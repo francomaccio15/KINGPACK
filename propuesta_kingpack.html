@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Propuesta Sistema Integral – King Pack | MACCIO TEC</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  @media print {
+    @page { size: 1200px 15530px; margin: 0; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { width: 1200px; }
+    .topbar { position: static !important; }
+  }
+</style>
+<style>
+  :root {
+    --bg:          #ffffff;
+    --bg-soft:     #f4f7fb;
+    --border:      #d0ddf0;
+    --border-soft: #e4ecf7;
+    --blue-900:    #0b1f4a;
+    --blue-800:    #103170;
+    --blue-700:    #1549a8;
+    --blue-600:    #1a5fd4;
+    --blue-500:    #2272f0;
+    --blue-400:    #4d94f7;
+    --blue-300:    #7fb3fa;
+    --blue-200:    #bcd5fd;
+    --blue-100:    #deeafd;
+    --blue-50:     #f0f5ff;
+    --cyan-500:    #0ea5e9;
+    --cyan-400:    #38bdf8;
+    --cyan-100:    #e0f4fe;
+    --text:        #0d1b3e;
+    --text-mid:    #2d4270;
+    --muted:       #6580a8;
+    --green:       #10b981;
+    --green-bg:    #ecfdf5;
+    --green-border:#a7f3d0;
+    --amber:       #f59e0b;
+    --amber-bg:    #fffbeb;
+    --amber-border:#fde68a;
+    --radius:      12px;
+    --shadow-sm:   0 1px 3px rgba(16,48,120,.07), 0 1px 2px rgba(16,48,120,.05);
+    --shadow-md:   0 4px 16px rgba(16,48,120,.09), 0 1px 4px rgba(16,48,120,.06);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; font-size: 15px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 32px; }
+
+  /* TOP BAR */
+  .topbar { background: var(--blue-900); padding: 10px 0; position: sticky; top: 0; z-index: 100; }
+  .topbar-inner { display: flex; align-items: center; justify-content: space-between; }
+  .topbar-logo { font-weight: 800; font-size: 17px; letter-spacing: .04em; color: #fff; }
+  .topbar-logo span { color: var(--cyan-400); }
+  .topbar-right { display: flex; gap: 28px; }
+  .topbar-right a { font-size: 12px; color: var(--blue-200); text-decoration: none; letter-spacing: .04em; font-weight: 500; transition: color .15s; }
+  .topbar-right a:hover { color: #fff; }
+
+  /* HERO */
+  .hero { background: linear-gradient(155deg, var(--blue-900) 0%, var(--blue-800) 55%, var(--blue-700) 100%); position: relative; overflow: hidden; padding: 90px 0 80px; }
+  .hero::before { content: ''; position: absolute; top: -100px; right: -100px; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(34,114,240,.22) 0%, transparent 70%); pointer-events: none; }
+  .hero::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 360px; height: 360px; border-radius: 50%; background: radial-gradient(circle, rgba(14,165,233,.14) 0%, transparent 70%); pointer-events: none; }
+  .hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 60px; align-items: center; position: relative; z-index: 1; }
+  .hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: var(--cyan-400); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; margin-bottom: 24px; }
+  .hero-eyebrow .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan-400); animation: blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .hero h1 { font-size: clamp(38px, 5.5vw, 66px); font-weight: 800; line-height: 1.06; color: #fff; margin-bottom: 20px; letter-spacing: -.02em; }
+  .hero h1 em { color: var(--cyan-400); font-style: normal; }
+  .hero-desc { font-size: 16px; color: var(--blue-200); max-width: 540px; margin-bottom: 40px; line-height: 1.7; }
+  .hero-stats { display: flex; gap: 0; border: 1px solid rgba(255,255,255,.15); border-radius: var(--radius); overflow: hidden; width: fit-content; }
+  .hero-stat { padding: 16px 26px; text-align: center; border-right: 1px solid rgba(255,255,255,.15); }
+  .hero-stat:last-child { border-right: none; }
+  .hero-stat .val { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+  .hero-stat .lbl { font-size: 10px; color: var(--blue-300); margin-top: 4px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .hero-card { background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.18); border-radius: 20px; padding: 32px 28px; backdrop-filter: blur(10px); min-width: 200px; text-align: center; }
+  .hero-card .big { font-size: 68px; margin-bottom: 10px; }
+  .hero-card p { color: var(--blue-300); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .hero-card strong { display: block; color: #fff; font-size: 16px; font-weight: 700; margin-top: 4px; }
+
+  /* SECTIONS */
+  section { padding: 76px 0; }
+  section + section { border-top: 1px solid var(--border-soft); }
+  .section-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--blue-50); border: 1px solid var(--blue-100); color: var(--blue-700); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; margin-bottom: 16px; }
+  h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -.02em; color: var(--blue-900); margin-bottom: 14px; line-height: 1.1; }
+  h2 em { color: var(--blue-600); font-style: normal; }
+  .lead { font-size: 16px; color: var(--muted); max-width: 680px; margin-bottom: 0; }
+
+  /* PROBLEM */
+  .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 36px; }
+  .problem-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, border-color .2s, transform .2s; position: relative; overflow: hidden; }
+  .problem-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--blue-600), var(--cyan-500)); }
+  .problem-card:hover { box-shadow: var(--shadow-md); border-color: var(--blue-200); transform: translateY(-2px); }
+  .p-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--blue-50); border: 1px solid var(--blue-100); display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 16px; }
+  .problem-card h3 { font-size: 15px; font-weight: 700; color: var(--blue-900); margin-bottom: 8px; }
+  .problem-card p { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.6; }
+
+  /* MODULES */
+  .modules-intro { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; margin-top: 6px; }
+  .m-legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .m-legend .dot-e1 { width: 10px; height: 10px; border-radius: 3px; background: var(--blue-600); }
+  .m-legend .dot-e2 { width: 10px; height: 10px; border-radius: 3px; background: var(--cyan-500); }
+
+  .modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .module-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow-sm); transition: all .2s; position: relative; }
+  .module-card:hover { box-shadow: var(--shadow-md); border-color: var(--blue-300); transform: translateY(-2px); }
+  .m-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--blue-50); border: 1px solid var(--blue-100); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 14px; }
+  .module-card h4 { font-size: 14px; font-weight: 700; color: var(--blue-900); margin-bottom: 6px; }
+  .module-card p { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.55; }
+  .module-card.featured-mod { border-color: var(--blue-200); background: linear-gradient(135deg, var(--blue-50), var(--bg)); }
+  .module-card.featured-mod .m-icon { background: var(--blue-100); border-color: var(--blue-200); }
+  .module-card.p2 { border-color: var(--cyan-100); background: linear-gradient(135deg, #f0f9ff, var(--bg)); }
+  .module-card.p2 .m-icon { background: #e0f4fe; border-color: #bae6fd; }
+  .module-card.p2:hover { border-color: var(--cyan-400); }
+  .p2-badge { position: absolute; top: 12px; right: 12px; background: var(--cyan-100); color: #0369a1; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; border: 1px solid #bae6fd; }
+
+  /* MODULE SECTION HEADING */
+  .mod-section-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--blue-600); margin: 32px 0 14px; display: flex; align-items: center; gap: 10px; }
+  .mod-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ARCA */
+  .arca-box { background: linear-gradient(135deg, var(--green-bg), #f0fdf9); border: 1px solid var(--green-border); border-radius: var(--radius); padding: 28px 32px; margin-top: 28px; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
+  .arca-icon { font-size: 44px; }
+  .arca-content h3 { font-size: 16px; font-weight: 700; color: #065f46; margin-bottom: 8px; }
+  .arca-content p { font-size: 14px; color: #047857; margin: 0; line-height: 1.65; }
+  .arca-content p strong { color: #065f46; }
+
+  /* DASHBOARD PREVIEW */
+  .dashboard-preview { margin-top: 32px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .dp-title { font-size: 13px; font-weight: 700; color: var(--blue-700); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+  .dp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .dp-kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .dp-kpi .k-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .dp-kpi .k-val { font-size: 22px; font-weight: 800; color: var(--blue-900); font-family: 'DM Mono', monospace; }
+  .dp-kpi .k-sub { font-size: 11px; color: var(--green); font-weight: 600; margin-top: 4px; }
+  .dp-kpi .k-sub.neg { color: #ef4444; }
+  .dp-row2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  .dp-chart-placeholder { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-height: 90px; display: flex; flex-direction: column; justify-content: space-between; }
+  .dp-chart-placeholder .bars { display: flex; align-items: flex-end; gap: 5px; height: 50px; }
+  .dp-chart-placeholder .bar { flex: 1; background: var(--blue-200); border-radius: 4px 4px 0 0; }
+  .dp-chart-placeholder .bar.active { background: var(--blue-600); }
+  .dp-chart-placeholder .cp-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .dp-alerts { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .dp-alerts .a-title { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .dp-alert-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-mid); padding: 5px 0; border-bottom: 1px solid var(--border-soft); }
+  .dp-alert-item:last-child { border-bottom: none; }
+  .dp-alert-item .badge-r { background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+  .dp-alert-item .badge-y { background: #fef9c3; color: #ca8a04; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+
+  /* TECH */
+  .tech-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 36px; }
+  .tech-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 16px; transition: all .2s; }
+  .tech-card:hover { box-shadow: var(--shadow-md); border-color: var(--blue-200); }
+  .t-ico { width: 48px; height: 48px; border-radius: 12px; background: var(--blue-50); border: 1px solid var(--blue-100); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+  .t-name { font-size: 14px; font-weight: 700; color: var(--blue-900); }
+  .t-role { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .arch-note { background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: var(--radius); padding: 24px 28px; margin-top: 24px; }
+  .arch-note h3 { font-size: 15px; font-weight: 700; color: var(--blue-800); margin-bottom: 8px; }
+  .arch-note p { font-size: 14px; color: var(--text-mid); margin: 0; line-height: 1.65; }
+  .arch-note p strong { color: var(--blue-700); }
+
+  /* DATABASE */
+  .db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px; margin-top: 36px; }
+  .db-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow .2s; }
+  .db-card:hover { box-shadow: var(--shadow-md); }
+  .db-header { background: linear-gradient(90deg, var(--blue-700), var(--blue-600)); padding: 11px 16px; display: flex; align-items: center; gap: 8px; }
+  .db-header span { font-size: 16px; }
+  .db-header h4 { font-family: 'DM Mono', monospace; font-size: 12px; color: #fff; font-weight: 500; }
+  .db-fields { padding: 10px 14px; }
+  .db-fields li { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); list-style: none; padding: 4px 0; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; justify-content: space-between; }
+  .db-fields li:last-child { border-bottom: none; }
+  .ft { color: var(--blue-400); font-size: 9px; }
+  .pk { color: var(--blue-700) !important; font-weight: 600; }
+
+  /* TIMELINE */
+  .timeline { position: relative; margin-top: 40px; }
+  .timeline::before { content: ''; position: absolute; left: 27px; top: 28px; bottom: 28px; width: 2px; background: linear-gradient(180deg, var(--blue-600), var(--cyan-400), var(--blue-300)); }
+  .tl-item { display: flex; gap: 28px; margin-bottom: 24px; }
+  .tl-num { width: 56px; height: 56px; flex-shrink: 0; border-radius: 50%; background: var(--blue-600); border: 3px solid var(--bg); box-shadow: 0 0 0 2px var(--blue-600); display: flex; align-items: center; justify-content: center; font-size: 22px; z-index: 1; }
+  .tl-item:nth-child(2) .tl-num { background: var(--cyan-500); box-shadow: 0 0 0 2px var(--cyan-500); }
+  .tl-item:nth-child(3) .tl-num { background: var(--blue-300); box-shadow: 0 0 0 2px var(--blue-300); }
+  .tl-body { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; flex: 1; box-shadow: var(--shadow-sm); }
+  .tl-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tl-badge { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; background: var(--blue-50); color: var(--blue-700); border: 1px solid var(--blue-100); }
+  .tl-item:nth-child(2) .tl-badge { background: var(--cyan-100); color: #0369a1; border-color: #bae6fd; }
+  .tl-item:nth-child(3) .tl-badge { background: var(--amber-bg); color: #92400e; border-color: var(--amber-border); }
+  .tl-dur { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .tl-body h3 { font-size: 16px; font-weight: 700; color: var(--blue-900); margin-bottom: 8px; }
+  .tl-body > p { font-size: 14px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+  .tl-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tl-tag { font-size: 12px; padding: 4px 10px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; color: var(--text-mid); font-weight: 500; }
+
+  /* COSTS */
+  .cost-note { background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px; font-size: 13.5px; color: var(--text-mid); line-height: 1.6; }
+  .cost-note strong { color: var(--blue-700); }
+
+  /* PAYMENT TIMELINE */
+  .payment-flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 0; align-items: center; margin: 32px 0; }
+  .pay-step { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; text-align: center; box-shadow: var(--shadow-sm); }
+  .pay-step.pay-main { background: linear-gradient(135deg, var(--blue-900), var(--blue-800)); border-color: var(--blue-700); }
+  .pay-step .pay-n { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
+  .pay-step.pay-main .pay-n { color: var(--blue-300); }
+  .pay-step .pay-amount { font-family: 'DM Mono', monospace; font-size: 30px; font-weight: 800; color: var(--blue-700); line-height: 1; }
+  .pay-step.pay-main .pay-amount { color: var(--cyan-400); }
+  .pay-step .pay-when { font-size: 12px; color: var(--muted); margin-top: 8px; font-weight: 500; }
+  .pay-step.pay-main .pay-when { color: var(--blue-300); }
+  .pay-arrow { font-size: 24px; color: var(--border); text-align: center; padding: 0 8px; }
+
+  .total-box { background: linear-gradient(135deg, var(--blue-900), var(--blue-800)); border-radius: var(--radius); padding: 28px 36px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+  .total-box .tb-label { color: var(--blue-300); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+  .total-box .tb-amount { font-family: 'DM Mono', monospace; font-size: 38px; font-weight: 800; color: var(--cyan-400); }
+  .total-box .tb-desc { color: var(--blue-300); font-size: 12px; margin-top: 4px; }
+  .total-box .tb-monthly { text-align: right; }
+  .total-box .tb-monthly .tb-label { margin-bottom: 4px; }
+  .total-box .tb-monthly .tb-amount { font-size: 26px; }
+
+  .cost-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .cost-table thead th { background: var(--blue-800); color: var(--blue-100); text-align: left; padding: 13px 18px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .cost-table tbody tr { background: var(--bg); border-bottom: 1px solid var(--border-soft); transition: background .12s; }
+  .cost-table tbody tr:nth-child(even) { background: var(--bg-soft); }
+  .cost-table tbody tr:hover { background: var(--blue-50); }
+  .cost-table tbody td { padding: 13px 18px; font-size: 14px; color: var(--text); }
+  .cost-table tbody td.hs { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+  .cost-table tbody td.pr { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--blue-700); }
+  .cost-table tfoot td { background: var(--blue-900); color: #fff; padding: 16px 18px; font-weight: 700; font-size: 15px; }
+  .cost-table tfoot td.pr-total { font-family: 'DM Mono', monospace; font-size: 22px; color: var(--cyan-400); font-weight: 800; }
+
+  .etapa2-box { background: linear-gradient(135deg, #f0f9ff, var(--bg)); border: 1px solid var(--cyan-100); border-radius: var(--radius); padding: 28px; margin-top: 28px; }
+  .etapa2-box .e2-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .etapa2-box h3 { font-size: 17px; font-weight: 700; color: var(--blue-900); }
+  .etapa2-box .tbd-badge { background: var(--cyan-100); color: #0369a1; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 999px; border: 1px solid #bae6fd; letter-spacing: .05em; text-transform: uppercase; }
+  .etapa2-box p { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 14px; }
+  .etapa2-modules { display: flex; flex-wrap: wrap; gap: 8px; }
+  .etapa2-mod { font-size: 12px; padding: 5px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-mid); font-weight: 500; }
+
+  /* GUARANTEES */
+  .guarantee-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 36px; }
+  .g-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; text-align: center; box-shadow: var(--shadow-sm); transition: all .2s; }
+  .g-card:hover { box-shadow: var(--shadow-md); border-color: var(--blue-200); transform: translateY(-2px); }
+  .g-ico { width: 52px; height: 52px; border-radius: 14px; background: var(--blue-50); border: 1px solid var(--blue-100); display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 16px; }
+  .g-card h4 { font-size: 14px; font-weight: 700; color: var(--blue-900); margin-bottom: 8px; }
+  .g-card p { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.55; }
+
+  /* CONTACT */
+  .contact-card { background: linear-gradient(135deg, var(--blue-900), var(--blue-800)); border-radius: 20px; padding: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; margin-top: 36px; }
+  .contact-left h3 { font-size: 26px; font-weight: 800; color: #fff; margin-bottom: 10px; letter-spacing: -.01em; }
+  .contact-left p { font-size: 14px; color: var(--blue-300); line-height: 1.65; margin: 0; }
+  .contact-items { display: flex; flex-direction: column; gap: 14px; }
+  .contact-item { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 16px 20px; }
+  .contact-item .c-icon { font-size: 22px; flex-shrink: 0; }
+  .contact-item .c-label { font-size: 11px; color: var(--blue-300); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+  .contact-item .c-val { font-size: 15px; font-weight: 700; color: #fff; }
+
+  /* FOOTER */
+  footer { background: var(--blue-900); padding: 56px 0 0; }
+  .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 56px; padding-bottom: 40px; }
+  .f-logo { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 12px; letter-spacing: .02em; }
+  .f-logo span { color: var(--cyan-400); }
+  .footer-brand p { font-size: 13px; color: var(--blue-300); line-height: 1.7; max-width: 300px; }
+  .footer-col h5 { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--blue-400); margin-bottom: 16px; }
+  .footer-col ul { list-style: none; }
+  .footer-col ul li { font-size: 13px; color: var(--blue-300); padding: 5px 0; }
+  .footer-col ul li strong { color: var(--blue-100); }
+  .footer-bottom { border-top: 1px solid rgba(255,255,255,.08); padding: 20px 0; display: flex; align-items: center; justify-content: space-between; }
+  .footer-bottom p { font-size: 12px; color: var(--blue-400); margin: 0; }
+  .footer-bottom .conf { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(148,170,200,.4); }
+
+  @media (max-width: 768px) {
+    .hero-grid, .contact-card, .footer-grid, .payment-flow { grid-template-columns: 1fr; }
+    .hero-card { display: none; }
+    .problem-grid, .guarantee-grid { grid-template-columns: 1fr; }
+    .tech-grid { grid-template-columns: 1fr 1fr; }
+    .topbar-right { display: none; }
+    .dp-grid { grid-template-columns: 1fr 1fr; }
+    .dp-row2 { grid-template-columns: 1fr; }
+    .pay-arrow { display: none; }
+    .total-box { flex-direction: column; gap: 16px; }
+    .total-box .tb-monthly { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<nav class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="topbar-logo"><span>MACCIO</span> TEC</div>
+    <div class="topbar-right">
+      <a href="#modulos">Módulos</a>
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#costos">Inversión</a>
+      <a href="#contacto">Contacto</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-eyebrow"><span class="dot"></span> Propuesta Técnica &amp; Comercial · Mayo 2025</div>
+        <h1>Sistema de Gestión<br>Integral para<br><em>King Pack</em></h1>
+        <p class="hero-desc">Plataforma web multi-sucursal a medida para reemplazar el sistema actual con arquitectura moderna, integración <strong style="color:#fff;">ARCA/AFIP</strong> nativa y acceso desde cualquier dispositivo.</p>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="val">17+</div><div class="lbl">Módulos</div></div>
+          <div class="hero-stat"><div class="val">100%</div><div class="lbl">A medida</div></div>
+          <div class="hero-stat"><div class="val">ARCA</div><div class="lbl">Integrado</div></div>
+          <div class="hero-stat"><div class="val">2</div><div class="lbl">Meses</div></div>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="big">📦</div>
+        <p>CLIENTE</p>
+        <strong>King Pack</strong>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.15);">
+          <p>DESARROLLADO POR</p>
+          <strong>MACCIO TEC</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 01 CONTEXTO -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">01 · Contexto</div>
+    <h2>El <em>Problema</em> Actual</h2>
+    <p class="lead">King Pack opera con múltiples sucursales y un sistema a medida que presenta deficiencias críticas que afectan la operativa diaria y la toma de decisiones.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="p-icon">🐌</div>
+        <h3>Problemas de Performance</h3>
+        <p>Tiempos de respuesta lentos, cuellos de botella en operaciones concurrentes y cuelgues frecuentes que interrumpen la atención al cliente y la facturación.</p>
+      </div>
+      <div class="problem-card">
+        <div class="p-icon">📐</div>
+        <h3>Sin Arquitectura Escalable</h3>
+        <p>La arquitectura legada impide agregar sucursales, usuarios o módulos sin riesgo de inestabilidad y costos de mantenimiento no planificados.</p>
+      </div>
+      <div class="problem-card">
+        <div class="p-icon">🧾</div>
+        <h3>Integración AFIP/ARCA Deficiente</h3>
+        <p>Fallas de sincronización, demoras en la emisión de CAE y ausencia de automatización para notas de crédito y otros comprobantes fiscales.</p>
+      </div>
+      <div class="problem-card">
+        <div class="p-icon">📊</div>
+        <h3>Visibilidad del Negocio Limitada</h3>
+        <p>Sin panel de control centralizado, los datos de ventas, caja y stock no están disponibles en tiempo real para la toma de decisiones gerenciales.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 MÓDULOS -->
+<section id="modulos" style="background:var(--bg-soft);">
+  <div class="wrap">
+    <div class="section-tag">02 · Alcance Funcional</div>
+    <h2>Módulos del <em>Sistema</em></h2>
+    <p class="lead">El sistema es una plataforma web <strong>100% responsiva</strong>, accesible desde computadoras, tablets y celulares sin necesidad de instalar nada. La <strong>Etapa 1</strong> cubre la operativa completa de la empresa.</p>
+
+    <!-- DASHBOARD DESTACADO -->
+    <div class="mod-section-label">Dashboard &amp; Control General</div>
+    <div class="modules-grid" style="margin-bottom: 0;">
+      <div class="module-card featured-mod" style="grid-column: span 2;">
+        <div style="display:flex;align-items:flex-start;gap:16px;">
+          <div class="m-icon" style="flex-shrink:0;">📊</div>
+          <div>
+            <h4 style="font-size:16px;margin-bottom:8px;">Dashboard Gerencial</h4>
+            <p style="font-size:13.5px;">Panel de control en tiempo real para el dueño. Desde una sola pantalla podés ver el estado actual del negocio: ventas del día, estado de cajas por sucursal, artículos con stock bajo, deudores con mayor saldo, comparativo mensual de ingresos vs. gastos, ranking de artículos más vendidos y alertas de operaciones pendientes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD PREVIEW VISUAL -->
+    <div class="dashboard-preview">
+      <div class="dp-title">👁 Vista previa referencial — Panel del dueño</div>
+      <div class="dp-grid">
+        <div class="dp-kpi">
+          <div class="k-label">Ventas hoy</div>
+          <div class="k-val">$284.500</div>
+          <div class="k-sub">↑ +12% vs ayer</div>
+        </div>
+        <div class="dp-kpi">
+          <div class="k-label">Cajas abiertas</div>
+          <div class="k-val">3 / 4</div>
+          <div class="k-sub">3 sucursales activas</div>
+        </div>
+        <div class="dp-kpi">
+          <div class="k-label">Gastos del mes</div>
+          <div class="k-val">$98.200</div>
+          <div class="k-sub neg">↑ +5% vs mes ant.</div>
+        </div>
+        <div class="dp-kpi">
+          <div class="k-label">Clientes con deuda</div>
+          <div class="k-val">14</div>
+          <div class="k-sub neg">3 vencidos</div>
+        </div>
+      </div>
+      <div class="dp-row2">
+        <div class="dp-chart-placeholder">
+          <div class="cp-label">Ventas últimos 7 días — todas las sucursales</div>
+          <div class="bars">
+            <div class="bar" style="height:40%"></div>
+            <div class="bar" style="height:65%"></div>
+            <div class="bar" style="height:50%"></div>
+            <div class="bar" style="height:80%"></div>
+            <div class="bar" style="height:55%"></div>
+            <div class="bar" style="height:90%"></div>
+            <div class="bar active" style="height:75%"></div>
+          </div>
+        </div>
+        <div class="dp-alerts">
+          <div class="a-title">⚡ Alertas activas</div>
+          <div class="dp-alert-item"><span class="badge-r">BAJO</span> Vasos descartables 8oz — Suc. Centro</div>
+          <div class="dp-alert-item"><span class="badge-r">BAJO</span> Servilletas x 100 — Suc. Norte</div>
+          <div class="dp-alert-item"><span class="badge-y">DEUDA</span> Cliente: Restaurante El Sol — $42.000</div>
+          <div class="dp-alert-item"><span class="badge-y">PEDIDO</span> Pedido proveedor #087 — pendiente validar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MÓDULOS OPERATIVOS -->
+    <div class="mod-section-label" style="margin-top:36px;">Módulos Operativos — Etapa 1</div>
+    <div class="modules-grid">
+      <div class="module-card">
+        <div class="m-icon">🛒</div>
+        <h4>Ventas</h4>
+        <p>POS completo con múltiples medios de pago, descuentos, historial por sucursal y emisión de comprobante electrónico en tiempo real.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">📋</div>
+        <h4>Pedidos a Proveedores</h4>
+        <p>Creación de órdenes de compra a proveedores, impresión del detalle del pedido, y validación al momento de la llegada de la mercadería para registrar automáticamente la entrada de stock.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🍽️</div>
+        <h4>Artículos</h4>
+        <p>Catálogo de productos con precios y categorías. Exportación de lista completa de precios como PDF, con posibilidad de aplicar descuentos globales o por categoría antes de generar el archivo.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🤝</div>
+        <h4>Clientes</h4>
+        <p>Base de clientes con historial de compras, cuenta corriente, datos fiscales, condición ante AFIP y límite de crédito configurable.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">💰</div>
+        <h4>Caja Diaria</h4>
+        <p>Apertura y cierre de caja por sucursal y turno, con control de ingresos, egresos, y arqueo final con detalle de diferencias.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🏦</div>
+        <h4>Cuentas Corrientes</h4>
+        <p>Gestión de cuentas corrientes de clientes y proveedores con saldos, vencimientos, registro de cobros y pagos.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">💸</div>
+        <h4>Gastos</h4>
+        <p>Registro de gastos operativos categorizados por sucursal, con control presupuestario y comparativas contra períodos anteriores.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">📝</div>
+        <h4>Preventas</h4>
+        <p>Presupuestos y preventas que se convierten en ventas con un clic, con control de vencimiento y estado de seguimiento.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🧑‍💼</div>
+        <h4>Preventas Vendedor</h4>
+        <p>Panel exclusivo para vendedores externos. Generación de preventas desde cualquier dispositivo con sincronización al sistema central.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">📈</div>
+        <h4>Resultado Mensual</h4>
+        <p>Rentabilidad mensual: ventas, costos, gastos y utilidad neta consolidada y desglosada por sucursal.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🔄</div>
+        <h4>Traspaso de Artículos</h4>
+        <p>Transferencia de stock entre sucursales con trazabilidad completa, registro de envío y confirmación de recepción.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">💳</div>
+        <h4>Movimientos de Caja</h4>
+        <p>Historial completo de operaciones con filtros por fecha, tipo de movimiento, operador y sucursal.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🏭</div>
+        <h4>Proveedores</h4>
+        <p>Gestión del padrón de proveedores con datos fiscales, historial de compras, saldo de deuda y condiciones de pago pactadas.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">👥</div>
+        <h4>Usuarios &amp; Roles</h4>
+        <p>Control de acceso por rol (Administrador, Supervisor, Cajero, Vendedor) con log de auditoría completo y permisos configurables.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🏷️</div>
+        <h4>Categorías</h4>
+        <p>Árbol de categorías y subcategorías de productos con márgenes de ganancia diferenciados por grupo.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🧑‍🤝‍🧑</div>
+        <h4>Ventas por Vendedor</h4>
+        <p>Seguimiento individual de ventas por vendedor con comisiones calculadas automáticamente, objetivos y ranking de performance.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">🏢</div>
+        <h4>Multi-Sucursal</h4>
+        <p>Panel central para gestionar todas las sucursales: stock, cajas, usuarios y reportes unificados desde un único acceso.</p>
+      </div>
+      <div class="module-card">
+        <div class="m-icon">👨‍💼</div>
+        <h4>Empleados</h4>
+        <p>Legajo digital por sucursal: datos personales, cargo, fecha de ingreso y documentación adjunta digitalizada.</p>
+      </div>
+    </div>
+
+    <div class="arca-box">
+      <div class="arca-icon">🧾</div>
+      <div class="arca-content">
+        <h3>Integración ARCA / AFIP — Facturación Electrónica Completa</h3>
+        <p>El sistema incluye integración nativa con los Web Services de <strong>ARCA (ex-AFIP)</strong>: emisión de <strong>Facturas A y B, Tickets, Notas de Crédito y Notas de Débito</strong>. Soporte para responsables inscriptos, monotributistas y exentos. Generación automática de PDF con CAE y código QR oficial. Consulta de CUIT, condición tributaria y padrones fiscales en tiempo real. Múltiples puntos de venta por sucursal.</p>
+      </div>
+    </div>
+
+    <!-- ETAPA 2 OPCIONAL -->
+    <div class="etapa2-box">
+      <div class="e2-header">
+        <h3>🤖 Etapa 2 — Inteligencia Artificial &amp; Analytics (Opcional)</h3>
+        <span class="tbd-badge">Costo a definir</span>
+      </div>
+      <p>Expansión opcional fuera del alcance de la presente propuesta. Incluye: análisis predictivo de ventas con IA, detección de anomalías en la operativa, recomendaciones automatizadas de restock, dashboard ejecutivo avanzado con KPIs configurables, alertas inteligentes y exportación avanzada de informes. El costo y alcance de esta etapa se cotizará por separado una vez finalizada e implementada la Etapa 1.</p>
+      <div class="etapa2-modules">
+        <span class="etapa2-mod">Predicción de Ventas IA</span>
+        <span class="etapa2-mod">Restock Inteligente</span>
+        <span class="etapa2-mod">Dashboard Ejecutivo Avanzado</span>
+        <span class="etapa2-mod">Alertas Automáticas</span>
+        <span class="etapa2-mod">Informes Personalizados</span>
+        <span class="etapa2-mod">Exportación Excel / PDF</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 ARQUITECTURA -->
+<section id="arquitectura">
+  <div class="wrap">
+    <div class="section-tag">03 · Arquitectura Técnica</div>
+    <h2>Stack <em>Tecnológico</em></h2>
+    <p class="lead">Tecnologías maduras y probadas en producción, seleccionadas para resolver los problemas de rendimiento del sistema actual y garantizar acceso desde cualquier dispositivo.</p>
+    <div class="tech-grid">
+      <div class="tech-card"><div class="t-ico">⚡</div><div><div class="t-name">Next.js 14</div><div class="t-role">Frontend web responsivo (desktop, tablet, móvil)</div></div></div>
+      <div class="tech-card"><div class="t-ico">🟢</div><div><div class="t-name">Node.js + Express</div><div class="t-role">API REST Backend</div></div></div>
+      <div class="tech-card"><div class="t-ico">🐘</div><div><div class="t-name">PostgreSQL 16</div><div class="t-role">Base de datos relacional</div></div></div>
+      <div class="tech-card"><div class="t-ico">🔴</div><div><div class="t-name">Redis</div><div class="t-role">Caché &amp; gestión de sesiones</div></div></div>
+      <div class="tech-card"><div class="t-ico">🖨️</div><div><div class="t-name">Puppeteer / PDFKit</div><div class="t-role">Generación de documentos PDF</div></div></div>
+      <div class="tech-card"><div class="t-ico">🌐</div><div><div class="t-name">VPS Dedicado</div><div class="t-role">Servidor &amp; base de datos en la nube</div></div></div>
+    </div>
+    <div class="arch-note">
+      <h3>¿Por qué esta arquitectura resuelve los problemas actuales?</h3>
+      <p><strong>PostgreSQL</strong> garantiza transacciones concurrentes con integridad ACID, eliminando la corrupción de datos. <strong>Redis</strong> actúa como caché inteligente, reduciendo la carga a la base de datos hasta en un 70%. <strong>Next.js responsivo</strong> asegura tiempos de carga menores a 300ms desde cualquier dispositivo sin instalar aplicaciones. La arquitectura en capas (Frontend / API / DB) permite escalar cada componente de forma independiente.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 DATABASE -->
+<section style="background:var(--bg-soft);">
+  <div class="wrap">
+    <div class="section-tag">04 · Modelo de Datos</div>
+    <h2>Base de Datos <em>Relacional</em></h2>
+    <p class="lead">Esquema normalizado con integridad referencial completa, diseñado para rendimiento en consultas complejas y facilidad de evolución futura.</p>
+    <div class="db-grid">
+      <div class="db-card"><div class="db-header"><span>🏢</span><h4>sucursales</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>nombre<span class="ft">varchar</span></li><li>direccion<span class="ft">text</span></li><li>telefono<span class="ft">varchar</span></li><li>cuit_sucursal<span class="ft">varchar</span></li><li>punto_venta_afip<span class="ft">int</span></li><li>activo<span class="ft">bool</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>👤</span><h4>usuarios</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>nombre<span class="ft">varchar</span></li><li>email<span class="ft">varchar</span></li><li>password_hash<span class="ft">varchar</span></li><li>rol<span class="ft">enum</span></li><li>sucursal_id<span class="ft">FK</span></li><li>activo<span class="ft">bool</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🤝</span><h4>clientes</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>razon_social<span class="ft">varchar</span></li><li>cuit<span class="ft">varchar</span></li><li>cond_iva<span class="ft">enum</span></li><li>email<span class="ft">varchar</span></li><li>limite_credito<span class="ft">decimal</span></li><li>saldo_cc<span class="ft">decimal</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🏭</span><h4>proveedores</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>razon_social<span class="ft">varchar</span></li><li>cuit<span class="ft">varchar</span></li><li>email<span class="ft">varchar</span></li><li>telefono<span class="ft">varchar</span></li><li>cond_pago<span class="ft">varchar</span></li><li>saldo_deuda<span class="ft">decimal</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>📋</span><h4>pedidos_compra</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>proveedor_id<span class="ft">FK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>usuario_id<span class="ft">FK</span></li><li>estado<span class="ft">enum</span></li><li>fecha_pedido<span class="ft">date</span></li><li>fecha_recepcion<span class="ft">timestamp</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>📦</span><h4>articulos</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>codigo<span class="ft">varchar</span></li><li>descripcion<span class="ft">text</span></li><li>categoria_id<span class="ft">FK</span></li><li>precio_costo<span class="ft">decimal</span></li><li>precio_venta<span class="ft">decimal</span></li><li>iva_alicuota<span class="ft">decimal</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>📊</span><h4>stock</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>articulo_id<span class="ft">FK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>cantidad<span class="ft">decimal</span></li><li>stock_minimo<span class="ft">decimal</span></li><li>ultima_actualizacion<span class="ft">timestamp</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🛒</span><h4>ventas</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>numero<span class="ft">varchar</span></li><li>cliente_id<span class="ft">FK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>total<span class="ft">decimal</span></li><li>cae<span class="ft">varchar</span></li><li>tipo_comprobante<span class="ft">enum</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🧾</span><h4>venta_items</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>venta_id<span class="ft">FK</span></li><li>articulo_id<span class="ft">FK</span></li><li>cantidad<span class="ft">decimal</span></li><li>precio_unit<span class="ft">decimal</span></li><li>descuento<span class="ft">decimal</span></li><li>iva_monto<span class="ft">decimal</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>💰</span><h4>cajas</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>usuario_id<span class="ft">FK</span></li><li>saldo_inicial<span class="ft">decimal</span></li><li>saldo_final_real<span class="ft">decimal</span></li><li>diferencia<span class="ft">decimal</span></li><li>apertura<span class="ft">timestamp</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>💳</span><h4>movimientos_caja</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>caja_id<span class="ft">FK</span></li><li>tipo<span class="ft">enum</span></li><li>concepto<span class="ft">text</span></li><li>monto<span class="ft">decimal</span></li><li>medio_pago<span class="ft">enum</span></li><li>fecha<span class="ft">timestamp</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>💸</span><h4>gastos</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>categoria_gasto_id<span class="ft">FK</span></li><li>descripcion<span class="ft">text</span></li><li>monto<span class="ft">decimal</span></li><li>fecha<span class="ft">date</span></li><li>comprobante_url<span class="ft">varchar</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🔄</span><h4>traspasos</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>sucursal_origen_id<span class="ft">FK</span></li><li>sucursal_destino_id<span class="ft">FK</span></li><li>usuario_id<span class="ft">FK</span></li><li>estado<span class="ft">enum</span></li><li>fecha_envio<span class="ft">timestamp</span></li><li>fecha_recepcion<span class="ft">timestamp</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>👨‍💼</span><h4>empleados</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>nombre<span class="ft">varchar</span></li><li>dni<span class="ft">varchar</span></li><li>sucursal_id<span class="ft">FK</span></li><li>cargo<span class="ft">varchar</span></li><li>fecha_ingreso<span class="ft">date</span></li><li>salario<span class="ft">decimal</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>📝</span><h4>preventas</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>cliente_id<span class="ft">FK</span></li><li>vendedor_id<span class="ft">FK</span></li><li>sucursal_id<span class="ft">FK</span></li><li>total<span class="ft">decimal</span></li><li>estado<span class="ft">enum</span></li><li>venta_id<span class="ft">FK null</span></li></ul></div>
+      <div class="db-card"><div class="db-header"><span>🏷️</span><h4>categorias</h4></div><ul class="db-fields"><li><span class="pk">🔑 id</span><span class="ft">PK</span></li><li>nombre<span class="ft">varchar</span></li><li>parent_id<span class="ft">FK null</span></li><li>margen_ganancia<span class="ft">decimal</span></li><li>activo<span class="ft">bool</span></li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 ROADMAP -->
+<section id="roadmap">
+  <div class="wrap">
+    <div class="section-tag">05 · Plan de Trabajo</div>
+    <h2>Cronograma en <em>2 Meses</em></h2>
+    <p class="lead">Un mes de construcción y un mes de implementación acompañada. Al finalizar el segundo mes, el equipo de King Pack estará operando con plena autonomía en el nuevo sistema.</p>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-num">🛠️</div>
+        <div class="tl-body">
+          <div class="tl-top"><span class="tl-badge">Mes 1</span><span class="tl-dur">⏱ 4 semanas · Construcción del sistema</span></div>
+          <h3>Desarrollo Completo</h3>
+          <p>Desarrollo full-stack de todos los módulos de la Etapa 1, integración con ARCA/AFIP, generación de PDFs, configuración del servidor, base de datos y entorno de producción. Entregas parciales cada semana para revisión del cliente.</p>
+          <div class="tl-tags">
+            <span class="tl-tag">Dashboard Gerencial</span><span class="tl-tag">Ventas &amp; Facturación ARCA</span><span class="tl-tag">Pedidos a Proveedores</span><span class="tl-tag">Artículos &amp; Stock</span><span class="tl-tag">Caja &amp; Movimientos</span><span class="tl-tag">Clientes &amp; Cuentas</span><span class="tl-tag">Gastos</span><span class="tl-tag">Preventas</span><span class="tl-tag">Traspaso Artículos</span><span class="tl-tag">Notas de Crédito</span><span class="tl-tag">Usuarios &amp; Roles</span><span class="tl-tag">Multi-sucursal</span><span class="tl-tag">Generación PDF</span>
+          </div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-num">🚀</div>
+        <div class="tl-body">
+          <div class="tl-top"><span class="tl-badge">Mes 2</span><span class="tl-dur">⏱ 4 semanas · Implementación y puesta en marcha</span></div>
+          <h3>Implementación Acompañada</h3>
+          <p>Puesta en producción del sistema, migración de datos históricos (artículos, clientes, proveedores), capacitación presencial y/o remota del equipo, y acompañamiento diario durante la transición. MACCIO TEC disponible para soporte inmediato durante todo el proceso.</p>
+          <div class="tl-tags">
+            <span class="tl-tag">Deploy en servidor</span><span class="tl-tag">Migración de datos</span><span class="tl-tag">Capacitación equipo</span><span class="tl-tag">Inducción por roles</span><span class="tl-tag">Soporte en tiempo real</span><span class="tl-tag">Ajustes finales</span><span class="tl-tag">Alta en ARCA</span>
+          </div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-num">🔧</div>
+        <div class="tl-body">
+          <div class="tl-top"><span class="tl-badge">Mes 3+</span><span class="tl-dur">Mantenimiento mensual continuo</span></div>
+          <h3>Soporte y Mantenimiento</h3>
+          <p>A partir del tercer mes, el sistema opera bajo el plan de mantenimiento mensual fijo. Incluye soporte técnico, actualizaciones de seguridad, actualización de endpoints ARCA, backups diarios y una mejora menor mensual incluida.</p>
+          <div class="tl-tags">
+            <span class="tl-tag">Actualizaciones ARCA</span><span class="tl-tag">Seguridad</span><span class="tl-tag">Backups diarios</span><span class="tl-tag">Monitoreo 24/7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 INVERSIÓN -->
+<section id="costos" style="background:var(--bg-soft);">
+  <div class="wrap">
+    <div class="section-tag">06 · Inversión</div>
+    <h2>Estructura de <em>Pago</em></h2>
+    <p class="lead" style="margin-bottom:32px;">Inversión total clara y sin costos ocultos. El plan de mantenimiento mensual incluye la infraestructura del servidor, por lo que no existen gastos adicionales de hosting a cargo del cliente.</p>
+
+    <!-- RESUMEN TOTAL -->
+    <div class="total-box">
+      <div>
+        <div class="tb-label">Inversión total del proyecto</div>
+        <div class="tb-amount">USD 1.500</div>
+        <div class="tb-desc">Sistema completo · 2 meses · Etapa 1</div>
+      </div>
+      <div class="tb-monthly">
+        <div class="tb-label">Mantenimiento mensual</div>
+        <div class="tb-amount">USD 250</div>
+        <div class="tb-desc">A partir del mes 3 · Infraestructura incluida</div>
+      </div>
+    </div>
+
+    <!-- FLUJO DE PAGO -->
+    <h3 style="font-size:16px;font-weight:700;color:var(--blue-900);margin-bottom:20px;">Plan de pagos</h3>
+    <div class="payment-flow">
+      <div class="pay-step pay-main">
+        <div class="pay-n">Pago 1 — Inicio de obra</div>
+        <div class="pay-amount">USD 750</div>
+        <div class="pay-when">Al firmar la propuesta y comenzar el desarrollo</div>
+      </div>
+      <div class="pay-arrow">→</div>
+      <div class="pay-step pay-main">
+        <div class="pay-n">Pago 2 — Fin de implementación</div>
+        <div class="pay-amount">USD 750</div>
+        <div class="pay-when">Al completar el mes 2 de implementación acompañada</div>
+      </div>
+      <div class="pay-arrow">→</div>
+      <div class="pay-step">
+        <div class="pay-n">Mes 3 en adelante</div>
+        <div class="pay-amount" style="color:var(--blue-700);">USD 250</div>
+        <div class="pay-when">Mantenimiento mensual fijo · Infraestructura incluida</div>
+      </div>
+    </div>
+
+    <!-- DESGLOSE -->
+    <h3 style="font-size:16px;font-weight:700;color:var(--blue-900);margin:32px 0 16px;">Desglose del sistema (Etapa 1)</h3>
+    <div class="cost-note">
+      <strong>ℹ️ Sobre la moneda:</strong> Los valores se expresan en <strong>Dólares Estadounidenses (USD)</strong> para proteger la inversión de ambas partes ante la variación cambiaria. La facturación puede realizarse en pesos argentinos al tipo de cambio oficial o dólar MEP vigente al día de cada pago.
+    </div>
+
+    <table class="cost-table">
+      <thead>
+        <tr><th>Componente / Módulo</th><th>Horas</th><th>Incluido en</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Configuración servidor, base de datos y entornos de desarrollo/producción</td><td class="hs">15 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Autenticación, roles, permisos y gestión multi-sucursal</td><td class="hs">30 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Dashboard Gerencial (KPIs, alertas, gráficos en tiempo real)</td><td class="hs">25 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Ventas — POS completo con medios de pago múltiples</td><td class="hs">40 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Artículos, Categorías, Stock y exportación PDF con descuentos</td><td class="hs">30 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Pedidos a Proveedores — creación, impresión y validación de llegada</td><td class="hs">30 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Proveedores — padrón, historial de compras, cuentas a pagar</td><td class="hs">15 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Clientes y Cuentas Corrientes</td><td class="hs">20 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Caja Diaria y Movimientos de Caja</td><td class="hs">25 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Gastos operativos</td><td class="hs">15 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Preventas y Preventas Vendedor</td><td class="hs">25 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Traspaso de Artículos entre sucursales</td><td class="hs">15 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Módulo Resultado Mensual, Empleados, Ventas por Vendedor</td><td class="hs">25 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td><strong>Integración ARCA/AFIP — Facturas, Notas de Crédito, Padrones</strong></td><td class="hs">40 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Generación de PDF (facturas, remitos, pedidos, lista de precios)</td><td class="hs">15 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Testing, QA y documentación técnica</td><td class="hs">20 hs</td><td class="pr">Pago 1</td></tr>
+        <tr><td>Deploy en producción, migración de datos del sistema anterior</td><td class="hs">10 hs</td><td class="pr">Pago 2</td></tr>
+        <tr><td>Implementación acompañada, capacitación y soporte de transición</td><td class="hs">20 hs</td><td class="pr">Pago 2</td></tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>TOTAL ETAPA 1 — Sistema completo + implementación</strong></td>
+          <td><strong>~415 hs</strong></td>
+          <td class="pr-total">USD 1.500</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- ETAPA 2 NOTA -->
+    <div class="cost-note" style="background:var(--bg);border-color:var(--border);margin-top:0;">
+      <strong>🤖 Etapa 2 — IA &amp; Analytics:</strong> Esta etapa es completamente opcional y queda fuera del alcance y costo de la presente propuesta. Su costo y alcance serán cotizados por separado una vez finalizada e implementada la Etapa 1.
+    </div>
+  </div>
+</section>
+
+<!-- 07 GARANTÍAS -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">07 · Garantías</div>
+    <h2>Nuestro <em>Compromiso</em></h2>
+    <p class="lead">El sistema desarrollado es propiedad intelectual de King Pack. El código fuente completo es entregado al cliente al finalizar la implementación.</p>
+    <div class="guarantee-grid">
+      <div class="g-card">
+        <div class="g-ico">🔐</div>
+        <h4>Código Fuente Propio</h4>
+        <p>Código 100% propiedad de King Pack. Repositorio en GitHub del cliente. Sin vendor lock-in de ningún tipo.</p>
+      </div>
+      <div class="g-card">
+        <div class="g-ico">🛡️</div>
+        <h4>Garantía Post-Entrega</h4>
+        <p>60 días de garantía por bugs sin costo adicional. Resolución comprometida en 48 horas hábiles.</p>
+      </div>
+      <div class="g-card">
+        <div class="g-ico">📚</div>
+        <h4>Documentación Completa</h4>
+        <p>Manual de usuario por rol, documentación técnica de la API y diagrama entidad-relación de la base de datos.</p>
+      </div>
+      <div class="g-card">
+        <div class="g-ico">🎓</div>
+        <h4>Capacitación Incluida</h4>
+        <p>Sesiones de capacitación para administradores y operadores con material audiovisual de referencia permanente.</p>
+      </div>
+      <div class="g-card">
+        <div class="g-ico">🔄</div>
+        <h4>Migración de Datos</h4>
+        <p>Migración completa de clientes, artículos, proveedores e historial del sistema actual al nuevo sin pérdida de información.</p>
+      </div>
+      <div class="g-card">
+        <div class="g-ico">🌐</div>
+        <h4>Acceso Responsivo</h4>
+        <p>El sistema funciona en cualquier dispositivo con navegador: computadoras, tablets y celulares. Sin instalaciones.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 CONTACTO -->
+<section id="contacto" style="background:var(--bg-soft);">
+  <div class="wrap">
+    <div class="section-tag">08 · Contacto</div>
+    <h2>¿Listo para <em>empezar</em>?</h2>
+    <p class="lead">Estamos disponibles para responder cualquier consulta, ampliar detalles técnicos o coordinar la firma de inicio del proyecto.</p>
+    <div class="contact-card">
+      <div class="contact-left">
+        <h3>MACCIO TEC</h3>
+        <p>Desarrollo de software a medida para empresas que necesitan crecer sin límites. Soluciones confiables, escalables y diseñadas para durar.</p>
+      </div>
+      <div class="contact-items">
+        <div class="contact-item">
+          <div class="c-icon">👤</div>
+          <div>
+            <div class="c-label">Responsable del proyecto</div>
+            <div class="c-val">Franco Maccio — Dueño</div>
+          </div>
+        </div>
+        <div class="contact-item">
+          <div class="c-icon">📱</div>
+          <div>
+            <div class="c-label">WhatsApp &amp; Teléfono</div>
+            <div class="c-val">+549 387 462-4579</div>
+          </div>
+        </div>
+        <div class="contact-item">
+          <div class="c-icon">🐙</div>
+          <div>
+            <div class="c-label">Repositorio del proyecto</div>
+            <div class="c-val">github.com/francomaccio15/KINGPACK</div>
+          </div>
+        </div>
+        <div class="contact-item">
+          <div class="c-icon">📍</div>
+          <div>
+            <div class="c-label">Ubicación</div>
+            <div class="c-val">Salta, Argentina</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="f-logo"><span>MACCIO</span> TEC</div>
+        <p>Desarrollo de software a medida para empresas que necesitan crecer sin límites. Soluciones confiables, escalables y diseñadas para durar.</p>
+      </div>
+      <div class="footer-col">
+        <h5>Proyecto</h5>
+        <ul>
+          <li>Sistema Integral <strong>King Pack</strong></li>
+          <li>Versión <strong>1.0 — Mayo 2025</strong></li>
+          <li>Duración: <strong>2 meses</strong></li>
+          <li>Stack: <strong>Next.js + PostgreSQL</strong></li>
+          <li>Repo: <strong>francomaccio15/KINGPACK</strong></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Contacto</h5>
+        <ul>
+          <li><strong>Franco Maccio</strong></li>
+          <li>Dueño — MACCIO TEC</li>
+          <li><strong>+549 387 462-4579</strong></li>
+          <li>Salta, Argentina</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 MACCIO TEC · Todos los derechos reservados</p>
+      <span class="conf">DOCUMENTO CONFIDENCIAL · USO EXCLUSIVO KING PACK S.R.L.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
