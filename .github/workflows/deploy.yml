@@ -15,7 +15,4 @@ jobs:
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            cd /root/KINGPACK
-            git pull origin master
-            pm2 restart all
-            pm2 status
+            cd /var/www/KINGPACK && bash scripts/deploy.sh
