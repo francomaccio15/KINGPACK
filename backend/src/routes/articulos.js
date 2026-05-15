@@ -49,66 +49,169 @@ router.get('/pdf-precios', async (req, res, next) => {
     `, params);
 
     const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 45, size: 'A4' });
+    const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition',
       `inline; filename="lista-precios-${listaNombre.toLowerCase().replace(/\s+/g, '-')}.pdf"`);
     doc.pipe(res);
 
-    const PAGE_W = doc.page.width - 90;
+    const PW   = doc.page.width;   // 595
+    const PH   = doc.page.height;  // 842
+    const ML   = 45;               // margin left
+    const MR   = 45;               // margin right
+    const CW   = PW - ML - MR;    // content width = 505
+
+    // Column layout
+    const COL_CODE  = ML;
+    const COL_NAME  = ML + 78;
+    const COL_PRICE = PW - MR;    // right-aligned anchor
+    const COL_NAME_W = CW - 78 - 90; // name column width
+
+    const ROW_H = 20;
+
     const ars = v => new Intl.NumberFormat('es-AR', {
       style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
     }).format(v);
 
-    // Header
-    doc.rect(0, 0, doc.page.width, 82).fill('#0d0d0d');
-    doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('KING PACK', 45, 18);
-    doc.fillColor('#e3000f').fontSize(10).font('Helvetica').text('DESCARTABLES', 45, 44);
-    doc.fillColor('#8a8a8a').fontSize(9).text(listaNombre.toUpperCase(), 45, 60);
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    const HEADER_H = 88;
+    doc.rect(0, 0, PW, HEADER_H).fill('#111111');
 
+    // Red accent stripe at the very top
+    doc.rect(0, 0, PW, 4).fill('#e3000f');
+
+    // Red vertical bar before logo
+    doc.rect(ML, 20, 3, 32).fill('#e3000f');
+
+    // KING PACK
+    doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold')
+       .text('KING PACK', ML + 12, 20);
+
+    // DESCARTABLES
+    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+       .text('DESCARTABLES', ML + 12, 48);
+
+    // Lista name — right side of "DESCARTABLES" line
+    doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica')
+       .text('·  ' + listaNombre.toUpperCase(), ML + 120, 48);
+
+    // Date — top right
     const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    doc.fillColor('#c0c0c0').fontSize(9).font('Helvetica')
-       .text(`Fecha: ${fecha}`, 0, 28, { align: 'right', width: doc.page.width - 45 });
-    if (descuento > 0)
-      doc.fillColor('#e3000f').fontSize(9)
-         .text(`Descuento adicional: ${descuento}%`, 0, 44, { align: 'right', width: doc.page.width - 45 });
+    doc.fillColor('#888888').fontSize(8).font('Helvetica')
+       .text(`Fecha: ${fecha}`, 0, 24, { align: 'right', width: PW - MR });
 
-    doc.y = 98;
+    // Extra discount badge (if any)
+    if (descuento > 0) {
+      doc.fillColor('#e3000f').fontSize(8).font('Helvetica-Bold')
+         .text(`Descuento adicional: ${descuento}%`, 0, 38, { align: 'right', width: PW - MR });
+    }
 
+    // ── COLUMN HEADERS ───────────────────────────────────────────────────────
+    const COL_HDR_Y = HEADER_H + 2;
+    doc.rect(0, COL_HDR_Y, PW, 22).fill('#f2f2f2');
+    doc.rect(0, COL_HDR_Y + 21, PW, 1).fill('#d0d0d0');
+
+    doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+    doc.text('CÓDIGO',  COL_CODE,  COL_HDR_Y + 7, { width: 70 });
+    doc.text('DESCRIPCIÓN', COL_NAME, COL_HDR_Y + 7, { width: COL_NAME_W });
+    doc.text('PRECIO',  0, COL_HDR_Y + 7, { align: 'right', width: PW - MR });
+
+    let curY = COL_HDR_Y + 24;
+
+    // ── ROWS ─────────────────────────────────────────────────────────────────
     let currentCat = null;
+    let rowIndex   = 0;
+
+    const ensureSpace = (needed) => {
+      if (curY + needed > PH - 55) {
+        doc.addPage();
+        // Repeat column header on new page
+        doc.rect(0, 0, PW, 22).fill('#f2f2f2');
+        doc.rect(0, 21, PW, 1).fill('#d0d0d0');
+        doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+        doc.text('CÓDIGO',      COL_CODE, 7, { width: 70 });
+        doc.text('DESCRIPCIÓN', COL_NAME, 7, { width: COL_NAME_W });
+        doc.text('PRECIO',      0,         7, { align: 'right', width: PW - MR });
+        curY = 26;
+        rowIndex = 0;
+      }
+    };
+
     for (const art of rows) {
+      // ── Category header
       if (art.categoria !== currentCat) {
         currentCat = art.categoria;
-        if (doc.y > 730) doc.addPage();
-        doc.moveDown(0.5);
-        doc.fillColor('#1a1a1a').rect(45, doc.y, PAGE_W, 18).fill();
-        doc.fillColor('#e3000f').fontSize(8).font('Helvetica-Bold')
-           .text((currentCat || 'SIN CATEGORÍA').toUpperCase(), 50, doc.y + 5);
-        doc.y += 22;
+        ensureSpace(28 + ROW_H);
+
+        const catLabel = (currentCat || 'SIN CATEGORÍA').toUpperCase();
+
+        doc.rect(0, curY, PW, 24).fill('#1e1e1e');
+        // Red left accent
+        doc.rect(ML - 2, curY, 3, 24).fill('#e3000f');
+        doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold')
+           .text(catLabel, ML + 8, curY + 8, { width: CW - 8 });
+
+        curY += 26;
+        rowIndex = 0;
       }
 
-      if (doc.y > 750) doc.addPage();
+      ensureSpace(ROW_H);
+
       const catDesc = Object.prototype.hasOwnProperty.call(descCatsMap, art.categoria_id)
         ? descCatsMap[art.categoria_id] : descuento;
       const precio = parseFloat(art.precio_lista) * (1 - catDesc / 100);
-      const rowY = doc.y;
 
-      doc.fillColor('#555').fontSize(8).font('Helvetica').text(art.codigo, 50, rowY, { width: 80 });
-      doc.fillColor('#f0f0f0').fontSize(8).text(art.nombre, 135, rowY, { width: PAGE_W - 155 });
-      doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold')
-         .text(ars(precio), 0, rowY, { align: 'right', width: doc.page.width - 45 });
-      doc.y = rowY + 14;
-      doc.strokeColor('#2a2a2a').lineWidth(0.4).moveTo(50, doc.y).lineTo(45 + PAGE_W, doc.y).stroke();
-      doc.y += 2;
+      // Alternating row background
+      if (rowIndex % 2 === 1) {
+        doc.rect(0, curY, PW, ROW_H).fill('#f9f9f9');
+      }
+
+      // Code
+      doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
+         .text(art.codigo, COL_CODE, curY + 6, { width: 70 });
+
+      // Name
+      doc.fillColor('#1a1a1a').fontSize(8.5).font('Helvetica')
+         .text(art.nombre, COL_NAME, curY + 5, { width: COL_NAME_W, lineBreak: false });
+
+      // Price — bold, dark
+      doc.fillColor('#111111').fontSize(9).font('Helvetica-Bold')
+         .text(ars(precio), 0, curY + 5, { align: 'right', width: PW - MR });
+
+      // Bottom separator
+      doc.strokeColor('#e8e8e8').lineWidth(0.5)
+         .moveTo(ML, curY + ROW_H).lineTo(PW - MR, curY + ROW_H).stroke();
+
+      curY += ROW_H;
+      rowIndex++;
     }
 
-    doc.moveDown(1.5);
-    doc.strokeColor('#2d2d2d').lineWidth(0.5).moveTo(45, doc.y).lineTo(45 + PAGE_W, doc.y).stroke();
-    doc.moveDown(0.5);
-    doc.fillColor('#8a8a8a').fontSize(7.5).font('Helvetica')
-       .text('* Precios en pesos argentinos con IVA incluido. Sujetos a modificación sin previo aviso.', 45, doc.y, { width: PAGE_W });
-    doc.text('Laprida 270 – Ciudad de Salta  ·  Tel: 3872220486', 45, doc.y + 12, { width: PAGE_W });
+    // ── FOOTER ───────────────────────────────────────────────────────────────
+    curY += 14;
+    doc.strokeColor('#cccccc').lineWidth(0.7)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 8;
+
+    doc.fillColor('#888888').fontSize(7).font('Helvetica')
+       .text('* Precios en pesos argentinos con IVA incluido. Sujetos a modificación sin previo aviso.', ML, curY, { width: CW });
+
+    curY += 12;
+    doc.fillColor('#555555').fontSize(7.5).font('Helvetica-Bold')
+       .text('Laprida 270 – Ciudad de Salta', ML, curY);
+    doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
+       .text('  ·  Tel: 3872220486', ML + 143, curY);
+
+    // Page numbers
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      if (totalPages > 1) {
+        doc.fillColor('#aaaaaa').fontSize(7).font('Helvetica')
+           .text(`Pág. ${i + 1} / ${totalPages}`, 0, PH - 22, { align: 'right', width: PW - MR });
+      }
+    }
+
     doc.end();
   } catch (err) {
     next(err);
