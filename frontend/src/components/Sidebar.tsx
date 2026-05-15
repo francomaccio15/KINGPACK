@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import SucursalSelector from '@/components/SucursalSelector';
 
 // ─── Íconos ──────────────────────────────────────────────────────────────────
 const ChevronLeft = () => (
@@ -63,12 +62,6 @@ const IcoReportes = () => (
     <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
   </svg>
 );
-const IcoSucursal = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-);
-
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -87,7 +80,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Catálogo',
     items: [
       { label: 'Artículos',         href: '/articulos',      icon: <IcoArticulos />   },
-      { label: 'Listas de Precios', href: '/listas-precios', icon: <IcoListas />      },
+      { label: 'Administración de Listas', href: '/listas-precios', icon: <IcoListas />      },
       { label: 'Categorías',        href: '/categorias',     icon: <IcoCategorias />, disabled: true },
     ],
   },
@@ -101,12 +94,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-type SidebarProps = {
-  sucursales: { id: string; nombre: string }[];
-  activaId: string;
-};
-
-export default function Sidebar({ sucursales, activaId }: SidebarProps) {
+export default function Sidebar() {
   const pathname = usePathname();
 
   // Persistir estado en localStorage
@@ -195,26 +183,6 @@ export default function Sidebar({ sucursales, activaId }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Selector de sucursal al fondo */}
-      <div className="border-t border-kp-border p-3 flex-shrink-0">
-        {collapsed ? (
-          <div className="flex justify-center">
-            <div className="relative text-kp-gray">
-              <IcoSucursal />
-              {activaId && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-kp-red border border-kp-surface" />
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-kp-gray px-1">
-              Sucursal
-            </p>
-            <SucursalSelector sucursales={sucursales} activaId={activaId} />
-          </div>
-        )}
-      </div>
     </aside>
   );
 }

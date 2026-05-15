@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Montserrat } from 'next/font/google';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import SucursalSelector from '@/components/SucursalSelector';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 
 const montserrat = Montserrat({
@@ -36,9 +37,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="es" className={montserrat.variable}>
       <body className="min-h-screen flex flex-col bg-kp-bg text-kp-white">
 
-        {/* Header — solo logo */}
+        {/* Header — logo + selector de sucursal */}
         <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20">
-          <div className="h-full px-5 flex items-center">
+          <div className="h-full px-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="w-1 h-6 bg-kp-red rounded-full block" />
               <h1 className="text-lg font-bold tracking-wide uppercase">
@@ -49,12 +50,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </span>
               </h1>
             </div>
+            <SucursalSelector sucursales={sucursales} activaId={sucursalActivaId} />
           </div>
         </header>
 
         {/* Cuerpo: sidebar + contenido */}
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar sucursales={sucursales} activaId={sucursalActivaId} />
+          <Sidebar />
 
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto px-6 py-8">
