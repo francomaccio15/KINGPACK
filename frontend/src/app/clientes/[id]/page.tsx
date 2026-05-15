@@ -34,7 +34,9 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
   const listas     = listasRes.ok   ? (await listasRes.json()).listas       ?? [] : [];
   const sucursales = sucursalesRes.ok ? (await sucursalesRes.json()).sucursales ?? [] : [];
 
-  const saldoActual = parseFloat(cliente.saldo_actual || '0');
+  const saldoActual  = parseFloat(cliente.saldo_actual  || '0');
+  const limiteCredito = parseFloat(cliente.limite_credito || '0');
+  const excedeCredito = limiteCredito > 0 && saldoActual > limiteCredito;
 
   const TIPO_LABEL: Record<string, string> = {
     venta:      'Venta',
@@ -71,11 +73,33 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
         </div>
       </div>
 
+      {/* Banner alerta crédito excedido */}
+      {excedeCredito && (
+        <div className="flex items-center gap-3 rounded-xl border border-kp-red/50 bg-kp-red/10 px-4 py-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-kp-red flex-shrink-0">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <p className="text-sm text-kp-red font-semibold">
+            Límite de crédito excedido — debe {fmt(saldoActual)} / límite {fmt(limiteCredito)}
+          </p>
+        </div>
+      )}
+
       {/* Tarjetas de resumen */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
+          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Saldo Actual</p>
+          <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : saldoActual > 0 ? 'text-amber-400' : saldoActual < 0 ? 'text-green-400' : 'text-kp-white'}`}>
+            {fmt(saldoActual)}
+          </p>
+        </div>
+        <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
+          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</p>
+          <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-kp-white'}`}>
+            {fmt(limiteCredito)}
+          </p>
+        </div>
         {[
-          { label: 'Saldo Actual', value: fmt(saldoActual), color: saldoActual > 0 ? 'text-amber-400' : saldoActual < 0 ? 'text-green-400' : 'text-kp-white' },
-          { label: 'Límite Crédito', value: fmt(cliente.limite_credito), color: 'text-kp-white' },
           { label: 'Descuento Extra', value: `${parseFloat(cliente.descuento_adicional || '0').toFixed(1)}%`, color: 'text-kp-white' },
           { label: 'Lista de Precios', value: cliente.lista_precio ?? '—', color: 'text-kp-gray-lt' },
         ].map(card => (

@@ -101,9 +101,20 @@ export default async function ClientesPage({
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-xs text-kp-gray">{fmt(c.limite_credito)}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
-                    <span className={saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}>
-                      {fmt(saldo)}
-                    </span>
+                    {(() => {
+                      const limite = parseFloat(c.limite_credito || '0');
+                      const excede = limite > 0 && saldo > limite;
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 ${excede ? 'text-kp-red' : saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
+                          {excede && (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                          )}
+                          {fmt(saldo)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {c.activo
