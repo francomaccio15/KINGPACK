@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Montserrat } from 'next/font/google';
 import './globals.css';
-import SucursalSelector from '@/components/SucursalSelector';
+import Sidebar from '@/components/Sidebar';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 
 const montserrat = Montserrat({
@@ -34,12 +34,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="es" className={montserrat.variable}>
-      <body className="min-h-screen flex flex-col">
-        <header className="bg-kp-surface border-b border-kp-border">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <body className="min-h-screen flex flex-col bg-kp-bg text-kp-white">
 
-            {/* Logo */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Header — solo logo */}
+        <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20">
+          <div className="h-full px-5 flex items-center">
+            <div className="flex items-center gap-3">
               <span className="w-1 h-6 bg-kp-red rounded-full block" />
               <h1 className="text-lg font-bold tracking-wide uppercase">
                 King Pack
@@ -49,37 +49,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </span>
               </h1>
             </div>
-
-            {/* Nav + Selector */}
-            <div className="flex items-center gap-6">
-              <nav className="flex items-center gap-6 text-sm font-medium">
-                <a href="/articulos"
-                  className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs">
-                  Artículos
-                </a>
-                <a href="/listas-precios"
-                  className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs">
-                  Listas de Precios
-                </a>
-              </nav>
-
-              {/* Divisor */}
-              <span className="w-px h-5 bg-kp-border" />
-
-              {/* Selector de sucursal */}
-              <SucursalSelector sucursales={sucursales} activaId={sucursalActivaId} />
-            </div>
-
           </div>
         </header>
 
-        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-          {children}
-        </main>
+        {/* Cuerpo: sidebar + contenido */}
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar sucursales={sucursales} activaId={sucursalActivaId} />
 
-        <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-5">
+          <main className="flex-1 overflow-y-auto">
+            <div className="max-w-6xl mx-auto px-6 py-8">
+              {children}
+            </div>
+          </main>
+        </div>
+
+        <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-4 flex-shrink-0 bg-kp-surface">
           KingPack &nbsp;·&nbsp; MaccioTEC &nbsp;·&nbsp; {process.env.NODE_ENV}
         </footer>
+
       </body>
     </html>
   );
