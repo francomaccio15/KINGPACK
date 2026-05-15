@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
+import EditarCliente from './EditarCliente';
 
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -10,9 +11,12 @@ const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-AR', { day: '
 export const dynamic = 'force-dynamic';
 
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
-  const [clienteRes, movsRes] = await Promise.all([
-    fetch(`${API}/api/clientes/${params.id}`, { cache: 'no-store' }),
+  const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes] = await Promise.all([
+    fetch(`${API}/api/clientes/${params.id}`,              { cache: 'no-store' }),
     fetch(`${API}/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
+    fetch(`${API}/api/clientes/cond-iva`,                 { cache: 'no-store' }),
+    fetch(`${API}/api/listas-precios`,                    { cache: 'no-store' }),
+    fetch(`${API}/api/sucursales`,                        { cache: 'no-store' }),
   ]);
 
   if (!clienteRes.ok) {
@@ -26,6 +30,9 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
 
   const { cliente }                        = await clienteRes.json();
   const { movimientos = [], correcciones = [], saldo_inicial = 0 } = movsRes.ok ? await movsRes.json() : {};
+  const condIva    = condIvaRes.ok  ? (await condIvaRes.json()).cond_iva    ?? [] : [];
+  const listas     = listasRes.ok   ? (await listasRes.json()).listas       ?? [] : [];
+  const sucursales = sucursalesRes.ok ? (await sucursalesRes.json()).sucursales ?? [] : [];
 
   const saldoActual = parseFloat(cliente.saldo_actual || '0');
 
@@ -58,7 +65,10 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             <p className="text-sm text-kp-gray pl-3 font-mono">CUIT: {cliente.cuit}</p>
           )}
         </div>
-        <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} />
+        <div className="flex items-center gap-2">
+          <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
+          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} />
+        </div>
       </div>
 
       {/* Tarjetas de resumen */}
