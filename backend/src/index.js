@@ -10,6 +10,7 @@ const articulosRouter    = require('./routes/articulos');
 const categoriasRouter   = require('./routes/categorias');
 const listasRouter       = require('./routes/listas-precios');
 const sucursalesRouter   = require('./routes/sucursales');
+const clientesRouter     = require('./routes/clientes');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -23,6 +24,7 @@ app.use('/api/articulos',      articulosRouter);
 app.use('/api/categorias',     categoriasRouter);
 app.use('/api/listas-precios', listasRouter);
 app.use('/api/sucursales',     sucursalesRouter);
+app.use('/api/clientes',       clientesRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
