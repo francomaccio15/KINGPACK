@@ -1,5 +1,13 @@
 import type { Metadata } from 'next';
+import { Montserrat } from 'next/font/google';
 import './globals.css';
+
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-montserrat',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'KingPack',
@@ -8,22 +16,37 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <body>
-        <header className="bg-kingpack text-white">
+    <html lang="es" className={montserrat.variable}>
+      <body className="min-h-screen flex flex-col">
+        <header className="bg-kp-surface border-b border-kp-border">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <h1 className="text-xl font-semibold">
-              KingPack <span className="text-kingpack-accent">·</span>{' '}
-              <span className="font-normal opacity-80">Gestión</span>
-            </h1>
-            <nav className="text-sm opacity-90">
-              <a href="/articulos" className="hover:underline">Artículos</a>
+            <div className="flex items-center gap-3">
+              <span className="w-1 h-6 bg-kp-red rounded-full block" />
+              <h1 className="text-lg font-bold tracking-wide uppercase">
+                King Pack
+                <span className="text-kp-red ml-1">·</span>
+                <span className="font-normal text-kp-gray ml-1 normal-case tracking-normal text-base">
+                  Gestión
+                </span>
+              </h1>
+            </div>
+            <nav className="flex items-center gap-6 text-sm font-medium">
+              <a
+                href="/articulos"
+                className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs"
+              >
+                Artículos
+              </a>
             </nav>
           </div>
         </header>
-        <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
-        <footer className="text-xs text-center text-slate-500 py-6">
-          KingPack · MaccioTEC · entorno {process.env.NODE_ENV}
+
+        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+          {children}
+        </main>
+
+        <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-5">
+          KingPack &nbsp;·&nbsp; MaccioTEC &nbsp;·&nbsp; {process.env.NODE_ENV}
         </footer>
       </body>
     </html>
