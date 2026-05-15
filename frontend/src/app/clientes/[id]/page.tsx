@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
 import EditarCliente from './EditarCliente';
+import EstadoCuentaPDF from './EstadoCuentaPDF';
 
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -68,6 +69,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           )}
         </div>
         <div className="flex items-center gap-2">
+          <EstadoCuentaPDF clienteId={cliente.id} />
           <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
           <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} />
         </div>

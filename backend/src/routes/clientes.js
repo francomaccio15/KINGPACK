@@ -278,4 +278,259 @@ router.post('/:id/pagos', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/clientes/:id/pdf-estado-cuenta ─────────────────────────────────
+router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
+  try {
+    const [{ rows: [cliente] }, { rows: movs }] = await Promise.all([
+      pool.query(`
+        SELECT c.razon_social, c.cuit, c.direccion, c.telefono,
+               ci.nombre AS cond_iva,
+               lp.nombre AS lista_precio,
+               c.saldo_inicial,
+               c.saldo_inicial
+                 + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                 + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual,
+               c.limite_credito
+          FROM clientes c
+          LEFT JOIN cond_iva ci        ON ci.id  = c.cond_iva_id
+          LEFT JOIN listas_precios lp  ON lp.id  = c.lista_precio_id
+          LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+          LEFT JOIN (
+            SELECT cliente_id, SUM(monto) AS total_correcciones
+              FROM correcciones_saldo_cliente GROUP BY cliente_id
+          ) cs_agg ON cs_agg.cliente_id = c.id
+         WHERE c.id = $1 AND c.deleted_at IS NULL
+         GROUP BY c.id, ci.nombre, lp.nombre, cs_agg.total_correcciones
+      `, [req.params.id]),
+      pool.query(`
+        SELECT debe, haber, saldo, fecha, origen_tipo
+          FROM cuentas_corrientes_cliente
+         WHERE cliente_id = $1
+         ORDER BY fecha ASC
+      `, [req.params.id]),
+    ]);
+
+    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+
+    const slug = cliente.razon_social.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="estado-cuenta-${slug}.pdf"`);
+    doc.pipe(res);
+
+    const PW = doc.page.width;   // 595
+    const PH = doc.page.height;  // 842
+    const ML = 45;
+    const MR = 45;
+    const CW = PW - ML - MR;
+
+    const ars = v => new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
+    }).format(parseFloat(v) || 0);
+
+    const fmtFecha = f => new Date(f).toLocaleDateString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+
+    const TIPO_LABEL = { venta: 'Venta', facturacion: 'Facturación', pago: 'Pago', correccion: 'Corrección' };
+
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    const HEADER_H = 88;
+    doc.rect(0, 0, PW, HEADER_H).fill('#111111');
+    doc.rect(0, 0, PW, 4).fill('#e3000f');
+    doc.rect(ML, 20, 3, 32).fill('#e3000f');
+
+    doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold')
+       .text('KING PACK', ML + 12, 20);
+    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+       .text('DESCARTABLES', ML + 12, 48);
+    doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica')
+       .text('·  ESTADO DE CUENTA', ML + 120, 48);
+
+    const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    doc.fillColor('#888888').fontSize(8).font('Helvetica')
+       .text(`Fecha: ${fecha}`, 0, 24, { align: 'right', width: PW - MR });
+
+    // ── DATOS DEL CLIENTE ─────────────────────────────────────────────────────
+    let curY = HEADER_H + 16;
+
+    doc.fillColor('#1a1a1a').fontSize(13).font('Helvetica-Bold')
+       .text(cliente.razon_social.toUpperCase(), ML, curY);
+    curY += 18;
+
+    const infoItems = [];
+    if (cliente.cuit)       infoItems.push(`CUIT: ${cliente.cuit}`);
+    if (cliente.cond_iva)   infoItems.push(`Cond. IVA: ${cliente.cond_iva}`);
+    if (cliente.lista_precio) infoItems.push(`Lista: ${cliente.lista_precio}`);
+    if (cliente.telefono)   infoItems.push(`Tel: ${cliente.telefono}`);
+    if (cliente.direccion)  infoItems.push(cliente.direccion);
+
+    doc.fillColor('#666666').fontSize(8).font('Helvetica')
+       .text(infoItems.join('   ·   '), ML, curY, { width: CW * 0.65 });
+    curY += 14;
+
+    // Saldo actual — badge derecho
+    const saldoActual  = parseFloat(cliente.saldo_actual) || 0;
+    const limiteCredito = parseFloat(cliente.limite_credito) || 0;
+    const excede = limiteCredito > 0 && saldoActual > limiteCredito;
+
+    const badgeColor = excede ? '#e3000f' : saldoActual > 0 ? '#d97706' : '#16a34a';
+    doc.rect(PW - MR - 130, HEADER_H + 14, 130, 44).fill(badgeColor);
+    doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold')
+       .text('SALDO ACTUAL', PW - MR - 126, HEADER_H + 19, { width: 122, align: 'center' });
+    doc.fillColor('#ffffff').fontSize(14).font('Helvetica-Bold')
+       .text(ars(saldoActual), PW - MR - 126, HEADER_H + 32, { width: 122, align: 'center' });
+
+    curY = Math.max(curY, HEADER_H + 62);
+
+    // Separator line
+    doc.strokeColor('#e0e0e0').lineWidth(0.7)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 14;
+
+    // ── COLUMN HEADERS ────────────────────────────────────────────────────────
+    const COL_FECHA = ML;
+    const COL_TIPO  = ML + 68;
+    const COL_DEBE  = PW - MR - 210;
+    const COL_HABER = PW - MR - 110;
+    const COL_SALDO = PW - MR;
+
+    doc.rect(0, curY, PW, 20).fill('#f2f2f2');
+    doc.rect(0, curY + 19, PW, 1).fill('#d0d0d0');
+
+    doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+    doc.text('FECHA',  COL_FECHA, curY + 7, { width: 60 });
+    doc.text('TIPO',   COL_TIPO,  curY + 7, { width: 90 });
+    doc.text('DEBE',   0, curY + 7, { align: 'right', width: PW - MR - 110 });
+    doc.text('HABER',  0, curY + 7, { align: 'right', width: PW - MR - 10  });
+    doc.text('SALDO',  0, curY + 7, { align: 'right', width: PW - MR });
+    curY += 22;
+
+    const ROW_H = 20;
+    let rowIndex = 0;
+
+    const ensureSpace = () => {
+      if (curY + ROW_H > PH - 55) {
+        doc.addPage();
+        doc.rect(0, 0, PW, 20).fill('#f2f2f2');
+        doc.rect(0, 19, PW, 1).fill('#d0d0d0');
+        doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+        doc.text('FECHA', COL_FECHA, 7, { width: 60 });
+        doc.text('TIPO',  COL_TIPO,  7, { width: 90 });
+        doc.text('DEBE',  0, 7, { align: 'right', width: PW - MR - 110 });
+        doc.text('HABER', 0, 7, { align: 'right', width: PW - MR - 10  });
+        doc.text('SALDO', 0, 7, { align: 'right', width: PW - MR });
+        curY = 22;
+        rowIndex = 0;
+      }
+    };
+
+    // Fila saldo inicial
+    ensureSpace();
+    if (rowIndex % 2 === 1) doc.rect(0, curY, PW, ROW_H).fill('#f9f9f9');
+    doc.fillColor('#999999').fontSize(7.5).font('Helvetica-Oblique')
+       .text('—', COL_FECHA, curY + 6, { width: 60 });
+    doc.fillColor('#999999').fontSize(7.5).font('Helvetica-Oblique')
+       .text('Saldo inicial', COL_TIPO, curY + 6, { width: 90 });
+    doc.fillColor('#444444').fontSize(8).font('Helvetica-Bold')
+       .text(ars(cliente.saldo_inicial), 0, curY + 5, { align: 'right', width: PW - MR });
+    doc.strokeColor('#eeeeee').lineWidth(0.4)
+       .moveTo(ML, curY + ROW_H).lineTo(PW - MR, curY + ROW_H).stroke();
+    curY += ROW_H;
+    rowIndex++;
+
+    // Movimientos
+    for (const m of movs) {
+      ensureSpace();
+      if (rowIndex % 2 === 1) doc.rect(0, curY, PW, ROW_H).fill('#f9f9f9');
+
+      const debe  = parseFloat(m.debe)  || 0;
+      const haber = parseFloat(m.haber) || 0;
+      const saldo = parseFloat(m.saldo) || 0;
+
+      doc.fillColor('#777777').fontSize(7.5).font('Helvetica')
+         .text(fmtFecha(m.fecha), COL_FECHA, curY + 6, { width: 60 });
+
+      doc.fillColor('#333333').fontSize(7.5).font('Helvetica')
+         .text(TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—', COL_TIPO, curY + 6, { width: 90 });
+
+      // Debe (amber)
+      if (debe > 0) {
+        doc.fillColor('#b45309').fontSize(8).font('Helvetica-Bold')
+           .text(ars(debe), 0, curY + 5, { align: 'right', width: PW - MR - 110 });
+      } else {
+        doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
+           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 110 });
+      }
+
+      // Haber (green)
+      if (haber > 0) {
+        doc.fillColor('#15803d').fontSize(8).font('Helvetica-Bold')
+           .text(ars(haber), 0, curY + 5, { align: 'right', width: PW - MR - 10 });
+      } else {
+        doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
+           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 10 });
+      }
+
+      // Saldo
+      const saldoColor = saldo > 0 ? '#b45309' : saldo < 0 ? '#15803d' : '#555555';
+      doc.fillColor(saldoColor).fontSize(8.5).font('Helvetica-Bold')
+         .text(ars(saldo), 0, curY + 5, { align: 'right', width: PW - MR });
+
+      doc.strokeColor('#eeeeee').lineWidth(0.4)
+         .moveTo(ML, curY + ROW_H).lineTo(PW - MR, curY + ROW_H).stroke();
+
+      curY += ROW_H;
+      rowIndex++;
+    }
+
+    // ── RESUMEN FINAL ─────────────────────────────────────────────────────────
+    curY += 10;
+    ensureSpace();
+
+    doc.rect(ML, curY, CW, 32).fill(excede ? '#fff1f2' : '#f8faff');
+    doc.strokeColor(excede ? '#e3000f' : '#d0d0d0').lineWidth(0.8)
+       .rect(ML, curY, CW, 32).stroke();
+
+    doc.fillColor('#555555').fontSize(7.5).font('Helvetica-Bold')
+       .text('SALDO TOTAL AL ' + fecha, ML + 10, curY + 8);
+    doc.fillColor(badgeColor).fontSize(13).font('Helvetica-Bold')
+       .text(ars(saldoActual), 0, curY + 6, { align: 'right', width: PW - MR });
+
+    if (excede) {
+      doc.fillColor('#e3000f').fontSize(7).font('Helvetica-Bold')
+         .text(`⚠  Límite de crédito excedido (límite: ${ars(limiteCredito)})`, ML + 10, curY + 21);
+    }
+
+    curY += 44;
+
+    // ── FOOTER ────────────────────────────────────────────────────────────────
+    doc.strokeColor('#cccccc').lineWidth(0.7)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 8;
+
+    doc.fillColor('#888888').fontSize(7).font('Helvetica')
+       .text('* Documento generado automáticamente. No válido como comprobante fiscal.', ML, curY, { width: CW });
+    curY += 12;
+
+    doc.fillColor('#555555').fontSize(7.5).font('Helvetica-Bold')
+       .text('Laprida 270 – Ciudad de Salta', ML, curY);
+    doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
+       .text('  ·  Tel: 3872220486', ML + 143, curY);
+
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      if (totalPages > 1) {
+        doc.fillColor('#aaaaaa').fontSize(7).font('Helvetica')
+           .text(`Pág. ${i + 1} / ${totalPages}`, 0, PH - 22, { align: 'right', width: PW - MR });
+      }
+    }
+
+    doc.end();
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
