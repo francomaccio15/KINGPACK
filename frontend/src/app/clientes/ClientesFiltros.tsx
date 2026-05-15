@@ -3,9 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
 
-type Sucursal = { id: string; nombre: string };
-
-export default function ClientesFiltros({ sucursales }: { sucursales: Sucursal[] }) {
+export default function ClientesFiltros() {
   const router       = useRouter();
   const pathname     = usePathname();
   const searchParams = useSearchParams();
@@ -21,9 +19,8 @@ export default function ClientesFiltros({ sucursales }: { sucursales: Sucursal[]
     startTransition(() => router.replace(`${pathname}?${params.toString()}`));
   }, [searchParams, pathname, router]);
 
-  const q          = searchParams.get('q') ?? '';
-  const activo     = searchParams.get('activo') ?? '';
-  const sucursalId = searchParams.get('sucursal_id') ?? '';
+  const q      = searchParams.get('q') ?? '';
+  const activo = searchParams.get('activo') ?? '';
 
   return (
     <div className={`flex flex-wrap items-center gap-2 transition-opacity ${pending ? 'opacity-60' : ''}`}>
@@ -44,19 +41,6 @@ export default function ClientesFiltros({ sucursales }: { sucursales: Sucursal[]
         />
       </div>
 
-      {/* Filtro sucursal */}
-      {sucursales.length > 0 && (
-        <select
-          value={sucursalId}
-          onChange={e => update('sucursal_id', e.target.value)}
-          className="py-1.5 px-3 bg-kp-surface2 border border-kp-border rounded-lg text-sm text-kp-white
-            focus:outline-none focus:border-kp-red transition-colors"
-        >
-          <option value="">Todas las sucursales</option>
-          {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-        </select>
-      )}
-
       {/* Filtro estado */}
       <select
         value={activo}
@@ -70,7 +54,7 @@ export default function ClientesFiltros({ sucursales }: { sucursales: Sucursal[]
       </select>
 
       {/* Limpiar filtros */}
-      {(q || sucursalId || activo) && (
+      {(q || activo) && (
         <button
           onClick={() => startTransition(() => router.replace(pathname))}
           className="text-xs text-kp-gray hover:text-kp-white transition-colors px-2 py-1.5 rounded border border-transparent hover:border-kp-border"

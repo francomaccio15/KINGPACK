@@ -14,11 +14,10 @@ type Cliente = {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 
-async function fetchAll(q?: string, activo?: string, sucursal_id?: string) {
+async function fetchAll(q?: string, activo?: string) {
   const params = new URLSearchParams({ limit: '500' });
-  if (q)           params.set('q', q);
-  if (activo)      params.set('activo', activo);
-  if (sucursal_id) params.set('sucursal_id', sucursal_id);
+  if (q)      params.set('q', q);
+  if (activo) params.set('activo', activo);
 
   const [clientes, condIva, listas, sucursales] = await Promise.all([
     fetch(`${API}/api/clientes?${params}`,  { cache: 'no-store' }).then(r => r.json()).then(d => d.clientes ?? []).catch(() => []),
@@ -34,15 +33,14 @@ export const dynamic = 'force-dynamic';
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; activo?: string; sucursal_id?: string };
+  searchParams: { q?: string; activo?: string };
 }) {
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,
-    searchParams.sucursal_id,
   );
 
-  const hayFiltros = !!(searchParams.q || searchParams.activo || searchParams.sucursal_id);
+  const hayFiltros = !!(searchParams.q || searchParams.activo);
 
   return (
     <section className="space-y-5">
@@ -64,7 +62,7 @@ export default async function ClientesPage({
 
       {/* Filtros */}
       <Suspense>
-        <ClientesFiltros sucursales={sucursales} />
+        <ClientesFiltros />
       </Suspense>
 
       {/* Tabla */}
