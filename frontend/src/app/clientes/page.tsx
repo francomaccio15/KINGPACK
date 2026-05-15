@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
+import ClientesFiltros from './ClientesFiltros';
 
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -12,20 +14,35 @@ type Cliente = {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 
-async function fetchAll() {
+async function fetchAll(q?: string, activo?: string, sucursal_id?: string) {
+  const params = new URLSearchParams({ limit: '500' });
+  if (q)           params.set('q', q);
+  if (activo)      params.set('activo', activo);
+  if (sucursal_id) params.set('sucursal_id', sucursal_id);
+
   const [clientes, condIva, listas, sucursales] = await Promise.all([
-    fetch(`${API}/api/clientes?limit=500`, { cache: 'no-store' }).then(r => r.json()).then(d => d.clientes ?? []).catch(() => []),
-    fetch(`${API}/api/clientes/cond-iva`,  { cache: 'no-store' }).then(r => r.json()).then(d => d.cond_iva ?? []).catch(() => []),
-    fetch(`${API}/api/listas-precios`,     { cache: 'no-store' }).then(r => r.json()).then(d => d.listas ?? []).catch(() => []),
-    fetch(`${API}/api/sucursales`,         { cache: 'no-store' }).then(r => r.json()).then(d => d.sucursales ?? []).catch(() => []),
+    fetch(`${API}/api/clientes?${params}`,  { cache: 'no-store' }).then(r => r.json()).then(d => d.clientes ?? []).catch(() => []),
+    fetch(`${API}/api/clientes/cond-iva`,   { cache: 'no-store' }).then(r => r.json()).then(d => d.cond_iva ?? []).catch(() => []),
+    fetch(`${API}/api/listas-precios`,      { cache: 'no-store' }).then(r => r.json()).then(d => d.listas ?? []).catch(() => []),
+    fetch(`${API}/api/sucursales`,          { cache: 'no-store' }).then(r => r.json()).then(d => d.sucursales ?? []).catch(() => []),
   ]);
   return { clientes, condIva, listas, sucursales };
 }
 
 export const dynamic = 'force-dynamic';
 
-export default async function ClientesPage() {
-  const { clientes, condIva, listas, sucursales } = await fetchAll();
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams: { q?: string; activo?: string; sucursal_id?: string };
+}) {
+  const { clientes, condIva, listas, sucursales } = await fetchAll(
+    searchParams.q,
+    searchParams.activo,
+    searchParams.sucursal_id,
+  );
+
+  const hayFiltros = !!(searchParams.q || searchParams.activo || searchParams.sucursal_id);
 
   return (
     <section className="space-y-5">
@@ -37,10 +54,18 @@ export default async function ClientesPage() {
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
             <h2 className="text-2xl font-bold uppercase tracking-wide">Clientes</h2>
           </div>
-          <p className="text-sm text-kp-gray pl-3">{clientes.length} {clientes.length === 1 ? 'registro' : 'registros'}</p>
+          <p className="text-sm text-kp-gray pl-3">
+            {clientes.length} {clientes.length === 1 ? 'registro' : 'registros'}
+            {hayFiltros && <span className="ml-1 text-kp-gray/60">(filtrado)</span>}
+          </p>
         </div>
         <NuevoCliente condIva={condIva} listas={listas} sucursales={sucursales} />
       </div>
+
+      {/* Filtros */}
+      <Suspense>
+        <ClientesFiltros sucursales={sucursales} />
+      </Suspense>
 
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
@@ -98,7 +123,9 @@ export default async function ClientesPage() {
             })}
             {clientes.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-kp-gray">No hay clientes cargados todavía.</td>
+                <td colSpan={8} className="px-4 py-12 text-center text-kp-gray">
+                  {hayFiltros ? 'No hay clientes que coincidan con los filtros.' : 'No hay clientes cargados todavía.'}
+                </td>
               </tr>
             )}
           </tbody>

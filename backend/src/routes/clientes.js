@@ -19,7 +19,7 @@ router.get('/cond-iva', async (req, res, next) => {
 // ?offset=      default 0
 router.get('/', async (req, res, next) => {
   try {
-    const { q, activo = 'true', limit = 200, offset = 0 } = req.query;
+    const { q, activo = 'true', sucursal_id, limit = 200, offset = 0 } = req.query;
 
     const conditions = ['c.deleted_at IS NULL'];
     const params = [];
@@ -33,6 +33,10 @@ router.get('/', async (req, res, next) => {
       conditions.push(`(c.razon_social ILIKE $${idx} OR c.cuit ILIKE $${idx})`);
       params.push(`%${q.trim()}%`);
       idx++;
+    }
+    if (sucursal_id) {
+      conditions.push(`c.sucursal_default_id = $${idx++}`);
+      params.push(sucursal_id);
     }
 
     const where = conditions.join(' AND ');
