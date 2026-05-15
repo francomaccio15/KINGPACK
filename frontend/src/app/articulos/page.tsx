@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
+import NuevoArticulo from './NuevoArticulo';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ type Articulo = {
 type Lista     = { id: string; nombre: string; tipo: string; descuento_base_pct: string };
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Sucursal  = { id: string; nombre: string };
+type Alicuota  = { id: string; porcentaje: string; descripcion: string };
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -49,6 +51,14 @@ async function fetchSucursales(): Promise<Sucursal[]> {
     const r = await fetch(`${API}/api/sucursales`, { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).sucursales ?? [];
+  } catch { return []; }
+}
+
+async function fetchAlicuotas(): Promise<Alicuota[]> {
+  try {
+    const r = await fetch(`${API}/api/articulos/alicuotas`, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return (await r.json()).alicuotas ?? [];
   } catch { return []; }
 }
 
@@ -95,10 +105,11 @@ export default async function ArticulosPage({
 }) {
   const sucursalActivaId = getSucursalActivaId();
 
-  const [listas, categorias, sucursales] = await Promise.all([
+  const [listas, categorias, sucursales, alicuotas] = await Promise.all([
     fetchListas(),
     fetchCategorias(),
     fetchSucursales(),
+    fetchAlicuotas(),
   ]);
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
@@ -148,9 +159,12 @@ export default async function ArticulosPage({
             {(searchParams.activo || 'true') === 'false' && ' inactivos'}
           </p>
         </div>
-        {listaActiva && (
-          <ExportarPDF lista={listaActiva} categorias={categorias} />
-        )}
+        <div className="flex items-center gap-3">
+          <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
+          {listaActiva && (
+            <ExportarPDF lista={listaActiva} categorias={categorias} />
+          )}
+        </div>
       </div>
 
       {/* ── Tabs por lista ── */}

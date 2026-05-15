@@ -4,6 +4,56 @@ const { pool } = require('../config/db');
 
 const router = express.Router();
 
+// ─── GET /api/articulos/alicuotas ────────────────────────────────────────────
+router.get('/alicuotas', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, porcentaje, descripcion FROM alicuotas_iva ORDER BY porcentaje'
+    );
+    res.json({ alicuotas: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/articulos ──────────────────────────────────────────────────────
+router.post('/', async (req, res, next) => {
+  try {
+    const {
+      codigo, nombre, categoria_id, alicuota_iva_id,
+      costo_base, costo_flete = 0, margen_aplicado,
+    } = req.body;
+
+    if (!codigo || !nombre || !categoria_id || !alicuota_iva_id || costo_base === undefined) {
+      return res.status(400).json({
+        error: 'codigo, nombre, categoria_id, alicuota_iva_id y costo_base son requeridos',
+      });
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO articulos
+        (codigo, nombre, categoria_id, alicuota_iva_id, costo_base, costo_flete, margen_aplicado)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, codigo, nombre, precio_madre, activo, created_at
+    `, [
+      codigo.trim(),
+      nombre.trim(),
+      categoria_id,
+      alicuota_iva_id,
+      parseFloat(costo_base) || 0,
+      parseFloat(costo_flete) || 0,
+      margen_aplicado !== undefined && margen_aplicado !== '' ? parseFloat(margen_aplicado) : null,
+    ]);
+
+    res.status(201).json({ articulo: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe un artículo con ese código' });
+    }
+    next(err);
+  }
+});
+
 // ─── GET /api/articulos/pdf-precios ──────────────────────────────────────────
 // ?lista_id=UUID   usa precio_efectivo de esa lista (default: precio_madre)
 // ?descuento=N     descuento % adicional sobre el precio de lista
