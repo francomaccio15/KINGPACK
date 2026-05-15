@@ -227,7 +227,7 @@ router.get('/pdf-precios', async (req, res, next) => {
 // ?offset=         default 0
 router.get('/', async (req, res, next) => {
   try {
-    const { q, categoria_id, lista_id, activo = 'true', limit = 500, offset = 0 } = req.query;
+    const { q, categoria_id, lista_id, sucursal_id, activo = 'true', limit = 500, offset = 0 } = req.query;
 
     const conditions = ['a.deleted_at IS NULL'];
     const params = [];
@@ -247,6 +247,8 @@ router.get('/', async (req, res, next) => {
       idx++;
     }
 
+    let joinParamCount = 0;
+
     // JOIN condicional para lista de precios
     let listaJoin = '';
     let precioListaExpr = 'a.precio_madre AS precio_lista';
@@ -254,10 +256,43 @@ router.get('/', async (req, res, next) => {
       params.push(lista_id);
       listaJoin = `LEFT JOIN lista_precio_items lpi ON lpi.articulo_id = a.id AND lpi.lista_id = $${idx++}`;
       precioListaExpr = 'COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista';
+      joinParamCount++;
+    }
+
+    // Subquery de stock — filtrado por sucursal o agregado total con detalle
+    let stockSubquery;
+    if (sucursal_id) {
+      params.push(sucursal_id);
+      stockSubquery = `
+        SELECT articulo_id,
+               COALESCE(cantidad, 0)                                            AS cantidad_total,
+               (COALESCE(cantidad, 0) <= stock_minimo AND stock_minimo > 0)     AS stock_bajo,
+               NULL::json                                                       AS stock_detalle
+          FROM stock
+         WHERE sucursal_id = $${idx++}
+      `;
+      joinParamCount++;
+    } else {
+      stockSubquery = `
+        SELECT st.articulo_id,
+               SUM(st.cantidad)                                                      AS cantidad_total,
+               BOOL_OR(st.cantidad <= st.stock_minimo AND st.stock_minimo > 0)      AS stock_bajo,
+               json_agg(
+                 json_build_object(
+                   'nombre',    s.nombre,
+                   'cantidad',  COALESCE(st.cantidad, 0)::numeric,
+                   'stock_bajo', (st.cantidad <= st.stock_minimo AND st.stock_minimo > 0)
+                 )
+                 ORDER BY s.nombre
+               )                                                                     AS stock_detalle
+          FROM stock st
+          JOIN sucursales s ON s.id = st.sucursal_id AND s.activo = true
+         GROUP BY st.articulo_id
+      `;
     }
 
     const where       = conditions.join(' AND ');
-    const countParams = params.slice(0, lista_id ? -1 : undefined); // sin lista_id para count
+    const countParams = params.slice(0, joinParamCount > 0 ? -joinParamCount : undefined);
 
     params.push(Math.min(parseInt(limit) || 500, 1000));
     params.push(Math.max(parseInt(offset) || 0, 0));
@@ -271,16 +306,12 @@ router.get('/', async (req, res, next) => {
           c.nombre       AS categoria,
           ${precioListaExpr},
           COALESCE(st.cantidad_total, 0)::numeric  AS stock_total,
-          COALESCE(st.stock_bajo,    false)         AS stock_bajo
+          COALESCE(st.stock_bajo,    false)         AS stock_bajo,
+          st.stock_detalle
         FROM articulos a
-        LEFT JOIN categorias c   ON c.id  = a.categoria_id
+        LEFT JOIN categorias c ON c.id = a.categoria_id
         ${listaJoin}
-        LEFT JOIN (
-          SELECT articulo_id,
-                 SUM(cantidad)                                          AS cantidad_total,
-                 BOOL_OR(cantidad <= stock_minimo AND stock_minimo > 0) AS stock_bajo
-            FROM stock GROUP BY articulo_id
-        ) st ON st.articulo_id = a.id
+        LEFT JOIN (${stockSubquery}) st ON st.articulo_id = a.id
         WHERE ${where}
         ORDER BY c.nombre NULLS LAST, a.nombre
         LIMIT $${idx} OFFSET $${idx + 1}

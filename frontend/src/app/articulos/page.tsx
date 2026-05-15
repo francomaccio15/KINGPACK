@@ -2,8 +2,11 @@ import { Suspense } from 'react';
 import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
+import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
+type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
+
 type Articulo = {
   id: string;
   codigo: string;
@@ -15,10 +18,12 @@ type Articulo = {
   categoria: string;
   stock_total: string;
   stock_bajo: boolean;
+  stock_detalle: StockDetalle[] | null;
 };
 
 type Lista     = { id: string; nombre: string; tipo: string; descuento_base_pct: string };
 type Categoria = { id: string; nombre: string; margen_default: string };
+type Sucursal  = { id: string; nombre: string };
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -39,13 +44,23 @@ async function fetchCategorias(): Promise<Categoria[]> {
   } catch { return []; }
 }
 
+async function fetchSucursales(): Promise<Sucursal[]> {
+  try {
+    const r = await fetch(`${API}/api/sucursales`, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return (await r.json()).sucursales ?? [];
+  } catch { return []; }
+}
+
 async function fetchArticulos(
-  sp: Record<string, string>
+  sp: Record<string, string>,
+  sucursal_id: string,
 ): Promise<{ count: number; articulos: Articulo[] } | { error: string }> {
   const qs = new URLSearchParams();
   if (sp.q)            qs.set('q', sp.q);
   if (sp.categoria_id) qs.set('categoria_id', sp.categoria_id);
   if (sp.lista_id)     qs.set('lista_id', sp.lista_id);
+  if (sucursal_id)     qs.set('sucursal_id', sucursal_id);
   qs.set('activo', sp.activo || 'true');
   try {
     const r = await fetch(`${API}/api/articulos?${qs}`, { cache: 'no-store' });
@@ -78,16 +93,26 @@ export default async function ArticulosPage({
 }: {
   searchParams: Record<string, string>;
 }) {
-  const [listas, categorias] = await Promise.all([fetchListas(), fetchCategorias()]);
+  const sucursalActivaId = getSucursalActivaId();
 
-  // Determinar lista activa (default: primera lista = madre)
+  const [listas, categorias, sucursales] = await Promise.all([
+    fetchListas(),
+    fetchCategorias(),
+    fetchSucursales(),
+  ]);
+
+  const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
+
   const listaActivaId = searchParams.lista_id || listas[0]?.id || '';
   const listaActiva   = listas.find(l => l.id === listaActivaId) ?? listas[0];
 
-  const data = await fetchArticulos({ ...searchParams, lista_id: listaActivaId });
+  const data = await fetchArticulos({ ...searchParams, lista_id: listaActivaId }, sucursalActivaId);
 
-  const esBase = listaActiva?.tipo === 'madre';
+  const esBase   = listaActiva?.tipo === 'madre';
   const descBase = listaActiva ? parseFloat(listaActiva.descuento_base_pct) : 0;
+
+  // Columnas de stock
+  const modeTodas = !sucursalActivaId;
 
   if ('error' in data) {
     return (
@@ -107,6 +132,15 @@ export default async function ArticulosPage({
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
             <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+
+            {/* Badge de sucursal activa */}
+            {sucursalActiva && (
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest
+                bg-kp-surface2 border border-kp-red/30 text-kp-red rounded px-2 py-0.5 ml-1">
+                <span className="w-1 h-1 rounded-full bg-kp-red" />
+                {sucursalActiva.nombre}
+              </span>
+            )}
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {data.count} {data.count === 1 ? 'registro' : 'registros'}
@@ -168,14 +202,16 @@ export default async function ArticulosPage({
                   Precio Base
                 </th>
               )}
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Stock</th>
+              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                {modeTodas ? 'Stock' : `Stock · ${sucursalActiva?.nombre ?? ''}`}
+              </th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
             </tr>
           </thead>
 
           <tbody className="bg-kp-surface divide-y divide-kp-border">
             {data.articulos.map(a => {
-              const stock = parseFloat(a.stock_total || '0');
+              const stock  = parseFloat(a.stock_total || '0');
               const pLista = parseFloat(a.precio_lista || '0');
               const pMadre = parseFloat(a.precio_madre || '0');
               const diffPct = !esBase && pMadre > 0
@@ -215,9 +251,30 @@ export default async function ArticulosPage({
                   )}
 
                   {/* Stock */}
-                  <td className="px-4 py-3 text-center tabular-nums whitespace-nowrap">
-                    {stock > 0 ? (
-                      <span className={`text-xs font-semibold ${a.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
+                    {modeTodas && a.stock_detalle && a.stock_detalle.length > 0 ? (
+                      /* Modo Todas — breakdown por sucursal */
+                      <div className="flex items-center justify-center gap-2">
+                        {a.stock_detalle.map(sd => (
+                          <span key={sd.nombre}
+                            className={`inline-flex items-center gap-1 text-xs tabular-nums
+                              ${sd.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
+                            <span className="text-[10px] text-kp-gray font-semibold uppercase">
+                              {sd.nombre[0]}:
+                            </span>
+                            {sd.cantidad % 1 === 0
+                              ? sd.cantidad.toFixed(0)
+                              : sd.cantidad.toFixed(1)}
+                            {sd.stock_bajo && (
+                              <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : stock > 0 ? (
+                      /* Modo sucursal específica — un solo número */
+                      <span className={`text-xs font-semibold tabular-nums
+                        ${a.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
                         {stock % 1 === 0 ? stock.toFixed(0) : stock.toFixed(1)}
                         {a.stock_bajo && (
                           <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block align-middle" />
