@@ -31,11 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </h1>
             </div>
             <nav className="flex items-center gap-6 text-sm font-medium">
-              <a
-                href="/articulos"
-                className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs"
-              >
+              <a href="/articulos"
+                className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs">
                 Artículos
+              </a>
+              <a href="/listas-precios"
+                className="text-kp-gray-lt hover:text-kp-red transition-colors duration-150 uppercase tracking-wide text-xs">
+                Listas de Precios
               </a>
             </nav>
           </div>

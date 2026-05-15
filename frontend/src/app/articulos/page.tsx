@@ -1,44 +1,51 @@
 import { Suspense } from 'react';
 import FiltrosArticulos from './FiltrosArticulos';
+import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
-type PrecioLista = {
-  lista_id: string;
-  nombre: string;
-  tipo: string;
-  precio: string;
-};
-
 type Articulo = {
   id: string;
   codigo: string;
   nombre: string;
   precio_madre: string;
+  precio_lista: string;
   activo: boolean;
   categoria_id: string;
   categoria: string;
   stock_total: string;
   stock_bajo: boolean;
-  precios_lista: PrecioLista[];
 };
 
-type Lista = {
-  id: string;
-  nombre: string;
-  tipo: string;
-  descuento_base_pct: string;
-};
-
+type Lista     = { id: string; nombre: string; tipo: string; descuento_base_pct: string };
 type Categoria = { id: string; nombre: string; margen_default: string };
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-async function fetchArticulos(sp: Record<string, string>): Promise<{ count: number; articulos: Articulo[] } | { error: string }> {
+async function fetchListas(): Promise<Lista[]> {
+  try {
+    const r = await fetch(`${API}/api/listas-precios`, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return (await r.json()).listas ?? [];
+  } catch { return []; }
+}
+
+async function fetchCategorias(): Promise<Categoria[]> {
+  try {
+    const r = await fetch(`${API}/api/categorias`, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return (await r.json()).categorias ?? [];
+  } catch { return []; }
+}
+
+async function fetchArticulos(
+  sp: Record<string, string>
+): Promise<{ count: number; articulos: Articulo[] } | { error: string }> {
   const qs = new URLSearchParams();
   if (sp.q)            qs.set('q', sp.q);
   if (sp.categoria_id) qs.set('categoria_id', sp.categoria_id);
+  if (sp.lista_id)     qs.set('lista_id', sp.lista_id);
   qs.set('activo', sp.activo || 'true');
   try {
     const r = await fetch(`${API}/api/articulos?${qs}`, { cache: 'no-store' });
@@ -49,67 +56,47 @@ async function fetchArticulos(sp: Record<string, string>): Promise<{ count: numb
   }
 }
 
-async function fetchListas(): Promise<Lista[]> {
-  try {
-    const r = await fetch(`${API}/api/listas-precios`, { cache: 'no-store' });
-    if (!r.ok) return [];
-    const d = await r.json();
-    return d.listas ?? [];
-  } catch { return []; }
-}
-
-async function fetchCategorias(): Promise<Categoria[]> {
-  try {
-    const r = await fetch(`${API}/api/categorias`, { cache: 'no-store' });
-    if (!r.ok) return [];
-    const d = await r.json();
-    return d.categorias ?? [];
-  } catch { return []; }
-}
-
-// ─── Helpers de formato ──────────────────────────────────────────────────────
+// ─── Utils ───────────────────────────────────────────────────────────────────
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
-const fmt = (v: string | number | undefined | null) => {
+const fmt = (v: string | number | null | undefined) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);
 };
 
 const TIPO_LABEL: Record<string, string> = {
-  madre:            'Base',
-  publica:          'Público',
-  revendedor:       'Reventa',
-  cuenta_corriente: 'Cta. Cte.',
+  madre:            'Precio Base',
+  publica:          'Precio Público',
+  revendedor:       'Lista Reventa',
+  cuenta_corriente: 'Cuenta Corriente',
 };
 
-// ─── Página ──────────────────────────────────────────────────────────────────
 export const dynamic = 'force-dynamic';
 
+// ─── Página ──────────────────────────────────────────────────────────────────
 export default async function ArticulosPage({
   searchParams,
 }: {
   searchParams: Record<string, string>;
 }) {
-  const [data, listas, categorias] = await Promise.all([
-    fetchArticulos(searchParams),
-    fetchListas(),
-    fetchCategorias(),
-  ]);
+  const [listas, categorias] = await Promise.all([fetchListas(), fetchCategorias()]);
+
+  // Determinar lista activa (default: primera lista = madre)
+  const listaActivaId = searchParams.lista_id || listas[0]?.id || '';
+  const listaActiva   = listas.find(l => l.id === listaActivaId) ?? listas[0];
+
+  const data = await fetchArticulos({ ...searchParams, lista_id: listaActivaId });
+
+  const esBase = listaActiva?.tipo === 'madre';
+  const descBase = listaActiva ? parseFloat(listaActiva.descuento_base_pct) : 0;
 
   if ('error' in data) {
     return (
       <div className="rounded-xl bg-kp-surface border border-kp-red/40 p-6">
-        <h2 className="font-bold text-kp-red uppercase tracking-wide text-sm mb-2">
-          Error al cargar artículos
-        </h2>
+        <h2 className="font-bold text-kp-red uppercase tracking-wide text-sm mb-2">Error al cargar artículos</h2>
         <p className="text-sm text-kp-gray-lt">{data.error}</p>
-        <p className="text-xs mt-2 text-kp-gray">
-          Verificá <code className="bg-kp-surface2 px-1 rounded">NEXT_PUBLIC_API_URL</code> y que el backend esté corriendo.
-        </p>
       </div>
     );
   }
-
-  const activo = searchParams.activo || 'true';
 
   return (
     <section className="space-y-5">
@@ -123,20 +110,35 @@ export default async function ArticulosPage({
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {data.count} {data.count === 1 ? 'registro' : 'registros'}
-            {activo === 'true' && ' activos'}
-            {activo === 'false' && ' inactivos'}
-            {listas.length > 0 && (
-              <span className="ml-2 text-kp-border">·</span>
-            )}
-            {listas.map(l => (
-              <span key={l.id} className="ml-2 inline-block text-xs bg-kp-surface2 border border-kp-border rounded px-1.5 py-0.5 text-kp-gray">
-                {TIPO_LABEL[l.tipo] ?? l.nombre}
-              </span>
-            ))}
+            {(searchParams.activo || 'true') === 'true' && ' activos'}
+            {(searchParams.activo || 'true') === 'false' && ' inactivos'}
           </p>
         </div>
-        <ExportarPDF listas={listas} categorias={categorias} />
+        {listaActiva && (
+          <ExportarPDF lista={listaActiva} categorias={categorias} />
+        )}
       </div>
+
+      {/* ── Tabs por lista ── */}
+      <Suspense fallback={null}>
+        <TabsListas listas={listas} listaActivaId={listaActivaId} />
+      </Suspense>
+
+      {/* ── Info de la lista activa ── */}
+      {listaActiva && (
+        <div className="flex items-center gap-3 px-1">
+          <span className="text-xs text-kp-gray">
+            {TIPO_LABEL[listaActiva.tipo] ?? listaActiva.nombre}
+          </span>
+          {descBase > 0 ? (
+            <span className="text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-green-400">
+              −{descBase.toFixed(1)}% sobre precio base
+            </span>
+          ) : !esBase ? (
+            <span className="text-xs text-kp-gray">Sin descuento aplicado</span>
+          ) : null}
+        </div>
+      )}
 
       {/* ── Filtros ── */}
       <Suspense fallback={<div className="h-10 bg-kp-surface rounded-lg animate-pulse" />}>
@@ -148,92 +150,69 @@ export default async function ArticulosPage({
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                Código
-              </th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">
-                Nombre
-              </th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                Categoría
-              </th>
-
-              {/* Columna dinámica por lista */}
-              {listas.map(l => (
-                <th key={l.id} className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                  <span className={l.tipo === 'madre' ? 'text-kp-red' : 'text-kp-gray'}>
-                    {TIPO_LABEL[l.tipo] ?? l.nombre}
+              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
+              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
+              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Categoría</th>
+              <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                <span className="text-kp-red">
+                  {listaActiva ? (TIPO_LABEL[listaActiva.tipo] ?? listaActiva.nombre) : 'Precio'}
+                </span>
+                {descBase > 0 && (
+                  <span className="block text-[10px] text-green-400 font-normal normal-case tracking-normal">
+                    −{descBase.toFixed(1)}%
                   </span>
-                  {parseFloat(l.descuento_base_pct) > 0 && (
-                    <span className="block text-[10px] text-kp-gray font-normal normal-case tracking-normal">
-                      −{parseFloat(l.descuento_base_pct).toFixed(0)}%
-                    </span>
-                  )}
+                )}
+              </th>
+              {!esBase && (
+                <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                  Precio Base
                 </th>
-              ))}
-
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                Stock
-              </th>
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                Estado
-              </th>
+              )}
+              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Stock</th>
+              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
             </tr>
           </thead>
 
           <tbody className="bg-kp-surface divide-y divide-kp-border">
             {data.articulos.map(a => {
               const stock = parseFloat(a.stock_total || '0');
-
-              // Mapa de precios por lista_id para acceso rápido
-              const preciosMap = Object.fromEntries(
-                (a.precios_lista ?? []).map(p => [p.lista_id, p.precio])
-              );
+              const pLista = parseFloat(a.precio_lista || '0');
+              const pMadre = parseFloat(a.precio_madre || '0');
+              const diffPct = !esBase && pMadre > 0
+                ? ((pLista - pMadre) / pMadre) * 100
+                : null;
 
               return (
                 <tr key={a.id} className="hover:bg-kp-surface2 transition-colors duration-100 group">
 
-                  {/* Código */}
-                  <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">
-                    {a.codigo}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">{a.codigo}</td>
 
-                  {/* Nombre */}
-                  <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors duration-100">
+                  <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors">
                     {a.nombre}
                   </td>
 
-                  {/* Categoría */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="inline-block text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-kp-gray-lt">
+                    <span className="text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-kp-gray-lt">
                       {a.categoria || '—'}
                     </span>
                   </td>
 
-                  {/* Precio por lista */}
-                  {listas.map((l, i) => {
-                    const p = preciosMap[l.id];
-                    const esMadre = l.tipo === 'madre';
-                    return (
-                      <td key={l.id} className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
-                        <span className={`text-sm font-${esMadre ? 'bold' : 'medium'} ${esMadre ? 'text-kp-white' : 'text-kp-gray-lt'}`}>
-                          {p ? fmt(p) : '—'}
-                        </span>
-                        {/* Diferencia respecto al precio madre si no es la lista madre */}
-                        {!esMadre && p && a.precio_madre && (
-                          (() => {
-                            const diff = ((parseFloat(p) - parseFloat(a.precio_madre)) / parseFloat(a.precio_madre)) * 100;
-                            if (Math.abs(diff) < 0.01) return null;
-                            return (
-                              <span className={`block text-[10px] ${diff < 0 ? 'text-green-500' : 'text-amber-400'}`}>
-                                {diff < 0 ? '−' : '+'}{Math.abs(diff).toFixed(1)}%
-                              </span>
-                            );
-                          })()
-                        )}
-                      </td>
-                    );
-                  })}
+                  {/* Precio de la lista activa */}
+                  <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                    <span className="font-bold text-kp-white">{fmt(a.precio_lista)}</span>
+                    {diffPct !== null && Math.abs(diffPct) >= 0.01 && (
+                      <span className={`block text-[10px] ${diffPct < 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                        {diffPct < 0 ? '−' : '+'}{Math.abs(diffPct).toFixed(1)}%
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Precio base (columna extra si no estamos en la lista madre) */}
+                  {!esBase && (
+                    <td className="px-4 py-3 text-right tabular-nums text-kp-gray text-xs whitespace-nowrap">
+                      {fmt(a.precio_madre)}
+                    </td>
+                  )}
 
                   {/* Stock */}
                   <td className="px-4 py-3 text-center tabular-nums whitespace-nowrap">
@@ -241,7 +220,7 @@ export default async function ArticulosPage({
                       <span className={`text-xs font-semibold ${a.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
                         {stock % 1 === 0 ? stock.toFixed(0) : stock.toFixed(1)}
                         {a.stock_bajo && (
-                          <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-amber-400 align-middle" title="Stock bajo" />
+                          <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block align-middle" />
                         )}
                       </span>
                     ) : (
@@ -253,13 +232,11 @@ export default async function ArticulosPage({
                   <td className="px-4 py-3 text-center whitespace-nowrap">
                     {a.activo ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-red">
-                        <span className="w-1.5 h-1.5 rounded-full bg-kp-red" />
-                        Activo
+                        <span className="w-1.5 h-1.5 rounded-full bg-kp-red" />Activo
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-gray">
-                        <span className="w-1.5 h-1.5 rounded-full bg-kp-border" />
-                        Inactivo
+                        <span className="w-1.5 h-1.5 rounded-full bg-kp-border" />Inactivo
                       </span>
                     )}
                   </td>
@@ -269,7 +246,7 @@ export default async function ArticulosPage({
 
             {data.articulos.length === 0 && (
               <tr>
-                <td colSpan={4 + listas.length} className="px-4 py-12 text-center text-kp-gray">
+                <td colSpan={esBase ? 6 : 7} className="px-4 py-12 text-center text-kp-gray">
                   {searchParams.q || searchParams.categoria_id
                     ? 'No se encontraron artículos con esos filtros.'
                     : 'No hay artículos cargados todavía.'}
