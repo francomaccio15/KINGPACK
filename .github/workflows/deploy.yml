@@ -1,0 +1,21 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 76.13.112.206
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            cd /root/KINGPACK
+            git pull origin master
+            pm2 restart all
+            pm2 status
