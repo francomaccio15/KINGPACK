@@ -34,4 +34,7 @@ FROM (VALUES
 JOIN cond_iva   ci ON ci.nombre = v.cond_iva_nombre
 LEFT JOIN sucursales  s  ON s.nombre  = v.sucursal_nombre
 LEFT JOIN listas_precios lp ON lp.nombre = v.lista_nombre
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM clientes c2
+  WHERE c2.razon_social = v.razon_social
+);
