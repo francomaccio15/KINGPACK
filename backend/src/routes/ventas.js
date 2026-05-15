@@ -125,13 +125,13 @@ router.post('/', async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    // Número de venta secuencial por sucursal (lock para concurrencia)
+    // Número de venta secuencial por sucursal
     const { rows: numRows } = await client.query(
-      `SELECT COALESCE(MAX(numero), 0) + 1 AS siguiente
-         FROM ventas WHERE sucursal_id = $1 FOR UPDATE`,
+      `SELECT numero FROM ventas WHERE sucursal_id = $1
+       ORDER BY numero DESC LIMIT 1 FOR UPDATE`,
       [sucursal_id]
     );
-    const numero = numRows[0].siguiente;
+    const numero = (numRows[0]?.numero ?? 0) + 1;
 
     // Calcular totales
     let subtotal = 0;
