@@ -1,0 +1,27 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build artifacts
+dist/
+build/
+
+# Editor / OS
+.vscode/
+.idea/
+
+# Backups, dumps
+*.sql.gz
+*.dump
+
+# Claude / agent local state
+.claude/
+.agent/
+.agents/
