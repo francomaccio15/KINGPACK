@@ -4,6 +4,40 @@ const { pool } = require('../config/db');
 
 const router = express.Router();
 
+// ─── PUT /api/articulos/:id ───────────────────────────────────────────────────
+router.put('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { costo_base, costo_flete, margen_aplicado, nombre, categoria_id, alicuota_iva_id } = req.body;
+
+    const updates = [];
+    const params  = [];
+    let idx = 1;
+
+    if (nombre         !== undefined) { updates.push(`nombre = $${idx++}`);          params.push(nombre.trim()); }
+    if (categoria_id   !== undefined) { updates.push(`categoria_id = $${idx++}`);    params.push(categoria_id); }
+    if (alicuota_iva_id !== undefined){ updates.push(`alicuota_iva_id = $${idx++}`); params.push(alicuota_iva_id); }
+    if (costo_base     !== undefined) { updates.push(`costo_base = $${idx++}`);      params.push(parseFloat(costo_base) || 0); }
+    if (costo_flete    !== undefined) { updates.push(`costo_flete = $${idx++}`);     params.push(parseFloat(costo_flete) || 0); }
+    if (margen_aplicado !== undefined){ updates.push(`margen_aplicado = $${idx++}`); params.push(margen_aplicado === '' || margen_aplicado === null ? null : parseFloat(margen_aplicado)); }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'Nada que actualizar' });
+
+    params.push(id);
+    const { rows } = await pool.query(`
+      UPDATE articulos SET ${updates.join(', ')}
+       WHERE id = $${idx} AND deleted_at IS NULL
+      RETURNING id, codigo, nombre, precio_madre, costo_base, costo_flete, margen_aplicado, categoria_id, activo
+    `, params);
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Artículo no encontrado' });
+    res.json({ articulo: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Código duplicado' });
+    next(err);
+  }
+});
+
 // ─── GET /api/articulos/alicuotas ────────────────────────────────────────────
 router.get('/alicuotas', async (req, res, next) => {
   try {
@@ -351,7 +385,7 @@ router.get('/', async (req, res, next) => {
       pool.query(`
         SELECT
           a.id, a.codigo, a.nombre,
-          a.precio_madre, a.activo,
+          a.precio_madre, a.costo_base, a.costo_flete, a.margen_aplicado, a.activo,
           c.id           AS categoria_id,
           c.nombre       AS categoria,
           ${precioListaExpr},

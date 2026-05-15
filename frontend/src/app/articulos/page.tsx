@@ -3,6 +3,7 @@ import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
 import NuevoArticulo from './NuevoArticulo';
+import EditarArticulo from './EditarArticulo';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -14,6 +15,9 @@ type Articulo = {
   nombre: string;
   precio_madre: string;
   precio_lista: string;
+  costo_base: string;
+  costo_flete: string;
+  margen_aplicado: string | null;
   activo: boolean;
   categoria_id: string;
   categoria: string;
@@ -220,6 +224,7 @@ export default async function ArticulosPage({
                 {modeTodas ? 'Stock' : `Stock · ${sucursalActiva?.nombre ?? ''}`}
               </th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
+              <th className="px-3 py-3" />
             </tr>
           </thead>
 
@@ -310,6 +315,11 @@ export default async function ArticulosPage({
                         <span className="w-1.5 h-1.5 rounded-full bg-kp-border" />Inactivo
                       </span>
                     )}
+                  </td>
+
+                  {/* Editar */}
+                  <td className="px-3 py-3 text-center">
+                    <EditarArticulo articulo={a} categorias={categorias} alicuotas={alicuotas} />
                   </td>
                 </tr>
               );
