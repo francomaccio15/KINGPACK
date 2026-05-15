@@ -79,20 +79,22 @@ router.get('/', async (req, res, next) => {
           lp.nombre        AS lista_precio,
           f.cae            AS cae,
           f.ok             AS facturada_ok,
-          COUNT(vi.articulo_id) OVER (PARTITION BY v.id) AS items_count
+          (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count
         FROM ventas v
         LEFT JOIN clientes c ON c.id = v.cliente_id
         LEFT JOIN sucursales s ON s.id = v.sucursal_id
         LEFT JOIN listas_precios lp ON lp.id = v.lista_precio_id
-        LEFT JOIN facturaciones f ON f.venta_id = v.id AND f.deleted_at IS NULL
-        LEFT JOIN venta_items vi ON vi.venta_id = v.id
+        LEFT JOIN LATERAL (
+          SELECT cae, ok FROM facturaciones
+          WHERE venta_id = v.id AND deleted_at IS NULL
+          ORDER BY created_at DESC LIMIT 1
+        ) f ON true
         WHERE ${where}
-        GROUP BY v.id, c.id, s.nombre, lp.nombre, f.cae, f.ok
         ORDER BY v.fecha DESC
         LIMIT $${idx} OFFSET $${idx + 1}
       `, params),
       pool.query(
-        `SELECT COUNT(DISTINCT v.id) FROM ventas v
+        `SELECT COUNT(*) FROM ventas v
          LEFT JOIN clientes c ON c.id = v.cliente_id
          WHERE ${where}`,
         countParams
