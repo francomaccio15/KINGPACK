@@ -12,33 +12,42 @@ const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
 });
 
-const EMPTY = {
+const EMPTY_FORM = {
   codigo: '', nombre: '', categoria_id: '', alicuota_iva_id: '',
   costo_base: '', costo_flete: '', margen_aplicado: '',
 };
 
+const EMPTY_CAT = { nombre: '', margen_default: '' };
+
 export default function NuevoArticulo({
-  categorias,
+  categorias: categoriasInit,
   alicuotas,
 }: {
   categorias: Categoria[];
   alicuotas: Alicuota[];
 }) {
   const router = useRouter();
-  const [open, setOpen]       = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [form, setForm]       = useState(EMPTY);
+  const [open, setOpen]         = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [form, setForm]         = useState(EMPTY_FORM);
+  const [categorias, setCategorias] = useState<Categoria[]>(categoriasInit);
 
-  // Pre-seleccionar categoría y alícuota IVA 21% por defecto
+  // Panel de nueva categoría
+  const [showCat, setShowCat]     = useState(false);
+  const [catForm, setCatForm]     = useState(EMPTY_CAT);
+  const [catLoading, setCatLoading] = useState(false);
+  const [catError, setCatError]   = useState('');
+
+  // Pre-seleccionar IVA 21% por defecto
   useEffect(() => {
     const iva21 = alicuotas.find(a => parseFloat(a.porcentaje) === 21);
     setForm(f => ({
       ...f,
-      categoria_id:    categorias[0]?.id    ?? '',
-      alicuota_iva_id: iva21?.id            ?? alicuotas[0]?.id ?? '',
+      categoria_id:    categoriasInit[0]?.id ?? '',
+      alicuota_iva_id: iva21?.id ?? alicuotas[0]?.id ?? '',
     }));
-  }, [categorias, alicuotas]);
+  }, [categoriasInit, alicuotas]);
 
   const catActiva  = categorias.find(c => c.id === form.categoria_id);
   const ivaActiva  = alicuotas.find(a => a.id === form.alicuota_iva_id);
@@ -50,11 +59,44 @@ export default function NuevoArticulo({
   const flete      = parseFloat(form.costo_flete) || 0;
   const precioCalc = (costo + flete) * (1 + margenReal / 100) * (1 + ivaReal / 100);
 
-  const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = (k: keyof typeof EMPTY_FORM) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const cerrar = () => { setOpen(false); setError(''); };
+  const cerrar = () => {
+    setOpen(false); setError('');
+    setShowCat(false); setCatForm(EMPTY_CAT); setCatError('');
+  };
 
+  // ── Crear categoría ────────────────────────────────────────────────────────
+  const handleCrearCategoria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCatError('');
+    setCatLoading(true);
+    try {
+      const res = await fetch(`${API}/api/categorias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre:        catForm.nombre.trim(),
+          margen_default: catForm.margen_default !== '' ? parseFloat(catForm.margen_default) : 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error al crear categoría');
+      const nueva: Categoria = data.categoria;
+      setCategorias(prev => [...prev, nueva].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setForm(f => ({ ...f, categoria_id: nueva.id }));
+      setShowCat(false);
+      setCatForm(EMPTY_CAT);
+    } catch (err: any) {
+      setCatError(err.message);
+    } finally {
+      setCatLoading(false);
+    }
+  };
+
+  // ── Crear artículo ─────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -75,7 +117,7 @@ export default function NuevoArticulo({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
-      setForm(f => ({ ...EMPTY, categoria_id: f.categoria_id, alicuota_iva_id: f.alicuota_iva_id }));
+      setForm(f => ({ ...EMPTY_FORM, categoria_id: f.categoria_id, alicuota_iva_id: f.alicuota_iva_id }));
       cerrar();
       router.refresh();
     } catch (err: any) {
@@ -87,7 +129,7 @@ export default function NuevoArticulo({
 
   return (
     <>
-      {/* ── Botón ── */}
+      {/* ── Botón principal ── */}
       <button
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
@@ -141,7 +183,16 @@ export default function NuevoArticulo({
               {/* Categoría + IVA */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Categoría *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-kp-gray uppercase tracking-widest">Categoría *</label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCat(v => !v); setCatError(''); }}
+                      className="text-[10px] text-kp-red hover:text-white transition-colors font-semibold uppercase tracking-wide"
+                    >
+                      {showCat ? '— Cancelar' : '+ Nueva'}
+                    </button>
+                  </div>
                   <select
                     required value={form.categoria_id} onChange={set('categoria_id')}
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
@@ -165,6 +216,51 @@ export default function NuevoArticulo({
                   </select>
                 </div>
               </div>
+
+              {/* Panel nueva categoría (inline) */}
+              {showCat && (
+                <div className="rounded-xl border border-kp-red/30 bg-kp-surface2 p-4 space-y-3">
+                  <p className="text-xs text-kp-red font-semibold uppercase tracking-widest">Nueva categoría</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs text-kp-gray mb-1">Nombre *</label>
+                      <input
+                        value={catForm.nombre}
+                        onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
+                        placeholder="ej: Vasos descartables"
+                        className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                          placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-kp-gray mb-1">Margen %</label>
+                      <div className="relative">
+                        <input
+                          type="number" min="0" max="999" step="0.1"
+                          value={catForm.margen_default}
+                          onChange={e => setCatForm(f => ({ ...f, margen_default: e.target.value }))}
+                          placeholder="0"
+                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
+                            placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  {catError && (
+                    <p className="text-xs text-kp-red">{catError}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCrearCategoria}
+                    disabled={catLoading || !catForm.nombre.trim()}
+                    className="w-full py-2 rounded-lg bg-kp-surface border border-kp-red/50 text-kp-red text-sm font-semibold
+                      hover:bg-kp-red hover:text-white disabled:opacity-40 transition-colors"
+                  >
+                    {catLoading ? 'Creando…' : 'Crear categoría'}
+                  </button>
+                </div>
+              )}
 
               {/* Costo + Flete + Margen */}
               <div className="grid grid-cols-3 gap-3">
