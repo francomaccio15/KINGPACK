@@ -1,0 +1,599 @@
+// TODO(fase-2): proteger con JWT
+const express = require('express');
+const { pool } = require('../config/db');
+const arca = require('../services/arca');
+
+const router = express.Router();
+
+// ─── GET /api/ventas/medios-pago ─────────────────────────────────────────────
+router.get('/medios-pago', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, nombre, requiere_cuenta FROM medios_pago WHERE activo = true ORDER BY nombre'
+    );
+    res.json({ medios_pago: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/ventas ──────────────────────────────────────────────────────────
+// ?q=            busca en número o razón social del cliente
+// ?estado=       preventa | confirmada | facturada | anulada
+// ?cliente_id=
+// ?fecha_desde=  ISO date
+// ?fecha_hasta=  ISO date
+// ?sucursal_id=
+// ?limit=        default 100
+// ?offset=       default 0
+router.get('/', async (req, res, next) => {
+  try {
+    const {
+      q, estado, cliente_id, fecha_desde, fecha_hasta, sucursal_id,
+      limit = 100, offset = 0,
+    } = req.query;
+
+    const conditions = ['v.deleted_at IS NULL'];
+    const params = [];
+    let idx = 1;
+
+    if (estado) {
+      conditions.push(`v.estado = $${idx++}`);
+      params.push(estado);
+    }
+    if (cliente_id) {
+      conditions.push(`v.cliente_id = $${idx++}`);
+      params.push(cliente_id);
+    }
+    if (sucursal_id) {
+      conditions.push(`v.sucursal_id = $${idx++}`);
+      params.push(sucursal_id);
+    }
+    if (fecha_desde) {
+      conditions.push(`v.fecha >= $${idx++}`);
+      params.push(fecha_desde);
+    }
+    if (fecha_hasta) {
+      conditions.push(`v.fecha < ($${idx++}::date + interval '1 day')`);
+      params.push(fecha_hasta);
+    }
+    if (q && q.trim()) {
+      conditions.push(`(c.razon_social ILIKE $${idx} OR v.numero::text = $${idx + 1})`);
+      params.push(`%${q.trim()}%`);
+      params.push(q.trim());
+      idx += 2;
+    }
+
+    const where = conditions.join(' AND ');
+    const countParams = [...params];
+    params.push(Math.min(parseInt(limit) || 100, 500));
+    params.push(Math.max(parseInt(offset) || 0, 0));
+
+    const [{ rows }, { rows: countRows }] = await Promise.all([
+      pool.query(`
+        SELECT
+          v.id, v.numero, v.fecha, v.estado,
+          v.subtotal, v.descuento_total, v.total,
+          v.observaciones,
+          c.id             AS cliente_id,
+          c.razon_social   AS cliente_nombre,
+          s.nombre         AS sucursal_nombre,
+          lp.nombre        AS lista_precio,
+          f.cae            AS cae,
+          f.ok             AS facturada_ok,
+          COUNT(vi.articulo_id) OVER (PARTITION BY v.id) AS items_count
+        FROM ventas v
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        LEFT JOIN sucursales s ON s.id = v.sucursal_id
+        LEFT JOIN listas_precios lp ON lp.id = v.lista_precio_id
+        LEFT JOIN facturaciones f ON f.venta_id = v.id AND f.deleted_at IS NULL
+        LEFT JOIN venta_items vi ON vi.venta_id = v.id
+        WHERE ${where}
+        GROUP BY v.id, c.id, s.nombre, lp.nombre, f.cae, f.ok
+        ORDER BY v.fecha DESC
+        LIMIT $${idx} OFFSET $${idx + 1}
+      `, params),
+      pool.query(
+        `SELECT COUNT(DISTINCT v.id) FROM ventas v
+         LEFT JOIN clientes c ON c.id = v.cliente_id
+         WHERE ${where}`,
+        countParams
+      ),
+    ]);
+
+    res.json({ count: parseInt(countRows[0].count), ventas: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/ventas ─────────────────────────────────────────────────────────
+// Body:
+//   sucursal_id, cliente_id (opcional), lista_precio_id (opcional),
+//   estado ('preventa'|'confirmada'), observaciones,
+//   items: [{ articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto }]
+//   pagos: [{ medio_pago_id, monto, cuenta_destino }]  (solo si estado=confirmada)
+router.post('/', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const {
+      sucursal_id, cliente_id, lista_precio_id,
+      estado = 'confirmada', observaciones,
+      items = [], pagos = [],
+    } = req.body;
+
+    if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
+    if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
+
+    await client.query('BEGIN');
+
+    // Número de venta secuencial por sucursal (lock para concurrencia)
+    const { rows: numRows } = await client.query(
+      `SELECT COALESCE(MAX(numero), 0) + 1 AS siguiente
+         FROM ventas WHERE sucursal_id = $1 FOR UPDATE`,
+      [sucursal_id]
+    );
+    const numero = numRows[0].siguiente;
+
+    // Calcular totales
+    let subtotal = 0;
+    let descuento_total = 0;
+    for (const item of items) {
+      const precio_lista        = parseFloat(item.precio_lista) || 0;
+      const precio_final        = parseFloat(item.precio_unitario_final) || 0;
+      const cantidad            = parseFloat(item.cantidad) || 1;
+      subtotal       += precio_lista * cantidad;
+      descuento_total += (precio_lista - precio_final) * cantidad;
+    }
+    const total = subtotal - descuento_total;
+
+    // Insertar venta
+    const { rows: ventaRows } = await client.query(`
+      INSERT INTO ventas
+        (numero, sucursal_id, cliente_id, lista_precio_id, estado, observaciones,
+         subtotal, descuento_total, total)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING id, numero, fecha, estado, total
+    `, [
+      numero,
+      sucursal_id,
+      cliente_id || null,
+      lista_precio_id || null,
+      estado,
+      observaciones || null,
+      subtotal.toFixed(2),
+      descuento_total.toFixed(2),
+      total.toFixed(2),
+    ]);
+    const venta = ventaRows[0];
+
+    // Insertar items
+    for (const item of items) {
+      await client.query(`
+        INSERT INTO venta_items
+          (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `, [
+        venta.id,
+        item.articulo_id,
+        parseFloat(item.cantidad) || 1,
+        parseFloat(item.precio_lista) || 0,
+        parseFloat(item.descuento_pct) || 0,
+        parseFloat(item.precio_unitario_final) || 0,
+        parseFloat(item.iva_monto) || 0,
+      ]);
+    }
+
+    // Insertar pagos (si confirmada)
+    if (estado === 'confirmada' && pagos.length > 0) {
+      for (const pago of pagos) {
+        await client.query(`
+          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
+          VALUES ($1,$2,$3,$4)
+        `, [venta.id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]);
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ venta });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/ventas/:id ──────────────────────────────────────────────────────
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const [{ rows: ventaRows }, { rows: itemRows }, { rows: pagoRows }, { rows: factRows }] = await Promise.all([
+      pool.query(`
+        SELECT
+          v.id, v.numero, v.fecha, v.estado, v.observaciones,
+          v.subtotal, v.descuento_total, v.total,
+          c.id           AS cliente_id,
+          c.razon_social AS cliente_nombre,
+          c.cuit         AS cliente_cuit,
+          c.telefono     AS cliente_telefono,
+          c.cond_iva_id,
+          ci.nombre      AS cliente_cond_iva,
+          s.nombre       AS sucursal_nombre,
+          s.direccion    AS sucursal_direccion,
+          lp.nombre      AS lista_precio
+        FROM ventas v
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        LEFT JOIN cond_iva ci ON ci.id = c.cond_iva_id
+        LEFT JOIN sucursales s ON s.id = v.sucursal_id
+        LEFT JOIN listas_precios lp ON lp.id = v.lista_precio_id
+        WHERE v.id = $1 AND v.deleted_at IS NULL
+      `, [id]),
+      pool.query(`
+        SELECT
+          vi.articulo_id, vi.cantidad, vi.precio_lista,
+          vi.descuento_pct, vi.precio_unitario_final, vi.iva_monto,
+          a.nombre AS articulo_nombre, a.codigo AS articulo_codigo,
+          a.precio_madre
+        FROM venta_items vi
+        JOIN articulos a ON a.id = vi.articulo_id
+        WHERE vi.venta_id = $1
+        ORDER BY a.nombre
+      `, [id]),
+      pool.query(`
+        SELECT vp.monto, vp.cuenta_destino, mp.nombre AS medio_pago
+        FROM venta_pagos vp
+        JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+        WHERE vp.venta_id = $1
+      `, [id]),
+      pool.query(`
+        SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,
+               f.punto_venta, f.total, f.qr_url, f.ok, f.mensaje_afip,
+               f.fecha_emision, tc.descripcion AS tipo_comprobante
+        FROM facturaciones f
+        LEFT JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
+        WHERE f.venta_id = $1 AND f.deleted_at IS NULL
+        ORDER BY f.created_at DESC
+        LIMIT 1
+      `, [id]),
+    ]);
+
+    if (ventaRows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    res.json({
+      venta: ventaRows[0],
+      items: itemRows,
+      pagos: pagoRows,
+      facturacion: factRows[0] || null,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
+router.patch('/:id/estado', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+    if (!['preventa','confirmada','facturada','anulada'].includes(estado)) {
+      return res.status(400).json({ error: 'Estado inválido' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE ventas SET estado = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, estado`,
+      [estado, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
+    res.json({ venta: rows[0] });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/ventas/:id/factura-test ───────────────────────────────────────
+router.post('/:id/factura-test', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { rows: ventaRows } = await pool.query(`
+      SELECT v.total, c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit,
+             ci.nombre AS cond_iva
+      FROM ventas v
+      LEFT JOIN clientes c ON c.id = v.cliente_id
+      LEFT JOIN cond_iva ci ON ci.id = c.cond_iva_id
+      WHERE v.id = $1 AND v.deleted_at IS NULL
+    `, [id]);
+
+    if (ventaRows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
+    const v = ventaRows[0];
+
+    const total = parseFloat(v.total);
+    const neto  = +(total / 1.21).toFixed(2);
+    const ivaImp = +(total - neto).toFixed(2);
+
+    const resultado = await arca.generarFactura({
+      puntoVenta:      1,
+      tipoComprobante: arca.TIPO_COMPROBANTE.FACTURA_B,
+      concepto:        arca.CONCEPTO.PRODUCTOS,
+      cliente: {
+        tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR,
+        nroDoc:  0,
+      },
+      items: [
+        {
+          descripcion:    `Venta #${id.slice(0,8)} — ${v.cliente_nombre || 'Consumidor Final'}`,
+          cantidad:       1,
+          precioUnitario: neto,
+          alicuotaIva:    21,
+        },
+      ],
+    });
+
+    // Guardar en facturaciones si OK (best-effort — no falla la respuesta si hay un error de BD)
+    if (resultado.CAE) {
+      try {
+        const nroComp = resultado.nroComprobante ? parseInt(resultado.nroComprobante) : 1;
+        await pool.query(`
+          INSERT INTO facturaciones
+            (venta_id, sucursal_id, tipo_comprobante_id, punto_venta, numero,
+             cae, cae_vencimiento, total, qr_url, respuesta_afip, ok, mensaje_afip)
+          SELECT $1, v.sucursal_id,
+                 COALESCE(
+                   (SELECT id FROM tipos_comprobante WHERE codigo_afip = 6 LIMIT 1),
+                   (SELECT id FROM tipos_comprobante LIMIT 1)
+                 ),
+                 $2, $3, $4, $5::date, $6, $7, $8::jsonb, true, 'Factura test ARCA'
+          FROM ventas v WHERE v.id = $1
+          ON CONFLICT DO NOTHING
+        `, [
+          id, nroComp, nroComp,
+          resultado.CAE,
+          resultado.CAEFchVto,
+          total.toFixed(2),
+          resultado.qrData ? `https://www.afip.gob.ar/fe/qr/?p=${resultado.qrData}` : null,
+          JSON.stringify(resultado),
+        ]);
+
+        await pool.query(
+          `UPDATE ventas SET estado = 'facturada' WHERE id = $1 AND deleted_at IS NULL`,
+          [id]
+        );
+      } catch (dbErr) {
+        console.warn('[ventas] factura-test: error guardando en BD:', dbErr.message);
+      }
+    }
+
+    res.json({
+      ok:             true,
+      modo:           resultado.modo,
+      CAE:            resultado.CAE,
+      CAEFchVto:      resultado.CAEFchVto,
+      nroComprobante: resultado.nroComprobante,
+      total:          resultado.total,
+      _mock:          resultado._mock || false,
+      cliente:        v.cliente_nombre || 'Consumidor Final',
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/ventas/:id/pdf ──────────────────────────────────────────────────
+router.get('/:id/pdf', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const [{ rows: ventaRows }, { rows: itemRows }, { rows: factRows }] = await Promise.all([
+      pool.query(`
+        SELECT v.numero, v.fecha, v.estado, v.subtotal, v.descuento_total, v.total,
+               c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit, c.telefono AS cliente_tel,
+               ci.nombre AS cond_iva,
+               s.nombre AS sucursal_nombre, s.direccion AS sucursal_dir,
+               lp.nombre AS lista_precio
+        FROM ventas v
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        LEFT JOIN cond_iva ci ON ci.id = c.cond_iva_id
+        LEFT JOIN sucursales s ON s.id = v.sucursal_id
+        LEFT JOIN listas_precios lp ON lp.id = v.lista_precio_id
+        WHERE v.id = $1 AND v.deleted_at IS NULL
+      `, [id]),
+      pool.query(`
+        SELECT vi.cantidad, vi.precio_lista, vi.descuento_pct,
+               vi.precio_unitario_final, vi.iva_monto,
+               a.nombre, a.codigo, a.precio_madre
+        FROM venta_items vi
+        JOIN articulos a ON a.id = vi.articulo_id
+        WHERE vi.venta_id = $1 ORDER BY a.nombre
+      `, [id]),
+      pool.query(`
+        SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,
+               f.punto_venta, f.total, f.qr_url, f.ok,
+               tc.descripcion AS tipo_comprobante, tc.letra
+        FROM facturaciones f
+        LEFT JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
+        WHERE f.venta_id = $1 AND f.deleted_at IS NULL AND f.ok = true
+        ORDER BY f.created_at DESC LIMIT 1
+      `, [id]),
+    ]);
+
+    if (ventaRows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const venta = ventaRows[0];
+    const fact  = factRows[0] || null;
+    const tieneFactura = !!(fact?.cae);
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="venta-${venta.numero}.pdf"`);
+    doc.pipe(res);
+
+    const PW = doc.page.width;   // 595
+    const PH = doc.page.height;  // 842
+    const ML = 45;
+    const MR = 45;
+    const CW = PW - ML - MR;
+
+    const ars = v => new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
+    }).format(v);
+
+    const pct = v => `${parseFloat(v || 0).toFixed(1)}%`;
+    const fechaFmt = d => new Date(d).toLocaleDateString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    const HEADER_H = 100;
+    doc.rect(0, 0, PW, HEADER_H).fill('#111111');
+    doc.rect(0, 0, PW, 4).fill('#e3000f');
+    doc.rect(ML, 18, 3, 36).fill('#e3000f');
+
+    doc.fillColor('#ffffff').fontSize(26).font('Helvetica-Bold')
+       .text('KING PACK', ML + 12, 18);
+    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+       .text('DESCARTABLES', ML + 12, 50);
+
+    // Tipo de comprobante — derecha del header
+    const tipoLabel = tieneFactura
+      ? `FACTURA ${fact.letra || 'B'}`
+      : 'COMPROBANTE INTERNO';
+
+    doc.fillColor('#ffffff').fontSize(14).font('Helvetica-Bold')
+       .text(tipoLabel, 0, 22, { align: 'right', width: PW - MR });
+
+    if (tieneFactura) {
+      doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica')
+         .text(`Pto. Venta: ${String(fact.punto_venta).padStart(4,'0')}  Nº: ${String(fact.factura_numero).padStart(8,'0')}`, 0, 44, { align: 'right', width: PW - MR });
+      doc.fillColor('#e3000f').fontSize(8).font('Helvetica-Bold')
+         .text(`CAE: ${fact.cae}`, 0, 60, { align: 'right', width: PW - MR });
+      doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
+         .text(`Vence: ${fechaFmt(fact.cae_vencimiento)}`, 0, 74, { align: 'right', width: PW - MR });
+    } else {
+      doc.fillColor('#888888').fontSize(9).font('Helvetica')
+         .text(`Nº ${venta.numero}`, 0, 44, { align: 'right', width: PW - MR });
+    }
+
+    let curY = HEADER_H + 16;
+
+    // ── DATOS EMISOR / RECEPTOR ───────────────────────────────────────────────
+    const sectionY = curY;
+    // Izquierda: emisor
+    doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold')
+       .text('VENDEDOR', ML, sectionY);
+    doc.fillColor('#1a1a1a').fontSize(9).font('Helvetica-Bold')
+       .text('King Pack Descartables', ML, sectionY + 10);
+    doc.fillColor('#555555').fontSize(8).font('Helvetica')
+       .text(venta.sucursal_dir || 'Laprida 270 – Ciudad de Salta', ML, sectionY + 23);
+    doc.text('Tel: 3872220486', ML, sectionY + 35);
+    doc.text(`CUIT: 30-71792696-6  ·  IVA Responsable Inscripto`, ML, sectionY + 47);
+    doc.fillColor('#888888').text(`Fecha: ${fechaFmt(venta.fecha)}`, ML, sectionY + 59);
+
+    // Línea divisoria vertical
+    doc.strokeColor('#dddddd').lineWidth(0.5)
+       .moveTo(PW / 2, sectionY).lineTo(PW / 2, sectionY + 75).stroke();
+
+    // Derecha: cliente
+    const RX = PW / 2 + 20;
+    doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold')
+       .text('CLIENTE', RX, sectionY);
+    doc.fillColor('#1a1a1a').fontSize(9).font('Helvetica-Bold')
+       .text(venta.cliente_nombre || 'Consumidor Final', RX, sectionY + 10, { width: PW - MR - RX });
+    doc.fillColor('#555555').fontSize(8).font('Helvetica')
+       .text(`CUIT: ${venta.cliente_cuit || '—'}`, RX, sectionY + 23);
+    doc.text(`Cond. IVA: ${venta.cond_iva || 'Consumidor Final'}`, RX, sectionY + 35);
+    if (venta.cliente_tel) {
+      doc.text(`Tel: ${venta.cliente_tel}`, RX, sectionY + 47);
+    }
+
+    curY = sectionY + 85;
+
+    // ── TABLA DE ITEMS ────────────────────────────────────────────────────────
+    doc.strokeColor('#dddddd').lineWidth(0.5)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 2;
+
+    // Header de tabla
+    doc.rect(ML, curY, CW, 20).fill('#f2f2f2');
+    doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+    doc.text('ARTÍCULO',    ML + 6,       curY + 6, { width: 180 });
+    doc.text('CANT.',       ML + 186,     curY + 6, { width: 40, align: 'right' });
+    doc.text('P. LISTA',    ML + 236,     curY + 6, { width: 70, align: 'right' });
+    doc.text('DESC.',       ML + 316,     curY + 6, { width: 40, align: 'right' });
+    doc.text('PRECIO FINAL',ML + 366,     curY + 6, { width: 80, align: 'right' });
+    doc.text('SUBTOTAL',    ML + 456,     curY + 6, { width: CW - 456, align: 'right' });
+    curY += 22;
+
+    let rowIdx = 0;
+    for (const item of itemRows) {
+      const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
+      const tieneDesc = parseFloat(item.descuento_pct || 0) > 0;
+
+      if (rowIdx % 2 === 1) {
+        doc.rect(ML, curY, CW, 18).fill('#f9f9f9');
+      }
+
+      doc.fillColor('#1a1a1a').fontSize(8).font('Helvetica')
+         .text(item.nombre, ML + 6, curY + 4, { width: 178, lineBreak: false });
+      doc.text(parseFloat(item.cantidad).toFixed(0), ML + 186, curY + 4, { width: 40, align: 'right' });
+
+      if (tieneDesc) {
+        doc.fillColor('#888888')
+           .text(ars(item.precio_lista), ML + 236, curY + 4, { width: 70, align: 'right' });
+        doc.fillColor('#e3000f')
+           .text(pct(item.descuento_pct), ML + 316, curY + 4, { width: 40, align: 'right' });
+        doc.fillColor('#1a1a1a')
+           .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
+      } else {
+        doc.fillColor('#888888').text('—', ML + 316, curY + 4, { width: 40, align: 'right' });
+        doc.fillColor('#1a1a1a')
+           .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
+      }
+
+      doc.fillColor('#111111').font('Helvetica-Bold')
+         .text(ars(subtotalItem), ML + 456, curY + 4, { width: CW - 456, align: 'right' });
+
+      doc.strokeColor('#eeeeee').lineWidth(0.4)
+         .moveTo(ML, curY + 18).lineTo(PW - MR, curY + 18).stroke();
+
+      curY += 19;
+      rowIdx++;
+    }
+
+    curY += 8;
+
+    // ── TOTALES ───────────────────────────────────────────────────────────────
+    const totX = ML + CW - 200;
+
+    const drawTotalRow = (label, value, bold = false, color = '#333333') => {
+      if (bold) {
+        doc.rect(totX - 10, curY - 1, 210, 20).fill('#f0f0f0');
+      }
+      doc.fillColor('#666666').fontSize(8).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+         .text(label, totX, curY + 3, { width: 100 });
+      doc.fillColor(color).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+         .text(ars(value), totX + 100, curY + 3, { width: 100, align: 'right' });
+      curY += bold ? 22 : 18;
+    };
+
+    drawTotalRow('Subtotal', venta.subtotal);
+    if (parseFloat(venta.descuento_total) > 0) {
+      drawTotalRow('Descuento', -parseFloat(venta.descuento_total), false, '#e3000f');
+    }
+    drawTotalRow('TOTAL', venta.total, true, '#111111');
+
+    // ── FOOTER ────────────────────────────────────────────────────────────────
+    curY += 20;
+    doc.strokeColor('#cccccc').lineWidth(0.7)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 10;
+
+    if (!tieneFactura) {
+      doc.fillColor('#aaaaaa').fontSize(7).font('Helvetica')
+         .text('Este comprobante no tiene validez fiscal. Documento interno de King Pack.', ML, curY, { width: CW });
+      curY += 12;
+    }
+
+    doc.fillColor('#888888').fontSize(7.5).font('Helvetica-Bold')
+       .text('Laprida 270 – Ciudad de Salta', ML, curY);
+    doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
+       .text('  ·  Tel: 3872220486', ML + 143, curY);
+
+    doc.end();
+  } catch (err) { next(err); }
+});
+
+module.exports = router;

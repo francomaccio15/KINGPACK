@@ -12,6 +12,7 @@ const listasRouter       = require('./routes/listas-precios');
 const sucursalesRouter   = require('./routes/sucursales');
 const clientesRouter     = require('./routes/clientes');
 const arcaRouter         = require('./routes/arca');
+const ventasRouter       = require('./routes/ventas');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -27,6 +28,7 @@ app.use('/api/listas-precios', listasRouter);
 app.use('/api/sucursales',     sucursalesRouter);
 app.use('/api/clientes',       clientesRouter);
 app.use('/api/arca',           arcaRouter);
+app.use('/api/ventas',         ventasRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
