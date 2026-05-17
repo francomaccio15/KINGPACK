@@ -73,7 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Ventas',                href: '/ventas',               icon: <IcoVentas /> },
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
       { label: 'Pedidos a Proveedores', href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
-      { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja />,     disabled: true },
+      { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
     ],
   },
   {

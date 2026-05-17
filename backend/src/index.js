@@ -15,6 +15,7 @@ const arcaRouter           = require('./routes/arca');
 const ventasRouter         = require('./routes/ventas');
 const proveedoresRouter    = require('./routes/proveedores');
 const pedidosCompraRouter  = require('./routes/pedidos-compra');
+const cajaRouter           = require('./routes/caja');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -33,6 +34,7 @@ app.use('/api/arca',           arcaRouter);
 app.use('/api/ventas',          ventasRouter);
 app.use('/api/proveedores',    proveedoresRouter);
 app.use('/api/pedidos-compra', pedidosCompraRouter);
+app.use('/api/caja',          cajaRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
