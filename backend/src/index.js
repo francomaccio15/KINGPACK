@@ -5,14 +5,16 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 
-const healthRouter       = require('./routes/health');
-const articulosRouter    = require('./routes/articulos');
-const categoriasRouter   = require('./routes/categorias');
-const listasRouter       = require('./routes/listas-precios');
-const sucursalesRouter   = require('./routes/sucursales');
-const clientesRouter     = require('./routes/clientes');
-const arcaRouter         = require('./routes/arca');
-const ventasRouter       = require('./routes/ventas');
+const healthRouter         = require('./routes/health');
+const articulosRouter      = require('./routes/articulos');
+const categoriasRouter     = require('./routes/categorias');
+const listasRouter         = require('./routes/listas-precios');
+const sucursalesRouter     = require('./routes/sucursales');
+const clientesRouter       = require('./routes/clientes');
+const arcaRouter           = require('./routes/arca');
+const ventasRouter         = require('./routes/ventas');
+const proveedoresRouter    = require('./routes/proveedores');
+const pedidosCompraRouter  = require('./routes/pedidos-compra');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -28,7 +30,9 @@ app.use('/api/listas-precios', listasRouter);
 app.use('/api/sucursales',     sucursalesRouter);
 app.use('/api/clientes',       clientesRouter);
 app.use('/api/arca',           arcaRouter);
-app.use('/api/ventas',         ventasRouter);
+app.use('/api/ventas',          ventasRouter);
+app.use('/api/proveedores',    proveedoresRouter);
+app.use('/api/pedidos-compra', pedidosCompraRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
