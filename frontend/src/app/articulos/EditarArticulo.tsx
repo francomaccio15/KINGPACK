@@ -166,16 +166,16 @@ export default function EditarArticulo({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete</label>
+                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
                     <input
-                      type="number" min="0" step="0.01"
+                      type="number" min="0" max="100" step="0.1"
                       value={form.costo_flete} onChange={set('costo_flete')}
-                      placeholder="0.00"
-                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
+                      placeholder="0.0"
+                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
                         placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                     />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
                   </div>
                 </div>
                 <div>
