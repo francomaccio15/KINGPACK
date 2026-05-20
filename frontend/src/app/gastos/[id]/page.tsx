@@ -120,7 +120,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
     promises.push(
       fetch(`${API}/api/proveedores/${egreso.proveedor_id}/cuenta-corriente?limit=8`, { cache: 'no-store' })
         .then(r => r.ok ? r.json() : {})
-        .then(d => {
+        .then((d: any) => {
           movimientosCC = d.movimientos ?? [];
           totalesCC = d.totales ?? null;
         })
