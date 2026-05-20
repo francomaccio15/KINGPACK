@@ -185,8 +185,7 @@ CREATE TABLE egreso_cheques (
   importe           NUMERIC(14,2) NOT NULL CHECK (importe > 0)
 );
 
-CREATE INDEX idx_egreso_cheques_venc ON egreso_cheques(fecha_vencimiento)
-  WHERE fecha_vencimiento >= CURRENT_DATE;
+CREATE INDEX idx_egreso_cheques_venc ON egreso_cheques(fecha_vencimiento);
 
 -- =============================================================================
 -- CUENTA CORRIENTE DE PROVEEDORES (espejo de cuentas_corrientes_cliente)
