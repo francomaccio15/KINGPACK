@@ -88,7 +88,7 @@ router.get('/:id', async (req, res, next) => {
 // ─── PUT /api/proveedores/:id ─────────────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
   try {
-    const fields = ['razon_social', 'cuit', 'telefono', 'email', 'direccion', 'cond_pago', 'activo'];
+    const fields = ['razon_social', 'cuit', 'telefono', 'email', 'direccion', 'cond_pago', 'activo', 'cond_iva_id'];
     const updates = [];
     const params = [];
     let idx = 1;
@@ -116,6 +116,59 @@ router.put('/:id', async (req, res, next) => {
     if (err.code === '23505') return res.status(409).json({ error: 'CUIT duplicado' });
     next(err);
   }
+});
+
+// ─── GET /api/proveedores/:id/cuenta-corriente ────────────────────────────────
+// Movimientos de la cuenta corriente del proveedor con saldo acumulado
+router.get('/:id/cuenta-corriente', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    const [{ rows: prov }, { rows: movs }, { rows: totales }] = await Promise.all([
+      pool.query(`SELECT id, razon_social, cuit FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [id]),
+      pool.query(`
+        SELECT id, debe, haber, saldo, fecha, origen_tipo, origen_id, descripcion
+        FROM cuentas_corrientes_proveedor
+        WHERE proveedor_id = $1
+        ORDER BY fecha DESC
+        LIMIT $2 OFFSET $3
+      `, [id, Math.min(parseInt(limit) || 50, 200), Math.max(parseInt(offset) || 0, 0)]),
+      pool.query(`
+        SELECT
+          COALESCE(SUM(debe), 0)           AS total_debe,
+          COALESCE(SUM(haber), 0)          AS total_haber,
+          COALESCE(SUM(debe) - SUM(haber), 0) AS saldo_actual
+        FROM cuentas_corrientes_proveedor
+        WHERE proveedor_id = $1
+      `, [id]),
+    ]);
+
+    if (!prov[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    res.json({
+      proveedor: prov[0],
+      movimientos: movs,
+      totales: totales[0],
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/proveedores/:id/anticipos ──────────────────────────────────────
+// Anticipos disponibles de un proveedor (para mostrar alerta en el formulario)
+router.get('/:id/anticipos', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(`
+      SELECT id, monto, fecha, descripcion, estado
+      FROM anticipos_proveedor
+      WHERE proveedor_id = $1 AND estado = 'disponible'
+      ORDER BY fecha ASC
+    `, [id]);
+
+    const totalDisponible = rows.reduce((acc, r) => acc + parseFloat(r.monto), 0);
+    res.json({ anticipos: rows, total_disponible: totalDisponible.toFixed(2) });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
