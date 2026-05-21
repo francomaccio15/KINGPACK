@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ArticuloRow } from './ArticulosTabla';
 
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
@@ -29,10 +30,12 @@ export default function EditarArticulo({
   articulo,
   categorias,
   alicuotas,
+  onSave,
 }: {
   articulo: Articulo;
   categorias: Categoria[];
   alicuotas: Alicuota[];
+  onSave?: (updated: Partial<ArticuloRow> & { id: string }) => void;
 }) {
   const router = useRouter();
   const [open, setOpen]       = useState(false);
@@ -85,8 +88,27 @@ export default function EditarArticulo({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
+
+      // Actualización optimista: propagar el nuevo precio_madre al padre antes del refresh
+      if (onSave && data.articulo) {
+        onSave({
+          id:              data.articulo.id,
+          nombre:          data.articulo.nombre,
+          precio_madre:    String(data.articulo.precio_madre),
+          // precio_lista en lista madre = precio_madre; en otras listas el router.refresh lo corrige
+          precio_lista:    String(data.articulo.precio_madre),
+          costo_base:      String(data.articulo.costo_base),
+          costo_flete:     String(data.articulo.costo_flete),
+          margen_aplicado: data.articulo.margen_aplicado !== undefined
+            ? (data.articulo.margen_aplicado === null ? null : String(data.articulo.margen_aplicado))
+            : null,
+          categoria_id:    data.articulo.categoria_id,
+          activo:          data.articulo.activo,
+        });
+      }
+
       cerrar();
-      router.refresh();
+      router.refresh(); // Sincroniza lista_precio_items y precio_lista de otras listas
     } catch (err: any) {
       setError(err.message);
     } finally {
