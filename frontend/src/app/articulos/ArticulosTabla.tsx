@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import EditarArticulo from './EditarArticulo';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
@@ -72,13 +74,44 @@ export default function ArticulosTabla({
     });
   }, [serverArticulos]);
 
-  // Actualización optimista inmediata al guardar
-  const handleSave = (updated: Partial<ArticuloRow> & { id: string }) => {
+  // Re-fetch del artículo individual para obtener precio_lista exacto del servidor
+  const refetchArticulo = useCallback(async (id: string) => {
+    try {
+      const qs = listaActiva ? `?lista_id=${listaActiva.id}` : '';
+      const r = await fetch(`${API}/api/articulos/${id}${qs}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const fresh: ArticuloRow | undefined = data.articulo;
+      if (fresh) {
+        setArticulos(prev => prev.map(a => (a.id === id ? { ...a, ...fresh } : a)));
+        editedIds.current.delete(id); // ya tenemos dato fresco del servidor
+      }
+    } catch { /* silencioso */ }
+  }, [listaActiva]);
+
+  // Actualización optimista inmediata + re-fetch para precio_lista exacto
+  const handleSave = useCallback((updated: Partial<ArticuloRow> & { id: string }) => {
     editedIds.current.add(updated.id);
+
+    // 1. Update optimista: precio_lista calculado con descuento de la lista activa
+    const pMadreNum   = parseFloat(updated.precio_madre ?? '0');
+    const desc        = parseFloat(listaActiva?.descuento_base_pct ?? '0');
+    const precioLista = pMadreNum > 0
+      ? String(Math.round(pMadreNum * (1 - desc / 100) * 100) / 100)
+      : (updated.precio_lista ?? '0');
+
     setArticulos(prev =>
-      prev.map(a => (a.id === updated.id ? { ...a, ...updated } : a))
+      prev.map(a =>
+        a.id === updated.id
+          ? { ...a, ...updated, precio_lista: precioLista }
+          : a
+      )
     );
-  };
+
+    // 2. Re-fetch asincrónico para obtener precio_lista exacto del servidor
+    //    (el trigger ya actualizó lista_precio_items en este punto)
+    refetchArticulo(updated.id);
+  }, [listaActiva, refetchArticulo]);
 
   const esBase   = listaActiva?.tipo === 'madre';
 

@@ -415,4 +415,45 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/articulos/:id — artículo individual con precio_lista correcto ───
+// Debe ir después de /alicuotas y después de / para no interceptar esas rutas.
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { lista_id } = req.query;
+
+    const listaJoin       = lista_id
+      ? `LEFT JOIN lista_precio_items lpi ON lpi.articulo_id = a.id AND lpi.lista_id = $2`
+      : '';
+    const precioListaExpr = lista_id
+      ? 'COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista'
+      : 'a.precio_madre AS precio_lista';
+    const params = lista_id ? [id, lista_id] : [id];
+
+    const { rows } = await pool.query(`
+      SELECT
+        a.id, a.codigo, a.nombre,
+        a.precio_madre, a.costo_base, a.costo_flete, a.margen_aplicado, a.activo,
+        a.alicuota_iva_id,
+        ai.porcentaje  AS alicuota_porcentaje,
+        c.id           AS categoria_id,
+        c.nombre       AS categoria,
+        ${precioListaExpr},
+        COALESCE(0, 0)::numeric AS stock_total,
+        FALSE           AS stock_bajo,
+        NULL            AS stock_detalle
+      FROM articulos a
+      LEFT JOIN categorias    c  ON c.id  = a.categoria_id
+      LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+      ${listaJoin}
+      WHERE a.id = $1 AND a.deleted_at IS NULL
+    `, params);
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Artículo no encontrado' });
+    res.json({ articulo: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
