@@ -60,6 +60,7 @@ router.get('/', async (req, res, next) => {
         SELECT
           p.id, p.fecha_pedido, p.estado, p.monto_total,
           p.numero_factura_prov, p.costo_flete_total, p.fecha_recepcion,
+          p.egreso_id, p.stock_acreditado,
           pv.id           AS proveedor_id,
           pv.razon_social AS proveedor_nombre,
           s.nombre        AS sucursal_nombre,
@@ -160,6 +161,7 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           p.id, p.fecha_pedido, p.estado, p.monto_total,
           p.numero_factura_prov, p.costo_flete_total, p.fecha_recepcion,
+          p.egreso_id, p.stock_acreditado,
           pv.id           AS proveedor_id,
           pv.razon_social AS proveedor_nombre,
           pv.cuit         AS proveedor_cuit,
@@ -189,6 +191,83 @@ router.get('/:id', async (req, res, next) => {
 
     res.json({ pedido: pedidoRows[0], items: itemRows });
   } catch (err) { next(err); }
+});
+
+// ─── PATCH /api/pedidos-compra/:id/confirmar-recepcion ───────────────────────
+// Confirma que la mercadería llegó y acredita el stock en la sucursal correspondiente.
+// Solo puede ejecutarse una vez (stock_acreditado es irreversible).
+router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const { rows: pedidoRows } = await client.query(
+      `SELECT id, estado, egreso_id, sucursal_id, stock_acreditado
+       FROM pedidos_compra WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (!pedidoRows[0]) return res.status(404).json({ error: 'Pedido no encontrado' });
+    const pedido = pedidoRows[0];
+
+    if (pedido.stock_acreditado) {
+      return res.status(400).json({ error: 'El stock ya fue acreditado para este pedido' });
+    }
+    if (pedido.estado === 'cancelado') {
+      return res.status(400).json({ error: 'No se puede confirmar un pedido cancelado' });
+    }
+
+    await client.query('BEGIN');
+
+    // Obtener ítems con la sucursal de imputación correcta
+    let itemsToProcess = [];
+    if (pedido.egreso_id) {
+      // Pedido generado desde egreso: usar sucursal_imputacion_id de egreso_items
+      const { rows } = await client.query(
+        `SELECT articulo_id, cantidad, sucursal_imputacion_id AS sucursal_id
+         FROM egreso_items
+         WHERE egreso_id = $1 AND articulo_id IS NOT NULL`,
+        [pedido.egreso_id]
+      );
+      itemsToProcess = rows;
+    } else {
+      // Pedido manual legacy: usar sucursal del pedido
+      const { rows } = await client.query(
+        `SELECT articulo_id, cantidad, $2::uuid AS sucursal_id
+         FROM pedido_items WHERE pedido_id = $1`,
+        [id, pedido.sucursal_id]
+      );
+      itemsToProcess = rows;
+    }
+
+    for (const item of itemsToProcess) {
+      await client.query(`
+        INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
+        VALUES ($1, $2, $3, 0)
+        ON CONFLICT (articulo_id, sucursal_id)
+        DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
+      `, [item.articulo_id, item.sucursal_id, item.cantidad]);
+
+      await client.query(`
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
+        VALUES ($1, $2, $3, $4)
+      `, [item.articulo_id, item.sucursal_id, item.cantidad, `Recepción — pedido ${id}`]);
+    }
+
+    await client.query(`
+      UPDATE pedidos_compra
+      SET estado = 'recibido', stock_acreditado = TRUE,
+          fecha_recepcion = NOW(), updated_at = NOW()
+      WHERE id = $1
+    `, [id]);
+
+    await client.query('COMMIT');
+    res.json({ ok: true, items_acreditados: itemsToProcess.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── PATCH /api/pedidos-compra/:id/estado ─────────────────────────────────────

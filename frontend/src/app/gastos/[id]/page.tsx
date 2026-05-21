@@ -75,6 +75,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
   let egreso: any = null;
   let items: any[]  = [];
   let pagos: any[]  = [];
+  let pedido: any   = null;
   let mediosPago: any[] = [];
   let cuentasBancarias: any[] = [];
   let movimientosCC: any[] = [];
@@ -87,6 +88,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
       egreso = data.egreso;
       items  = data.items  ?? [];
       pagos  = data.pagos  ?? [];
+      pedido = data.pedido ?? null;
     }
   } catch { /* handled below */ }
 
@@ -183,6 +185,39 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
           />
         )}
       </div>
+
+      {/* Banner pedido de compra vinculado */}
+      {pedido && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm
+          ${pedido.stock_acreditado
+            ? 'border-green-500/20 bg-green-500/5'
+            : 'border-amber-500/20 bg-amber-500/5'}`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+            className={`w-5 h-5 flex-shrink-0 ${pedido.stock_acreditado ? 'text-green-400' : 'text-amber-400'}`}>
+            <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          </svg>
+          <div className="flex-1 min-w-0">
+            {pedido.stock_acreditado ? (
+              <span className="text-green-400 font-semibold">Stock acreditado</span>
+            ) : (
+              <span className="text-amber-400 font-semibold">Stock pendiente de recepción</span>
+            )}
+            <span className="text-kp-gray ml-2 text-xs">
+              {pedido.stock_acreditado
+                ? 'La mercadería fue recibida y el stock fue actualizado.'
+                : 'El pedido está pendiente. Confirmá la recepción para acreditar el stock.'}
+            </span>
+          </div>
+          <Link
+            href={`/pedidos-proveedores/${pedido.id}`}
+            className={`ml-auto text-xs font-semibold hover:underline whitespace-nowrap
+              ${pedido.stock_acreditado ? 'text-green-400 hover:text-green-300' : 'text-amber-400 hover:text-amber-300'}`}
+          >
+            {pedido.stock_acreditado ? 'Ver pedido →' : 'Confirmar recepción →'}
+          </Link>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

@@ -316,7 +316,12 @@ export default function NuevoEgresoPage() {
       });
       const data = await res.json();
       if (!res.ok) { setSaveError(data.error ?? 'Error al guardar'); return; }
-      router.push('/gastos');
+      // Compra de mercadería → ir al pedido generado para confirmar recepción
+      if (data.pedido_creado?.id) {
+        router.push(`/pedidos-proveedores/${data.pedido_creado.id}`);
+      } else {
+        router.push('/gastos');
+      }
     } catch {
       setSaveError('Error de conexión con el servidor');
     } finally {

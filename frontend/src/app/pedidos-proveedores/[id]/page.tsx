@@ -8,6 +8,8 @@ const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);
 };
+const fmtDate = (s: string | null) =>
+  s ? new Date(s).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
 
 const ESTADO_STYLE: Record<string, string> = {
   pendiente:        'bg-amber-500/10 text-amber-400 border-amber-500/30',
@@ -49,13 +51,8 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
     );
   }
 
-  const fecha = new Date(pedido.fecha_pedido).toLocaleDateString('es-AR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
-  const fechaRecepcion = pedido.fecha_recepcion
-    ? new Date(pedido.fecha_recepcion).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : null;
-
+  const fecha = fmtDate(pedido.fecha_pedido);
+  const fechaRecepcion = fmtDate(pedido.fecha_recepcion);
   const totalMerc = items.reduce((s: number, i: any) =>
     s + parseFloat(i.precio_compra) * parseFloat(i.cantidad), 0
   );
@@ -75,12 +72,20 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
             <h2 className="text-2xl font-bold">{pedido.proveedor_nombre}</h2>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[pedido.estado] ?? ''}`}>
               {ESTADO_LABEL[pedido.estado] ?? pedido.estado}
             </span>
+            {pedido.stock_acreditado && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border border-green-500/30 bg-green-500/10 text-green-400">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Stock acreditado
+              </span>
+            )}
           </div>
           <p className="text-sm text-kp-gray pl-3">
             Pedido del {fecha}
@@ -91,13 +96,31 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
         <AccionesPedido pedido={pedido} />
       </div>
 
+      {/* Banner: generado desde egreso */}
+      {pedido.egreso_id && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-blue-400 flex-shrink-0">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span className="text-kp-gray">
+            Generado desde egreso de compra.
+          </span>
+          <Link
+            href={`/gastos/${pedido.egreso_id}`}
+            className="ml-auto text-xs text-blue-400 hover:text-blue-300 hover:underline font-semibold whitespace-nowrap"
+          >
+            Ver egreso →
+          </Link>
+        </div>
+      )}
+
       {/* Info cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Proveedor',    value: pedido.proveedor_nombre },
-          { label: 'CUIT',         value: pedido.proveedor_cuit ?? '—' },
-          { label: 'Nº Factura',   value: pedido.numero_factura_prov ?? '—' },
-          { label: 'Teléfono',     value: pedido.proveedor_telefono ?? '—' },
+          { label: 'Proveedor',  value: pedido.proveedor_nombre },
+          { label: 'CUIT',       value: pedido.proveedor_cuit ?? '—' },
+          { label: 'Nº Factura', value: pedido.numero_factura_prov ?? '—' },
+          { label: 'Teléfono',   value: pedido.proveedor_telefono ?? '—' },
         ].map(c => (
           <div key={c.label} className="bg-kp-surface2 border border-kp-border rounded-xl p-4">
             <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">{c.label}</p>
@@ -108,8 +131,9 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
 
       {/* Items */}
       <div className="rounded-xl border border-kp-border overflow-hidden">
-        <div className="bg-kp-surface2 border-b border-kp-border px-4 py-3">
+        <div className="bg-kp-surface2 border-b border-kp-border px-4 py-3 flex items-center justify-between">
           <h3 className="text-sm font-bold uppercase tracking-wide text-kp-gray">Artículos del Pedido</h3>
+          <span className="text-xs text-kp-gray/60">{items.length} línea{items.length !== 1 ? 's' : ''}</span>
         </div>
         <table className="min-w-full text-sm">
           <thead>
@@ -118,7 +142,6 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Código</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Cantidad</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">P. Compra</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Flete Asign.</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Subtotal</th>
             </tr>
           </thead>
@@ -135,9 +158,6 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
                   <td className="px-4 py-3 text-right tabular-nums text-kp-white">
                     {fmt(item.precio_compra)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt text-xs">
-                    {fmt(item.costo_flete_asignado)}
-                  </td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
                     {fmt(sub)}
                   </td>
@@ -150,15 +170,17 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
 
       {/* Totales */}
       <div className="flex justify-end">
-        <div className="w-64 space-y-2 bg-kp-surface2 border border-kp-border rounded-xl p-4">
+        <div className="w-60 space-y-2 bg-kp-surface2 border border-kp-border rounded-xl p-4">
           <div className="flex justify-between text-sm">
             <span className="text-kp-gray">Mercadería</span>
             <span className="tabular-nums text-kp-white">{fmt(totalMerc)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-kp-gray">Flete</span>
-            <span className="tabular-nums text-kp-gray-lt">{fmt(pedido.costo_flete_total)}</span>
-          </div>
+          {parseFloat(pedido.costo_flete_total || '0') > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-kp-gray">Flete</span>
+              <span className="tabular-nums text-kp-gray-lt">{fmt(pedido.costo_flete_total)}</span>
+            </div>
+          )}
           <div className="border-t border-kp-border pt-2 flex justify-between">
             <span className="font-bold text-kp-white text-sm uppercase tracking-wide">Total</span>
             <span className="font-bold text-kp-white tabular-nums">{fmt(pedido.monto_total)}</span>

@@ -290,7 +290,7 @@ router.post('/', async (req, res, next) => {
     ]);
     const egreso = egresoRows[0];
 
-    // --- Insertar ítems y actualizar stock ---
+    // --- Insertar ítems ---
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const cant = parseFloat(it.cantidad) || 1;
@@ -305,19 +305,32 @@ router.post('/', async (req, res, next) => {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       `, [egreso.id, it.articulo_id || null, (it.descripcion || '').trim(),
           cant, precio, neto, sucImp, i]);
+    }
 
-      if (tipo_operacion === 'compra_mercaderia' && it.articulo_id) {
-        await client.query(`
-          INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
-          VALUES ($1, $2, $3, 0)
-          ON CONFLICT (articulo_id, sucursal_id)
-          DO UPDATE SET cantidad = stock.cantidad + $3
-        `, [it.articulo_id, sucImp, cant]);
+    // --- Compra mercadería: crear pedido pendiente (stock se acredita al confirmar recepción) ---
+    let pedidoCreado = null;
+    if (tipo_operacion === 'compra_mercaderia') {
+      const montoMercaderia = items.reduce((s, it) => {
+        return s + (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio_unitario) || 0);
+      }, 0);
 
+      const { rows: pedidoRows } = await client.query(`
+        INSERT INTO pedidos_compra (proveedor_id, sucursal_id, egreso_id, monto_total)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `, [proveedor_id, sucursal_id, egreso.id, montoMercaderia.toFixed(2)]);
+      pedidoCreado = pedidoRows[0];
+
+      for (const it of items) {
+        if (!it.articulo_id) continue;
+        const cant = parseFloat(it.cantidad) || 1;
+        const precio = parseFloat(it.precio_unitario) || 0;
         await client.query(`
-          INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
+          INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, precio_compra)
           VALUES ($1, $2, $3, $4)
-        `, [it.articulo_id, sucImp, cant, `Compra — egreso ${egreso.id}`]);
+          ON CONFLICT (pedido_id, articulo_id)
+          DO UPDATE SET cantidad = pedido_items.cantidad + EXCLUDED.cantidad
+        `, [pedidoCreado.id, it.articulo_id, cant, precio]);
       }
     }
 
@@ -407,6 +420,7 @@ router.post('/', async (req, res, next) => {
     res.status(201).json({
       egreso: { ...egreso, estado_pago: estadoFinal },
       anticipo_creado: anticipoNuevo,
+      pedido_creado: pedidoCreado,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -426,7 +440,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const [{ rows: egresoRows }, { rows: itemRows }, { rows: pagoRows }] = await Promise.all([
+    const [{ rows: egresoRows }, { rows: itemRows }, { rows: pagoRows }, { rows: pedidoRows }] = await Promise.all([
       pool.query(`
         SELECT
           e.*,
@@ -473,11 +487,22 @@ router.get('/:id', async (req, res, next) => {
         GROUP BY ep.id, mp.nombre, cb.nombre
         ORDER BY ep.fecha_pago DESC
       `, [id]),
+      pool.query(`
+        SELECT id, estado, stock_acreditado, fecha_recepcion, monto_total
+        FROM pedidos_compra
+        WHERE egreso_id = $1 AND deleted_at IS NULL
+        LIMIT 1
+      `, [id]),
     ]);
 
     if (egresoRows.length === 0) return res.status(404).json({ error: 'Egreso no encontrado' });
 
-    res.json({ egreso: egresoRows[0], items: itemRows, pagos: pagoRows });
+    res.json({
+      egreso: egresoRows[0],
+      items: itemRows,
+      pagos: pagoRows,
+      pedido: pedidoRows[0] ?? null,
+    });
   } catch (err) { next(err); }
 });
 
