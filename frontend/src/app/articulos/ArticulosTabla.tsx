@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import EditarArticulo from './EditarArticulo';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -56,14 +56,25 @@ export default function ArticulosTabla({
   hasFilters,
 }: Props) {
   const [articulos, setArticulos] = useState<ArticuloRow[]>(serverArticulos);
+  // IDs editados recientemente — el useEffect no los sobreescribe
+  const editedIds = useRef<Set<string>>(new Set());
 
-  // Sincronizar cuando el servidor re-renderiza (router.refresh)
+  // Sincroniza cuando el servidor re-renderiza (NuevoArticulo → router.refresh),
+  // pero respeta las ediciones optimistas hechas en esta sesión.
   useEffect(() => {
-    setArticulos(serverArticulos);
+    setArticulos(prev => {
+      const prevMap = new Map(prev.map(a => [a.id, a]));
+      return serverArticulos.map(serverA =>
+        editedIds.current.has(serverA.id)
+          ? (prevMap.get(serverA.id) ?? serverA)  // conserva el estado editado
+          : serverA                                 // nuevo artículo o sin editar
+      );
+    });
   }, [serverArticulos]);
 
   // Actualización optimista inmediata al guardar
   const handleSave = (updated: Partial<ArticuloRow> & { id: string }) => {
+    editedIds.current.add(updated.id);
     setArticulos(prev =>
       prev.map(a => (a.id === updated.id ? { ...a, ...updated } : a))
     );
