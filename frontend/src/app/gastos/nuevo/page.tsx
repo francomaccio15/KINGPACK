@@ -33,6 +33,7 @@ interface ArticuloResult {
   id: string;
   nombre: string;
   codigo: string;
+  costo_base: number;
   precio_madre: number;
 }
 
@@ -215,7 +216,7 @@ export default function NuevoEgresoPage() {
         articulo_id: art.id,
         descripcion: art.nombre,
         cantidad: 1,
-        precio_unitario: art.precio_madre ?? 0,
+        precio_unitario: art.costo_base ?? 0,
         sucursal_imputacion_id: sucursalId,
       }];
     });
@@ -589,7 +590,7 @@ export default function NuevoEgresoPage() {
                             <span className="text-sm font-medium text-kp-white">{a.nombre}</span>
                             <span className="ml-2 text-xs text-kp-gray font-mono">{a.codigo}</span>
                           </div>
-                          <span className="text-xs text-kp-gray-lt tabular-nums">{ars.format(a.precio_madre)}</span>
+                          <span className="text-xs text-kp-gray-lt tabular-nums">{ars.format(a.costo_base)}</span>
                         </button>
                       </li>
                     ))}

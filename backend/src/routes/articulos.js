@@ -386,6 +386,8 @@ router.get('/', async (req, res, next) => {
         SELECT
           a.id, a.codigo, a.nombre,
           a.precio_madre, a.costo_base, a.costo_flete, a.margen_aplicado, a.activo,
+          a.alicuota_iva_id,
+          ai.porcentaje  AS alicuota_porcentaje,
           c.id           AS categoria_id,
           c.nombre       AS categoria,
           ${precioListaExpr},
@@ -394,6 +396,7 @@ router.get('/', async (req, res, next) => {
           st.stock_detalle
         FROM articulos a
         LEFT JOIN categorias c ON c.id = a.categoria_id
+        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
         ${listaJoin}
         LEFT JOIN (${stockSubquery}) st ON st.articulo_id = a.id
         WHERE ${where}

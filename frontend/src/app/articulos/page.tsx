@@ -18,6 +18,8 @@ type Articulo = {
   costo_base: string;
   costo_flete: string;
   margen_aplicado: string | null;
+  alicuota_iva_id: string;
+  alicuota_porcentaje: string;
   activo: boolean;
   categoria_id: string;
   categoria: string;

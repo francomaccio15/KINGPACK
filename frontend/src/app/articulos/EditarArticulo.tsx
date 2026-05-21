@@ -14,6 +14,8 @@ type Articulo = {
   costo_base?: string;
   costo_flete?: string;
   margen_aplicado?: string | null;
+  alicuota_iva_id?: string;
+  alicuota_porcentaje?: string;
   categoria_id: string;
 };
 
@@ -52,9 +54,12 @@ export default function EditarArticulo({
   const costo      = parseFloat(form.costo_base)  || 0;
   const flete      = parseFloat(form.costo_flete) || 0;
 
-  // precio_madre calculado igual que el trigger del backend
-  // (sin IVA visible aquí — lo muestra como referencia el precio actual)
-  const precioRef  = parseFloat(articulo.precio_madre) || 0;
+  // Precio estimado — recalculado en tiempo real igual que el trigger del backend:
+  // precio_madre = costo × (1 + flete%) × (1 + margen%) × (1 + iva%)
+  const ivaPct     = parseFloat(articulo.alicuota_porcentaje ?? '21');
+  const precioRef  = costo > 0
+    ? costo * (1 + flete / 100) * (1 + margenReal / 100) * (1 + ivaPct / 100)
+    : parseFloat(articulo.precio_madre) || 0;
 
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -200,9 +205,16 @@ export default function EditarArticulo({
                 </div>
               </div>
 
-              {/* Precio actual */}
+              {/* Precio estimado — se actualiza en tiempo real */}
               <div className="flex items-center justify-between rounded-xl bg-kp-surface2 border border-kp-border px-5 py-3">
-                <span className="text-xs text-kp-gray uppercase tracking-widest">Precio actual</span>
+                <div>
+                  <span className="text-xs text-kp-gray uppercase tracking-widest">Precio estimado</span>
+                  {costo > 0 && (
+                    <span className="block text-[10px] text-kp-gray mt-0.5">
+                      IVA {ivaPct.toFixed(0)}% incluido
+                    </span>
+                  )}
+                </div>
                 <span className="text-xl font-bold tabular-nums text-kp-white">
                   {ars.format(precioRef)}
                 </span>
