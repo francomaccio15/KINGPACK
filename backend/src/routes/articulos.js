@@ -162,18 +162,18 @@ router.get('/pdf-precios', async (req, res, next) => {
     const HEADER_H = 88;
     doc.rect(0, 0, PW, HEADER_H).fill('#111111');
 
-    // Red accent stripe at the very top
-    doc.rect(0, 0, PW, 4).fill('#e3000f');
+    // Top accent stripe
+    doc.rect(0, 0, PW, 4).fill('#333333');
 
-    // Red vertical bar before logo
-    doc.rect(ML, 20, 3, 32).fill('#e3000f');
+    // Vertical bar before logo
+    doc.rect(ML, 20, 3, 32).fill('#333333');
 
     // KING PACK
     doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold')
        .text('KING PACK', ML + 12, 20);
 
     // DESCARTABLES
-    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+    doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold')
        .text('DESCARTABLES', ML + 12, 48);
 
     // Lista name — right side of "DESCARTABLES" line
@@ -187,7 +187,7 @@ router.get('/pdf-precios', async (req, res, next) => {
 
     // Extra discount badge (if any)
     if (descuento > 0) {
-      doc.fillColor('#e3000f').fontSize(8).font('Helvetica-Bold')
+      doc.fillColor('#aaaaaa').fontSize(8).font('Helvetica-Bold')
          .text(`Descuento adicional: ${descuento}%`, 0, 38, { align: 'right', width: PW - MR });
     }
 
@@ -231,8 +231,8 @@ router.get('/pdf-precios', async (req, res, next) => {
         const catLabel = (currentCat || 'SIN CATEGORÍA').toUpperCase();
 
         doc.rect(0, curY, PW, 24).fill('#1e1e1e');
-        // Red left accent
-        doc.rect(ML - 2, curY, 3, 24).fill('#e3000f');
+        // Left accent
+        doc.rect(ML - 2, curY, 3, 24).fill('#555555');
         doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold')
            .text(catLabel, ML + 8, curY + 8, { width: CW - 8 });
 

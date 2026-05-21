@@ -441,12 +441,12 @@ router.get('/:id/pdf', async (req, res, next) => {
     // ── HEADER ────────────────────────────────────────────────────────────────
     const HEADER_H = 100;
     doc.rect(0, 0, PW, HEADER_H).fill('#111111');
-    doc.rect(0, 0, PW, 4).fill('#e3000f');
-    doc.rect(ML, 18, 3, 36).fill('#e3000f');
+    doc.rect(0, 0, PW, 4).fill('#333333');
+    doc.rect(ML, 18, 3, 36).fill('#333333');
 
     doc.fillColor('#ffffff').fontSize(26).font('Helvetica-Bold')
        .text('KING PACK', ML + 12, 18);
-    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+    doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold')
        .text('DESCARTABLES', ML + 12, 50);
 
     // Tipo de comprobante — derecha del header
@@ -460,7 +460,7 @@ router.get('/:id/pdf', async (req, res, next) => {
     if (tieneFactura) {
       doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica')
          .text(`Pto. Venta: ${String(fact.punto_venta).padStart(4,'0')}  Nº: ${String(fact.factura_numero).padStart(8,'0')}`, 0, 44, { align: 'right', width: PW - MR });
-      doc.fillColor('#e3000f').fontSize(8).font('Helvetica-Bold')
+      doc.fillColor('#aaaaaa').fontSize(8).font('Helvetica-Bold')
          .text(`CAE: ${fact.cae}`, 0, 60, { align: 'right', width: PW - MR });
       doc.fillColor('#888888').fontSize(7.5).font('Helvetica')
          .text(`Vence: ${fechaFmt(fact.cae_vencimiento)}`, 0, 74, { align: 'right', width: PW - MR });
@@ -535,7 +535,7 @@ router.get('/:id/pdf', async (req, res, next) => {
       if (tieneDesc) {
         doc.fillColor('#888888')
            .text(ars(item.precio_lista), ML + 236, curY + 4, { width: 70, align: 'right' });
-        doc.fillColor('#e3000f')
+        doc.fillColor('#555555')
            .text(pct(item.descuento_pct), ML + 316, curY + 4, { width: 40, align: 'right' });
         doc.fillColor('#1a1a1a')
            .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
@@ -573,7 +573,7 @@ router.get('/:id/pdf', async (req, res, next) => {
 
     drawTotalRow('Subtotal', venta.subtotal);
     if (parseFloat(venta.descuento_total) > 0) {
-      drawTotalRow('Descuento', -parseFloat(venta.descuento_total), false, '#e3000f');
+      drawTotalRow('Descuento', -parseFloat(venta.descuento_total), false, '#555555');
     }
     drawTotalRow('TOTAL', venta.total, true, '#111111');
 

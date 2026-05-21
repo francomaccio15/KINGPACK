@@ -339,12 +339,12 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     // ── HEADER ────────────────────────────────────────────────────────────────
     const HEADER_H = 88;
     doc.rect(0, 0, PW, HEADER_H).fill('#111111');
-    doc.rect(0, 0, PW, 4).fill('#e3000f');
-    doc.rect(ML, 20, 3, 32).fill('#e3000f');
+    doc.rect(0, 0, PW, 4).fill('#333333');
+    doc.rect(ML, 20, 3, 32).fill('#333333');
 
     doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold')
        .text('KING PACK', ML + 12, 20);
-    doc.fillColor('#e3000f').fontSize(9).font('Helvetica-Bold')
+    doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold')
        .text('DESCARTABLES', ML + 12, 48);
     doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica')
        .text('·  ESTADO DE CUENTA', ML + 120, 48);
@@ -376,7 +376,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     const limiteCredito = parseFloat(cliente.limite_credito) || 0;
     const excede = limiteCredito > 0 && saldoActual > limiteCredito;
 
-    const badgeColor = excede ? '#e3000f' : saldoActual > 0 ? '#d97706' : '#16a34a';
+    const badgeColor = excede ? '#1a1a1a' : saldoActual > 0 ? '#444444' : '#666666';
     doc.rect(PW - MR - 130, HEADER_H + 14, 130, 44).fill(badgeColor);
     doc.fillColor('#ffffff').fontSize(7.5).font('Helvetica-Bold')
        .text('SALDO ACTUAL', PW - MR - 126, HEADER_H + 19, { width: 122, align: 'center' });
@@ -456,18 +456,18 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
       doc.fillColor('#333333').fontSize(7.5).font('Helvetica')
          .text(TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—', COL_TIPO, curY + 6, { width: 90 });
 
-      // Debe (amber)
+      // Debe
       if (debe > 0) {
-        doc.fillColor('#b45309').fontSize(8).font('Helvetica-Bold')
+        doc.fillColor('#333333').fontSize(8).font('Helvetica-Bold')
            .text(ars(debe), 0, curY + 5, { align: 'right', width: PW - MR - 110 });
       } else {
         doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
            .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 110 });
       }
 
-      // Haber (green)
+      // Haber
       if (haber > 0) {
-        doc.fillColor('#15803d').fontSize(8).font('Helvetica-Bold')
+        doc.fillColor('#666666').fontSize(8).font('Helvetica-Bold')
            .text(ars(haber), 0, curY + 5, { align: 'right', width: PW - MR - 10 });
       } else {
         doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
@@ -475,7 +475,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
       }
 
       // Saldo
-      const saldoColor = saldo > 0 ? '#b45309' : saldo < 0 ? '#15803d' : '#555555';
+      const saldoColor = saldo > 0 ? '#333333' : saldo < 0 ? '#666666' : '#555555';
       doc.fillColor(saldoColor).fontSize(8.5).font('Helvetica-Bold')
          .text(ars(saldo), 0, curY + 5, { align: 'right', width: PW - MR });
 
@@ -490,8 +490,8 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     curY += 10;
     ensureSpace();
 
-    doc.rect(ML, curY, CW, 32).fill(excede ? '#fff1f2' : '#f8faff');
-    doc.strokeColor(excede ? '#e3000f' : '#d0d0d0').lineWidth(0.8)
+    doc.rect(ML, curY, CW, 32).fill('#f5f5f5');
+    doc.strokeColor(excede ? '#444444' : '#d0d0d0').lineWidth(0.8)
        .rect(ML, curY, CW, 32).stroke();
 
     doc.fillColor('#555555').fontSize(7.5).font('Helvetica-Bold')
@@ -500,7 +500,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
        .text(ars(saldoActual), 0, curY + 6, { align: 'right', width: PW - MR });
 
     if (excede) {
-      doc.fillColor('#e3000f').fontSize(7).font('Helvetica-Bold')
+      doc.fillColor('#333333').fontSize(7).font('Helvetica-Bold')
          .text(`⚠  Límite de crédito excedido (límite: ${ars(limiteCredito)})`, ML + 10, curY + 21);
     }
 
