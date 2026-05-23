@@ -4,6 +4,7 @@ import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: any) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
