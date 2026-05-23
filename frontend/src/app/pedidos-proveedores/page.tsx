@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosPedidos from './FiltrosPedidos';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 type Pedido = {
   id: string;
@@ -48,8 +48,8 @@ async function fetchData(params: Record<string, string | undefined>) {
   q.set('limit', '200');
 
   const [pedidosRes, proveedoresRes] = await Promise.all([
-    fetch(`${API}/api/pedidos-compra?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ pedidos: [], count: 0 })),
-    fetch(`${API}/api/proveedores?limit=500`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch(`/api/pedidos-compra?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ pedidos: [], count: 0 })),
+    serverFetch(`/api/proveedores?limit=500`,{ cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
   ]);
 
   return {

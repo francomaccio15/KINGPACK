@@ -49,6 +49,7 @@ interface CartItem {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -157,7 +158,7 @@ export default function NuevaVenta({
   // ─── Fetch medios de pago when modal opens ─────────────────────────────────
   useEffect(() => {
     if (!open) return;
-    fetch(`${API}/api/ventas/medios-pago`)
+    apiFetch(`/api/ventas/medios-pago`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
         const list: MedioPago[] = data.medios_pago ?? data ?? [];
@@ -204,7 +205,7 @@ export default function NuevaVenta({
       try {
         const params = new URLSearchParams({ q: artQuery.trim(), limit: '30' });
         if (listaId) params.set('lista_id', listaId);
-        const r = await fetch(`${API}/api/articulos?${params}`);
+        const r = await apiFetch(`/api/articulos?${params}`);
         if (!r.ok) throw new Error();
         const data = await r.json();
         setArtResults(data.articulos ?? data ?? []);
@@ -233,7 +234,7 @@ export default function NuevaVenta({
     clientDebounceRef.current = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ q: clientQuery.trim(), limit: '20' });
-        const r = await fetch(`${API}/api/clientes?${params}`);
+        const r = await apiFetch(`/api/clientes?${params}`);
         if (!r.ok) throw new Error();
         const data = await r.json();
         setClientResults(data.clientes ?? data ?? []);
@@ -357,7 +358,7 @@ export default function NuevaVenta({
     };
 
     try {
-      const r = await fetch(`${API}/api/ventas`, {
+      const r = await apiFetch(`/api/ventas`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),

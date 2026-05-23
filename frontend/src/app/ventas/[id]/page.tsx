@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import AccionesVenta from './AccionesVenta';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 async function fetchVenta(id: string) {
   try {
-    const res = await fetch(`${API}/api/ventas/${id}`, { cache: 'no-store' });
+    const res = await serverFetch(`/api/ventas/${id}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return res.json();
   } catch {

@@ -8,6 +8,7 @@ type Lista    = { id: string; nombre: string };
 type Sucursal = { id: string; nombre: string };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 const EMPTY = {
   razon_social: '', cuit: '', cond_iva_id: '', telefono: '', direccion: '',
@@ -41,7 +42,7 @@ export default function NuevoCliente({
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/clientes`, {
+      const res = await apiFetch(`/api/clientes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

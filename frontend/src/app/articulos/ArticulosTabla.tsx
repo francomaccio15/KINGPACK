@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import EditarArticulo from './EditarArticulo';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
@@ -78,7 +79,7 @@ export default function ArticulosTabla({
   const refetchArticulo = useCallback(async (id: string) => {
     try {
       const qs = listaActiva ? `?lista_id=${listaActiva.id}` : '';
-      const r = await fetch(`${API}/api/articulos/${id}${qs}`);
+      const r = await apiFetch(`/api/articulos/${id}${qs}`);
       if (!r.ok) return;
       const data = await r.json();
       const fresh: ArticuloRow | undefined = data.articulo;

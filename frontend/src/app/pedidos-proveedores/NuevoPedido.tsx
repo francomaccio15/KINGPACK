@@ -22,6 +22,7 @@ interface LineItem {
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
@@ -78,7 +79,7 @@ export default function NuevoPedido({
     artDebounce.current = setTimeout(async () => {
       setArtLoading(true);
       try {
-        const res = await fetch(`${API}/api/articulos?q=${encodeURIComponent(q)}&limit=10`);
+        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&limit=10`);
         const data = await res.json();
         setArtResults(data.articulos ?? []);
       } catch {
@@ -134,7 +135,7 @@ export default function NuevoPedido({
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(`${API}/api/pedidos-compra`, {
+      const res = await apiFetch(`/api/pedidos-compra`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

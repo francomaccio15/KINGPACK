@@ -2,8 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
 import ClientesFiltros from './ClientesFiltros';
-
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 type Cliente = {
   id: string; razon_social: string; cuit: string | null; telefono: string | null;
@@ -20,10 +19,10 @@ async function fetchAll(q?: string, activo?: string) {
   if (activo) params.set('activo', activo);
 
   const [clientes, condIva, listas, sucursales] = await Promise.all([
-    fetch(`${API}/api/clientes?${params}`,  { cache: 'no-store' }).then(r => r.json()).then(d => d.clientes ?? []).catch(() => []),
-    fetch(`${API}/api/clientes/cond-iva`,   { cache: 'no-store' }).then(r => r.json()).then(d => d.cond_iva ?? []).catch(() => []),
-    fetch(`${API}/api/listas-precios`,      { cache: 'no-store' }).then(r => r.json()).then(d => d.listas ?? []).catch(() => []),
-    fetch(`${API}/api/sucursales`,          { cache: 'no-store' }).then(r => r.json()).then(d => d.sucursales ?? []).catch(() => []),
+    serverFetch(`/api/clientes?${params}`,  { cache: 'no-store' }).then(r => r.json()).then(d => d.clientes ?? []).catch(() => []),
+    serverFetch('/api/clientes/cond-iva',   { cache: 'no-store' }).then(r => r.json()).then(d => d.cond_iva ?? []).catch(() => []),
+    serverFetch('/api/listas-precios',      { cache: 'no-store' }).then(r => r.json()).then(d => d.listas ?? []).catch(() => []),
+    serverFetch('/api/sucursales',          { cache: 'no-store' }).then(r => r.json()).then(d => d.sucursales ?? []).catch(() => []),
   ]);
   return { clientes, condIva, listas, sucursales };
 }

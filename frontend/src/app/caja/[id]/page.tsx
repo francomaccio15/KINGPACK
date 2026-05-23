@@ -2,7 +2,7 @@ import Link from 'next/link';
 import RegistrarMovimiento from './RegistrarMovimiento';
 import CerrarCaja from './CerrarCaja';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -32,7 +32,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
   let mediosPago: any[] = [];
 
   try {
-    const res = await fetch(`${API}/api/caja/${params.id}`, { cache: 'no-store' });
+    const res = await serverFetch(`/api/caja/${params.id}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       caja       = data.caja;

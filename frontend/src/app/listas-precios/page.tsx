@@ -1,4 +1,5 @@
 import ListaEditor from './ListaEditor';
+import { serverFetch } from '@/lib/serverFetch';
 
 type Lista = {
   id: string;
@@ -8,11 +9,9 @@ type Lista = {
   articulos_count: number;
 };
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
 async function fetchListas(): Promise<Lista[] | { error: string }> {
   try {
-    const r = await fetch(`${API}/api/listas-precios`, { cache: 'no-store' });
+    const r = await serverFetch(`/api/listas-precios`, { cache: 'no-store' });
     if (!r.ok) return { error: `API respondió ${r.status}` };
     return (await r.json()).listas ?? [];
   } catch (e: any) {

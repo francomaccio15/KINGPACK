@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 type Facturacion = {
   cae: string;
@@ -29,7 +30,7 @@ export default function AccionesVenta({
     setLoadingFactura(true);
     setResultFactura(null);
     try {
-      const res  = await fetch(`${API}/api/ventas/${ventaId}/factura-test`, { method: 'POST' });
+      const res  = await apiFetch(`/api/ventas/${ventaId}/factura-test`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al facturar');
       setResultFactura(data);
@@ -44,7 +45,7 @@ export default function AccionesVenta({
   const descargarPdf = async () => {
     setLoadingPdf(true);
     try {
-      const res = await fetch(`${API}/api/ventas/${ventaId}/pdf`);
+      const res = await apiFetch(`/api/ventas/${ventaId}/pdf`);
       if (!res.ok) throw new Error('Error al generar PDF');
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);

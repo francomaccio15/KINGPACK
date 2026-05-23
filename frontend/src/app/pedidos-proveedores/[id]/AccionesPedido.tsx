@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 type Pedido = {
   id: string;
@@ -22,7 +23,7 @@ export default function AccionesPedido({ pedido }: { pedido: Pedido }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/pedidos-compra/${pedido.id}/confirmar-recepcion`, {
+      const res = await apiFetch(`/api/pedidos-compra/${pedido.id}/confirmar-recepcion`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -41,7 +42,7 @@ export default function AccionesPedido({ pedido }: { pedido: Pedido }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/pedidos-compra/${pedido.id}/estado`, {
+      const res = await apiFetch(`/api/pedidos-compra/${pedido.id}/estado`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: 'cancelado' }),

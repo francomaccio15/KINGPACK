@@ -2,8 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosVentas from './FiltrosVentas';
 import NuevaVenta from './NuevaVenta';
-
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 type Venta = {
   id: string;
@@ -50,9 +49,9 @@ async function fetchData(params: Record<string, string | undefined>) {
   q.set('limit', '100');
 
   const [ventasRes, sucursalesRes, listasRes] = await Promise.all([
-    fetch(`${API}/api/ventas?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ventas: [], count: 0 })),
-    fetch(`${API}/api/sucursales`,  { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
-    fetch(`${API}/api/listas-precios`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ listas: [] })),
+    serverFetch(`/api/ventas?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ ventas: [], count: 0 })),
+    serverFetch('/api/sucursales',  { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
+    serverFetch('/api/listas-precios', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ listas: [] })),
   ]);
 
   const rawListas = listasRes.listas ?? [];

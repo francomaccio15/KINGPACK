@@ -1,8 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosGastos from './FiltrosGastos';
-
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 type Egreso = {
   id: string;
@@ -78,9 +77,9 @@ async function fetchData(params: Record<string, string | undefined>) {
   q.set('limit', '100');
 
   const [egresosRes, proveedoresRes, alertasRes] = await Promise.all([
-    fetch(`${API}/api/egresos?${q}`,           { cache: 'no-store' }).then(r => r.json()).catch(() => ({ egresos: [], count: 0 })),
-    fetch(`${API}/api/proveedores?limit=500`,   { cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
-    fetch(`${API}/api/egresos/alertas`,         { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+    serverFetch(`/api/egresos?${q}`,           { cache: 'no-store' }).then(r => r.json()).catch(() => ({ egresos: [], count: 0 })),
+    serverFetch('/api/proveedores?limit=500',   { cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch('/api/egresos/alertas',         { cache: 'no-store' }).then(r => r.json()).catch(() => null),
   ]);
 
   return {

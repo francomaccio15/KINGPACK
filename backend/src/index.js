@@ -5,6 +5,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 
+const authRouter              = require('./routes/auth');
 const healthRouter            = require('./routes/health');
 const articulosRouter         = require('./routes/articulos');
 const categoriasRouter        = require('./routes/categorias');
@@ -20,6 +21,7 @@ const egresosRouter           = require('./routes/egresos');
 const rubrosGastosRouter      = require('./routes/rubros-gastos');
 const cuentasBancariasRouter  = require('./routes/cuentas-bancarias');
 const anticiposRouter         = require('./routes/anticipos-proveedores');
+const { verifyToken }         = require('./middleware/auth');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -28,11 +30,17 @@ app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || true }));
 app.use(express.json({ limit: '1mb' }));
 
-app.use('/api/health',                healthRouter);
+// Rutas públicas (sin JWT)
+app.use('/api/health',     healthRouter);
+app.use('/api/auth',       authRouter);
+app.use('/api/sucursales', sucursalesRouter); // necesario para el layout server-side
+
+// Todas las rutas siguientes requieren JWT válido
+app.use(verifyToken);
+
 app.use('/api/articulos',             articulosRouter);
 app.use('/api/categorias',            categoriasRouter);
 app.use('/api/listas-precios',        listasRouter);
-app.use('/api/sucursales',            sucursalesRouter);
 app.use('/api/clientes',              clientesRouter);
 app.use('/api/arca',                  arcaRouter);
 app.use('/api/ventas',                ventasRouter);

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import AbrirCaja from './AbrirCaja';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -36,8 +36,8 @@ type CajaHistorial = {
 
 async function fetchData() {
   const [estadoRes, historialRes] = await Promise.all([
-    fetch(`${API}/api/caja/estado`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
-    fetch(`${API}/api/caja?limit=20`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ cajas: [] })),
+    serverFetch(`/api/caja/estado`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
+    serverFetch(`/api/caja?limit=20`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ cajas: [] })),
   ]);
   return {
     sucursales:  estadoRes.sucursales  ?? [],

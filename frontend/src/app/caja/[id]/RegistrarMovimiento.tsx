@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 type MedioPago = { id: string; nombre: string };
 
@@ -53,7 +54,7 @@ export default function RegistrarMovimiento({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/api/caja/${cajaId}/movimiento`, {
+      const res = await apiFetch(`/api/caja/${cajaId}/movimiento`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

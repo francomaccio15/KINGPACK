@@ -7,6 +7,7 @@ type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
@@ -74,7 +75,7 @@ export default function NuevoArticulo({
     setCatError('');
     setCatLoading(true);
     try {
-      const res = await fetch(`${API}/api/categorias`, {
+      const res = await apiFetch(`/api/categorias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,7 +103,7 @@ export default function NuevoArticulo({
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/articulos`, {
+      const res = await apiFetch(`/api/articulos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

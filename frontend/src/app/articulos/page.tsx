@@ -5,6 +5,7 @@ import ExportarPDF from './ExportarPDF';
 import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
+import { serverFetch } from '@/lib/serverFetch';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
@@ -34,11 +35,9 @@ type Sucursal  = { id: string; nombre: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
 async function fetchListas(): Promise<Lista[]> {
   try {
-    const r = await fetch(`${API}/api/listas-precios`, { cache: 'no-store' });
+    const r = await serverFetch('/api/listas-precios', { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).listas ?? [];
   } catch { return []; }
@@ -46,7 +45,7 @@ async function fetchListas(): Promise<Lista[]> {
 
 async function fetchCategorias(): Promise<Categoria[]> {
   try {
-    const r = await fetch(`${API}/api/categorias`, { cache: 'no-store' });
+    const r = await serverFetch('/api/categorias', { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).categorias ?? [];
   } catch { return []; }
@@ -54,7 +53,7 @@ async function fetchCategorias(): Promise<Categoria[]> {
 
 async function fetchSucursales(): Promise<Sucursal[]> {
   try {
-    const r = await fetch(`${API}/api/sucursales`, { cache: 'no-store' });
+    const r = await serverFetch('/api/sucursales', { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).sucursales ?? [];
   } catch { return []; }
@@ -62,7 +61,7 @@ async function fetchSucursales(): Promise<Sucursal[]> {
 
 async function fetchAlicuotas(): Promise<Alicuota[]> {
   try {
-    const r = await fetch(`${API}/api/articulos/alicuotas`, { cache: 'no-store' });
+    const r = await serverFetch('/api/articulos/alicuotas', { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).alicuotas ?? [];
   } catch { return []; }
@@ -79,11 +78,11 @@ async function fetchArticulos(
   if (sucursal_id)     qs.set('sucursal_id', sucursal_id);
   qs.set('activo', sp.activo || 'true');
   try {
-    const r = await fetch(`${API}/api/articulos?${qs}`, { cache: 'no-store' });
+    const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
     if (!r.ok) return { error: `API respondió ${r.status}` };
     return r.json();
-  } catch (e: any) {
-    return { error: e.message || 'No se pudo conectar a la API' };
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'No se pudo conectar a la API' };
   }
 }
 

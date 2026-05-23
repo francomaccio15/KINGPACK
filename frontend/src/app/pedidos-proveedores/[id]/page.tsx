@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import AccionesPedido from './AccionesPedido';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -32,7 +32,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
   let items: any[] = [];
 
   try {
-    const res = await fetch(`${API}/api/pedidos-compra/${params.id}`, { cache: 'no-store' });
+    const res = await serverFetch(`/api/pedidos-compra/${params.id}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       pedido = data.pedido;

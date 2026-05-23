@@ -3,7 +3,7 @@ import RegistrarPago from './RegistrarPago';
 import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: any) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
@@ -13,11 +13,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
   const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes] = await Promise.all([
-    fetch(`${API}/api/clientes/${params.id}`,              { cache: 'no-store' }),
-    fetch(`${API}/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
-    fetch(`${API}/api/clientes/cond-iva`,                 { cache: 'no-store' }),
-    fetch(`${API}/api/listas-precios`,                    { cache: 'no-store' }),
-    fetch(`${API}/api/sucursales`,                        { cache: 'no-store' }),
+    serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
+    serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
+    serverFetch(`/api/clientes/cond-iva`,                 { cache: 'no-store' }),
+    serverFetch(`/api/listas-precios`,                    { cache: 'no-store' }),
+    serverFetch(`/api/sucursales`,                        { cache: 'no-store' }),
   ]);
 
   if (!clienteRes.ok) {

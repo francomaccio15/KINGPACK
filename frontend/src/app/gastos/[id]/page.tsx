@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
 
-const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { serverFetch } from '@/lib/serverFetch';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -82,7 +82,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
   let totalesCC: any = null;
 
   try {
-    const res = await fetch(`${API}/api/egresos/${params.id}`, { cache: 'no-store' });
+    const res = await serverFetch(`/api/egresos/${params.id}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       egreso = data.egreso;
@@ -105,14 +105,14 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
   const promises: Promise<void>[] = [];
 
   promises.push(
-    fetch(`${API}/api/ventas/medios-pago`, { cache: 'no-store' })
+    serverFetch(`/api/ventas/medios-pago`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { medios: [] })
       .then(d => { mediosPago = d.medios ?? []; })
       .catch(() => {})
   );
 
   promises.push(
-    fetch(`${API}/api/cuentas-bancarias?activo=true`, { cache: 'no-store' })
+    serverFetch(`/api/cuentas-bancarias?activo=true`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { cuentas: [] })
       .then(d => { cuentasBancarias = d.cuentas ?? []; })
       .catch(() => {})
@@ -120,7 +120,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
 
   if (egreso.proveedor_id) {
     promises.push(
-      fetch(`${API}/api/proveedores/${egreso.proveedor_id}/cuenta-corriente?limit=8`, { cache: 'no-store' })
+      serverFetch(`/api/proveedores/${egreso.proveedor_id}/cuenta-corriente?limit=8`, { cache: 'no-store' })
         .then(r => r.ok ? r.json() : {})
         .then((d: any) => {
           movimientosCC = d.movimientos ?? [];

@@ -45,6 +45,7 @@ interface Anticipo {
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,11 +129,11 @@ export default function NuevoEgresoPage() {
   // ── Cargar catálogos al montar ────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/api/sucursales`).then(r => r.json()),
-      fetch(`${API}/api/proveedores?limit=500`).then(r => r.json()),
-      fetch(`${API}/api/rubros-gastos`).then(r => r.json()),
-      fetch(`${API}/api/ventas/medios-pago`).then(r => r.json()).catch(() => ({ medios: [] })),
-      fetch(`${API}/api/cuentas-bancarias`).then(r => r.json()),
+      apiFetch(`/api/sucursales`).then(r => r.json()),
+      apiFetch(`/api/proveedores?limit=500`).then(r => r.json()),
+      apiFetch(`/api/rubros-gastos`).then(r => r.json()),
+      apiFetch(`/api/ventas/medios-pago`).then(r => r.json()).catch(() => ({ medios: [] })),
+      apiFetch(`/api/cuentas-bancarias`).then(r => r.json()),
     ]).then(([suc, prov, rub, mp, cb]) => {
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
@@ -150,7 +151,7 @@ export default function NuevoEgresoPage() {
     setVincularAnticipo(false);
     setAnticipoId('');
     if (!proveedorId || tipoOp === 'anticipo_proveedor') return;
-    fetch(`${API}/api/proveedores/${proveedorId}/anticipos`)
+    apiFetch(`/api/proveedores/${proveedorId}/anticipos`)
       .then(r => r.json())
       .then(d => setAnticipasDisponibles(d.anticipos ?? []))
       .catch(() => {});
@@ -199,7 +200,7 @@ export default function NuevoEgresoPage() {
     artDebounce.current = setTimeout(async () => {
       setArtLoading(true);
       try {
-        const res = await fetch(`${API}/api/articulos?q=${encodeURIComponent(q)}&limit=10`);
+        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&limit=10`);
         const data = await res.json();
         setArtResults(data.articulos ?? []);
       } catch { setArtResults([]); }
@@ -309,7 +310,7 @@ export default function NuevoEgresoPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API}/api/egresos`, {
+      const res = await apiFetch(`/api/egresos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
