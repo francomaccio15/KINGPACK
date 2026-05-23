@@ -79,7 +79,7 @@ function AppShell({
             </h1>
           </div>
           <div className="flex items-center gap-5">
-            <SucursalSelector sucursales={sucursales} activaId={activaId} />
+            <SucursalSelector sucursales={sucursales} activaId={activaId ?? ''} />
             <UserMenu nombre={user.nombre} rol={user.rol} />
           </div>
         </div>
