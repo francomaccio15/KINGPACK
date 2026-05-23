@@ -6,6 +6,7 @@ import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
@@ -102,6 +103,7 @@ export default async function ArticulosPage({
 }: {
   searchParams: Record<string, string>;
 }) {
+  requireAuth();
   const sucursalActivaId = getSucursalActivaId();
 
   const [listas, categorias, sucursales, alicuotas] = await Promise.all([

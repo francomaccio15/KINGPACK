@@ -3,6 +3,7 @@ import Link from 'next/link';
 import FiltrosVentas from './FiltrosVentas';
 import NuevaVenta from './NuevaVenta';
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 type Venta = {
   id: string;
@@ -74,6 +75,7 @@ export default async function VentasPage({
 }: {
   searchParams: { q?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
+  requireAuth();
   const { ventas, count, sucursales, listas } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.fecha_desde || searchParams.fecha_hasta);
 

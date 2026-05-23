@@ -4,6 +4,7 @@ import FiltrosPedidos from './FiltrosPedidos';
 import NuevoPedido from './NuevoPedido';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 type Pedido = {
   id: string;
@@ -69,6 +70,7 @@ export default async function PedidosProveedoresPage({
 }: {
   searchParams: { q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
+  requireAuth();
   const { pedidos, count, sucursales, proveedores } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.proveedor_id || searchParams.fecha_desde || searchParams.fecha_hasta);
 

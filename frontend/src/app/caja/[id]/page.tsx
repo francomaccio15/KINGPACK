@@ -3,6 +3,7 @@ import RegistrarMovimiento from './RegistrarMovimiento';
 import CerrarCaja from './CerrarCaja';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -27,6 +28,7 @@ const TIPO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function DetalleCajaPage({ params }: { params: { id: string } }) {
+  requireAuth();
   let caja: any = null;
   let movimientos: any[] = [];
   let mediosPago: any[] = [];

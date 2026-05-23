@@ -3,6 +3,7 @@ import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
 import ClientesFiltros from './ClientesFiltros';
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 type Cliente = {
   id: string; razon_social: string; cuit: string | null; telefono: string | null;
@@ -34,6 +35,7 @@ export default async function ClientesPage({
 }: {
   searchParams: { q?: string; activo?: string };
 }) {
+  requireAuth();
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,

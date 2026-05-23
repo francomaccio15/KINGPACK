@@ -2,6 +2,7 @@ import Link from 'next/link';
 import AbrirCaja from './AbrirCaja';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -48,6 +49,7 @@ async function fetchData() {
 export const dynamic = 'force-dynamic';
 
 export default async function CajaPage() {
+  requireAuth();
   const { sucursales, historial } = await fetchData();
 
   const abiertas  = sucursales.filter((s: SucursalEstado) => s.estado === 'abierta');

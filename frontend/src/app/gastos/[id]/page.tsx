@@ -2,6 +2,7 @@ import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -72,6 +73,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 export const dynamic = 'force-dynamic';
 
 export default async function DetalleEgresoPage({ params }: { params: { id: string } }) {
+  requireAuth();
   let egreso: any = null;
   let items: any[]  = [];
   let pagos: any[]  = [];

@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosGastos from './FiltrosGastos';
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 type Egreso = {
   id: string;
@@ -97,6 +98,7 @@ export default async function GastosPage({
 }: {
   searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
+  requireAuth();
   const { egresos, count, proveedores, alertas } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
 

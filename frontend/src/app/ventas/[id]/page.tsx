@@ -2,6 +2,7 @@ import Link from 'next/link';
 import AccionesVenta from './AccionesVenta';
 
 import { serverFetch } from '@/lib/serverFetch';
+import { requireAuth } from '@/lib/requireAuth';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -32,6 +33,7 @@ async function fetchVenta(id: string) {
 }
 
 export default async function VentaDetallePage({ params }: { params: { id: string } }) {
+  requireAuth();
   const data = await fetchVenta(params.id);
 
   if (!data) {
