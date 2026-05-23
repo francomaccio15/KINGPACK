@@ -11,6 +11,9 @@ type Lista = {
   articulos_count: number;
 };
 
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
+
 const TIPO_LABEL: Record<string, string> = {
   madre:            'Precio Base',
   publica:          'Precio Público',
@@ -28,8 +31,7 @@ const TIPO_DESC: Record<string, string> = {
 type Estado = 'idle' | 'saving' | 'ok' | 'error';
 
 export default function ListaEditor({ lista }: { lista: Lista }) {
-  const router  = useRouter();
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const router = useRouter();
 
   const [descuento, setDescuento] = useState(parseFloat(lista.descuento_base_pct) || 0);
   const [estado, setEstado]       = useState<Estado>('idle');
@@ -40,7 +42,7 @@ export default function ListaEditor({ lista }: { lista: Lista }) {
     setEstado('saving');
     setMsg('');
     try {
-      const r = await fetch(`${apiBase}/api/listas-precios/${lista.id}`, {
+      const r = await apiFetch(`/api/listas-precios/${lista.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descuento_base_pct: descuento }),
