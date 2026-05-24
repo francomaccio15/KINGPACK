@@ -5,7 +5,7 @@
 INSERT INTO usuarios (email, password_hash, nombre, rol, activo)
 VALUES (
   'admin@kingpack.com.ar',
-  '$2b$10$YourBcryptHashHereReplaceBeforeProduction1234567890abcd',  -- REEMPLAZAR antes de producción
+  '$2a$10$bXMMJiw/V06LH6WTJ0dScewp.mpslMsiVqyWYdL787BsZSkLXlDiW',
   'Administrador',
   'administrador',
   TRUE

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+const API = process.env.NEXT_PUBLIC_API_URL || '';
+const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
+
 type Categoria = { id: string; nombre: string };
 type Lista     = { id: string; nombre: string; tipo: string };
 
@@ -16,8 +19,8 @@ export default function ExportarPDF({
   const [descuento, setDescuento] = useState(0);
   const [porCat, setPorCat]       = useState(false);
   const [descCats, setDescCats]   = useState<Record<string, number>>({});
+  const [loading, setLoading]     = useState(false);
   const panelRef                  = useRef<HTMLDivElement>(null);
-  const apiBase                   = process.env.NEXT_PUBLIC_API_URL || '';
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -30,18 +33,33 @@ export default function ExportarPDF({
   const setCatDesc = (id: string, val: number) =>
     setDescCats(prev => ({ ...prev, [id]: Math.max(0, Math.min(100, val)) }));
 
-  const generar = () => {
-    const parts = [`lista_id=${lista.id}`];
-    if (descuento > 0) parts.push(`descuento=${descuento}`);
-    if (porCat) {
-      const cats = Object.entries(descCats)
-        .filter(([, v]) => v > 0)
-        .map(([id, v]) => `${id}:${v}`)
-        .join(',');
-      if (cats) parts.push(`desc_cats=${cats}`);
+  const generar = async () => {
+    setLoading(true);
+    try {
+      const parts = [`lista_id=${lista.id}`];
+      if (descuento > 0) parts.push(`descuento=${descuento}`);
+      if (porCat) {
+        const cats = Object.entries(descCats)
+          .filter(([, v]) => v > 0)
+          .map(([id, v]) => `${id}:${v}`)
+          .join(',');
+        if (cats) parts.push(`desc_cats=${cats}`);
+      }
+      const token = getToken();
+      const res = await fetch(`${API}/api/articulos/pdf-precios?${parts.join('&')}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Error al generar PDF');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
     }
-    window.open(`${apiBase}/api/articulos/pdf-precios?${parts.join('&')}`, '_blank');
-    setOpen(false);
   };
 
   return (
@@ -116,9 +134,9 @@ export default function ExportarPDF({
               className="flex-1 text-xs py-2 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white transition-colors">
               Cancelar
             </button>
-            <button onClick={generar}
-              className="flex-1 text-xs py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark text-kp-white font-semibold transition-colors">
-              Generar PDF
+            <button onClick={generar} disabled={loading}
+              className="flex-1 text-xs py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark text-kp-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              {loading ? 'Generando...' : 'Generar PDF'}
             </button>
           </div>
         </div>
