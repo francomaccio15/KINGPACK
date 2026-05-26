@@ -20,7 +20,7 @@ router.get('/', async (req, res, next) => {
       limit = 100, offset = 0,
     } = req.query;
 
-    const conditions = ['p.deleted_at IS NULL'];
+    const conditions = ['1=1'];
     const params = [];
     let idx = 1;
 
@@ -172,7 +172,7 @@ router.get('/:id', async (req, res, next) => {
         FROM pedidos_compra p
         LEFT JOIN proveedores pv ON pv.id = p.proveedor_id
         LEFT JOIN sucursales s  ON s.id  = p.sucursal_id
-        WHERE p.id = $1 AND p.deleted_at IS NULL
+        WHERE p.id = $1
       `, [id]),
       pool.query(`
         SELECT
@@ -203,7 +203,7 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, egreso_id, sucursal_id, stock_acreditado
-       FROM pedidos_compra WHERE id = $1 AND deleted_at IS NULL`,
+       FROM pedidos_compra WHERE id = $1`,
       [id]
     );
     if (!pedidoRows[0]) return res.status(404).json({ error: 'Pedido no encontrado' });
@@ -284,7 +284,7 @@ router.patch('/:id/estado', async (req, res, next) => {
     const { rows } = await pool.query(
       `UPDATE pedidos_compra
        SET estado = $1, fecha_recepcion = ${fechaRecepcion}, updated_at = NOW()
-       WHERE id = $2 AND deleted_at IS NULL
+       WHERE id = $2
        RETURNING id, estado, fecha_recepcion`,
       [estado, id]
     );
