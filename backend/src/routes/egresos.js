@@ -491,7 +491,7 @@ router.get('/:id', async (req, res, next) => {
       pool.query(`
         SELECT id, estado, stock_acreditado, fecha_recepcion, monto_total
         FROM pedidos_compra
-        WHERE egreso_id = $1 AND deleted_at IS NULL
+        WHERE egreso_id = $1
         LIMIT 1
       `, [id]),
     ]);
