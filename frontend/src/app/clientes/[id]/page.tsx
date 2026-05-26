@@ -13,7 +13,7 @@ const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-AR', { day: '
 export const dynamic = 'force-dynamic';
 
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
-  requireAuth();
+  requireAuth('/clientes');
   const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes] = await Promise.all([
     serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
     serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),

@@ -1,4 +1,4 @@
-import ListaEditor from './ListaEditor';
+﻿import ListaEditor from './ListaEditor';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
 
@@ -23,7 +23,7 @@ async function fetchListas(): Promise<Lista[] | { error: string }> {
 export const dynamic = 'force-dynamic';
 
 export default async function ListasPreciosPage() {
-  requireAuth();
+  requireAuth('/listas-precios');
   const listas = await fetchListas();
 
   if (!Array.isArray(listas)) {

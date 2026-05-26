@@ -28,7 +28,7 @@ const TIPO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function DetalleCajaPage({ params }: { params: { id: string } }) {
-  requireAuth();
+  requireAuth('/caja');
   let caja: any = null;
   let movimientos: any[] = [];
   let mediosPago: any[] = [];

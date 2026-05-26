@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { puedeAcceder } from '@/lib/permissions';
 
 // ─── Íconos ──────────────────────────────────────────────────────────────────
 const ChevronLeft = () => (
@@ -106,6 +108,7 @@ const NAV_GROUPS: NavGroup[] = [
 // ─── Componente ───────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   // Persistir estado en localStorage
   const [collapsed, setCollapsed] = useState(false);
@@ -141,7 +144,12 @@ export default function Sidebar() {
 
       {/* Nav scrollable */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-5">
-        {NAV_GROUPS.map(group => (
+        {NAV_GROUPS.map(group => {
+          const visibles = group.items.filter(item =>
+            !user || puedeAcceder(user.rol, item.href)
+          );
+          if (visibles.length === 0) return null;
+          return (
           <div key={group.label}>
             {/* Label del grupo o separador */}
             {collapsed ? (
@@ -153,7 +161,7 @@ export default function Sidebar() {
             )}
 
             <ul className="space-y-0.5">
-              {group.items.map(item => {
+              {visibles.map(item => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                 const cls = [
                   'group relative flex items-center gap-3 px-3 py-2.5 mx-1 rounded-md',
@@ -190,7 +198,8 @@ export default function Sidebar() {
               })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
     </aside>

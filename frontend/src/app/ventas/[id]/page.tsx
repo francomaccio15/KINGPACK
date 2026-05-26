@@ -33,7 +33,7 @@ async function fetchVenta(id: string) {
 }
 
 export default async function VentaDetallePage({ params }: { params: { id: string } }) {
-  requireAuth();
+  requireAuth('/ventas');
   const data = await fetchVenta(params.id);
 
   if (!data) {

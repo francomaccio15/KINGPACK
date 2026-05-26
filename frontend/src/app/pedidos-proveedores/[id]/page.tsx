@@ -29,7 +29,7 @@ const ESTADO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function DetallePedidoPage({ params }: { params: { id: string } }) {
-  requireAuth();
+  requireAuth('/pedidos-proveedores');
   let pedido: any = null;
   let items: any[] = [];
 

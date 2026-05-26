@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosPedidos from './FiltrosPedidos';
 import NuevoPedido from './NuevoPedido';
@@ -70,7 +70,7 @@ export default async function PedidosProveedoresPage({
 }: {
   searchParams: { q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
-  requireAuth();
+  requireAuth('/pedidos-proveedores');
   const { pedidos, count, sucursales, proveedores } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.proveedor_id || searchParams.fecha_desde || searchParams.fecha_hasta);
 

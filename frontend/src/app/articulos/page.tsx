@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
@@ -103,7 +103,7 @@ export default async function ArticulosPage({
 }: {
   searchParams: Record<string, string>;
 }) {
-  requireAuth();
+  requireAuth('/articulos');
   const sucursalActivaId = getSucursalActivaId();
 
   const [listas, categorias, sucursales, alicuotas] = await Promise.all([

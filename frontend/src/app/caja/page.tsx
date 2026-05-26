@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import AbrirCaja from './AbrirCaja';
 
 import { serverFetch } from '@/lib/serverFetch';
@@ -49,7 +49,7 @@ async function fetchData() {
 export const dynamic = 'force-dynamic';
 
 export default async function CajaPage() {
-  requireAuth();
+  requireAuth('/caja');
   const { sucursales, historial } = await fetchData();
 
   const abiertas  = sucursales.filter((s: SucursalEstado) => s.estado === 'abierta');

@@ -73,7 +73,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 export const dynamic = 'force-dynamic';
 
 export default async function DetalleEgresoPage({ params }: { params: { id: string } }) {
-  requireAuth();
+  requireAuth('/gastos');
   let egreso: any = null;
   let items: any[]  = [];
   let pagos: any[]  = [];

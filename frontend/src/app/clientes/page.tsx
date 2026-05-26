@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
 import ClientesFiltros from './ClientesFiltros';
@@ -35,7 +35,7 @@ export default async function ClientesPage({
 }: {
   searchParams: { q?: string; activo?: string };
 }) {
-  requireAuth();
+  requireAuth('/clientes');
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,
