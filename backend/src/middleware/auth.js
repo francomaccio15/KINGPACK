@@ -26,4 +26,15 @@ function requireRol(...roles) {
   };
 }
 
-module.exports = { verifyToken, requireRol };
+/**
+ * Para cajeros devuelve siempre su sucursal del JWT (ignora query params).
+ * Para otros roles devuelve req.query.sucursal_id (puede ser undefined).
+ */
+function sucursalEfectiva(req) {
+  if (req.usuario?.rol === 'cajero') {
+    return req.usuario.sucursal_default_id ?? null;
+  }
+  return req.query?.sucursal_id ?? null;
+}
+
+module.exports = { verifyToken, requireRol, sucursalEfectiva };

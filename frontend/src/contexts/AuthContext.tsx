@@ -46,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { token, usuario } = await res.json() as { token: string; usuario: AuthUser };
     saveSession(token, usuario);
+    // Cajero: fijar su sucursal automáticamente en la cookie
+    if (usuario.rol === 'cajero' && usuario.sucursal_default_id) {
+      document.cookie = `kp_sucursal_id=${usuario.sucursal_default_id}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+    }
     setUser(usuario);
   }, []);
 

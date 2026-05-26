@@ -1,6 +1,6 @@
-// TODO(fase-2): proteger con JWT
 const express = require('express');
 const { pool } = require('../config/db');
+const { sucursalEfectiva } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ router.get('/cond-iva', async (req, res, next) => {
 // ?offset=      default 0
 router.get('/', async (req, res, next) => {
   try {
-    const { q, activo = 'true', sucursal_id, limit = 200, offset = 0 } = req.query;
+    const { q, activo = 'true', limit = 200, offset = 0 } = req.query;
 
     const conditions = ['c.deleted_at IS NULL'];
     const params = [];
@@ -34,9 +34,10 @@ router.get('/', async (req, res, next) => {
       params.push(`%${q.trim()}%`);
       idx++;
     }
-    if (sucursal_id) {
+    const sucId = sucursalEfectiva(req);
+    if (sucId) {
       conditions.push(`c.sucursal_default_id = $${idx++}`);
-      params.push(sucursal_id);
+      params.push(sucId);
     }
 
     const where = conditions.join(' AND ');

@@ -79,7 +79,13 @@ function AppShell({
             </h1>
           </div>
           <div className="flex items-center gap-5">
-            <SucursalSelector sucursales={sucursales} activaId={activaId ?? ''} />
+            {user.rol === 'cajero' ? (
+              <span className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-md bg-kp-surface2 border border-kp-border text-kp-gray-lt">
+                {sucursales.find(s => s.id === user.sucursal_default_id)?.nombre ?? 'Sucursal'}
+              </span>
+            ) : (
+              <SucursalSelector sucursales={sucursales} activaId={activaId ?? ''} />
+            )}
             <UserMenu nombre={user.nombre} rol={user.rol} />
           </div>
         </div>

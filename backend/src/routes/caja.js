@@ -1,6 +1,6 @@
-// TODO(fase-2): proteger con JWT
 const express = require('express');
 const { pool } = require('../config/db');
+const { sucursalEfectiva } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -8,6 +8,10 @@ const router = express.Router();
 // Devuelve la caja abierta de cada sucursal (o null si no hay)
 router.get('/estado', async (req, res, next) => {
   try {
+    const sucId = sucursalEfectiva(req);
+    const params = sucId ? [sucId] : [];
+    const sucursFiltro = sucId ? `AND s.id = $1` : '';
+
     const { rows } = await pool.query(`
       SELECT
         s.id          AS sucursal_id,
@@ -16,7 +20,6 @@ router.get('/estado', async (req, res, next) => {
         c.fecha_apertura,
         c.saldo_inicial,
         c.estado,
-        -- Totales calculados en tiempo real
         COALESCE(SUM(CASE WHEN m.tipo IN ('ingreso','venta') THEN m.monto ELSE 0 END), 0) AS total_ingresos,
         COALESCE(SUM(CASE WHEN m.tipo IN ('egreso','retiro') THEN m.monto ELSE 0 END), 0) AS total_egresos,
         COUNT(m.id) AS total_movimientos
@@ -25,10 +28,10 @@ router.get('/estado', async (req, res, next) => {
         ON c.sucursal_id = s.id AND c.estado = 'abierta'
       LEFT JOIN movimientos_caja m
         ON m.caja_id = c.id
-      WHERE s.activo = true
+      WHERE s.activo = true ${sucursFiltro}
       GROUP BY s.id, s.nombre, c.id, c.fecha_apertura, c.saldo_inicial, c.estado
       ORDER BY s.nombre
-    `);
+    `, params);
 
     res.json({ sucursales: rows });
   } catch (err) { next(err); }
@@ -43,7 +46,7 @@ router.get('/estado', async (req, res, next) => {
 // ?offset=      default 0
 router.get('/', async (req, res, next) => {
   try {
-    const { estado, sucursal_id, fecha_desde, fecha_hasta, limit = 50, offset = 0 } = req.query;
+    const { estado, fecha_desde, fecha_hasta, limit = 50, offset = 0 } = req.query;
 
     const conditions = [];
     const params = [];
@@ -53,9 +56,10 @@ router.get('/', async (req, res, next) => {
       conditions.push(`c.estado = $${idx++}`);
       params.push(estado);
     }
-    if (sucursal_id) {
+    const sucId = sucursalEfectiva(req);
+    if (sucId) {
       conditions.push(`c.sucursal_id = $${idx++}`);
-      params.push(sucursal_id);
+      params.push(sucId);
     }
     if (fecha_desde) {
       conditions.push(`c.fecha_apertura >= $${idx++}`);

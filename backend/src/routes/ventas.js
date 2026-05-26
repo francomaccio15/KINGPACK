@@ -1,7 +1,7 @@
-// TODO(fase-2): proteger con JWT
 const express = require('express');
 const { pool } = require('../config/db');
 const arca = require('../services/arca');
+const { sucursalEfectiva } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ router.get('/medios-pago', async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const {
-      q, estado, cliente_id, fecha_desde, fecha_hasta, sucursal_id,
+      q, estado, cliente_id, fecha_desde, fecha_hasta,
       limit = 100, offset = 0,
     } = req.query;
 
@@ -43,9 +43,10 @@ router.get('/', async (req, res, next) => {
       conditions.push(`v.cliente_id = $${idx++}`);
       params.push(cliente_id);
     }
-    if (sucursal_id) {
+    const sucId = sucursalEfectiva(req);
+    if (sucId) {
       conditions.push(`v.sucursal_id = $${idx++}`);
-      params.push(sucursal_id);
+      params.push(sucId);
     }
     if (fecha_desde) {
       conditions.push(`v.fecha >= $${idx++}`);
