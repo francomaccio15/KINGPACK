@@ -203,11 +203,26 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Formas de Pago</h3>
               </div>
-              <div className="px-5 py-4 space-y-2">
+              <div className="px-5 py-4 space-y-3">
                 {pagos.map((p: any, i: number) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-kp-gray-lt">{p.medio_pago}</span>
-                    <span className="text-kp-white tabular-nums font-medium">{fmt(p.monto)}</span>
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-kp-gray-lt">{p.medio_pago}</span>
+                      <span className="text-kp-white tabular-nums font-medium">{fmt(p.monto)}</span>
+                    </div>
+                    {Array.isArray(p.cheques) && p.cheques.length > 0 && (
+                      <div className="ml-3 space-y-1">
+                        {p.cheques.map((ch: any) => (
+                          <div key={ch.id} className="flex flex-wrap gap-3 text-xs text-kp-gray bg-kp-surface2 rounded-lg px-3 py-1.5">
+                            <span>{ch.banco}</span>
+                            <span>Nro: {ch.numero_cheque}</span>
+                            {ch.fecha_emision && <span>Emisión: {new Date(ch.fecha_emision).toLocaleDateString('es-AR')}</span>}
+                            <span>Vence: {new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')}</span>
+                            <span className="ml-auto tabular-nums text-kp-white font-semibold">{fmt(ch.importe)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

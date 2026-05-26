@@ -395,9 +395,9 @@ router.post('/', async (req, res, next) => {
       for (const ch of (pago.cheques || [])) {
         await client.query(`
           INSERT INTO egreso_cheques
-            (egreso_pago_id, banco, numero_cheque, fecha_vencimiento, importe)
-          VALUES ($1, $2, $3, $4, $5)
-        `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+            (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
       }
 
       if (proveedor_id) {
@@ -475,6 +475,7 @@ router.get('/:id', async (req, res, next) => {
             json_build_object(
               'id', ec.id, 'banco', ec.banco,
               'numero_cheque', ec.numero_cheque,
+              'fecha_emision', ec.fecha_emision,
               'fecha_vencimiento', ec.fecha_vencimiento,
               'importe', ec.importe
             )
@@ -540,9 +541,9 @@ router.post('/:id/pago', async (req, res, next) => {
     for (const ch of cheques) {
       await client.query(`
         INSERT INTO egreso_cheques
-          (egreso_pago_id, banco, numero_cheque, fecha_vencimiento, importe)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+          (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
     }
 
     // Calcular total pagado para determinar nuevo estado

@@ -190,6 +190,15 @@ router.post('/', async (req, res, next) => {
           INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
           VALUES ($1,$2,$3,$4)
         `, [venta.id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]);
+
+        for (const ch of (pago.cheques || [])) {
+          await client.query(`
+            INSERT INTO venta_cheques
+              (venta_id, medio_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
+          `, [venta.id, pago.medio_pago_id, ch.banco, ch.numero_cheque,
+              ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+        }
       }
     }
 
@@ -241,10 +250,24 @@ router.get('/:id', async (req, res, next) => {
         ORDER BY a.nombre
       `, [id]),
       pool.query(`
-        SELECT vp.monto, vp.cuenta_destino, mp.nombre AS medio_pago
+        SELECT
+          vp.monto, vp.cuenta_destino, mp.nombre AS medio_pago,
+          json_agg(
+            json_build_object(
+              'id',               vc.id,
+              'banco',            vc.banco,
+              'numero_cheque',    vc.numero_cheque,
+              'fecha_emision',    vc.fecha_emision,
+              'fecha_vencimiento',vc.fecha_vencimiento,
+              'importe',          vc.importe
+            )
+          ) FILTER (WHERE vc.id IS NOT NULL) AS cheques
         FROM venta_pagos vp
         JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+        LEFT JOIN venta_cheques vc
+          ON vc.venta_id = vp.venta_id AND vc.medio_pago_id = vp.medio_pago_id
         WHERE vp.venta_id = $1
+        GROUP BY vp.monto, vp.cuenta_destino, mp.nombre
       `, [id]),
       pool.query(`
         SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,

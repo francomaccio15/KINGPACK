@@ -35,6 +35,14 @@ interface MedioPago {
   nombre: string;
 }
 
+interface Cheque {
+  banco: string;
+  numero_cheque: string;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  importe: string;
+}
+
 interface CartItem {
   articulo_id: string;
   nombre: string;
@@ -150,6 +158,10 @@ export default function NuevaVenta({
   // ── Medios de pago
   const [mediosPago, setMediosPago]   = useState<MedioPago[]>([]);
   const [medioPagoId, setMedioPagoId] = useState<string>('');
+  const [cheques, setCheques] = useState<Cheque[]>([{ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }]);
+
+  const selectedMedio = mediosPago.find(m => m.id === medioPagoId);
+  const esCheque = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
 
   // ── Save state
   const [saving, setSaving]     = useState<'preventa' | 'confirmada' | null>(null);
@@ -353,7 +365,14 @@ export default function NuevaVenta({
         iva_monto:             0,
       })),
       pagos: medioPagoId
-        ? [{ medio_pago_id: medioPagoId, monto: subtotalFinal }]
+        ? [{
+            medio_pago_id: medioPagoId,
+            monto: subtotalFinal,
+            cheques: esCheque
+              ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
+                       .map(c => ({ ...c, importe: parseFloat(c.importe) }))
+              : undefined,
+          }]
         : [],
     };
 
@@ -830,6 +849,63 @@ export default function NuevaVenta({
                       </select>
                     )}
                   </section>
+
+                  {/* ── Cheques ──────────────────────────────────────────── */}
+                  {esCheque && (
+                    <section className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
+                        <button type="button"
+                          onClick={() => setCheques(prev => [...prev, { banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }])}
+                          className="text-xs text-kp-red hover:underline">
+                          + Agregar cheque
+                        </button>
+                      </div>
+                      {cheques.map((ch, i) => (
+                        <div key={i} className="bg-kp-surface2 border border-kp-border rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-kp-gray">Cheque #{i + 1}</span>
+                            {cheques.length > 1 && (
+                              <button type="button" onClick={() => setCheques(prev => prev.filter((_, idx) => idx !== i))}
+                                className="text-xs text-kp-red hover:underline">Eliminar</button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Banco</p>
+                              <input type="text" placeholder="Ej: Galicia" value={ch.banco}
+                                onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, banco: e.target.value } : c))}
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Nro. Cheque</p>
+                              <input type="text" placeholder="00001234" value={ch.numero_cheque}
+                                onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, numero_cheque: e.target.value } : c))}
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Emisión</p>
+                              <input type="date" value={ch.fecha_emision}
+                                onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, fecha_emision: e.target.value } : c))}
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Vencimiento</p>
+                              <input type="date" value={ch.fecha_vencimiento}
+                                onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, fecha_vencimiento: e.target.value } : c))}
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Importe</p>
+                              <input type="number" step="0.01" min="0.01" placeholder="0.00" value={ch.importe}
+                                onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, importe: e.target.value } : c))}
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </section>
+                  )}
 
                   {/* ── Totals ─────────────────────────────────────────────── */}
                   <section className="rounded-xl bg-kp-surface border border-kp-border overflow-hidden">

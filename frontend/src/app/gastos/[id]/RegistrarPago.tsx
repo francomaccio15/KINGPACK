@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 type MedioPago = { id: string; nombre: string };
 type CuentaBancaria = { id: string; nombre: string; banco: string | null };
-type Cheque = { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+type Cheque = { banco: string; numero_cheque: string; fecha_emision: string; fecha_vencimiento: string; importe: string };
 
 type Props = {
   egresoId: string;
@@ -21,7 +21,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !
 const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
 const labelCls = 'block text-xs text-kp-gray font-semibold uppercase tracking-wide mb-1';
 
-const emptyCheque = (): Cheque => ({ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
+const emptyCheque = (): Cheque => ({ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' });
 
 export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, mediosPago, cuentasBancarias }: Props) {
   const router = useRouter();
@@ -73,7 +73,7 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
     if (esCheque) {
       const chequesValidos = cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe);
       if (chequesValidos.length === 0) { setError('Completá al menos un cheque'); return; }
-      body.cheques = chequesValidos.map(c => ({ ...c, importe: parseFloat(c.importe) }));
+      body.cheques = chequesValidos.map(c => ({ ...c, importe: parseFloat(c.importe), fecha_emision: c.fecha_emision || null }));
     }
 
     setLoading(true);
@@ -211,11 +211,16 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
                             placeholder="00001234" className={inputCls} />
                         </div>
                         <div>
-                          <label className={labelCls}>Vencimiento</label>
-                          <input type="date" value={ch.fecha_vencimiento} onChange={e => updateCheque(i, 'fecha_vencimiento', e.target.value)}
+                          <label className={labelCls}>Fecha de Emisión</label>
+                          <input type="date" value={ch.fecha_emision} onChange={e => updateCheque(i, 'fecha_emision', e.target.value)}
                             className={inputCls} />
                         </div>
                         <div>
+                          <label className={labelCls}>Fecha de Vencimiento</label>
+                          <input type="date" value={ch.fecha_vencimiento} onChange={e => updateCheque(i, 'fecha_vencimiento', e.target.value)}
+                            className={inputCls} />
+                        </div>
+                        <div className="col-span-2">
                           <label className={labelCls}>Importe</label>
                           <input type="number" step="0.01" min="0.01" value={ch.importe} onChange={e => updateCheque(i, 'importe', e.target.value)}
                             className={inputCls} />

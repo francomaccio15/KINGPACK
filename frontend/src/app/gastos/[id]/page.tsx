@@ -425,6 +425,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
                       <div key={ch.id} className="flex flex-wrap gap-3 text-xs text-kp-gray bg-kp-surface2 rounded-lg px-3 py-1.5">
                         <span>Cheque {ch.banco}</span>
                         <span>Nro: {ch.numero_cheque}</span>
+                        {ch.fecha_emision && <span>Emisión: {fmtDate(ch.fecha_emision)}</span>}
                         <span>Vence: {fmtDate(ch.fecha_vencimiento)}</span>
                         <span className="ml-auto tabular-nums text-kp-white font-semibold">{fmt(ch.importe)}</span>
                       </div>
