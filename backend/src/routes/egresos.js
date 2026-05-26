@@ -107,7 +107,7 @@ router.get('/', async (req, res, next) => {
       limit = 100, offset = 0,
     } = req.query;
 
-    const conditions = ['1=1'];
+    const conditions = ['e.deleted_at IS NULL'];
     const params = [];
     let idx = 1;
 
@@ -578,6 +578,31 @@ router.post('/:id/pago', async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// ─── DELETE /api/egresos/:id ──────────────────────────────────────────────────
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    if (!motivo || !motivo.trim()) {
+      return res.status(400).json({ error: 'El motivo de eliminación es requerido' });
+    }
+
+    const { rowCount } = await pool.query(
+      `UPDATE egresos
+          SET deleted_at = NOW(), motivo_eliminacion = $1, updated_at = NOW()
+        WHERE id = $2 AND deleted_at IS NULL`,
+      [motivo.trim(), id]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Egreso no encontrado o ya eliminado' });
+    }
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

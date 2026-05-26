@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
+import EliminarEgreso from './EliminarEgreso';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -177,15 +178,18 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
           </p>
         </div>
 
-        {puedeRegistrarPago && (
-          <RegistrarPago
-            egresoId={egreso.id}
-            totalEgreso={totalEgreso}
-            totalPagado={totalPagado}
-            mediosPago={mediosPago}
-            cuentasBancarias={cuentasBancarias}
-          />
-        )}
+        <div className="flex items-center gap-3">
+          {puedeRegistrarPago && (
+            <RegistrarPago
+              egresoId={egreso.id}
+              totalEgreso={totalEgreso}
+              totalPagado={totalPagado}
+              mediosPago={mediosPago}
+              cuentasBancarias={cuentasBancarias}
+            />
+          )}
+          <EliminarEgreso egresoId={egreso.id} />
+        </div>
       </div>
 
       {/* Banner pedido de compra vinculado */}
