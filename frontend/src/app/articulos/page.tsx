@@ -7,6 +7,7 @@ import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
 import Paginador from './Paginador';
+import { redirect } from 'next/navigation';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -137,7 +138,8 @@ export default async function ArticulosPage({
 }: {
   searchParams: Record<string, string>;
 }) {
-  requireAuth('/articulos');
+  const user = requireAuth('/articulos');
+  if (user.rol === 'cajero') redirect('/ventas');
   const sucursalActivaId = getSucursalActivaId();
 
   const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
