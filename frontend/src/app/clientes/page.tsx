@@ -35,7 +35,8 @@ export default async function ClientesPage({
 }: {
   searchParams: { q?: string; activo?: string };
 }) {
-  requireAuth('/clientes');
+  const user = requireAuth('/clientes');
+  const esAdmin = user.rol === 'admin';
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,
@@ -75,10 +76,12 @@ export default async function ClientesPage({
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">CUIT</th>
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Cond. IVA</th>
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Lista</th>
-              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Límite Crédito</th>
-              <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                <span className="text-kp-red">Saldo</span>
-              </th>
+              {esAdmin && <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Límite Crédito</th>}
+              {esAdmin && (
+                <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                  <span className="text-kp-red">Saldo</span>
+                </th>
+              )}
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
               <th className="px-3 py-3" />
             </tr>
@@ -98,23 +101,25 @@ export default async function ClientesPage({
                       ? <span className="text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-kp-gray-lt">{c.lista_precio}</span>
                       : <span className="text-xs text-kp-border">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-xs text-kp-gray">{fmt(c.limite_credito)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
-                    {(() => {
-                      const limite = parseFloat(c.limite_credito || '0');
-                      const excede = limite > 0 && saldo > limite;
-                      return (
-                        <span className={`inline-flex items-center gap-1.5 ${excede ? 'text-kp-red' : saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
-                          {excede && (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
-                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                            </svg>
-                          )}
-                          {fmt(saldo)}
-                        </span>
-                      );
-                    })()}
-                  </td>
+                  {esAdmin && <td className="px-4 py-3 text-right tabular-nums text-xs text-kp-gray">{fmt(c.limite_credito)}</td>}
+                  {esAdmin && (
+                    <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
+                      {(() => {
+                        const limite = parseFloat(c.limite_credito || '0');
+                        const excede = limite > 0 && saldo > limite;
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 ${excede ? 'text-kp-red' : saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
+                            {excede && (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                              </svg>
+                            )}
+                            {fmt(saldo)}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-center">
                     {c.activo
                       ? <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-red"><span className="w-1.5 h-1.5 rounded-full bg-kp-red" />Activo</span>
@@ -133,7 +138,7 @@ export default async function ClientesPage({
             })}
             {clientes.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-kp-gray">
+                <td colSpan={esAdmin ? 8 : 6} className="px-4 py-12 text-center text-kp-gray">
                   {hayFiltros ? 'No hay clientes que coincidan con los filtros.' : 'No hay clientes cargados todavía.'}
                 </td>
               </tr>
