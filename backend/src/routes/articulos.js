@@ -410,6 +410,7 @@ router.get('/', async (req, res, next) => {
       pool.query(
         stock_bajo === 'true'
           ? `SELECT COUNT(*) FROM articulos a
+             ${listaJoin}
              LEFT JOIN (${stockSubquery}) st ON st.articulo_id = a.id
              WHERE ${where}`
           : `SELECT COUNT(*) FROM articulos a WHERE ${where}`,
