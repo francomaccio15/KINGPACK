@@ -342,9 +342,9 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
               </button>
             </div>
 
-            <div className="rounded-xl border border-kp-border overflow-hidden">
+            <div className="rounded-xl border border-kp-border">
               {/* Header tabla */}
-              <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border">
+              <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border rounded-t-xl">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>

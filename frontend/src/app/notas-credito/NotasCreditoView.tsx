@@ -58,11 +58,13 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
   const { user } = useAuth();
   const isAdmin  = user?.rol === 'administrador';
 
-  const [notas,       setNotas]       = useState<NotaCredito[]>(notasIniciales);
-  const [showForm,    setShowForm]    = useState(false);
-  const [anulando,    setAnulando]    = useState<string | null>(null);
-  const [confirmId,   setConfirmId]   = useState<string | null>(null);
-  const [q,           setQ]           = useState('');
+  const [notas,        setNotas]        = useState<NotaCredito[]>(notasIniciales);
+  const [showForm,     setShowForm]     = useState(false);
+  const [anulando,     setAnulando]     = useState<string | null>(null);
+  const [confirmId,    setConfirmId]    = useState<string | null>(null);
+  const [eliminando,   setEliminando]   = useState<string | null>(null);
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null);
+  const [q,            setQ]            = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
 
   // Filtro client-side simple
@@ -97,9 +99,20 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
     }
   };
 
-  const IcoPlus = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>;
-  const IcoEye  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+  const handleEliminar = async (id: string) => {
+    setEliminando(id);
+    try {
+      const r = await apiFetch(`/api/notas-credito/${id}`, { method: 'DELETE' });
+      if (r.ok) setNotas(prev => prev.filter(n => n.id !== id));
+    } finally {
+      setEliminando(null);
+      setConfirmDelId(null);
+    }
+  };
+
+  const IcoPlus  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>;
   const IcoPrint = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-4 h-4"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+  const IcoTrash = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
 
   return (
     <section className="space-y-5">
@@ -216,6 +229,7 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Imprimir */}
                       <Link
                         href={`/notas-credito/${n.id}`}
                         target="_blank"
@@ -224,30 +238,47 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                       >
                         <IcoPrint />
                       </Link>
-                      {isAdmin && n.estado === 'emitida' && (
-                        confirmId === n.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleAnular(n.id)}
-                              disabled={anulando === n.id}
-                              className="text-[10px] font-bold text-rose-400 hover:underline"
-                            >
-                              {anulando === n.id ? '…' : 'Anular'}
+
+                      {isAdmin && (
+                        <>
+                          {/* Anular (solo emitidas) */}
+                          {n.estado === 'emitida' && (
+                            confirmId === n.id ? (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => handleAnular(n.id)} disabled={anulando === n.id}
+                                  className="text-[10px] font-bold text-rose-400 hover:underline">
+                                  {anulando === n.id ? '…' : 'Anular'}
+                                </button>
+                                <span className="text-kp-border">/</span>
+                                <button onClick={() => setConfirmId(null)}
+                                  className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmId(n.id)}
+                                className="text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1">
+                                Anular
+                              </button>
+                            )
+                          )}
+
+                          {/* Eliminar (todas) */}
+                          {confirmDelId === n.id ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleEliminar(n.id)} disabled={eliminando === n.id}
+                                className="text-[10px] font-bold text-rose-500 hover:underline">
+                                {eliminando === n.id ? '…' : '¡Eliminar!'}
+                              </button>
+                              <span className="text-kp-border">/</span>
+                              <button onClick={() => setConfirmDelId(null)}
+                                className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDelId(n.id)} title="Eliminar"
+                              className="w-7 h-7 flex items-center justify-center rounded-md text-kp-gray hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
+                              <IcoTrash />
                             </button>
-                            <span className="text-kp-border">/</span>
-                            <button
-                              onClick={() => setConfirmId(null)}
-                              className="text-[10px] font-bold text-kp-gray hover:underline"
-                            >No</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmId(n.id)}
-                            className="text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1"
-                          >
-                            Anular
-                          </button>
-                        )
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
