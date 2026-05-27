@@ -26,6 +26,7 @@ export default function FiltrosArticulos({
       else next.delete(k);
     });
     next.delete('offset');
+    next.delete('page');
     router.push(`${pathname}?${next.toString()}`);
   };
 

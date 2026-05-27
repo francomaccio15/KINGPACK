@@ -6,6 +6,7 @@ import ExportarPDF from './ExportarPDF';
 import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
+import Paginador from './Paginador';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -99,6 +100,7 @@ async function fetchStockBajoCount(sucursal_id: string): Promise<number> {
 async function fetchArticulos(
   sp: Record<string, string>,
   sucursal_id: string,
+  page: number,
 ): Promise<{ count: number; articulos: Articulo[] } | { error: string }> {
   const qs = new URLSearchParams();
   if (sp.q)             qs.set('q', sp.q);
@@ -107,6 +109,8 @@ async function fetchArticulos(
   if (sp.stock_bajo)    qs.set('stock_bajo', sp.stock_bajo);
   if (sucursal_id)      qs.set('sucursal_id', sucursal_id);
   qs.set('activo', sp.activo || 'true');
+  qs.set('limit',  String(PAGE_SIZE));
+  qs.set('offset', String((page - 1) * PAGE_SIZE));
   try {
     const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
     if (!r.ok) return { error: `API respondió ${r.status}` };
@@ -125,6 +129,7 @@ const TIPO_LABEL: Record<string, string> = {
 };
 
 export const dynamic = 'force-dynamic';
+const PAGE_SIZE = 10;
 
 // ─── Página ──────────────────────────────────────────────────────────────────
 export default async function ArticulosPage({
@@ -134,6 +139,8 @@ export default async function ArticulosPage({
 }) {
   requireAuth('/articulos');
   const sucursalActivaId = getSucursalActivaId();
+
+  const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
 
   const [listas, categorias, sucursales, alicuotas, stockBajoCount, ranking] = await Promise.all([
     fetchListas(),
@@ -149,7 +156,11 @@ export default async function ArticulosPage({
   const listaActivaId = searchParams.lista_id || listas[0]?.id || '';
   const listaActiva   = listas.find(l => l.id === listaActivaId) ?? listas[0];
 
-  const data = await fetchArticulos({ ...searchParams, lista_id: listaActivaId }, sucursalActivaId);
+  const data = await fetchArticulos({ ...searchParams, lista_id: listaActivaId }, sucursalActivaId, currentPage);
+
+  const totalPages = 'error' in data ? 1 : Math.max(1, Math.ceil(data.count / PAGE_SIZE));
+  // Si la página pedida supera el total, clampeamos a la última
+  const safePage = Math.min(currentPage, totalPages);
 
   const esBase   = listaActiva?.tipo === 'madre';
   const descBase = listaActiva ? parseFloat(listaActiva.descuento_base_pct) : 0;
@@ -243,6 +254,17 @@ export default async function ArticulosPage({
         <FiltrosArticulos categorias={categorias} stockBajoActivo={searchParams.stock_bajo === 'true'} />
       </Suspense>
 
+      {/* ── Paginador superior ── */}
+      {'error' in data ? null : (
+        <Paginador
+          page={safePage}
+          totalPages={totalPages}
+          count={data.count}
+          pageSize={PAGE_SIZE}
+          searchParams={{ ...searchParams, lista_id: listaActivaId }}
+        />
+      )}
+
       {/* ── Tabla ── */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
@@ -285,6 +307,17 @@ export default async function ArticulosPage({
           />
         </table>
       </div>
+
+      {/* ── Paginador inferior ── */}
+      {'error' in data ? null : (
+        <Paginador
+          page={safePage}
+          totalPages={totalPages}
+          count={data.count}
+          pageSize={PAGE_SIZE}
+          searchParams={{ ...searchParams, lista_id: listaActivaId }}
+        />
+      )}
 
       {/* ── Ranking de ventas del mes ── */}
       {ranking && (
