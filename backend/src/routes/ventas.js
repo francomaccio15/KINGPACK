@@ -223,12 +223,13 @@ router.post('/', async (req, res, next) => {
           },
         });
       }
+      const nuevaCantidad = parseFloat((stockActual - item.cantidad).toFixed(3));
       await client.query(
         `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
-         VALUES ($1, $2, $3 - $4, NOW())
+         VALUES ($1, $2, $3, NOW())
          ON CONFLICT (articulo_id, sucursal_id)
-         DO UPDATE SET cantidad = stock.cantidad - $4, ultima_actualizacion = NOW()`,
-        [item.articulo_id, sucursal_id, stockActual, item.cantidad]
+         DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
+        [item.articulo_id, sucursal_id, nuevaCantidad]
       );
     }
 
@@ -389,10 +390,10 @@ router.patch('/:id/estado', async (req, res, next) => {
       for (const item of itemRows) {
         await client.query(
           `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
-           VALUES ($1, $2, $3, NOW())
+           VALUES ($1, $2, $3::numeric, NOW())
            ON CONFLICT (articulo_id, sucursal_id)
-           DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()`,
-          [item.articulo_id, venta.sucursal_id, item.cantidad]
+           DO UPDATE SET cantidad = stock.cantidad + $3::numeric, ultima_actualizacion = NOW()`,
+          [item.articulo_id, venta.sucursal_id, parseFloat(item.cantidad)]
         );
       }
     }
