@@ -144,7 +144,6 @@ export default async function PedidosProveedoresPage({
                     {p.egreso_id && (
                       <Link
                         href={`/gastos/${p.egreso_id}`}
-                        onClick={e => e.stopPropagation()}
                         className="ml-2 text-xs text-blue-400/70 hover:text-blue-400 hover:underline"
                         title="Ver egreso de origen"
                       >
