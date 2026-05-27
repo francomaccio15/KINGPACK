@@ -30,6 +30,9 @@ const { verifyToken }         = require('./middleware/auth');
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
 
+// Confiar en el proxy inverso (nginx) para que express-rate-limit funcione correctamente
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || true }));
 app.use(express.json({ limit: '1mb' }));
