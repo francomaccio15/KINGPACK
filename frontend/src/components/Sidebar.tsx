@@ -120,7 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Artículos',         href: '/articulos',      icon: <IcoArticulos />   },
       { label: 'Administración de Listas', href: '/listas-precios', icon: <IcoListas />      },
-      { label: 'Categorías',        href: '/categorias',     icon: <IcoCategorias />, disabled: true },
+      { label: 'Categorías',        href: '/categorias',     icon: <IcoCategorias /> },
     ],
   },
   {
