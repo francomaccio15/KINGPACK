@@ -50,6 +50,25 @@ const SELECT_NC = `
   LEFT JOIN facturaciones f         ON f.id = nc.factura_id
 `;
 
+// Helper: calcular saldo actual de un cliente dentro de una transacción
+async function getSaldoActual(client, clienteId) {
+  const { rows } = await client.query(`
+    SELECT
+      c.saldo_inicial
+        + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+        + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual
+    FROM clientes c
+    LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+    LEFT JOIN (
+      SELECT cliente_id, SUM(monto) AS total_correcciones
+        FROM correcciones_saldo_cliente GROUP BY cliente_id
+    ) cs_agg ON cs_agg.cliente_id = c.id
+    WHERE c.id = $1 AND c.deleted_at IS NULL
+    GROUP BY c.id, c.saldo_inicial, cs_agg.total_correcciones
+  `, [clienteId]);
+  return parseFloat(rows[0]?.saldo_actual ?? '0');
+}
+
 // ─── GET /api/notas-credito ───────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
@@ -113,7 +132,11 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ─── POST /api/notas-credito — solo admin ─────────────────────────────────────
+// Efectos colaterales (en transacción):
+//   1. Restaura stock para ítems con articulo_id (devolución de mercadería)
+//   2. Acredita la cuenta corriente del cliente (haber = total → saldo a favor)
 router.post('/', requireRol('administrador'), async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const {
       cliente_id,
@@ -134,8 +157,10 @@ router.post('/', requireRol('administrador'), async (req, res, next) => {
     if (!tipo_comprobante_id)      return res.status(400).json({ error: 'El tipo de comprobante es obligatorio' });
     if (total === undefined || total === null) return res.status(400).json({ error: 'El total es obligatorio' });
 
-    // Calcular número correlativo para el tipo de comprobante
-    const { rows: lastNum } = await pool.query(
+    await client.query('BEGIN');
+
+    // Número correlativo para el tipo de comprobante
+    const { rows: lastNum } = await client.query(
       `SELECT COALESCE(MAX(numero), 0) + 1 AS next_num
          FROM notas_credito
         WHERE tipo_comprobante_id = $1 AND deleted_at IS NULL`,
@@ -143,7 +168,8 @@ router.post('/', requireRol('administrador'), async (req, res, next) => {
     );
     const numero = lastNum[0].next_num;
 
-    const { rows } = await pool.query(
+    // Insertar la nota de crédito
+    const { rows } = await client.query(
       `INSERT INTO notas_credito
          (factura_id, cliente_id, sucursal_id, tipo_comprobante_id,
           numero, numero_referencia, motivo, items,
@@ -167,30 +193,119 @@ router.post('/', requireRol('administrador'), async (req, res, next) => {
         fecha || new Date().toISOString(),
       ]
     );
+    const ncId = rows[0].id;
+    const totalNum = parseFloat(total) || 0;
+
+    // ── 1. Restaurar stock para ítems con articulo_id ─────────────────────────
+    const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
+    if (itemsConArticulo.length > 0 && sucursal_id) {
+      for (const item of itemsConArticulo) {
+        await client.query(
+          `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+           VALUES ($1, $2, $3::numeric, NOW())
+           ON CONFLICT (articulo_id, sucursal_id)
+           DO UPDATE SET
+             cantidad = GREATEST(0, stock.cantidad + $3::numeric),
+             ultima_actualizacion = NOW()`,
+          [item.articulo_id, sucursal_id, parseFloat(item.cantidad)]
+        );
+      }
+    }
+
+    // ── 2. Acreditar cuenta corriente del cliente ─────────────────────────────
+    if (cliente_id && totalNum > 0) {
+      const saldoActual = await getSaldoActual(client, cliente_id);
+      // haber = total NC → reduce deuda / genera saldo a favor (saldo negativo)
+      const saldoDespues = parseFloat((saldoActual - totalNum).toFixed(2));
+
+      await client.query(
+        `INSERT INTO cuentas_corrientes_cliente
+           (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+         VALUES ($1, 0, $2, $3, 'nota_credito', $4)`,
+        [cliente_id, totalNum, saldoDespues, ncId]
+      );
+    }
+
+    await client.query('COMMIT');
 
     // Devolver la nota completa
     const { rows: full } = await pool.query(
       `${SELECT_NC} WHERE nc.id = $1`,
-      [rows[0].id]
+      [ncId]
     );
 
     res.status(201).json({ nota: full[0] });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── PATCH /api/notas-credito/:id/anular — solo admin ────────────────────────
+// Revierte en transacción:
+//   1. Descuenta el stock que fue devuelto (vuelve a quitar la mercadería)
+//   2. Inserta debe en CC del cliente para cancelar el haber original
 router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) => {
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+
+    // Obtener la NC y marcarla anulada
+    const { rows } = await client.query(
       `UPDATE notas_credito
           SET estado = 'anulada', updated_at = NOW()
         WHERE id = $1 AND deleted_at IS NULL AND estado != 'anulada'
-        RETURNING id`,
+        RETURNING id, cliente_id, sucursal_id, total, items`,
       [req.params.id]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'No encontrada o ya anulada' });
+    if (!rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No encontrada o ya anulada' });
+    }
+    const nc = rows[0];
+    const totalNum = parseFloat(nc.total) || 0;
+    const items = nc.items || [];
+
+    // ── 1. Revertir stock (quitar lo que se había devuelto) ───────────────────
+    const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
+    if (itemsConArticulo.length > 0 && nc.sucursal_id) {
+      for (const item of itemsConArticulo) {
+        await client.query(
+          `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+           VALUES ($1, $2, $3::numeric, NOW())
+           ON CONFLICT (articulo_id, sucursal_id)
+           DO UPDATE SET
+             cantidad = GREATEST(0, stock.cantidad - $3::numeric),
+             ultima_actualizacion = NOW()`,
+          [item.articulo_id, nc.sucursal_id, parseFloat(item.cantidad)]
+        );
+      }
+    }
+
+    // ── 2. Revertir CC: insertar debe para cancelar el haber de la NC ─────────
+    if (nc.cliente_id && totalNum > 0) {
+      const saldoActual = await getSaldoActual(client, nc.cliente_id);
+      // debe = total NC → revierte el haber; saldo sube (cliente vuelve a deber o pierde el crédito)
+      const saldoDespues = parseFloat((saldoActual + totalNum).toFixed(2));
+
+      await client.query(
+        `INSERT INTO cuentas_corrientes_cliente
+           (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+         VALUES ($1, $2, 0, $3, 'anulacion_nc', $4)`,
+        [nc.cliente_id, totalNum, saldoDespues, nc.id]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ ok: true });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── DELETE /api/notas-credito/:id — solo admin (soft delete) ────────────────

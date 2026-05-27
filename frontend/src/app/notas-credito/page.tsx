@@ -41,6 +41,7 @@ export type NcItem = {
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
+  articulo_id?: string; // presente si fue seleccionado del buscador (permite restaurar stock)
 };
 
 type TipoComprobante = { id: string; codigo_afip: number; letra: string; descripcion: string };

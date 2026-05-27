@@ -150,7 +150,7 @@ interface Props {
   onClose: () => void;
 }
 
-const emptyItem = (): NcItem => ({ descripcion: '', cantidad: 1, precio_unitario: 0, subtotal: 0 });
+const emptyItem = (): NcItem => ({ descripcion: '', cantidad: 1, precio_unitario: 0, subtotal: 0, articulo_id: undefined });
 
 export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCreate, onClose }: Props) {
   const today = new Date().toISOString().slice(0, 10);
@@ -183,7 +183,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const selectArticulo = (i: number, art: ArtResult) => {
     setItems(prev => prev.map((it, idx) => {
       if (idx !== i) return it;
-      const updated = { ...it, descripcion: art.nombre, precio_unitario: art.precio_madre };
+      const updated = { ...it, descripcion: art.nombre, precio_unitario: art.precio_madre, articulo_id: art.id };
       updated.subtotal = updated.cantidad * updated.precio_unitario;
       return updated;
     }));

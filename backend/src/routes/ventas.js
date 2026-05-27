@@ -255,6 +255,61 @@ router.post('/', async (req, res, next) => {
 
     // Insertar pagos (si confirmada)
     if (estado === 'confirmada' && pagos.length > 0) {
+      // Resolver nombres de medios de pago para detectar "Saldo a favor"
+      const medioIds = [...new Set(pagos.map(p => p.medio_pago_id).filter(Boolean))];
+      let mediosMap = {};
+      if (medioIds.length > 0) {
+        const { rows: mediosRows } = await client.query(
+          `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
+          [medioIds]
+        );
+        mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
+      }
+
+      // Validar y consumir saldo a favor antes de insertar
+      const pagosSaldoFavor = pagos.filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor');
+      if (pagosSaldoFavor.length > 0) {
+        if (!cliente_id) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Se requiere un cliente para usar saldo a favor' });
+        }
+
+        // Calcular saldo disponible
+        const { rows: [saldoRow] } = await client.query(`
+          SELECT c.saldo_inicial
+                 + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                 + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual
+            FROM clientes c
+            LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+            LEFT JOIN (
+              SELECT cliente_id, SUM(monto) AS total_correcciones
+                FROM correcciones_saldo_cliente GROUP BY cliente_id
+            ) cs_agg ON cs_agg.cliente_id = c.id
+           WHERE c.id = $1 AND c.deleted_at IS NULL
+           GROUP BY c.id, c.saldo_inicial, cs_agg.total_correcciones
+        `, [cliente_id]);
+
+        const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+        const saldoDisponible = saldoActual < 0 ? Math.abs(saldoActual) : 0;
+        const totalSaldoFavor = pagosSaldoFavor.reduce((s, p) => s + parseFloat(p.monto), 0);
+
+        if (totalSaldoFavor > saldoDisponible + 0.01) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: `Saldo a favor insuficiente. Disponible: $${saldoDisponible.toFixed(2)}, solicitado: $${totalSaldoFavor.toFixed(2)}`,
+          });
+        }
+
+        // Consumir el crédito: insertar debe en CC para reducir el saldo a favor
+        const saldoDespues = parseFloat((saldoActual + totalSaldoFavor).toFixed(2));
+        await client.query(
+          `INSERT INTO cuentas_corrientes_cliente
+             (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+           VALUES ($1, $2, 0, $3, 'consumo_nc', $4)`,
+          [cliente_id, totalSaldoFavor, saldoDespues, venta.id]
+        );
+      }
+
       for (const pago of pagos) {
         await client.query(`
           INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)

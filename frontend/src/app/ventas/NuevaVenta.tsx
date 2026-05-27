@@ -30,6 +30,7 @@ interface ClienteResult {
   lista_precio_id: string | null;
   lista_precio: string | null;      // API field name
   descuento_adicional: number;
+  saldo_actual: number;             // negativo = tiene saldo a favor
 }
 
 interface MedioPago {
@@ -180,6 +181,17 @@ export default function NuevaVenta({
     ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio.nombre.toLowerCase().includes(k))
     : false;
 
+  // ── Saldo a favor
+  const [saldoAFavorAplicado, setSaldoAFavorAplicado] = useState<number>(0);
+
+  // Cuánto saldo a favor tiene el cliente (solo si saldo_actual < 0)
+  const saldoAFavorDisponible = selectedClient && (selectedClient.saldo_actual ?? 0) < 0
+    ? Math.abs(selectedClient.saldo_actual ?? 0)
+    : 0;
+
+  // ID del medio de pago "Saldo a favor" (insertado en la DB)
+  const SALDO_FAVOR_MP_ID = 'b1122bd5-2aac-4b21-bbc0-739729681c1e';
+
   // ── Save state
   const [saving, setSaving]     = useState<'preventa' | 'confirmada' | null>(null);
   const [saveError, setSaveError] = useState('');
@@ -219,6 +231,7 @@ export default function NuevaVenta({
     setSaveError('');
     setSaving(null);
     setSucursalId(sucursales[0]?.id ?? '');
+    setSaldoAFavorAplicado(0);
   }, [sucursales]);
 
   const cerrar = useCallback(() => {
@@ -303,7 +316,9 @@ export default function NuevaVenta({
     if (selectedClient?.lista_precio_id) {
       setListaId(selectedClient.lista_precio_id);
     }
-  }, [selectedClient]);
+    // Reset saldo a favor al cambiar cliente
+    setSaldoAFavorAplicado(0);
+  }, [selectedClient?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Recalculate cart when lista or client discount changes ───────────────
   useEffect(() => {
@@ -405,6 +420,35 @@ export default function NuevaVenta({
     setSaveError('');
     setSaving(estado);
 
+    // ── Construir pagos (saldo a favor + medio restante) ─────────────────────
+    const saldoAplicado = Math.min(saldoAFavorAplicado, subtotalFinal);
+    const saldoRestante = Math.max(0, subtotalFinal - saldoAplicado);
+
+    const pagos: {
+      medio_pago_id: string;
+      monto: number;
+      cuenta_destino?: string | null;
+      cheques?: object[];
+    }[] = [];
+
+    if (saldoAplicado > 0.001) {
+      pagos.push({ medio_pago_id: SALDO_FAVOR_MP_ID, monto: saldoAplicado });
+    }
+
+    if (saldoRestante > 0.001 && medioPagoId) {
+      pagos.push({
+        medio_pago_id:  medioPagoId,
+        monto:          saldoRestante,
+        cuenta_destino: esTransferencia
+          ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
+          : null,
+        cheques: esCheque
+          ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
+                   .map(c => ({ ...c, importe: parseFloat(c.importe) }))
+          : undefined,
+      });
+    }
+
     const body = {
       sucursal_id:    sucursalId || null,
       cliente_id:     selectedClient?.id ?? null,
@@ -419,19 +463,7 @@ export default function NuevaVenta({
         precio_unitario_final: i.precio_unitario_final,
         iva_monto:             0,
       })),
-      pagos: medioPagoId
-        ? [{
-            medio_pago_id:  medioPagoId,
-            monto:          subtotalFinal,
-            cuenta_destino: esTransferencia
-              ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
-              : null,
-            cheques: esCheque
-              ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
-                       .map(c => ({ ...c, importe: parseFloat(c.importe) }))
-              : undefined,
-          }]
-        : [],
+      pagos,
     };
 
     try {
@@ -915,38 +947,94 @@ export default function NuevaVenta({
                     </section>
                   )}
 
+                  {/* ── Saldo a favor ────────────────────────────────────── */}
+                  {saldoAFavorDisponible > 0 && !cartEmpty && (
+                    <section className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-3 space-y-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0">
+                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                          <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                          Saldo a favor
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-emerald-400 tabular-nums leading-none">
+                        {ars.format(saldoAFavorDisponible)}
+                      </p>
+                      <div>
+                        <p className="text-[10px] text-kp-gray mb-1.5">Aplicar en esta venta</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            max={Math.min(saldoAFavorDisponible, subtotalFinal)}
+                            step="0.01"
+                            value={saldoAFavorAplicado || ''}
+                            onChange={e => {
+                              const max = Math.min(saldoAFavorDisponible, subtotalFinal);
+                              const val = Math.min(max, Math.max(0, parseFloat(e.target.value) || 0));
+                              setSaldoAFavorAplicado(val);
+                            }}
+                            placeholder="0,00"
+                            className="flex-1 bg-kp-surface border border-emerald-500/40 rounded-lg px-3 py-2 text-sm
+                              text-emerald-400 font-bold tabular-nums focus:outline-none focus:border-emerald-400 transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSaldoAFavorAplicado(Math.min(saldoAFavorDisponible, subtotalFinal))}
+                            className="text-[10px] font-bold text-emerald-400 border border-emerald-500/40 rounded-lg
+                              px-2 py-1 hover:bg-emerald-500/15 transition-colors whitespace-nowrap"
+                          >
+                            Todo
+                          </button>
+                        </div>
+                      </div>
+                      {saldoAFavorAplicado > 0 && (
+                        <div className="flex justify-between items-center pt-1 border-t border-emerald-500/20">
+                          <span className="text-[10px] text-kp-gray">Resto a pagar</span>
+                          <span className="text-sm font-bold text-kp-white tabular-nums">
+                            {ars.format(Math.max(0, subtotalFinal - saldoAFavorAplicado))}
+                          </span>
+                        </div>
+                      )}
+                    </section>
+                  )}
+
                   {/* ── Medio de pago ────────────────────────────────────── */}
-                  <section>
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
-                      Medio de pago
-                    </p>
-                    {mediosPago.length > 0 ? (
-                      <select
-                        value={medioPagoId}
-                        onChange={e => setMedioPagoId(e.target.value)}
-                        className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                          focus:outline-none focus:border-kp-red transition-colors"
-                      >
-                        {mediosPago.map(m => (
-                          <option key={m.id} value={m.id}>{m.nombre}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select
-                        className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-gray
-                          focus:outline-none transition-colors"
-                        disabled
-                      >
-                        <option>Efectivo</option>
-                        <option>Tarjeta</option>
-                        <option>Transferencia</option>
-                        <option>Cuenta Corriente</option>
-                      </select>
-                    )}
-                  </section>
+                  {(saldoAFavorAplicado < subtotalFinal - 0.001 || cartEmpty) && (
+                    <section>
+                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                        {saldoAFavorAplicado > 0 ? 'Medio de pago (resto)' : 'Medio de pago'}
+                      </p>
+                      {mediosPago.length > 0 ? (
+                        <select
+                          value={medioPagoId}
+                          onChange={e => setMedioPagoId(e.target.value)}
+                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                            focus:outline-none focus:border-kp-red transition-colors"
+                        >
+                          {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
+                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-gray
+                            focus:outline-none transition-colors"
+                          disabled
+                        >
+                          <option>Efectivo</option>
+                          <option>Tarjeta</option>
+                          <option>Transferencia</option>
+                          <option>Cuenta Corriente</option>
+                        </select>
+                      )}
+                    </section>
+                  )}
 
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
-                  {esTransferencia && cuentasBancarias.length > 0 && (
+                  {esTransferencia && cuentasBancarias.length > 0 && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
@@ -979,7 +1067,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cheques ──────────────────────────────────────────── */}
-                  {esCheque && (
+                  {esCheque && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
