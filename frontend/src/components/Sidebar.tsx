@@ -79,6 +79,11 @@ const IcoDashboard = () => (
     <rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" />
   </svg>
 );
+const IcoNotas = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -98,6 +103,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Gastos',                 href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
+      { label: 'Notas de equipo',       href: '/notas',                icon: <IcoNotas /> },
     ],
   },
   {
