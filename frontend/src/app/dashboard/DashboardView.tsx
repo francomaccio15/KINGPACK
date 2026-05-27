@@ -17,6 +17,22 @@ export type ChequeItem = {
   referencia: string;
 };
 
+export type MedioPagoData = {
+  nombre:   string;
+  cantidad: number;
+  monto:    number;
+};
+
+export type TransaccionHoy = {
+  id:         string;
+  numero:     number;
+  fecha:      string;
+  estado:     string;
+  total:      number;
+  cliente:    string;
+  medios_pago: string | null;
+};
+
 export type DashboardData = {
   ventas_hoy:        { cantidad: number; monto: number };
   ventas_ayer:       { cantidad: number; monto: number };
@@ -37,8 +53,10 @@ export type DashboardData = {
     id: string; numero: number; total: number;
     fecha: string; estado: string; cliente: string | null;
   }[];
-  cheques_a_cobrar: ChequeItem[];
-  cheques_a_pagar:  ChequeItem[];
+  cheques_a_cobrar:  ChequeItem[];
+  cheques_a_pagar:   ChequeItem[];
+  ventas_por_medio:  MedioPagoData[];
+  transacciones_hoy: TransaccionHoy[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -322,6 +340,149 @@ const IcoOrder  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const IcoRefresh= () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg>;
 const IcoWarn   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 const IcoCheque = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 14h4"/><path d="M14 14h4"/></svg>;
+const IcoCash   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 12h.01M18 12h.01"/></svg>;
+const IcoCard   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>;
+const IcoTransfer=() => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>;
+const IcoQR     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3"/><rect x="16" y="5" width="3" height="3"/><rect x="5" y="16" width="3" height="3"/><path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/></svg>;
+const IcoBank   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2L2 7h20L12 2z"/></svg>;
+
+// ─── Medio de pago helpers ────────────────────────────────────────────────────
+function medioStyle(nombre: string): { icon: React.ReactNode; bg: string; color: string; bar: string } {
+  const n = nombre.toLowerCase();
+  if (n.includes('efectivo'))   return { icon: <IcoCash />,     bg: 'bg-emerald-500/10', color: 'text-emerald-400', bar: 'bg-emerald-500' };
+  if (n.includes('crédito'))    return { icon: <IcoCard />,     bg: 'bg-violet-500/10',  color: 'text-violet-400',  bar: 'bg-violet-500'  };
+  if (n.includes('débito'))     return { icon: <IcoCard />,     bg: 'bg-sky-500/10',     color: 'text-sky-400',     bar: 'bg-sky-500'     };
+  if (n.includes('transferen')) return { icon: <IcoTransfer />, bg: 'bg-blue-500/10',    color: 'text-blue-400',    bar: 'bg-blue-500'    };
+  if (n.includes('mercado'))    return { icon: <IcoTransfer />, bg: 'bg-cyan-500/10',    color: 'text-cyan-400',    bar: 'bg-cyan-500'    };
+  if (n.includes('qr'))         return { icon: <IcoQR />,       bg: 'bg-indigo-500/10',  color: 'text-indigo-400',  bar: 'bg-indigo-500'  };
+  if (n.includes('cuenta'))     return { icon: <IcoBank />,     bg: 'bg-amber-500/10',   color: 'text-amber-400',   bar: 'bg-amber-500'   };
+  if (n.includes('cheque'))     return { icon: <IcoCheque />,   bg: 'bg-rose-500/10',    color: 'text-rose-400',    bar: 'bg-rose-500'    };
+  return                               { icon: <IcoCash />,     bg: 'bg-kp-surface2',    color: 'text-kp-gray',     bar: 'bg-kp-border'   };
+}
+
+// ─── CobrosDelDia component ───────────────────────────────────────────────────
+function CobrosDelDia({
+  medios, transacciones,
+}: {
+  medios: MedioPagoData[];
+  transacciones: TransaccionHoy[];
+}) {
+  const totalMonto    = medios.reduce((a, m) => a + m.monto, 0);
+  const totalOps      = transacciones.length;
+
+  return (
+    <section className="space-y-4">
+      {/* Encabezado de sección */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+          <span className="w-5 h-px bg-kp-border inline-block" />
+          Cobros del día · por método de pago
+          <span className="flex-1 h-px bg-kp-border inline-block" />
+        </p>
+        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+          <span className="text-xs text-kp-gray">{totalOps} transacciones</span>
+          <span className="text-sm font-bold text-kp-white">{fmt(totalMonto)}</span>
+        </div>
+      </div>
+
+      {/* Cards por método */}
+      {medios.length === 0 ? (
+        <div className="rounded-xl border border-kp-border bg-kp-surface px-6 py-8 text-center text-kp-gray text-sm">
+          Sin cobros registrados hoy todavía.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {medios.map(m => {
+            const s   = medioStyle(m.nombre);
+            const pct = totalMonto > 0 ? (m.monto / totalMonto) * 100 : 0;
+            return (
+              <div key={m.nombre} className="rounded-xl border border-kp-border bg-kp-surface p-4 flex flex-col gap-3">
+                {/* Icono + nombre */}
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${s.bg}`}>
+                    <span className={s.color}>{s.icon}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-kp-white leading-tight">{m.nombre}</p>
+                </div>
+                {/* Monto */}
+                <div>
+                  <p className={`text-lg font-bold leading-none ${s.color}`}>{fmt(m.monto)}</p>
+                  <p className="text-[10px] text-kp-gray mt-1">{m.cantidad} op. · {pct.toFixed(1)}%</p>
+                </div>
+                {/* Barra proporcional */}
+                <div className="h-1 rounded-full bg-kp-border/50 overflow-hidden">
+                  <div className={`h-full rounded-full ${s.bar} opacity-70`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tabla de transacciones del día */}
+      {transacciones.length > 0 && (
+        <div className="rounded-xl border border-kp-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-kp-border bg-kp-surface2 flex items-center justify-between">
+            <p className="text-xs font-bold text-kp-gray uppercase tracking-widest">Detalle de transacciones de hoy</p>
+            <Link href="/ventas" className="text-xs text-kp-red hover:underline font-semibold">Ver todas →</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm bg-kp-surface">
+              <thead>
+                <tr className="border-b border-kp-border">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">Hora</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">#</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">Cliente</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell">Medio de pago</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Estado</th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Monto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-kp-border">
+                {transacciones.map(t => {
+                  const hora = new Date(t.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <tr key={t.id} className="hover:bg-kp-surface2 transition-colors">
+                      <td className="px-4 py-2.5 text-xs font-mono text-kp-gray whitespace-nowrap">{hora}</td>
+                      <td className="px-4 py-2.5">
+                        <Link href={`/ventas/${t.id}`} className="font-mono font-bold text-kp-red hover:underline text-xs">
+                          #{t.numero}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-kp-white max-w-[140px] truncate">{t.cliente}</td>
+                      <td className="px-4 py-2.5 hidden md:table-cell">
+                        {t.medios_pago ? (
+                          <div className="flex flex-wrap gap-1">
+                            {t.medios_pago.split(' + ').map(mp => {
+                              const s = medioStyle(mp);
+                              return (
+                                <span key={mp} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.color}`}>
+                                  {mp}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-kp-gray">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 hidden sm:table-cell">
+                        <EstadoBadge estado={t.estado} />
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold text-kp-white text-sm tabular-nums whitespace-nowrap">
+                        {fmt(t.total)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardView({
@@ -458,6 +619,12 @@ export default function DashboardView({
         </div>
       </section>
 
+      {/* ── Cobros del día por medio de pago ── */}
+      <CobrosDelDia
+        medios={d.ventas_por_medio ?? []}
+        transacciones={d.transacciones_hoy ?? []}
+      />
+
       {/* ── KPI Mes ── */}
       <section>
         <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
@@ -529,55 +696,6 @@ export default function DashboardView({
         </section>
       )}
 
-      {/* ── Recent Sales ── */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
-            <span className="w-5 h-px bg-kp-border inline-block" />
-            Últimas ventas
-            <span className="flex-1 h-px bg-kp-border inline-block" />
-          </p>
-          <Link href="/ventas" className="text-xs text-kp-red hover:underline font-semibold">Ver todas →</Link>
-        </div>
-        <div className="rounded-xl border border-kp-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-kp-border">
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">#</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">Cliente</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell">Estado</th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Total</th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Fecha</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-kp-border">
-              {d.ultimas_ventas.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-kp-gray text-sm">
-                    No hay ventas registradas aún.
-                  </td>
-                </tr>
-              ) : d.ultimas_ventas.map(v => (
-                <tr key={v.id} className="hover:bg-kp-surface2 transition-colors">
-                  <td className="px-4 py-3">
-                    <Link href={`/ventas/${v.id}`} className="font-mono font-bold text-kp-red hover:underline text-xs">
-                      #{v.numero}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-kp-white text-sm">
-                    {v.cliente ?? <span className="text-kp-gray italic text-xs">Consumidor final</span>}
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell"><EstadoBadge estado={v.estado} /></td>
-                  <td className="px-4 py-3 text-right font-semibold text-kp-white">{fmt(v.total)}</td>
-                  <td className="px-4 py-3 text-right text-kp-gray text-xs hidden sm:table-cell whitespace-nowrap">
-                    {new Date(v.fecha).toLocaleDateString('es-AR')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
     </div>
   );

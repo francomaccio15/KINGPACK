@@ -21,6 +21,8 @@ router.get('/', async (req, res, next) => {
       ultimasVentas,
       chequesACobrar,
       chequesAPagar,
+      ventasPorMedio,
+      transaccionesHoy,
     ] = await Promise.all([
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
@@ -117,6 +119,46 @@ router.get('/', async (req, res, next) => {
         ORDER BY ec.fecha_vencimiento ASC
         LIMIT 20
       `),
+
+      // Desglose de cobros de hoy por medio de pago
+      pool.query(`
+        SELECT
+          mp.nombre,
+          COUNT(DISTINCT v.id)::int  AS cantidad,
+          COALESCE(SUM(vp.monto),0)::float AS monto
+        FROM venta_pagos vp
+        JOIN ventas v ON v.id = vp.venta_id
+          AND v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND v.fecha::date = CURRENT_DATE
+          ${sucId ? 'AND v.sucursal_id = $1' : ''}
+        JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+        GROUP BY mp.nombre
+        ORDER BY monto DESC
+      `, p),
+
+      // Transacciones de hoy (últimas 25)
+      pool.query(`
+        SELECT
+          v.id,
+          v.numero,
+          v.fecha,
+          v.estado,
+          v.total::float,
+          COALESCE(c.razon_social, 'Consumidor final') AS cliente,
+          STRING_AGG(mp.nombre, ' + ' ORDER BY mp.nombre) AS medios_pago
+        FROM ventas v
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        LEFT JOIN venta_pagos vp ON vp.venta_id = v.id
+        LEFT JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+        WHERE v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND v.fecha::date = CURRENT_DATE
+          ${sucId ? 'AND v.sucursal_id = $1' : ''}
+        GROUP BY v.id, v.numero, v.fecha, v.estado, v.total, c.razon_social
+        ORDER BY v.fecha DESC
+        LIMIT 25
+      `, p),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
@@ -147,6 +189,8 @@ router.get('/', async (req, res, next) => {
       ultimas_ventas:      ultimasVentas.rows,
       cheques_a_cobrar:    chequesACobrar.rows,
       cheques_a_pagar:     chequesAPagar.rows,
+      ventas_por_medio:    ventasPorMedio.rows,
+      transacciones_hoy:   transaccionesHoy.rows,
     });
   } catch (err) { next(err); }
 });
