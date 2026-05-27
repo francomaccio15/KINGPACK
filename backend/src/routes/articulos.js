@@ -424,6 +424,75 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/articulos/ranking — top más y menos vendidos del mes ───────────
+router.get('/ranking', async (req, res, next) => {
+  try {
+    const { sucursal_id, limite = '10' } = req.query;
+    const lim = Math.min(parseInt(limite) || 10, 20);
+
+    const sucursalFilter = sucursal_id ? `AND v.sucursal_id = $2` : '';
+    const params         = sucursal_id ? [lim, sucursal_id] : [lim];
+
+    const [masVendidos, menosVendidos] = await Promise.all([
+
+      // Top más vendidos del mes (solo artículos con al menos 1 venta)
+      pool.query(`
+        SELECT
+          a.id,
+          a.nombre,
+          a.codigo,
+          COALESCE(cat.nombre, 'Sin categoría') AS categoria,
+          SUM(vi.cantidad)::float                AS total_unidades,
+          SUM(vi.cantidad * vi.precio_unitario_final)::float AS total_ingresos
+        FROM venta_items vi
+        JOIN articulos a  ON a.id = vi.articulo_id
+                         AND a.deleted_at IS NULL
+                         AND a.activo = TRUE
+        JOIN ventas v     ON v.id = vi.venta_id
+                         AND v.deleted_at IS NULL
+                         AND DATE_TRUNC('month', v.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')
+                           = DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')
+                         ${sucursalFilter}
+        LEFT JOIN categorias cat ON cat.id = a.categoria_id
+        GROUP BY a.id, a.nombre, a.codigo, cat.nombre
+        ORDER BY total_unidades DESC
+        LIMIT $1
+      `, params),
+
+      // Top menos vendidos del mes (incluye artículos con 0 ventas)
+      pool.query(`
+        SELECT
+          a.id,
+          a.nombre,
+          a.codigo,
+          COALESCE(cat.nombre, 'Sin categoría') AS categoria,
+          COALESCE(SUM(vi.cantidad), 0)::float   AS total_unidades,
+          COALESCE(SUM(vi.cantidad * vi.precio_unitario_final), 0)::float AS total_ingresos
+        FROM articulos a
+        LEFT JOIN categorias cat ON cat.id = a.categoria_id
+        LEFT JOIN venta_items vi ON vi.articulo_id = a.id
+        LEFT JOIN ventas v       ON v.id = vi.venta_id
+                                AND v.deleted_at IS NULL
+                                AND DATE_TRUNC('month', v.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires')
+                                  = DATE_TRUNC('month', NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')
+                                ${sucursal_id ? `AND v.sucursal_id = $2` : ''}
+        WHERE a.deleted_at IS NULL AND a.activo = TRUE
+        GROUP BY a.id, a.nombre, a.codigo, cat.nombre
+        ORDER BY total_unidades ASC, a.nombre ASC
+        LIMIT $1
+      `, params),
+    ]);
+
+    const mes = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+
+    res.json({
+      mes,
+      mas_vendidos:   masVendidos.rows,
+      menos_vendidos: menosVendidos.rows,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/articulos/:id — artículo individual con precio_lista correcto ───
 // Debe ir después de /alicuotas y después de / para no interceptar esas rutas.
 router.get('/:id', async (req, res, next) => {

@@ -5,6 +5,7 @@ import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
 import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
+import RankingArticulos from './RankingArticulos';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -35,6 +36,12 @@ type Lista     = { id: string; nombre: string; tipo: string; descuento_base_pct:
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Sucursal  = { id: string; nombre: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
+
+type RankingItem = {
+  id: string; nombre: string; codigo: string; categoria: string;
+  total_unidades: number; total_ingresos: number;
+};
+type RankingData = { mes: string; mas_vendidos: RankingItem[]; menos_vendidos: RankingItem[] };
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
 async function fetchListas(): Promise<Lista[]> {
@@ -67,6 +74,16 @@ async function fetchAlicuotas(): Promise<Alicuota[]> {
     if (!r.ok) return [];
     return (await r.json()).alicuotas ?? [];
   } catch { return []; }
+}
+
+async function fetchRanking(sucursal_id: string): Promise<RankingData | null> {
+  try {
+    const qs = new URLSearchParams({ limite: '10' });
+    if (sucursal_id) qs.set('sucursal_id', sucursal_id);
+    const r = await serverFetch(`/api/articulos/ranking?${qs}`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return r.json();
+  } catch { return null; }
 }
 
 async function fetchStockBajoCount(sucursal_id: string): Promise<number> {
@@ -118,12 +135,13 @@ export default async function ArticulosPage({
   requireAuth('/articulos');
   const sucursalActivaId = getSucursalActivaId();
 
-  const [listas, categorias, sucursales, alicuotas, stockBajoCount] = await Promise.all([
+  const [listas, categorias, sucursales, alicuotas, stockBajoCount, ranking] = await Promise.all([
     fetchListas(),
     fetchCategorias(),
     fetchSucursales(),
     fetchAlicuotas(),
     fetchStockBajoCount(sucursalActivaId),
+    fetchRanking(sucursalActivaId),
   ]);
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
@@ -267,6 +285,15 @@ export default async function ArticulosPage({
           />
         </table>
       </div>
+
+      {/* ── Ranking de ventas del mes ── */}
+      {ranking && (
+        <RankingArticulos
+          mes={ranking.mes}
+          masVendidos={ranking.mas_vendidos}
+          menosVendidos={ranking.menos_vendidos}
+        />
+      )}
 
     </section>
   );
