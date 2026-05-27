@@ -24,3 +24,10 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-kp-red;
 }
+
+/* ── Print styles (notas de crédito) ────────────────────────────────────── */
+@media print {
+  body { background: white !important; color: black !important; }
+  .print\:hidden { display: none !important; }
+  @page { margin: 10mm; size: A4; }
+}
