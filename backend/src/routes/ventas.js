@@ -133,14 +133,14 @@ router.post('/', async (req, res, next) => {
 
     // Fetchear precios reales desde la DB — no confiar en el cliente
     const precioQuery = lista_precio_id
-      ? `SELECT a.id, a.alicuota_iva_id, ai.porcentaje AS iva_pct,
+      ? `SELECT a.id, a.nombre, a.alicuota_iva_id, ai.porcentaje AS iva_pct,
                 COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista
          FROM articulos a
          LEFT JOIN lista_precio_items lpi
            ON lpi.articulo_id = a.id AND lpi.lista_id = $2 AND lpi.activo = TRUE
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
          WHERE a.id = ANY($1) AND a.deleted_at IS NULL`
-      : `SELECT a.id, a.precio_madre AS precio_lista, a.alicuota_iva_id,
+      : `SELECT a.id, a.nombre, a.precio_madre AS precio_lista, a.alicuota_iva_id,
                 ai.porcentaje AS iva_pct
          FROM articulos a
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
@@ -202,35 +202,38 @@ router.post('/', async (req, res, next) => {
     ]);
     const venta = ventaRows[0];
 
-    // Verificar y descontar stock (con lock para evitar race conditions)
-    for (const item of itemsCalculados) {
-      const { rows: stockRows } = await client.query(
-        `SELECT cantidad FROM stock
-         WHERE articulo_id = $1 AND sucursal_id = $2
-         FOR UPDATE`,
-        [item.articulo_id, sucursal_id]
-      );
-      const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
-      if (stockActual < item.cantidad) {
-        await client.query('ROLLBACK');
-        const art = artMap[item.articulo_id];
-        return res.status(409).json({
-          error: `Stock insuficiente`,
-          detalle: {
-            articulo_id: item.articulo_id,
-            disponible: stockActual,
-            solicitado: item.cantidad,
-          },
-        });
+    // Solo verificar y descontar stock en ventas confirmadas
+    if (estado === 'confirmada') {
+      for (const item of itemsCalculados) {
+        const { rows: stockRows } = await client.query(
+          `SELECT cantidad FROM stock
+           WHERE articulo_id = $1 AND sucursal_id = $2
+           FOR UPDATE`,
+          [item.articulo_id, sucursal_id]
+        );
+        const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
+        if (stockActual < item.cantidad) {
+          await client.query('ROLLBACK');
+          const art = artMap[item.articulo_id];
+          return res.status(409).json({
+            error: `Stock insuficiente para "${art.nombre}"`,
+            detalle: {
+              articulo_id: item.articulo_id,
+              nombre: art.nombre,
+              disponible: stockActual,
+              solicitado: item.cantidad,
+            },
+          });
+        }
+        const nuevaCantidad = parseFloat((stockActual - item.cantidad).toFixed(3));
+        await client.query(
+          `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (articulo_id, sucursal_id)
+           DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
+          [item.articulo_id, sucursal_id, nuevaCantidad]
+        );
       }
-      const nuevaCantidad = parseFloat((stockActual - item.cantidad).toFixed(3));
-      await client.query(
-        `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (articulo_id, sucursal_id)
-         DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
-        [item.articulo_id, sucursal_id, nuevaCantidad]
-      );
     }
 
     // Insertar items con precios calculados server-side
