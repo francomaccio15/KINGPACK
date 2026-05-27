@@ -202,6 +202,36 @@ router.post('/', async (req, res, next) => {
     ]);
     const venta = ventaRows[0];
 
+    // Verificar y descontar stock (con lock para evitar race conditions)
+    for (const item of itemsCalculados) {
+      const { rows: stockRows } = await client.query(
+        `SELECT cantidad FROM stock
+         WHERE articulo_id = $1 AND sucursal_id = $2
+         FOR UPDATE`,
+        [item.articulo_id, sucursal_id]
+      );
+      const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
+      if (stockActual < item.cantidad) {
+        await client.query('ROLLBACK');
+        const art = artMap[item.articulo_id];
+        return res.status(409).json({
+          error: `Stock insuficiente`,
+          detalle: {
+            articulo_id: item.articulo_id,
+            disponible: stockActual,
+            solicitado: item.cantidad,
+          },
+        });
+      }
+      await client.query(
+        `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+         VALUES ($1, $2, $3 - $4, NOW())
+         ON CONFLICT (articulo_id, sucursal_id)
+         DO UPDATE SET cantidad = stock.cantidad - $4, ultima_actualizacion = NOW()`,
+        [item.articulo_id, sucursal_id, stockActual, item.cantidad]
+      );
+    }
+
     // Insertar items con precios calculados server-side
     for (const item of itemsCalculados) {
       await client.query(`
@@ -330,19 +360,56 @@ router.get('/:id', async (req, res, next) => {
 
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
 router.patch('/:id/estado', async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { estado } = req.body;
     if (!['preventa','confirmada','facturada','anulada'].includes(estado)) {
       return res.status(400).json({ error: 'Estado inválido' });
     }
-    const { rows } = await pool.query(
-      `UPDATE ventas SET estado = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, estado`,
+
+    await client.query('BEGIN');
+
+    const { rows: ventaRows } = await client.query(
+      `SELECT id, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [id]
+    );
+    if (!ventaRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Venta no encontrada' });
+    }
+    const venta = ventaRows[0];
+
+    // Al anular: devolver stock a la sucursal
+    if (estado === 'anulada' && venta.estado !== 'anulada') {
+      const { rows: itemRows } = await client.query(
+        `SELECT articulo_id, cantidad FROM venta_items WHERE venta_id = $1`,
+        [id]
+      );
+      for (const item of itemRows) {
+        await client.query(
+          `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (articulo_id, sucursal_id)
+           DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()`,
+          [item.articulo_id, venta.sucursal_id, item.cantidad]
+        );
+      }
+    }
+
+    const { rows } = await client.query(
+      `UPDATE ventas SET estado = $1 WHERE id = $2 RETURNING id, estado`,
       [estado, id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    await client.query('COMMIT');
     res.json({ venta: rows[0] });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── POST /api/ventas/:id/factura-test ───────────────────────────────────────
