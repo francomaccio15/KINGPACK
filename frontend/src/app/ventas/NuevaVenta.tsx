@@ -20,6 +20,8 @@ interface ArticuloResult {
   codigo: string;
   precio_madre: number;
   precio_lista: number; // resolved by backend when lista_id is passed
+  stock_total: number;
+  stock_bajo: boolean;
 }
 
 interface ClienteResult {
@@ -216,7 +218,8 @@ export default function NuevaVenta({
     artDebounceRef.current = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ q: artQuery.trim(), limit: '30' });
-        if (listaId) params.set('lista_id', listaId);
+        if (listaId)    params.set('lista_id',    listaId);
+        if (sucursalId) params.set('sucursal_id', sucursalId);
         const r = await apiFetch(`/api/articulos?${params}`);
         if (!r.ok) throw new Error();
         const data = await r.json();
@@ -229,7 +232,7 @@ export default function NuevaVenta({
     }, 300);
 
     return () => { if (artDebounceRef.current) clearTimeout(artDebounceRef.current); };
-  }, [artQuery, listaId, open]);
+  }, [artQuery, listaId, sucursalId, open]);
 
   // ─── Client search (debounced 300 ms) ────────────────────────────────────
   useEffect(() => {
@@ -499,6 +502,12 @@ export default function NuevaVenta({
                     </div>
                     {artResults.map(art => {
                       const displayPrice = art.precio_lista ?? art.precio_madre;
+                      const sinStock   = art.stock_total === 0;
+                      const stockBadge = sinStock
+                        ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/20',  label: 'Sin stock' }
+                        : art.stock_bajo
+                          ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` }
+                          : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` };
                       return (
                         <div
                           key={art.id}
@@ -507,7 +516,12 @@ export default function NuevaVenta({
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
-                            <p className="text-xs text-kp-gray">{art.codigo}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-kp-gray">{art.codigo}</span>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
+                                {stockBadge.label}
+                              </span>
+                            </div>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-kp-white tabular-nums">
