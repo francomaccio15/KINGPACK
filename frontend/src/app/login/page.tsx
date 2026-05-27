@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace('/articulos');
+      router.replace('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
