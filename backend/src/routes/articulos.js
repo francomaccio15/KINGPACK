@@ -1,4 +1,3 @@
-// TODO(fase-2): proteger con JWT — endpoint público temporal.
 const express = require('express');
 const { pool } = require('../config/db');
 

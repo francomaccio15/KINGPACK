@@ -1,4 +1,3 @@
-// TODO(fase-2): proteger con JWT
 const express = require('express');
 const { pool } = require('../config/db');
 
