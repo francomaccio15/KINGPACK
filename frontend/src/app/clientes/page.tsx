@@ -36,7 +36,7 @@ export default async function ClientesPage({
   searchParams: { q?: string; activo?: string };
 }) {
   const user = requireAuth('/clientes');
-  const esAdmin = user.rol === 'admin';
+  const esAdmin = user.rol === 'administrador';
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,
