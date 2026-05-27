@@ -215,8 +215,19 @@ router.post('/', async (req, res, next) => {
     }
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (!descripcion?.trim()) return res.status(400).json({ error: 'descripcion es requerida' });
-    const totalNum = parseFloat(total);
-    if (!totalNum || totalNum <= 0) return res.status(400).json({ error: 'total debe ser mayor a 0' });
+    const TIPOS_CON_COMPROBANTE = ['compra_mercaderia','compra_gasto','inversion_bien_uso'];
+    let totalNum;
+    if (TIPOS_CON_COMPROBANTE.includes(tipo_operacion)) {
+      totalNum = parseFloat(
+        [neto_gravado, neto_no_gravado, iva_21, iva_105, percepciones_ib, otros_impuestos]
+          .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
+          .toFixed(2)
+      );
+      if (totalNum <= 0) return res.status(400).json({ error: 'La suma de importes debe ser mayor a 0' });
+    } else {
+      totalNum = parseFloat(total);
+      if (!totalNum || totalNum <= 0) return res.status(400).json({ error: 'total debe ser mayor a 0' });
+    }
 
     const TIPOS_CON_PROVEEDOR = ['compra_mercaderia','compra_gasto','inversion_bien_uso','anticipo_proveedor'];
     if (TIPOS_CON_PROVEEDOR.includes(tipo_operacion) && !proveedor_id) {
@@ -239,19 +250,6 @@ router.post('/', async (req, res, next) => {
     if (tipo_comprobante && tipo_comprobante !== 'informal') {
       if (parseFloat(neto_gravado) === 0 && parseFloat(neto_no_gravado) === 0) {
         return res.status(400).json({ error: 'Las facturas en blanco requieren neto gravado o neto no gravado' });
-      }
-    }
-
-    // Validación de total vs suma de netos/impuestos (solo para tipos con comprobante)
-    const TIPOS_CON_COMPROBANTE = ['compra_mercaderia','compra_gasto','inversion_bien_uso'];
-    if (TIPOS_CON_COMPROBANTE.includes(tipo_operacion)) {
-      const sumaCalculada = [neto_gravado, neto_no_gravado, iva_21, iva_105, percepciones_ib, otros_impuestos]
-        .reduce((acc, v) => acc + (parseFloat(v) || 0), 0);
-      if (Math.abs(sumaCalculada - totalNum) > 0.02) {
-        return res.status(400).json({
-          error: `El total (${totalNum.toFixed(2)}) no coincide con la suma de netos e impuestos (${sumaCalculada.toFixed(2)})`,
-          diferencia: (totalNum - sumaCalculada).toFixed(2),
-        });
       }
     }
 

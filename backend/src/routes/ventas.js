@@ -124,7 +124,55 @@ router.post('/', async (req, res, next) => {
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
 
+    const articuloIds = items.map(i => i.articulo_id).filter(Boolean);
+    if (articuloIds.length !== items.length) {
+      return res.status(400).json({ error: 'Todos los ítems deben tener articulo_id' });
+    }
+
     await client.query('BEGIN');
+
+    // Fetchear precios reales desde la DB — no confiar en el cliente
+    const precioQuery = lista_precio_id
+      ? `SELECT a.id, a.alicuota_iva_id, ai.porcentaje AS iva_pct,
+                COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista
+         FROM articulos a
+         LEFT JOIN lista_precio_items lpi
+           ON lpi.articulo_id = a.id AND lpi.lista_id = $2 AND lpi.activo = TRUE
+         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+         WHERE a.id = ANY($1) AND a.deleted_at IS NULL`
+      : `SELECT a.id, a.precio_madre AS precio_lista, a.alicuota_iva_id,
+                ai.porcentaje AS iva_pct
+         FROM articulos a
+         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+         WHERE a.id = ANY($1) AND a.deleted_at IS NULL`;
+
+    const precioParams = lista_precio_id ? [articuloIds, lista_precio_id] : [articuloIds];
+    const { rows: artRows } = await client.query(precioQuery, precioParams);
+
+    if (artRows.length !== articuloIds.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Uno o más artículos no existen o están inactivos' });
+    }
+    const artMap = Object.fromEntries(artRows.map(a => [a.id, a]));
+
+    // Recalcular precios y totales con datos de la DB
+    let subtotal = 0;
+    let descuento_total = 0;
+    const itemsCalculados = items.map(item => {
+      const art        = artMap[item.articulo_id];
+      const precio_lista  = parseFloat(art.precio_lista) || 0;
+      const descuento_pct = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
+      const precio_final  = parseFloat((precio_lista * (1 - descuento_pct / 100)).toFixed(2));
+      const cantidad      = Math.max(0, parseFloat(item.cantidad) || 1);
+      const iva_pct       = parseFloat(art.iva_pct) || 0;
+      const iva_monto     = parseFloat((precio_final * (iva_pct / 100)).toFixed(2));
+
+      subtotal        += precio_lista * cantidad;
+      descuento_total += (precio_lista - precio_final) * cantidad;
+
+      return { ...item, precio_lista, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad };
+    });
+    const total = parseFloat((subtotal - descuento_total).toFixed(2));
 
     // Número de venta secuencial por sucursal
     const { rows: numRows } = await client.query(
@@ -133,18 +181,6 @@ router.post('/', async (req, res, next) => {
       [sucursal_id]
     );
     const numero = (numRows[0]?.numero ?? 0) + 1;
-
-    // Calcular totales
-    let subtotal = 0;
-    let descuento_total = 0;
-    for (const item of items) {
-      const precio_lista        = parseFloat(item.precio_lista) || 0;
-      const precio_final        = parseFloat(item.precio_unitario_final) || 0;
-      const cantidad            = parseFloat(item.cantidad) || 1;
-      subtotal       += precio_lista * cantidad;
-      descuento_total += (precio_lista - precio_final) * cantidad;
-    }
-    const total = subtotal - descuento_total;
 
     // Insertar venta
     const { rows: ventaRows } = await client.query(`
@@ -166,8 +202,8 @@ router.post('/', async (req, res, next) => {
     ]);
     const venta = ventaRows[0];
 
-    // Insertar items
-    for (const item of items) {
+    // Insertar items con precios calculados server-side
+    for (const item of itemsCalculados) {
       await client.query(`
         INSERT INTO venta_items
           (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
@@ -175,11 +211,11 @@ router.post('/', async (req, res, next) => {
       `, [
         venta.id,
         item.articulo_id,
-        parseFloat(item.cantidad) || 1,
-        parseFloat(item.precio_lista) || 0,
-        parseFloat(item.descuento_pct) || 0,
-        parseFloat(item.precio_unitario_final) || 0,
-        parseFloat(item.iva_monto) || 0,
+        item.cantidad,
+        item.precio_lista,
+        item.descuento_pct,
+        item.precio_unitario_final,
+        item.iva_monto,
       ]);
     }
 
