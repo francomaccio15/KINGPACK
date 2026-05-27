@@ -312,7 +312,7 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           vi.articulo_id, vi.cantidad, vi.precio_lista,
           vi.descuento_pct, vi.precio_unitario_final, vi.iva_monto,
-          a.nombre AS articulo_nombre, a.codigo AS articulo_codigo,
+          a.nombre, a.codigo,
           a.precio_madre
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
