@@ -49,17 +49,19 @@ async function fetchData(params: Record<string, string | undefined>) {
   if (params.fecha_hasta)  q.set('fecha_hasta', params.fecha_hasta);
   q.set('limit', '200');
 
-  const [pedidosRes, sucursalesRes, proveedoresRes] = await Promise.all([
+  const [pedidosRes, sucursalesRes, proveedoresRes, articulosRes] = await Promise.all([
     serverFetch(`/api/pedidos-compra?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ pedidos: [], count: 0 })),
     serverFetch(`/api/sucursales`,           { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
     serverFetch(`/api/proveedores?limit=500`,{ cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch(`/api/articulos?limit=2000`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ articulos: [] })),
   ]);
 
   return {
-    pedidos:     pedidosRes.pedidos       ?? [],
-    count:       pedidosRes.count         ?? 0,
-    sucursales:  sucursalesRes.sucursales ?? [],
+    pedidos:     pedidosRes.pedidos        ?? [],
+    count:       pedidosRes.count          ?? 0,
+    sucursales:  sucursalesRes.sucursales  ?? [],
     proveedores: proveedoresRes.proveedores ?? [],
+    articulos:   articulosRes.articulos    ?? [],
   };
 }
 
@@ -71,7 +73,7 @@ export default async function PedidosProveedoresPage({
   searchParams: { q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
   requireAuth('/pedidos-proveedores');
-  const { pedidos, count, sucursales, proveedores } = await fetchData(searchParams);
+  const { pedidos, count, sucursales, proveedores, articulos } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.proveedor_id || searchParams.fecha_desde || searchParams.fecha_hasta);
 
   const pendienteCount = pedidos.filter((p: Pedido) => p.estado === 'pendiente').length;
@@ -93,7 +95,7 @@ export default async function PedidosProveedoresPage({
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <NuevoPedido sucursales={sucursales} proveedores={proveedores} />
+          <NuevoPedido sucursales={sucursales} proveedores={proveedores} articulos={articulos} />
 
           {/* Indicador de pendientes */}
           {pendienteCount > 0 && (

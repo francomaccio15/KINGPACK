@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Sucursal   = { id: string; nombre: string };
 type Proveedor  = { id: string; razon_social: string };
 
-interface ArticuloResult {
+interface Articulo {
   id: string;
   nombre: string;
   codigo: string;
@@ -38,29 +38,48 @@ function Spinner() {
 export default function NuevoPedido({
   sucursales,
   proveedores,
+  articulos,
 }: {
   sucursales: Sucursal[];
   proveedores: Proveedor[];
+  articulos: Articulo[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [sucursalId, setSucursalId]     = useState(sucursales[0]?.id ?? '');
-  const [proveedorId, setProveedorId]   = useState('');
-  const [nroFactura, setNroFactura]     = useState('');
-  const [flete, setFlete]               = useState('');
-  const [items, setItems]               = useState<LineItem[]>([]);
+  const [sucursalId, setSucursalId]   = useState(sucursales[0]?.id ?? '');
+  const [proveedorId, setProveedorId] = useState('');
+  const [nroFactura, setNroFactura]   = useState('');
+  const [flete, setFlete]             = useState('');
+  const [items, setItems]             = useState<LineItem[]>([]);
 
-  // ── Artículo search ─────────────────────────────────────────────────────────
-  const [artQ, setArtQ]                 = useState('');
-  const [artResults, setArtResults]     = useState<ArticuloResult[]>([]);
-  const [artLoading, setArtLoading]     = useState(false);
-  const artDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Artículo dropdown ───────────────────────────────────────────────────────
+  const [artQ, setArtQ]           = useState('');
+  const [dropOpen, setDropOpen]   = useState(false);
+  const dropRef                   = useRef<HTMLDivElement>(null);
+
+  const artFiltrados = artQ.trim().length === 0
+    ? articulos
+    : articulos.filter(a =>
+        a.nombre.toLowerCase().includes(artQ.toLowerCase()) ||
+        a.codigo.toLowerCase().includes(artQ.toLowerCase())
+      );
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        setDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // ── Save state ──────────────────────────────────────────────────────────────
-  const [saving, setSaving]             = useState(false);
-  const [saveError, setSaveError]       = useState<string | null>(null);
+  const [saving, setSaving]       = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const reset = () => {
     setSucursalId(sucursales[0]?.id ?? '');
@@ -69,28 +88,11 @@ export default function NuevoPedido({
     setFlete('');
     setItems([]);
     setArtQ('');
-    setArtResults([]);
+    setDropOpen(false);
     setSaveError(null);
   };
 
-  const searchArticulos = useCallback((q: string) => {
-    if (artDebounce.current) clearTimeout(artDebounce.current);
-    if (!q.trim()) { setArtResults([]); return; }
-    artDebounce.current = setTimeout(async () => {
-      setArtLoading(true);
-      try {
-        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&limit=10`);
-        const data = await res.json();
-        setArtResults(data.articulos ?? []);
-      } catch {
-        setArtResults([]);
-      } finally {
-        setArtLoading(false);
-      }
-    }, 280);
-  }, []);
-
-  const addItem = (art: ArticuloResult) => {
+  const addItem = (art: Articulo) => {
     setItems(prev => {
       const existing = prev.find(i => i.articulo_id === art.id);
       if (existing) {
@@ -108,7 +110,7 @@ export default function NuevoPedido({
       }];
     });
     setArtQ('');
-    setArtResults([]);
+    setDropOpen(false);
   };
 
   const updateItem = (idx: number, field: 'cantidad' | 'precio_compra', value: string) => {
@@ -259,42 +261,65 @@ export default function NuevoPedido({
                   </div>
                 </div>
 
-                {/* Buscador de artículos */}
+                {/* Dropdown de artículos */}
                 <div>
                   <label className={labelCls}>Agregar Artículo</label>
-                  <div className="relative">
-                    <input
-                      type="search"
-                      placeholder="Buscar por nombre o código…"
-                      value={artQ}
-                      onChange={e => { setArtQ(e.target.value); searchArticulos(e.target.value); }}
-                      className={inputCls}
-                    />
-                    {artLoading && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Spinner />
-                      </span>
-                    )}
-                    {artResults.length > 0 && (
-                      <ul className="absolute z-10 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-xl overflow-hidden">
-                        {artResults.map(a => (
-                          <li key={a.id}>
-                            <button
-                              type="button"
-                              onClick={() => addItem(a)}
-                              className="w-full text-left px-4 py-2.5 hover:bg-kp-red/10 transition-colors flex items-center justify-between gap-3"
-                            >
-                              <div>
-                                <span className="text-sm font-medium text-kp-white">{a.nombre}</span>
-                                <span className="ml-2 text-xs text-kp-gray font-mono">{a.codigo}</span>
-                              </div>
-                              <span className="text-xs text-kp-gray-lt tabular-nums whitespace-nowrap">
-                                {ars.format(a.precio_madre)}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                  <div className="relative" ref={dropRef}>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o código…"
+                        value={artQ}
+                        onFocus={() => setDropOpen(true)}
+                        onChange={e => { setArtQ(e.target.value); setDropOpen(true); }}
+                        className={inputCls}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDropOpen(v => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-kp-gray hover:text-kp-white transition-colors px-1"
+                        tabIndex={-1}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 transition-transform ${dropOpen ? 'rotate-180' : ''}`}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {dropOpen && (
+                      <div className="absolute z-20 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-2xl flex flex-col" style={{ maxHeight: '260px' }}>
+                        <div className="px-2 pt-2 pb-1 border-b border-kp-border flex-shrink-0">
+                          <p className="text-xs text-kp-gray/60">
+                            {artFiltrados.length} {artFiltrados.length === 1 ? 'artículo' : 'artículos'}
+                          </p>
+                        </div>
+                        <ul className="overflow-y-auto flex-1">
+                          {artFiltrados.length === 0 ? (
+                            <li className="px-4 py-6 text-center text-xs text-kp-gray">
+                              Sin resultados para &ldquo;{artQ}&rdquo;
+                            </li>
+                          ) : (
+                            artFiltrados.map(a => (
+                              <li key={a.id}>
+                                <button
+                                  type="button"
+                                  onMouseDown={e => { e.preventDefault(); addItem(a); }}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-kp-red/10 transition-colors flex items-center justify-between gap-3"
+                                >
+                                  <div className="min-w-0">
+                                    <span className="text-sm font-medium text-kp-white block truncate">{a.nombre}</span>
+                                    <span className="text-xs text-kp-gray font-mono">{a.codigo}</span>
+                                  </div>
+                                  <span className="text-xs text-kp-gray-lt tabular-nums whitespace-nowrap flex-shrink-0">
+                                    {ars.format(a.precio_madre ?? 0)}
+                                  </span>
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      </div>
                     )}
                   </div>
                 </div>
