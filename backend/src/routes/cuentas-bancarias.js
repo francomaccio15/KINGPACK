@@ -17,7 +17,7 @@ router.get('/', async (req, res, next) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, nombre, banco, cbu, activo FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
+      `SELECT id, nombre, banco, titular, alias, cbu, activo FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
       params
     );
     res.json({ cuentas: rows });

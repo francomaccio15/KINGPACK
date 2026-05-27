@@ -37,6 +37,15 @@ interface MedioPago {
   nombre: string;
 }
 
+interface CuentaBancaria {
+  id: string;
+  nombre: string;
+  banco: string | null;
+  titular: string | null;
+  alias: string | null;
+  cbu: string | null;
+}
+
 interface Cheque {
   banco: string;
   numero_cheque: string;
@@ -159,18 +168,23 @@ export default function NuevaVenta({
   const descuentoCliente = selectedClient?.descuento_adicional ?? 0;
 
   // ── Medios de pago
-  const [mediosPago, setMediosPago]   = useState<MedioPago[]>([]);
-  const [medioPagoId, setMedioPagoId] = useState<string>('');
-  const [cheques, setCheques] = useState<Cheque[]>([{ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }]);
+  const [mediosPago, setMediosPago]       = useState<MedioPago[]>([]);
+  const [medioPagoId, setMedioPagoId]     = useState<string>('');
+  const [cheques, setCheques]             = useState<Cheque[]>([{ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }]);
+  const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
+  const [cuentaDestinoId, setCuentaDestinoId]   = useState<string>('');
 
   const selectedMedio = mediosPago.find(m => m.id === medioPagoId);
-  const esCheque = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
+  const esCheque       = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
+  const esTransferencia = selectedMedio
+    ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio.nombre.toLowerCase().includes(k))
+    : false;
 
   // ── Save state
   const [saving, setSaving]     = useState<'preventa' | 'confirmada' | null>(null);
   const [saveError, setSaveError] = useState('');
 
-  // ─── Fetch medios de pago when modal opens ─────────────────────────────────
+  // ─── Fetch medios de pago + cuentas bancarias when modal opens ───────────────
   useEffect(() => {
     if (!open) return;
     apiFetch(`/api/ventas/medios-pago`)
@@ -179,6 +193,14 @@ export default function NuevaVenta({
         const list: MedioPago[] = data.medios_pago ?? data ?? [];
         setMediosPago(list);
         setMedioPagoId(list[0]?.id ?? '');
+      })
+      .catch(() => {});
+    apiFetch(`/api/cuentas-bancarias`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const cuentas: CuentaBancaria[] = data.cuentas ?? [];
+        setCuentasBancarias(cuentas);
+        setCuentaDestinoId(cuentas[0]?.id ?? '');
       })
       .catch(() => {});
   }, [open]);
@@ -399,8 +421,11 @@ export default function NuevaVenta({
       })),
       pagos: medioPagoId
         ? [{
-            medio_pago_id: medioPagoId,
-            monto: subtotalFinal,
+            medio_pago_id:  medioPagoId,
+            monto:          subtotalFinal,
+            cuenta_destino: esTransferencia
+              ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
+              : null,
             cheques: esCheque
               ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
                        .map(c => ({ ...c, importe: parseFloat(c.importe) }))
@@ -919,6 +944,39 @@ export default function NuevaVenta({
                       </select>
                     )}
                   </section>
+
+                  {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
+                  {esTransferencia && cuentasBancarias.length > 0 && (
+                    <section>
+                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                        Cuenta destino
+                      </p>
+                      <select
+                        value={cuentaDestinoId}
+                        onChange={e => setCuentaDestinoId(e.target.value)}
+                        className="w-full bg-kp-surface border border-kp-red/60 rounded-lg px-3 py-2 text-sm text-kp-white
+                          focus:outline-none focus:border-kp-red transition-colors"
+                      >
+                        {cuentasBancarias.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Info de la cuenta seleccionada */}
+                      {(() => {
+                        const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId);
+                        return cc ? (
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                            {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
+                            {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
+                            {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}
+                            {cc.alias   && <p><span className="text-kp-gray-lt font-medium">Alias:</span> {cc.alias}</p>}
+                          </div>
+                        ) : null;
+                      })()}
+                    </section>
+                  )}
 
                   {/* ── Cheques ──────────────────────────────────────────── */}
                   {esCheque && (
