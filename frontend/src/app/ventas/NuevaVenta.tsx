@@ -54,6 +54,7 @@ interface CartItem {
   precio_madre: number;        // fallback base price
   descuento_pct: number;       // combined discount %
   precio_unitario_final: number;
+  stock_disponible: number;    // stock al momento de agregar
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -295,7 +296,6 @@ export default function NuevaVenta({
     setCart(prev => {
       const existing = prev.findIndex(i => i.articulo_id === art.id);
       if (existing !== -1) {
-        // increment quantity
         return prev.map((item, idx) =>
           idx === existing
             ? { ...item, cantidad: item.cantidad + 1 }
@@ -316,6 +316,7 @@ export default function NuevaVenta({
           precio_madre:          art.precio_madre,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
+          stock_disponible:      art.stock_total ?? 0,
         },
       ];
     });
@@ -324,12 +325,41 @@ export default function NuevaVenta({
   // ─── Update quantity ───────────────────────────────────────────────────────
   const updateQty = useCallback((articuloId: string, delta: number) => {
     setCart(prev =>
-      prev
-        .map(item =>
-          item.articulo_id === articuloId
-            ? { ...item, cantidad: Math.max(1, item.cantidad + delta) }
-            : item
+      prev.map(item =>
+        item.articulo_id === articuloId
+          ? { ...item, cantidad: Math.max(1, item.cantidad + delta) }
+          : item
+      )
+    );
+  }, []);
+
+  const setQty = useCallback((articuloId: string, raw: string) => {
+    const val = parseInt(raw, 10);
+    if (isNaN(val) || raw === '') {
+      // Permite borrar el campo temporalmente (lo guardamos como string vacío via trick)
+      setCart(prev =>
+        prev.map(item =>
+          item.articulo_id === articuloId ? { ...item, cantidad: 0 } : item
         )
+      );
+      return;
+    }
+    setCart(prev =>
+      prev.map(item =>
+        item.articulo_id === articuloId
+          ? { ...item, cantidad: Math.max(1, val) }
+          : item
+      )
+    );
+  }, []);
+
+  const commitQty = useCallback((articuloId: string) => {
+    setCart(prev =>
+      prev.map(item =>
+        item.articulo_id === articuloId
+          ? { ...item, cantidad: Math.max(1, item.cantidad || 1) }
+          : item
+      )
     );
   }, []);
 
@@ -386,7 +416,13 @@ export default function NuevaVenta({
         body:    JSON.stringify(body),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? 'Error al guardar la venta');
+      if (!r.ok) {
+        let msg = data.error ?? 'Error al guardar la venta';
+        if (data.detalle?.disponible !== undefined) {
+          msg += ` — disponible: ${data.detalle.disponible}, pedido: ${data.detalle.solicitado}`;
+        }
+        throw new Error(msg);
+      }
       cerrar();
       router.refresh();
     } catch (err: any) {
@@ -588,7 +624,7 @@ export default function NuevaVenta({
                         return (
                           <div
                             key={item.articulo_id}
-                            className={`flex items-center gap-2 py-2.5 ${
+                            className={`relative flex items-center gap-2 py-2.5 ${
                               idx < cart.length - 1 ? 'border-b border-kp-border' : ''
                             }`}
                           >
@@ -622,29 +658,49 @@ export default function NuevaVenta({
                             </div>
 
                             {/* Qty controls */}
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-0.5 shrink-0">
                               <button
                                 onClick={() => updateQty(item.articulo_id, -1)}
-                                className="w-7 h-7 rounded border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:border-kp-gray flex items-center justify-center text-sm leading-none
+                                className="w-7 h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
+                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
                                   transition-colors"
                                 aria-label="Reducir cantidad"
                               >
                                 −
                               </button>
-                              <span className="w-8 text-center text-sm font-semibold text-kp-white tabular-nums">
-                                {item.cantidad}
-                              </span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.cantidad === 0 ? '' : item.cantidad}
+                                onChange={e => setQty(item.articulo_id, e.target.value)}
+                                onBlur={() => commitQty(item.articulo_id)}
+                                onFocus={e => e.target.select()}
+                                className={[
+                                  'w-14 text-center text-sm font-semibold tabular-nums',
+                                  'bg-kp-surface2 border-y border-kp-border outline-none py-1',
+                                  'focus:border-kp-red focus:bg-kp-surface transition-colors',
+                                  item.stock_disponible > 0 && item.cantidad > item.stock_disponible
+                                    ? 'text-amber-400'
+                                    : 'text-kp-white',
+                                ].join(' ')}
+                                aria-label="Cantidad"
+                              />
                               <button
                                 onClick={() => updateQty(item.articulo_id, 1)}
-                                className="w-7 h-7 rounded border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:border-kp-gray flex items-center justify-center text-sm leading-none
+                                className="w-7 h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
+                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
                                   transition-colors"
                                 aria-label="Aumentar cantidad"
                               >
                                 +
                               </button>
                             </div>
+                            {/* Aviso stock insuficiente inline */}
+                            {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
+                              <span className="text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
+                                Stock: {item.stock_disponible}
+                              </span>
+                            )}
 
                             {/* Line subtotal */}
                             <div className="w-24 text-right shrink-0">
