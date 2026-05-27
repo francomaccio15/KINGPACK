@@ -1,4 +1,5 @@
 ﻿import { Suspense } from 'react';
+import Link from 'next/link';
 import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
@@ -68,6 +69,16 @@ async function fetchAlicuotas(): Promise<Alicuota[]> {
   } catch { return []; }
 }
 
+async function fetchStockBajoCount(sucursal_id: string): Promise<number> {
+  try {
+    const qs = new URLSearchParams({ stock_bajo: 'true', activo: 'true', limit: '1' });
+    if (sucursal_id) qs.set('sucursal_id', sucursal_id);
+    const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
+    if (!r.ok) return 0;
+    return (await r.json()).count ?? 0;
+  } catch { return 0; }
+}
+
 async function fetchArticulos(
   sp: Record<string, string>,
   sucursal_id: string,
@@ -107,11 +118,12 @@ export default async function ArticulosPage({
   requireAuth('/articulos');
   const sucursalActivaId = getSucursalActivaId();
 
-  const [listas, categorias, sucursales, alicuotas] = await Promise.all([
+  const [listas, categorias, sucursales, alicuotas, stockBajoCount] = await Promise.all([
     fetchListas(),
     fetchCategorias(),
     fetchSucursales(),
     fetchAlicuotas(),
+    fetchStockBajoCount(sucursalActivaId),
   ]);
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
@@ -155,12 +167,29 @@ export default async function ArticulosPage({
               </span>
             )}
           </div>
-          <p className="text-sm text-kp-gray pl-3">
-            {data.count} {data.count === 1 ? 'artículo' : 'artículos'}
-            {searchParams.stock_bajo === 'true' && ' con stock bajo'}
-            {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'true' && ' activos'}
-            {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'false' && ' inactivos'}
-          </p>
+          <div className="flex items-center gap-3 pl-3 flex-wrap">
+            <p className="text-sm text-kp-gray">
+              {data.count} {data.count === 1 ? 'artículo' : 'artículos'}
+              {searchParams.stock_bajo === 'true' && ' con stock bajo'}
+              {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'true' && ' activos'}
+              {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'false' && ' inactivos'}
+            </p>
+            {/* Acceso directo stock bajo — se oculta cuando ya está activo ese filtro */}
+            {searchParams.stock_bajo !== 'true' && stockBajoCount > 0 && (
+              <Link
+                href={`/articulos?stock_bajo=true${listaActivaId ? `&lista_id=${listaActivaId}` : ''}`}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg
+                  bg-amber-500/10 border border-amber-500/30 text-amber-400
+                  hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                {stockBajoCount} con stock bajo
+              </Link>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
