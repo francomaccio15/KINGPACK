@@ -19,6 +19,8 @@ router.get('/', async (req, res, next) => {
       pedidosPendientes,
       ventas7Dias,
       ultimasVentas,
+      chequesACobrar,
+      chequesAPagar,
     ] = await Promise.all([
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
@@ -84,6 +86,37 @@ router.get('/', async (req, res, next) => {
         WHERE v.deleted_at IS NULL AND v.estado NOT IN ('anulada','preventa') ${sf}
         ORDER BY v.fecha DESC LIMIT 5
       `, p),
+
+      // Cheques a cobrar: cheques recibidos en ventas con vencimiento próximo
+      pool.query(`
+        SELECT vc.id, vc.banco, vc.numero_cheque,
+               vc.fecha_vencimiento::text,
+               vc.importe::float,
+               (vc.fecha_vencimiento - CURRENT_DATE)::int AS dias,
+               COALESCE(c.razon_social, 'Consumidor final') AS referencia
+        FROM venta_cheques vc
+        JOIN ventas v ON v.id = vc.venta_id AND v.deleted_at IS NULL
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        WHERE vc.fecha_vencimiento BETWEEN CURRENT_DATE - 7 AND CURRENT_DATE + 30
+        ORDER BY vc.fecha_vencimiento ASC
+        LIMIT 20
+      `),
+
+      // Cheques a pagar: cheques emitidos en egresos con vencimiento próximo
+      pool.query(`
+        SELECT ec.id, ec.banco, ec.numero_cheque,
+               ec.fecha_vencimiento::text,
+               ec.importe::float,
+               (ec.fecha_vencimiento - CURRENT_DATE)::int AS dias,
+               COALESCE(p.razon_social, e.descripcion, 'Sin referencia') AS referencia
+        FROM egreso_cheques ec
+        JOIN egreso_pagos ep ON ep.id = ec.egreso_pago_id
+        JOIN egresos e ON e.id = ep.egreso_id AND e.deleted_at IS NULL
+        LEFT JOIN proveedores p ON p.id = e.proveedor_id
+        WHERE ec.fecha_vencimiento BETWEEN CURRENT_DATE - 7 AND CURRENT_DATE + 30
+        ORDER BY ec.fecha_vencimiento ASC
+        LIMIT 20
+      `),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
@@ -112,6 +145,8 @@ router.get('/', async (req, res, next) => {
       pedidos_pendientes:  parseInt(pedidosPendientes.rows[0].cantidad),
       ventas_7dias:        ventas7Dias.rows,
       ultimas_ventas:      ultimasVentas.rows,
+      cheques_a_cobrar:    chequesACobrar.rows,
+      cheques_a_pagar:     chequesAPagar.rows,
     });
   } catch (err) { next(err); }
 });

@@ -87,7 +87,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Inicio',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <IcoDashboard /> },
+      { label: 'Resumen diario', href: '/dashboard', icon: <IcoDashboard /> },
     ],
   },
   {

@@ -7,6 +7,16 @@ import Link from 'next/link';
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type DayData = { dia: string; cantidad: number; monto: number };
 
+export type ChequeItem = {
+  id: string;
+  banco: string;
+  numero_cheque: string;
+  fecha_vencimiento: string;
+  importe: number;
+  dias: number;
+  referencia: string;
+};
+
 export type DashboardData = {
   ventas_hoy:        { cantidad: number; monto: number };
   ventas_ayer:       { cantidad: number; monto: number };
@@ -27,6 +37,8 @@ export type DashboardData = {
     id: string; numero: number; total: number;
     fecha: string; estado: string; cliente: string | null;
   }[];
+  cheques_a_cobrar: ChequeItem[];
+  cheques_a_pagar:  ChequeItem[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -207,6 +219,99 @@ function EstadoBadge({ estado }: { estado: string }) {
   );
 }
 
+function VencimientoBadge({ dias }: { dias: number }) {
+  if (dias < 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 whitespace-nowrap">
+        Vencido {Math.abs(dias)}d
+      </span>
+    );
+  }
+  if (dias === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 whitespace-nowrap">
+        Vence hoy
+      </span>
+    );
+  }
+  if (dias <= 7) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 whitespace-nowrap">
+        {dias}d
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 whitespace-nowrap">
+      {dias}d
+    </span>
+  );
+}
+
+function ChequesPanel({ titulo, cheques, acento }: {
+  titulo: string;
+  cheques: ChequeItem[];
+  acento: 'emerald' | 'violet';
+}) {
+  const acentoClasses = {
+    emerald: { border: 'border-emerald-500/20', dot: 'bg-emerald-400', label: 'text-emerald-400', sum: 'text-emerald-400', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    violet:  { border: 'border-violet-500/20',  dot: 'bg-violet-400',  label: 'text-violet-400',  sum: 'text-violet-400',  badge: 'bg-violet-500/10  text-violet-400  border-violet-500/20'  },
+  }[acento];
+
+  const total = cheques.reduce((a, c) => a + c.importe, 0);
+  const vencidos = cheques.filter(c => c.dias < 0).length;
+
+  return (
+    <div className={`rounded-xl border bg-kp-surface flex flex-col ${acentoClasses.border}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-kp-border">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${acentoClasses.dot}`} />
+          <p className={`text-xs font-bold uppercase tracking-widest ${acentoClasses.label}`}>{titulo}</p>
+          <span className="text-[10px] font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded px-1.5 py-0.5">
+            {cheques.length}
+          </span>
+          {vencidos > 0 && (
+            <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 py-0.5">
+              {vencidos} vencido{vencidos !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <span className={`text-sm font-bold ${acentoClasses.sum}`}>{fmtCompact(total)}</span>
+      </div>
+
+      {/* Rows */}
+      <div className="divide-y divide-kp-border/60 flex-1">
+        {cheques.length === 0 ? (
+          <p className="px-5 py-6 text-xs text-kp-gray text-center">
+            Sin cheques próximos a vencer
+          </p>
+        ) : cheques.map(c => (
+          <div key={c.id} className="flex items-center gap-3 px-5 py-3 hover:bg-kp-surface2 transition-colors">
+            {/* Banco + número */}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-kp-white truncate">{c.referencia}</p>
+              <p className="text-[10px] text-kp-gray mt-0.5 truncate">
+                {c.banco} · #{c.numero_cheque}
+              </p>
+            </div>
+            {/* Fecha + badge */}
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              <span className="text-xs font-bold text-kp-white">{fmt(c.importe)}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-kp-gray whitespace-nowrap">
+                  {new Date(c.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
+                </span>
+                <VencimientoBadge dias={c.dias} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IcoCart   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
 const IcoReceipt= () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="9" x2="16" y2="9"/></svg>;
@@ -216,6 +321,7 @@ const IcoBox    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const IcoOrder  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
 const IcoRefresh= () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg>;
 const IcoWarn   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const IcoCheque = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 14h4"/><path d="M14 14h4"/></svg>;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardView({
@@ -240,7 +346,7 @@ export default function DashboardView({
   if (!data) {
     return (
       <div className="p-8 flex flex-col items-center justify-center gap-4 text-kp-gray">
-        <p>No se pudo cargar el dashboard.</p>
+        <p>No se pudo cargar el resumen diario.</p>
         <button onClick={refresh} className="text-sm text-kp-red hover:underline">Reintentar</button>
       </div>
     );
@@ -250,6 +356,8 @@ export default function DashboardView({
   const margenHoy = d.ventas_hoy.monto > 0 ? (d.resultado_hoy / d.ventas_hoy.monto) * 100 : 0;
   const margenMes = d.ventas_mes.monto > 0 ? (d.resultado_mes / d.ventas_mes.monto) * 100 : 0;
   const totalSemana = d.ventas_7dias.reduce((a, b) => a + b.monto, 0);
+  const tienesCheques = d.cheques_a_cobrar.length > 0 || d.cheques_a_pagar.length > 0;
+  const chequesVencidos = [...d.cheques_a_cobrar, ...d.cheques_a_pagar].filter(c => c.dias < 0).length;
 
   return (
     <div className="p-5 md:p-7 space-y-6 max-w-6xl mx-auto">
@@ -257,11 +365,16 @@ export default function DashboardView({
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-kp-white">
-            {greeting}, <span className="text-kp-red">{userName.split(' ')[0]}</span>
-          </h1>
-          <p className="text-sm text-kp-gray mt-0.5 capitalize">
-            {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-1 h-5 bg-kp-red rounded-full block" />
+            <h1 className="text-xl font-bold text-kp-white">Resumen diario</h1>
+          </div>
+          <p className="text-sm text-kp-gray pl-3">
+            {greeting}, <span className="text-kp-white font-medium">{userName.split(' ')[0]}</span>
+            {' · '}
+            <span className="capitalize">
+              {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -286,8 +399,14 @@ export default function DashboardView({
       </div>
 
       {/* ── Alerts ── */}
-      {(d.stock_bajo > 0 || d.pedidos_pendientes > 0) && (
+      {(d.stock_bajo > 0 || d.pedidos_pendientes > 0 || chequesVencidos > 0) && (
         <div className="flex flex-wrap gap-2">
+          {chequesVencidos > 0 && (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+              <IcoCheque />
+              {chequesVencidos} cheque{chequesVencidos !== 1 ? 's' : ''} vencido{chequesVencidos !== 1 ? 's' : ''}
+            </div>
+          )}
           {d.stock_bajo > 0 && (
             <Link href="/articulos?stock_bajo=true" className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/15 transition-colors">
               <IcoWarn />
@@ -386,6 +505,29 @@ export default function DashboardView({
         </div>
         <AreaChart data={d.ventas_7dias} />
       </section>
+
+      {/* ── Cheques próximos ── */}
+      {tienesCheques && (
+        <section>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
+            <span className="w-5 h-px bg-kp-border inline-block" />
+            Cheques próximos · 30 días
+            <span className="flex-1 h-px bg-kp-border inline-block" />
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChequesPanel
+              titulo="A cobrar"
+              cheques={d.cheques_a_cobrar}
+              acento="emerald"
+            />
+            <ChequesPanel
+              titulo="A pagar"
+              cheques={d.cheques_a_pagar}
+              acento="violet"
+            />
+          </div>
+        </section>
+      )}
 
       {/* ── Recent Sales ── */}
       <section>
