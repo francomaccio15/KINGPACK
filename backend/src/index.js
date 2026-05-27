@@ -21,6 +21,7 @@ const egresosRouter           = require('./routes/egresos');
 const rubrosGastosRouter      = require('./routes/rubros-gastos');
 const cuentasBancariasRouter  = require('./routes/cuentas-bancarias');
 const anticiposRouter         = require('./routes/anticipos-proveedores');
+const dashboardRouter         = require('./routes/dashboard');
 const { verifyToken }         = require('./middleware/auth');
 
 const app = express();
@@ -51,6 +52,7 @@ app.use('/api/egresos',               egresosRouter);
 app.use('/api/rubros-gastos',         rubrosGastosRouter);
 app.use('/api/cuentas-bancarias',     cuentasBancariasRouter);
 app.use('/api/anticipos-proveedores', anticiposRouter);
+app.use('/api/dashboard',             dashboardRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
