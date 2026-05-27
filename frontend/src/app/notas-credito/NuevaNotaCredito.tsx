@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NotaCredito, NcItem } from './page';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -8,6 +8,118 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
   return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string,string>||{}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } });
 };
+
+// ─── Buscador de artículos inline ────────────────────────────────────────────
+interface ArtResult { id: string; nombre: string; codigo: string; precio_madre: number }
+
+function ArticuloInput({
+  value,
+  onChange,
+  onSelect,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSelect: (art: ArtResult) => void;
+}) {
+  const [query,    setQuery]    = useState(value);
+  const [results,  setResults]  = useState<ArtResult[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [open,     setOpen]     = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef     = useRef<HTMLDivElement>(null);
+
+  // Sync external value changes (e.g., clear)
+  useEffect(() => { setQuery(value); }, [value]);
+
+  // Cerrar al click fuera
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Búsqueda debounced
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim() || query.length < 2) { setResults([]); setOpen(false); return; }
+
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await apiFetch(`/api/articulos?q=${encodeURIComponent(query.trim())}&limit=20`);
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        setResults(data.articulos ?? []);
+        setOpen(true);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 280);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
+
+  const handleChange = (v: string) => {
+    setQuery(v);
+    onChange(v);          // propagate text immediately
+  };
+
+  const handleSelect = (art: ArtResult) => {
+    setQuery(art.nombre);
+    onChange(art.nombre);
+    onSelect(art);
+    setOpen(false);
+    setResults([]);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <div className="relative">
+        <input
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Buscar artículo o escribir descripción…"
+          className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white placeholder:text-kp-gray/50 outline-none py-0.5 pr-5 transition-colors"
+        />
+        {loading && (
+          <span className="absolute right-0 top-1/2 -translate-y-1/2">
+            <svg className="animate-spin h-3 w-3 text-kp-gray" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+          </span>
+        )}
+      </div>
+
+      {open && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-kp-surface border border-kp-border rounded-xl shadow-2xl shadow-black/60 overflow-hidden max-h-52 overflow-y-auto">
+          {results.map(art => (
+            <button
+              key={art.id}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); handleSelect(art); }}
+              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-kp-surface2 transition-colors border-b border-kp-border/40 last:border-0"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
+                <p className="text-[10px] text-kp-gray font-mono">{art.codigo}</p>
+              </div>
+              <span className="text-xs text-kp-gray-lt tabular-nums shrink-0">
+                {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(art.precio_madre)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Cliente        = { id: string; razon_social: string; cuit: string | null };
 type Sucursal       = { id: string; nombre: string };
@@ -63,6 +175,15 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     setItems(prev => prev.map((it, idx) => {
       if (idx !== i) return it;
       const updated = { ...it, [field]: field === 'descripcion' ? val : (parseFloat(String(val)) || 0) };
+      updated.subtotal = updated.cantidad * updated.precio_unitario;
+      return updated;
+    }));
+  };
+
+  const selectArticulo = (i: number, art: ArtResult) => {
+    setItems(prev => prev.map((it, idx) => {
+      if (idx !== i) return it;
+      const updated = { ...it, descripcion: art.nombre, precio_unitario: art.precio_madre };
       updated.subtotal = updated.cantidad * updated.precio_unitario;
       return updated;
     }));
@@ -234,12 +355,11 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
               {/* Filas */}
               <div className="divide-y divide-kp-border/40">
                 {items.map((it, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 items-center bg-kp-surface">
-                    <input
+                  <div key={i} className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2.5 items-center bg-kp-surface">
+                    <ArticuloInput
                       value={it.descripcion}
-                      onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                      placeholder="Descripción del artículo o servicio"
-                      className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white placeholder:text-kp-gray/50 outline-none py-0.5 transition-colors"
+                      onChange={v => updateItem(i, 'descripcion', v)}
+                      onSelect={art => selectArticulo(i, art)}
                     />
                     <input
                       type="number" min="0.01" step="any"
