@@ -131,11 +131,11 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── POST /api/notas-credito — solo admin ─────────────────────────────────────
+// ─── POST /api/notas-credito — todos los roles autenticados ──────────────────
 // Efectos colaterales (en transacción):
 //   1. Restaura stock para ítems con articulo_id (devolución de mercadería)
 //   2. Acredita la cuenta corriente del cliente (haber = total → saldo a favor)
-router.post('/', requireRol('administrador'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const {

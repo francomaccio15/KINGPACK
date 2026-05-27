@@ -56,7 +56,7 @@ function LetraBadge({ letra }: { letra: string | null }) {
 
 export default function NotasCreditoView({ notasIniciales, totalCount, clientes, sucursales, tiposNC }: Props) {
   const { user } = useAuth();
-  const isAdmin  = user?.rol === 'administrador';
+  const isAdmin  = user?.rol === 'administrador'; // anular y eliminar solo admin
 
   const [notas,        setNotas]        = useState<NotaCredito[]>(notasIniciales);
   const [showForm,     setShowForm]     = useState(false);
@@ -129,14 +129,12 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
             {filtroEstado ? ` · ${filtroEstado}` : ''}
           </p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 transition-colors"
-          >
-            <IcoPlus /> Nueva Nota de Crédito
-          </button>
-        )}
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 transition-colors"
+        >
+          <IcoPlus /> Nueva Nota de Crédito
+        </button>
       </div>
 
       {/* ── Filtros ── */}
