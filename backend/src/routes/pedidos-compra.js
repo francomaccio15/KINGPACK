@@ -270,6 +270,34 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
   }
 });
 
+// ─── DELETE /api/pedidos-compra/:id ──────────────────────────────────────────
+router.delete('/:id', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const { rows } = await client.query(
+      `SELECT id, stock_acreditado FROM pedidos_compra WHERE id = $1`, [id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Pedido no encontrado' });
+    if (rows[0].stock_acreditado) {
+      return res.status(400).json({ error: 'No se puede eliminar un pedido con stock ya acreditado' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM pedido_items   WHERE pedido_id = $1`, [id]);
+    await client.query(`DELETE FROM pedidos_compra WHERE id = $1`,        [id]);
+    await client.query('COMMIT');
+
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PATCH /api/pedidos-compra/:id/estado ─────────────────────────────────────
 router.patch('/:id/estado', async (req, res, next) => {
   try {
