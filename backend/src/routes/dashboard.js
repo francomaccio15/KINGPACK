@@ -23,6 +23,8 @@ router.get('/', async (req, res, next) => {
       chequesAPagar,
       ventasPorMedio,
       transaccionesHoy,
+      cobrosPorCuentaHoy,
+      cobrosPorCuentaMes,
     ] = await Promise.all([
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
@@ -159,6 +161,39 @@ router.get('/', async (req, res, next) => {
         ORDER BY v.fecha DESC
         LIMIT 25
       `, p),
+
+      // Cobros de HOY por cuenta bancaria destino
+      pool.query(`
+        SELECT
+          vp.cuenta_destino,
+          COUNT(DISTINCT v.id)::int       AS cantidad,
+          COALESCE(SUM(vp.monto),0)::float AS monto
+        FROM venta_pagos vp
+        JOIN ventas v ON v.id = vp.venta_id
+          AND v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND v.fecha::date = CURRENT_DATE
+          ${sucId ? 'AND v.sucursal_id = $1' : ''}
+        WHERE vp.cuenta_destino IS NOT NULL
+        GROUP BY vp.cuenta_destino
+        ORDER BY monto DESC
+      `, p),
+
+      // Cobros del MES por cuenta bancaria destino
+      pool.query(`
+        SELECT
+          vp.cuenta_destino,
+          COALESCE(SUM(vp.monto),0)::float AS monto_mes
+        FROM venta_pagos vp
+        JOIN ventas v ON v.id = vp.venta_id
+          AND v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND date_trunc('month', v.fecha) = date_trunc('month', CURRENT_DATE)
+          ${sucId ? 'AND v.sucursal_id = $1' : ''}
+        WHERE vp.cuenta_destino IS NOT NULL
+        GROUP BY vp.cuenta_destino
+        ORDER BY monto_mes DESC
+      `, p),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
@@ -189,8 +224,10 @@ router.get('/', async (req, res, next) => {
       ultimas_ventas:      ultimasVentas.rows,
       cheques_a_cobrar:    chequesACobrar.rows,
       cheques_a_pagar:     chequesAPagar.rows,
-      ventas_por_medio:    ventasPorMedio.rows,
-      transacciones_hoy:   transaccionesHoy.rows,
+      ventas_por_medio:       ventasPorMedio.rows,
+      transacciones_hoy:      transaccionesHoy.rows,
+      cobros_por_cuenta_hoy:  cobrosPorCuentaHoy.rows,
+      cobros_por_cuenta_mes:  cobrosPorCuentaMes.rows,
     });
   } catch (err) { next(err); }
 });

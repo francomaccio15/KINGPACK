@@ -23,6 +23,13 @@ export type MedioPagoData = {
   monto:    number;
 };
 
+export type CuentaData = {
+  cuenta_destino: string;
+  cantidad:       number;
+  monto:          number;
+  monto_mes?:     number;
+};
+
 export type TransaccionHoy = {
   id:         string;
   numero:     number;
@@ -53,10 +60,12 @@ export type DashboardData = {
     id: string; numero: number; total: number;
     fecha: string; estado: string; cliente: string | null;
   }[];
-  cheques_a_cobrar:  ChequeItem[];
-  cheques_a_pagar:   ChequeItem[];
-  ventas_por_medio:  MedioPagoData[];
-  transacciones_hoy: TransaccionHoy[];
+  cheques_a_cobrar:       ChequeItem[];
+  cheques_a_pagar:        ChequeItem[];
+  ventas_por_medio:       MedioPagoData[];
+  transacciones_hoy:      TransaccionHoy[];
+  cobros_por_cuenta_hoy:  CuentaData[];
+  cobros_por_cuenta_mes:  { cuenta_destino: string; monto_mes: number }[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -484,6 +493,106 @@ function CobrosDelDia({
   );
 }
 
+// ─── CuentasBancariasPanel ────────────────────────────────────────────────────
+function CuentasBancariasPanel({
+  hoy,
+  mes,
+}: {
+  hoy: CuentaData[];
+  mes: { cuenta_destino: string; monto_mes: number }[];
+}) {
+  if (hoy.length === 0 && mes.length === 0) return null;
+
+  // Merge hoy + mes keyed by cuenta_destino
+  const allCuentas = Array.from(
+    new Set([...hoy.map(c => c.cuenta_destino), ...mes.map(c => c.cuenta_destino)])
+  );
+
+  const totalHoy = hoy.reduce((a, c) => a + c.monto, 0);
+
+  // Color palette per account (cycles)
+  const palettes = [
+    { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', bar: 'bg-emerald-500', dot: 'bg-emerald-400' },
+    { bg: 'bg-sky-500/10',     border: 'border-sky-500/20',     text: 'text-sky-400',     bar: 'bg-sky-500',     dot: 'bg-sky-400'     },
+    { bg: 'bg-violet-500/10',  border: 'border-violet-500/20',  text: 'text-violet-400',  bar: 'bg-violet-500',  dot: 'bg-violet-400'  },
+    { bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   text: 'text-amber-400',   bar: 'bg-amber-500',   dot: 'bg-amber-400'   },
+    { bg: 'bg-rose-500/10',    border: 'border-rose-500/20',    text: 'text-rose-400',    bar: 'bg-rose-500',    dot: 'bg-rose-400'    },
+  ];
+
+  return (
+    <section className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+          <span className="w-5 h-px bg-kp-border inline-block" />
+          Cuentas bancarias · cobros
+          <span className="flex-1 h-px bg-kp-border inline-block" />
+        </p>
+        {totalHoy > 0 && (
+          <span className="text-xs text-kp-gray ml-3 flex-shrink-0">
+            Hoy total: <span className="text-kp-white font-bold">{fmt(totalHoy)}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {allCuentas.map((cuenta, i) => {
+          const pal     = palettes[i % palettes.length];
+          const dataHoy = hoy.find(c => c.cuenta_destino === cuenta);
+          const dataMes = mes.find(c => c.cuenta_destino === cuenta);
+          const montoHoy = dataHoy?.monto ?? 0;
+          const montoMes = dataMes?.monto_mes ?? 0;
+          const pct      = totalHoy > 0 ? (montoHoy / totalHoy) * 100 : 0;
+
+          // Shorten name for display
+          const shortName = cuenta.length > 28 ? cuenta.slice(0, 26) + '…' : cuenta;
+
+          return (
+            <div key={cuenta} className={`rounded-xl border ${pal.border} bg-kp-surface p-4 flex flex-col gap-3`}>
+              {/* Nombre cuenta */}
+              <div className="flex items-start gap-2">
+                <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${pal.dot}`} />
+                <p className="text-xs font-semibold text-kp-white leading-tight">{shortName}</p>
+              </div>
+
+              {/* HOY */}
+              <div>
+                <p className="text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Hoy</p>
+                <p className={`text-xl font-bold leading-none ${pal.text}`}>
+                  {fmt(montoHoy)}
+                </p>
+                {dataHoy && (
+                  <p className="text-[10px] text-kp-gray mt-1">
+                    {dataHoy.cantidad} {dataHoy.cantidad === 1 ? 'operación' : 'operaciones'}
+                    {pct > 0 && ` · ${pct.toFixed(1)}%`}
+                  </p>
+                )}
+                {montoHoy === 0 && (
+                  <p className="text-[10px] text-kp-gray mt-1">Sin movimientos hoy</p>
+                )}
+              </div>
+
+              {/* Barra proporcional */}
+              <div className="h-1 rounded-full bg-kp-border/40 overflow-hidden">
+                <div className={`h-full rounded-full ${pal.bar} opacity-70 transition-all`} style={{ width: `${pct}%` }} />
+              </div>
+
+              {/* MES */}
+              <div className="pt-1 border-t border-kp-border/50">
+                <p className="text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Este mes</p>
+                <p className="text-sm font-semibold text-kp-white tabular-nums">
+                  {fmt(montoMes)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardView({
   data, userName,
@@ -623,6 +732,12 @@ export default function DashboardView({
       <CobrosDelDia
         medios={d.ventas_por_medio ?? []}
         transacciones={d.transacciones_hoy ?? []}
+      />
+
+      {/* ── Cuentas bancarias ── */}
+      <CuentasBancariasPanel
+        hoy={d.cobros_por_cuenta_hoy ?? []}
+        mes={d.cobros_por_cuenta_mes ?? []}
       />
 
       {/* ── KPI Mes ── */}
