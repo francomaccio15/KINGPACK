@@ -306,11 +306,12 @@ router.get('/pdf-precios', async (req, res, next) => {
 // ?q=              busca en nombre o código
 // ?categoria_id=   filtra por categoría
 // ?activo=         'true' (default) | 'false' | 'all'
+// ?stock_bajo=     'true' — solo artículos con cantidad <= stock_minimo
 // ?limit=          max 1000, default 500
 // ?offset=         default 0
 router.get('/', async (req, res, next) => {
   try {
-    const { q, categoria_id, lista_id, sucursal_id, activo = 'true', limit = 500, offset = 0 } = req.query;
+    const { q, categoria_id, lista_id, sucursal_id, activo = 'true', stock_bajo, limit = 500, offset = 0 } = req.query;
 
     const conditions = ['a.deleted_at IS NULL'];
     const params = [];
@@ -374,6 +375,10 @@ router.get('/', async (req, res, next) => {
       `;
     }
 
+    if (stock_bajo === 'true') {
+      conditions.push('COALESCE(st.stock_bajo, false) = true');
+    }
+
     const where       = conditions.join(' AND ');
     const countParams = params.slice(0, joinParamCount > 0 ? -joinParamCount : undefined);
 
@@ -403,8 +408,12 @@ router.get('/', async (req, res, next) => {
         LIMIT $${idx} OFFSET $${idx + 1}
       `, params),
       pool.query(
-        `SELECT COUNT(*) FROM articulos a WHERE ${where}`,
-        countParams
+        stock_bajo === 'true'
+          ? `SELECT COUNT(*) FROM articulos a
+             LEFT JOIN (${stockSubquery}) st ON st.articulo_id = a.id
+             WHERE ${where}`
+          : `SELECT COUNT(*) FROM articulos a WHERE ${where}`,
+        stock_bajo === 'true' ? params.slice(0, -2) : countParams
       ),
     ]);
 

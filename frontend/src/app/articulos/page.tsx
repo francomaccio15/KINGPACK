@@ -73,10 +73,11 @@ async function fetchArticulos(
   sucursal_id: string,
 ): Promise<{ count: number; articulos: Articulo[] } | { error: string }> {
   const qs = new URLSearchParams();
-  if (sp.q)            qs.set('q', sp.q);
-  if (sp.categoria_id) qs.set('categoria_id', sp.categoria_id);
-  if (sp.lista_id)     qs.set('lista_id', sp.lista_id);
-  if (sucursal_id)     qs.set('sucursal_id', sucursal_id);
+  if (sp.q)             qs.set('q', sp.q);
+  if (sp.categoria_id)  qs.set('categoria_id', sp.categoria_id);
+  if (sp.lista_id)      qs.set('lista_id', sp.lista_id);
+  if (sp.stock_bajo)    qs.set('stock_bajo', sp.stock_bajo);
+  if (sucursal_id)      qs.set('sucursal_id', sucursal_id);
   qs.set('activo', sp.activo || 'true');
   try {
     const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
@@ -155,9 +156,10 @@ export default async function ArticulosPage({
             )}
           </div>
           <p className="text-sm text-kp-gray pl-3">
-            {data.count} {data.count === 1 ? 'registro' : 'registros'}
-            {(searchParams.activo || 'true') === 'true' && ' activos'}
-            {(searchParams.activo || 'true') === 'false' && ' inactivos'}
+            {data.count} {data.count === 1 ? 'artículo' : 'artículos'}
+            {searchParams.stock_bajo === 'true' && ' con stock bajo'}
+            {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'true' && ' activos'}
+            {searchParams.stock_bajo !== 'true' && (searchParams.activo || 'true') === 'false' && ' inactivos'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -191,7 +193,7 @@ export default async function ArticulosPage({
 
       {/* ── Filtros ── */}
       <Suspense fallback={<div className="h-10 bg-kp-surface rounded-lg animate-pulse" />}>
-        <FiltrosArticulos categorias={categorias} />
+        <FiltrosArticulos categorias={categorias} stockBajoActivo={searchParams.stock_bajo === 'true'} />
       </Suspense>
 
       {/* ── Tabla ── */}

@@ -289,7 +289,7 @@ export default function DashboardView({
       {(d.stock_bajo > 0 || d.pedidos_pendientes > 0) && (
         <div className="flex flex-wrap gap-2">
           {d.stock_bajo > 0 && (
-            <Link href="/articulos" className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/15 transition-colors">
+            <Link href="/articulos?stock_bajo=true" className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/15 transition-colors">
               <IcoWarn />
               {d.stock_bajo} artículo{d.stock_bajo !== 1 ? 's' : ''} con stock bajo
               <span className="text-amber-500/60 ml-1">→</span>
