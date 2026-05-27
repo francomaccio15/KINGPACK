@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import SucursalSelector from './SucursalSelector';
+import NotifBell from './NotifBell';
 
 interface Sucursal { id: string; nombre: string; }
 
@@ -78,7 +79,7 @@ function AppShell({
               </span>
             </h1>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
             {user.rol === 'cajero' ? (
               <span className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-md bg-kp-surface2 border border-kp-border text-kp-gray-lt">
                 {sucursales.find(s => s.id === user.sucursal_default_id)?.nombre ?? 'Sucursal'}
@@ -86,6 +87,7 @@ function AppShell({
             ) : (
               <SucursalSelector sucursales={sucursales} activaId={activaId ?? ''} />
             )}
+            {user.rol === 'administrador' && <NotifBell />}
             <UserMenu nombre={user.nombre} rol={user.rol} />
           </div>
         </div>
