@@ -192,11 +192,14 @@ export default function NuevaVenta({
   // ID del medio de pago "Saldo a favor" (insertado en la DB)
   const SALDO_FAVOR_MP_ID = 'b1122bd5-2aac-4b21-bbc0-739729681c1e';
 
+  // ── Caja state
+  const [cajaAbierta, setCajaAbierta] = useState<boolean | null>(null); // null = checking
+
   // ── Save state
   const [saving, setSaving]     = useState<'preventa' | 'confirmada' | null>(null);
   const [saveError, setSaveError] = useState('');
 
-  // ─── Fetch medios de pago + cuentas bancarias when modal opens ───────────────
+  // ─── Fetch medios de pago + cuentas bancarias + estado caja when modal opens ─
   useEffect(() => {
     if (!open) return;
     apiFetch(`/api/ventas/medios-pago`)
@@ -217,6 +220,19 @@ export default function NuevaVenta({
       .catch(() => {});
   }, [open]);
 
+  // ─── Verificar caja abierta cuando cambia sucursal o se abre el modal ────────
+  useEffect(() => {
+    if (!open || !sucursalId) return;
+    setCajaAbierta(null);
+    apiFetch(`/api/caja?sucursal_id=${sucursalId}&estado=abierta&limit=1`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const cajas: any[] = data.cajas ?? [];
+        setCajaAbierta(cajas.length > 0);
+      })
+      .catch(() => setCajaAbierta(true)); // en caso de error, no bloquear
+  }, [open, sucursalId]);
+
   // ─── Reset when closed ─────────────────────────────────────────────────────
   const resetModal = useCallback(() => {
     setArtQuery('');
@@ -232,6 +248,7 @@ export default function NuevaVenta({
     setSaving(null);
     setSucursalId(sucursales[0]?.id ?? '');
     setSaldoAFavorAplicado(0);
+    setCajaAbierta(null);
   }, [sucursales]);
 
   const cerrar = useCallback(() => {
@@ -563,6 +580,32 @@ export default function NuevaVenta({
               {/* ══ LEFT PANEL — Artículos + Carrito ══════════════════════ */}
               <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4">
 
+                {/* Caja cerrada — panel bloqueante */}
+                {cajaAbierta === false && (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
+                    <div className="w-16 h-16 rounded-2xl bg-kp-red/10 border border-kp-red/30 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-8 h-8 text-kp-red">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-base font-bold text-kp-white mb-1">Caja cerrada</p>
+                      <p className="text-sm text-kp-gray">No se pueden registrar ventas.<br/>Primero abrí la caja de esta sucursal.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Verificando estado de caja */}
+                {cajaAbierta === null && (
+                  <div className="flex-1 flex items-center justify-center">
+                    <Spinner />
+                  </div>
+                )}
+
+                {/* Contenido normal solo si caja abierta */}
+                {cajaAbierta === true && (
+                  <>
                 {/* Article search */}
                 <div>
                   <label className="block text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
@@ -781,6 +824,8 @@ export default function NuevaVenta({
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </div>
 
               {/* ══ RIGHT PANEL — Resumen ════════════════════════════════ */}
@@ -1178,7 +1223,8 @@ export default function NuevaVenta({
 
                   <button
                     onClick={() => handleSave('confirmada')}
-                    disabled={cartEmpty || saving !== null}
+                    disabled={cartEmpty || saving !== null || cajaAbierta !== true}
+                    title={cajaAbierta === false ? 'La caja está cerrada' : undefined}
                     className="w-full bg-kp-red hover:bg-kp-red-dark text-white font-semibold px-4 py-2.5 rounded-lg
                       transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed
                       shadow-lg shadow-kp-red/20"
@@ -1187,6 +1233,8 @@ export default function NuevaVenta({
                       <span className="flex items-center justify-center gap-2">
                         <Spinner /> Confirmando…
                       </span>
+                    ) : cajaAbierta === false ? (
+                      'Caja cerrada'
                     ) : (
                       'Confirmar Venta'
                     )}

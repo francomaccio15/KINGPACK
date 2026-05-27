@@ -129,6 +129,17 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Todos los ítems deben tener articulo_id' });
     }
 
+    // Verificar caja abierta antes de confirmar una venta
+    if (estado === 'confirmada') {
+      const { rows: cajaRows } = await pool.query(
+        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+        [sucursal_id]
+      );
+      if (!cajaRows[0]) {
+        return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja antes de registrar ventas.' });
+      }
+    }
+
     await client.query('BEGIN');
 
     // Fetchear precios reales desde la DB — no confiar en el cliente

@@ -28,7 +28,9 @@ const TIPO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function DetalleCajaPage({ params }: { params: { id: string } }) {
-  requireAuth('/caja');
+  const user = requireAuth('/caja');
+  const esAdmin = user.rol === 'administrador';
+
   let caja: any = null;
   let movimientos: any[] = [];
   let mediosPago: any[] = [];
@@ -52,10 +54,25 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     );
   }
 
+  // Cajeros solo ven movimientos de efectivo
+  const movimientosFiltrados = esAdmin
+    ? movimientos
+    : movimientos.filter((m: any) =>
+        m.tipo !== 'venta' || (m.medio_pago ?? '').toLowerCase().includes('efectivo')
+      );
+
+  // Recalcular KPIs a partir de los movimientos filtrados
+  const totalIngresosVista = movimientosFiltrados
+    .filter((m: any) => ['ingreso', 'venta'].includes(m.tipo))
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+  const totalEgresosVista = movimientosFiltrados
+    .filter((m: any) => !['ingreso', 'venta'].includes(m.tipo))
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+
   const abierta = caja.estado === 'abierta';
-  const saldoSistema = parseFloat(caja.saldo_inicial)
-    + parseFloat(caja.total_ingresos)
-    - parseFloat(caja.total_egresos);
+  const saldoSistema = esAdmin
+    ? parseFloat(caja.saldo_inicial) + parseFloat(caja.total_ingresos) - parseFloat(caja.total_egresos)
+    : parseFloat(caja.saldo_inicial) + totalIngresosVista - totalEgresosVista;
 
   const diff = caja.diferencia != null ? parseFloat(caja.diferencia) : null;
   const diffColor = diff == null || Math.abs(diff) < 0.01
@@ -97,8 +114,8 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           <p className="text-sm text-kp-gray pl-3">Apertura: {fecha}</p>
         </div>
 
-        {/* Acciones */}
-        {abierta && (
+        {/* Acciones (solo admin) */}
+        {abierta && esAdmin && (
           <div className="flex gap-2">
             <RegistrarMovimiento cajaId={caja.id} mediosPago={mediosPago} />
             <CerrarCaja cajaId={caja.id} saldoSistema={saldoSistema} />
@@ -113,23 +130,27 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           <p className="text-lg font-bold tabular-nums text-kp-white">{fmt(caja.saldo_inicial)}</p>
         </div>
         <div className="bg-kp-surface2 border border-green-500/20 rounded-xl p-4">
-          <p className="text-xs text-green-400/70 uppercase tracking-widest font-semibold mb-1">Ingresos</p>
-          <p className="text-lg font-bold tabular-nums text-green-400">+{fmt(caja.total_ingresos)}</p>
+          <p className="text-xs text-green-400/70 uppercase tracking-widest font-semibold mb-1">
+            Ingresos{!esAdmin ? ' (efectivo)' : ''}
+          </p>
+          <p className="text-lg font-bold tabular-nums text-green-400">
+            +{fmt(esAdmin ? caja.total_ingresos : totalIngresosVista)}
+          </p>
         </div>
         <div className="bg-kp-surface2 border border-kp-red/20 rounded-xl p-4">
           <p className="text-xs text-kp-red/70 uppercase tracking-widest font-semibold mb-1">Egresos</p>
-          <p className="text-lg font-bold tabular-nums text-kp-red">−{fmt(caja.total_egresos)}</p>
+          <p className="text-lg font-bold tabular-nums text-kp-red">
+            −{fmt(esAdmin ? caja.total_egresos : totalEgresosVista)}
+          </p>
         </div>
         <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4">
-          <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">
-            {abierta ? 'Saldo sistema' : 'Saldo sistema'}
-          </p>
+          <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">Saldo sistema</p>
           <p className="text-lg font-bold tabular-nums text-kp-white">{fmt(saldoSistema)}</p>
         </div>
       </div>
 
-      {/* Arqueo (solo cerradas) */}
-      {!abierta && (
+      {/* Arqueo (solo cerradas y solo admin) */}
+      {!abierta && esAdmin && (
         <div className={[
           'rounded-xl border p-5 flex flex-wrap gap-6',
           diff != null && Math.abs(diff) > 0.01
@@ -168,9 +189,9 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
       <div className="rounded-xl border border-kp-border overflow-hidden">
         <div className="bg-kp-surface2 border-b border-kp-border px-4 py-3 flex items-center justify-between">
           <h3 className="text-sm font-bold uppercase tracking-wide text-kp-gray">
-            Movimientos
+            Movimientos{!esAdmin ? ' — Efectivo' : ''}
           </h3>
-          <span className="text-xs text-kp-gray/60">{movimientos.length} registros</span>
+          <span className="text-xs text-kp-gray/60">{movimientosFiltrados.length} registros</span>
         </div>
         <table className="min-w-full text-sm">
           <thead>
@@ -183,7 +204,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
             </tr>
           </thead>
           <tbody className="bg-kp-surface divide-y divide-kp-border">
-            {movimientos.map((m: any) => {
+            {movimientosFiltrados.map((m: any) => {
               const esIngreso = ['ingreso', 'venta'].includes(m.tipo);
               return (
                 <tr key={m.id} className="hover:bg-kp-surface2 transition-colors">
@@ -203,10 +224,10 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
                 </tr>
               );
             })}
-            {movimientos.length === 0 && (
+            {movimientosFiltrados.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-kp-gray text-sm">
-                  No hay movimientos registrados en esta caja.
+                  No hay movimientos{!esAdmin ? ' en efectivo' : ''} registrados en esta caja.
                 </td>
               </tr>
             )}
