@@ -68,6 +68,13 @@ const IcoEmpleados = () => (
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
   </svg>
 );
+const IcoUsuarios = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M6 20v-1a6 6 0 0 1 12 0v1" />
+    <line x1="18" y1="8" x2="23" y2="8" /><line x1="20.5" y1="5.5" x2="20.5" y2="10.5" />
+  </svg>
+);
 const IcoReportes = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
     <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
@@ -126,8 +133,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Gestión',
     items: [
-      { label: 'Empleados', href: '/empleados', icon: <IcoEmpleados />, disabled: true },
-      { label: 'Reportes',  href: '/reportes',  icon: <IcoReportes />,  disabled: true },
+      { label: 'Usuarios',   href: '/usuarios',  icon: <IcoUsuarios />  },
+      { label: 'Empleados',  href: '/empleados', icon: <IcoEmpleados />, disabled: true },
+      { label: 'Reportes',   href: '/reportes',  icon: <IcoReportes />,  disabled: true },
     ],
   },
 ];
