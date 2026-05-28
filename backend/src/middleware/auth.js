@@ -28,11 +28,13 @@ function requireRol(...roles) {
 
 /**
  * Para cajeros devuelve siempre su sucursal del JWT (ignora query params).
+ * Si el cajero no tiene sucursal asignada en el JWT devuelve un UUID imposible
+ * para que ninguna query retorne datos en lugar de devolver todo.
  * Para otros roles devuelve req.query.sucursal_id (puede ser undefined).
  */
 function sucursalEfectiva(req) {
   if (req.usuario?.rol === 'cajero') {
-    return req.usuario.sucursal_default_id ?? null;
+    return req.usuario.sucursal_default_id || '00000000-0000-0000-0000-000000000000';
   }
   return req.query?.sucursal_id ?? null;
 }
