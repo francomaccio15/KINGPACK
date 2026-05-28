@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/auth';
 
@@ -119,9 +119,8 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
             const isLoading = loading === v.id;
 
             return (
-              <>
+              <Fragment key={v.id}>
                 <tr
-                  key={v.id}
                   className={`hover:bg-kp-surface2 transition-colors group cursor-pointer ${isOpen ? 'bg-kp-surface2' : ''}`}
                   onClick={() => toggle(v.id)}
                 >
@@ -176,7 +175,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
 
                 {/* ── Fila expandida con detalle de ítems ── */}
                 {isOpen && (
-                  <tr key={`${v.id}-detail`} className="bg-kp-surface2/50">
+                  <tr className="bg-kp-surface2/50">
                     <td colSpan={10} className="px-6 py-3">
                       {isLoading ? (
                         <p className="text-xs text-kp-gray py-2">Cargando ítems...</p>
@@ -222,7 +221,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </tbody>
