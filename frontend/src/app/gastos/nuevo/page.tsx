@@ -26,6 +26,7 @@ interface LineItem {
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
+  descuento_pct: number;
   sucursal_imputacion_id: string;
 }
 
@@ -184,7 +185,7 @@ export default function NuevoEgresoPage() {
   }, [netoGravado, tipoComp]);
 
   // ── Total calculado de ítems ──────────────────────────────────────────────
-  const totalItems = items.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0);
+  const totalItems = items.reduce((s, i) => s + i.cantidad * i.precio_unitario * (1 - i.descuento_pct / 100), 0);
 
   // ── Diferencia total vs suma fiscal ──────────────────────────────────────
   const sumaFiscal = [netoGravado, netoNoGravado, iva21, iva105, percepcionesIb, otrosImpuestos]
@@ -218,6 +219,7 @@ export default function NuevoEgresoPage() {
         descripcion: art.nombre,
         cantidad: 1,
         precio_unitario: art.costo_base ?? 0,
+        descuento_pct: 0,
         sucursal_imputacion_id: sucursalId,
       }];
     });
@@ -232,6 +234,7 @@ export default function NuevoEgresoPage() {
       descripcion: '',
       cantidad: 1,
       precio_unitario: 0,
+      descuento_pct: 0,
       sucursal_imputacion_id: sucursalId,
     }]);
   };
@@ -295,6 +298,7 @@ export default function NuevoEgresoPage() {
         descripcion: i.descripcion,
         cantidad: i.cantidad,
         precio_unitario: i.precio_unitario,
+        descuento_pct: i.descuento_pct || 0,
         sucursal_imputacion_id: i.sucursal_imputacion_id || sucursalId,
       })),
     };
@@ -627,6 +631,7 @@ export default function NuevoEgresoPage() {
                     </th>
                     <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-20">Cant.</th>
                     <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-32">P. Unitario</th>
+                    <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-20">Dto. %</th>
                     <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-28">Neto línea</th>
                     <th className="text-left px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-32">Sucursal</th>
                     <th className="w-8" />
@@ -663,8 +668,20 @@ export default function NuevoEgresoPage() {
                           className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                         />
                       </td>
+                      <td className="px-3 py-2">
+                        <div className="relative">
+                          <input
+                            type="number" min="0" max="100" step="0.1"
+                            value={item.descuento_pct || ''}
+                            placeholder="0"
+                            onChange={e => updateItem(item.key, 'descuento_pct', parseFloat(e.target.value) || 0)}
+                            className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 pr-5 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-kp-gray pointer-events-none">%</span>
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums text-sm text-kp-white font-semibold">
-                        {ars.format(item.cantidad * item.precio_unitario)}
+                        {ars.format(item.cantidad * item.precio_unitario * (1 - item.descuento_pct / 100))}
                       </td>
                       <td className="px-3 py-2">
                         <select
@@ -688,7 +705,7 @@ export default function NuevoEgresoPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-kp-surface2 border-t border-kp-border">
-                    <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold uppercase tracking-widest text-kp-gray">
+                    <td colSpan={4} className="px-3 py-2 text-right text-xs font-bold uppercase tracking-widest text-kp-gray">
                       Subtotal ítems
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-kp-white">

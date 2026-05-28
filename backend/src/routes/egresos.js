@@ -292,23 +292,28 @@ router.post('/', async (req, res, next) => {
       const it = items[i];
       const cant = parseFloat(it.cantidad) || 1;
       const precio = parseFloat(it.precio_unitario) || 0;
-      const neto = parseFloat((cant * precio).toFixed(2));
+      const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+      const precioConDto = parseFloat((precio * (1 - descPct / 100)).toFixed(2));
+      const neto = parseFloat((cant * precioConDto).toFixed(2));
       const sucImp = it.sucursal_imputacion_id || sucursal_id;
 
       await client.query(`
         INSERT INTO egreso_items
-          (egreso_id, articulo_id, descripcion, cantidad, precio_unitario, neto_linea,
-           sucursal_imputacion_id, orden)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          (egreso_id, articulo_id, descripcion, cantidad, precio_unitario, descuento_pct,
+           neto_linea, sucursal_imputacion_id, orden)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [egreso.id, it.articulo_id || null, (it.descripcion || '').trim(),
-          cant, precio, neto, sucImp, i]);
+          cant, precio, descPct, neto, sucImp, i]);
     }
 
     // --- Compra mercadería: crear pedido pendiente (stock se acredita al confirmar recepción) ---
     let pedidoCreado = null;
     if (tipo_operacion === 'compra_mercaderia') {
       const montoMercaderia = items.reduce((s, it) => {
-        return s + (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio_unitario) || 0);
+        const cant = parseFloat(it.cantidad) || 1;
+        const precio = parseFloat(it.precio_unitario) || 0;
+        const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+        return s + cant * parseFloat((precio * (1 - descPct / 100)).toFixed(2));
       }, 0);
 
       const { rows: pedidoRows } = await client.query(`
