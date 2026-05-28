@@ -262,8 +262,20 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
         </div>
       </div>
 
-      {/* ── Layout de impresión ───────────────────────────────────────────── */}
-      <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', color: '#111', background: 'white' }}>
+      {/* ── Estilos de control de modo de impresión ──────────────────────── */}
+      <style>{`
+        @media print {
+          .print-layout-venta    { display: block !important; }
+          .print-layout-factura  { display: none  !important; }
+        }
+        @media print {
+          body.print-factura .print-layout-venta   { display: none  !important; }
+          body.print-factura .print-layout-factura { display: block !important; }
+        }
+      `}</style>
+
+      {/* ── Layout de impresión VENTA ─────────────────────────────────────── */}
+      <div className="print-layout-venta hidden print:block" style={{ fontFamily: 'Arial, sans-serif', color: '#111', background: 'white' }}>
 
         {/* Encabezado del documento */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111', paddingBottom: '12px', marginBottom: '16px' }}>
@@ -431,6 +443,241 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
         </div>
 
       </div>
+
+      {/* ── Layout de impresión FACTURA FISCAL ───────────────────────────────── */}
+      {facturacion && (
+        <div className="print-layout-factura hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', color: '#111', background: 'white', width: '210mm', margin: '0 auto', padding: '15mm', boxSizing: 'border-box' }}>
+
+          {/* ══ ENCABEZADO FISCAL — 3 columnas ══ */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', border: '2px solid #111', marginBottom: '10px' }}>
+
+            {/* Emisor */}
+            <div style={{ padding: '10px 12px', borderRight: '2px solid #111' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <div style={{ width: '3px', height: '22px', background: '#dc2626', borderRadius: '1px', flexShrink: 0 }} />
+                <span style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '1.5px', textTransform: 'uppercase' }}>King Pack</span>
+              </div>
+              <p style={{ fontSize: '11px', marginBottom: '2px', marginLeft: '9px' }}>
+                <strong>CUIT:</strong> 30-71792696-6
+              </p>
+              <p style={{ fontSize: '11px', marginBottom: '2px', marginLeft: '9px' }}>
+                <strong>Cond. IVA:</strong> Responsable Inscripto
+              </p>
+              {venta.sucursal_direccion && (
+                <p style={{ fontSize: '11px', marginBottom: '2px', marginLeft: '9px' }}>
+                  <strong>Domicilio:</strong> {venta.sucursal_direccion}
+                </p>
+              )}
+              {venta.sucursal_telefono && (
+                <p style={{ fontSize: '11px', marginBottom: '2px', marginLeft: '9px' }}>
+                  <strong>Tel:</strong> {venta.sucursal_telefono}
+                </p>
+              )}
+              <p style={{ fontSize: '11px', marginLeft: '9px' }}>
+                <strong>Sucursal:</strong> {venta.sucursal_nombre}
+              </p>
+            </div>
+
+            {/* Letra del comprobante */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '2px solid #111', padding: '8px 4px', gap: '4px' }}>
+              <div style={{ width: '64px', height: '64px', border: '3px solid #111', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }}>
+                <span style={{ fontSize: '48px', fontWeight: '900', lineHeight: 1 }}>
+                  {facturacion.tipo_comprobante?.split(' ').pop() ?? ''}
+                </span>
+              </div>
+              <span style={{ fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', textAlign: 'center', lineHeight: 1.2 }}>
+                {facturacion.tipo_comprobante}
+              </span>
+            </div>
+
+            {/* Datos del comprobante */}
+            <div style={{ padding: '10px 12px' }}>
+              <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#6b7280', marginBottom: '6px' }}>
+                Datos del Comprobante
+              </p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ color: '#6b7280', paddingBottom: '3px', width: '45%' }}>N° Comprobante</td>
+                    <td style={{ fontWeight: '700', fontFamily: 'monospace', paddingBottom: '3px', fontSize: '12px' }}>
+                      {String(facturacion.punto_venta).padStart(4, '0')}-{String(facturacion.factura_numero).padStart(8, '0')}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#6b7280', paddingBottom: '3px' }}>Fecha Emisión</td>
+                    <td style={{ fontWeight: '600', paddingBottom: '3px' }}>
+                      {fechaCorta(facturacion.fecha_emision ?? facturacion.cae_vencimiento ?? venta.fecha)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#6b7280', paddingBottom: '3px' }}>Tipo</td>
+                    <td style={{ fontWeight: '600', paddingBottom: '3px' }}>{facturacion.tipo_comprobante}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#6b7280' }}>Punto de Venta</td>
+                    <td style={{ fontFamily: 'monospace' }}>{String(facturacion.punto_venta).padStart(4, '0')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ══ RECEPTOR ══ */}
+          <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '8px 12px', marginBottom: '10px', background: '#f9fafb' }}>
+            <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '6px' }}>
+              Datos del Receptor
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '11px' }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <span style={{ color: '#6b7280', flexShrink: 0 }}>Razón Social:</span>
+                <span style={{ fontWeight: '700' }}>{venta.cliente_nombre ?? 'Consumidor Final'}</span>
+              </div>
+              {venta.cliente_cuit && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>CUIT:</span>
+                  <span style={{ fontWeight: '600', fontFamily: 'monospace' }}>{venta.cliente_cuit}</span>
+                </div>
+              )}
+              {venta.cliente_cond_iva && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>Cond. IVA:</span>
+                  <span style={{ fontWeight: '600' }}>{venta.cliente_cond_iva}</span>
+                </div>
+              )}
+              {venta.cliente_direccion && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>Domicilio:</span>
+                  <span>{venta.cliente_direccion}</span>
+                </div>
+              )}
+              {venta.cliente_telefono && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>Teléfono:</span>
+                  <span>{venta.cliente_telefono}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ══ TABLA DE ARTÍCULOS ══ */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '10px' }}>
+            <thead>
+              <tr style={{ background: '#111', color: 'white' }}>
+                <th style={{ textAlign: 'left', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Código</th>
+                <th style={{ textAlign: 'left', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Descripción</th>
+                <th style={{ textAlign: 'center', padding: '7px 6px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '40px' }}>Cant.</th>
+                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>P. Unitario</th>
+                <th style={{ textAlign: 'right', padding: '7px 6px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>% Desc.</th>
+                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>P. Final</th>
+                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item: any, i: number) => {
+                const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
+                const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
+                return (
+                  <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: '10px', color: '#6b7280' }}>{item.codigo}</td>
+                    <td style={{ padding: '6px 8px', fontWeight: '600' }}>{item.nombre}</td>
+                    <td style={{ padding: '6px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                      {parseFloat(item.cantidad).toFixed(0)}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#9ca3af' : '#111', textDecoration: tieneDesc ? 'line-through' : 'none' }}>
+                      {fmt(item.precio_lista)}
+                    </td>
+                    <td style={{ padding: '6px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
+                      {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* ══ FILA INFERIOR — Pagos | Totales ══ */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '12px', marginBottom: '10px' }}>
+
+            {/* Formas de pago */}
+            <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ background: '#f3f4f6', padding: '5px 10px', borderBottom: '1px solid #d1d5db' }}>
+                <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#374151' }}>Formas de Pago</p>
+              </div>
+              <div style={{ padding: '8px 10px', fontSize: '11px' }}>
+                {pagos.length > 0 ? pagos.map((p: any, i: number) => (
+                  <div key={i} style={{ marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#374151' }}>{p.medio_pago}</span>
+                      <span style={{ fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>{fmt(p.monto)}</span>
+                    </div>
+                    {Array.isArray(p.cheques) && p.cheques.map((ch: any) => (
+                      <div key={ch.id} style={{ fontSize: '9px', color: '#6b7280', paddingLeft: '8px', marginTop: '2px', lineHeight: 1.4 }}>
+                        {ch.banco} · N° {ch.numero_cheque}
+                        {ch.fecha_emision && ` · Emis. ${new Date(ch.fecha_emision).toLocaleDateString('es-AR')}`}
+                        {` · Vence ${new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')} · `}
+                        <strong style={{ color: '#111' }}>{fmt(ch.importe)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )) : (
+                  <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Sin registrar</p>
+                )}
+              </div>
+            </div>
+
+            {/* Totales */}
+            <div style={{ border: '2px solid #111', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ background: '#f3f4f6', padding: '5px 10px', borderBottom: '1px solid #d1d5db' }}>
+                <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#374151' }}>Resumen</p>
+              </div>
+              <div style={{ padding: '8px 10px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ color: '#6b7280' }}>Subtotal</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.subtotal)}</span>
+                </div>
+                {descuento > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ color: '#6b7280' }}>Descuento</span>
+                    <span style={{ color: '#dc2626', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #111', paddingTop: '6px', marginTop: '4px' }}>
+                  <span style={{ fontWeight: '900', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Imp.</span>
+                  <span style={{ fontWeight: '900', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ══ PIE FISCAL — CAE ══ */}
+          <div style={{ border: '2px solid #111', borderRadius: '4px', padding: '10px 14px', background: '#f9fafb' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '4px' }}>
+                  Código de Autorización Electrónica (CAE)
+                </p>
+                <p style={{ fontSize: '18px', fontFamily: 'monospace', fontWeight: '900', letterSpacing: '2px', color: '#111', marginBottom: '4px' }}>
+                  {facturacion.cae}
+                </p>
+                {facturacion.cae_vencimiento && (
+                  <p style={{ fontSize: '11px', color: '#374151' }}>
+                    <strong>Vencimiento CAE:</strong> {fechaCorta(facturacion.cae_vencimiento)}
+                  </p>
+                )}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '9px', color: '#6b7280', lineHeight: 1.5, maxWidth: '200px' }}>
+                  Este comprobante es válido ante<br />
+                  <strong style={{ color: '#111' }}>ARCA (ex-AFIP)</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
 
     </section>
   );

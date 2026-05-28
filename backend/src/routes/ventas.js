@@ -388,8 +388,10 @@ router.get('/:id', async (req, res, next) => {
           c.telefono     AS cliente_telefono,
           c.cond_iva_id,
           ci.nombre      AS cliente_cond_iva,
+          c.direccion    AS cliente_direccion,
           s.nombre       AS sucursal_nombre,
           s.direccion    AS sucursal_direccion,
+          s.telefono     AS sucursal_telefono,
           lp.nombre      AS lista_precio
         FROM ventas v
         LEFT JOIN clientes c ON c.id = v.cliente_id
