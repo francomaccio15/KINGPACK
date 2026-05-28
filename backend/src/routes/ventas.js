@@ -130,6 +130,7 @@ router.post('/', async (req, res, next) => {
     }
 
     // Verificar caja abierta antes de confirmar una venta
+    let cajaId = null;
     if (estado === 'confirmada') {
       const { rows: cajaRows } = await pool.query(
         `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
@@ -138,6 +139,7 @@ router.post('/', async (req, res, next) => {
       if (!cajaRows[0]) {
         return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja antes de registrar ventas.' });
       }
+      cajaId = cajaRows[0].id;
     }
 
     await client.query('BEGIN');
@@ -334,6 +336,24 @@ router.post('/', async (req, res, next) => {
             VALUES ($1,$2,$3,$4,$5,$6,$7)
           `, [venta.id, pago.medio_pago_id, ch.banco, ch.numero_cheque,
               ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+        }
+
+        // Registrar movimiento en la caja de la sucursal correspondiente
+        // "Saldo a favor" es un crédito interno, no genera ingreso de caja
+        const medio = mediosMap[pago.medio_pago_id];
+        if (cajaId && medio?.nombre !== 'Saldo a favor') {
+          await client.query(`
+            INSERT INTO movimientos_caja
+              (caja_id, tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id, usuario_id)
+            VALUES ($1, 'venta', $2, $3, $4, 'venta', $5, $6)
+          `, [
+            cajaId,
+            `Venta #${numero}`,
+            parseFloat(pago.monto),
+            pago.medio_pago_id,
+            venta.id,
+            req.usuario?.id || null,
+          ]);
         }
       }
     }
