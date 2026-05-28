@@ -25,9 +25,40 @@ body {
   @apply bg-kp-red;
 }
 
-/* ── Print styles (notas de crédito) ────────────────────────────────────── */
+/* ── Print styles ────────────────────────────────────────────────────────── */
 @media print {
-  body { background: white !important; color: black !important; }
+  @page { margin: 12mm; size: A4; }
+
+  body { background: white !important; color: #111 !important; }
+
   .print\:hidden { display: none !important; }
-  @page { margin: 10mm; size: A4; }
+
+  /* Fondo blanco en todos los contenedores */
+  [class*="bg-kp-"] { background-color: white !important; }
+  [class*="bg-amber-"], [class*="bg-green-"], [class*="bg-blue-"], [class*="bg-red-"] {
+    background-color: white !important;
+  }
+
+  /* Bordes suaves */
+  [class*="border-kp-"] { border-color: #d1d5db !important; }
+  [class*="divide-kp-"] > * + * { border-color: #d1d5db !important; }
+
+  /* Textos oscuros */
+  [class*="text-kp-white"],
+  [class*="text-kp-gray"],
+  [class*="text-kp-gray-lt"] { color: #111 !important; }
+
+  /* Rojos → negro en impresión para legibilidad */
+  [class*="text-kp-red"]   { color: #111 !important; }
+  [class*="text-amber-"]   { color: #111 !important; }
+  [class*="text-green-"]   { color: #111 !important; }
+  [class*="text-blue-"]    { color: #111 !important; }
+  [class*="text-kp-border"] { color: #6b7280 !important; }
+
+  /* Sombras fuera */
+  [class*="shadow"] { box-shadow: none !important; }
+
+  /* Expand automático del contenido */
+  main { overflow: visible !important; }
+  .overflow-x-auto { overflow: visible !important; }
 }
