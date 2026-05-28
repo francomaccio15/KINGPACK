@@ -75,9 +75,32 @@ export default async function VentasPage({
 }: {
   searchParams: { q?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
-  requireAuth('/ventas');
-  const { ventas, count, sucursales, listas } = await fetchData(searchParams);
+  const user = requireAuth('/ventas');
+  const { ventas, count, sucursales: todasSucursales, listas } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.fecha_desde || searchParams.fecha_hasta);
+
+  const esCajero = user.rol === 'cajero';
+  const sucursalId = user.sucursal_default_id ?? null;
+
+  // Cajero sin sucursal asignada
+  if (esCajero && !sucursalId) {
+    return (
+      <section className="space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Ventas</h2>
+        </div>
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-sm text-yellow-400">
+          No tenés sucursal asignada. Contactá al administrador para que configure tu sucursal de trabajo.
+        </div>
+      </section>
+    );
+  }
+
+  // Para el cajero solo mostramos su sucursal en el selector de NuevaVenta
+  const sucursales = esCajero
+    ? todasSucursales.filter((s: { id: string }) => s.id === sucursalId)
+    : todasSucursales;
 
   return (
     <section className="space-y-5">

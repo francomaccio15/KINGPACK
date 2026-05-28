@@ -124,6 +124,14 @@ router.post('/', async (req, res, next) => {
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
 
+    // El cajero solo puede registrar ventas en su propia sucursal
+    if (req.usuario?.rol === 'cajero') {
+      const sucursalCajero = req.usuario.sucursal_default_id;
+      if (!sucursalCajero || sucursalCajero !== sucursal_id) {
+        return res.status(403).json({ error: 'No podés registrar ventas en una sucursal distinta a la tuya' });
+      }
+    }
+
     const articuloIds = items.map(i => i.articulo_id).filter(Boolean);
     if (articuloIds.length !== items.length) {
       return res.status(400).json({ error: 'Todos los ítems deben tener articulo_id' });
@@ -338,21 +346,17 @@ router.post('/', async (req, res, next) => {
               ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
         }
 
-        // Registrar movimiento en la caja de la sucursal correspondiente
-        // "Saldo a favor" es un crédito interno, no genera ingreso de caja
+        // Registrar movimiento en la caja (omitir "Saldo a favor" — no es ingreso de efectivo)
         const medio = mediosMap[pago.medio_pago_id];
         if (cajaId && medio?.nombre !== 'Saldo a favor') {
           await client.query(`
-            INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id, usuario_id)
-            VALUES ($1, 'venta', $2, $3, $4, 'venta', $5, $6)
+            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
+            VALUES ($1, 'venta', $2, $3, $4)
           `, [
             cajaId,
             `Venta #${numero}`,
             parseFloat(pago.monto),
-            pago.medio_pago_id,
-            venta.id,
-            req.usuario?.id || null,
+            pago.medio_pago_id || null,
           ]);
         }
       }
