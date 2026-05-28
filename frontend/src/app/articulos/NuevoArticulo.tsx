@@ -62,7 +62,7 @@ export default function NuevoArticulo({
   const precioCalc = costo * (1 + flete / 100) * (1 + margenReal / 100) * (1 + ivaReal / 100);
 
   const set = (k: keyof typeof EMPTY_FORM) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: { target: { value: string } }) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
 
   const cerrar = () => {

@@ -65,7 +65,7 @@ export default function EditarArticulo({
     : parseFloat(articulo.precio_madre) || 0;
 
   const set = (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: { target: { value: string } }) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
 
   const cerrar = () => { setOpen(false); setError(''); };

@@ -33,7 +33,7 @@ export default function NuevoCliente({
   }, [condIva]);
 
   const set = (k: keyof typeof EMPTY) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    (e: { target: { value: string } }) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
 
   const cerrar = () => { setOpen(false); setError(''); };

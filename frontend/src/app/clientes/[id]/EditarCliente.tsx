@@ -52,10 +52,8 @@ export default function EditarCliente({
   });
 
   const set = (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const val = e.target.type === 'checkbox'
-        ? (e.target as HTMLInputElement).checked
-        : e.target.value;
+    (e: { target: { value: string; type?: string; checked?: boolean } }) => {
+      const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
       setForm(f => ({ ...f, [k]: val }));
     };
 
