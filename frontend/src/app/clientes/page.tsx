@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
 import ClientesFiltros from './ClientesFiltros';
+import DeudoresTable from './DeudoresTable';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
 
@@ -9,6 +10,7 @@ type Cliente = {
   id: string; razon_social: string; cuit: string | null; telefono: string | null;
   cond_iva: string; lista_precio: string | null; sucursal_nombre: string | null;
   limite_credito: string; descuento_adicional: string; saldo_actual: string; activo: boolean;
+  plazo_dias: number | null; fecha_vencimiento: string | null;
 };
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
@@ -33,7 +35,7 @@ export const dynamic = 'force-dynamic';
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; activo?: string };
+  searchParams: { q?: string; activo?: string; tab?: string };
 }) {
   const user = requireAuth('/clientes');
   const esAdmin = user.rol === 'administrador';
@@ -43,6 +45,8 @@ export default async function ClientesPage({
   );
 
   const hayFiltros = !!(searchParams.q || searchParams.activo);
+  const tab = searchParams.tab === 'deuda' ? 'deuda' : 'todos';
+  const cantDeudores = clientes.filter((c: Cliente) => parseFloat(c.saldo_actual || '0') > 0).length;
 
   return (
     <section className="space-y-5">
@@ -62,13 +66,49 @@ export default async function ClientesPage({
         <NuevoCliente condIva={condIva} listas={listas} sucursales={sucursales} />
       </div>
 
-      {/* Filtros */}
-      <Suspense>
-        <ClientesFiltros />
-      </Suspense>
+      {/* Pestañas */}
+      <div className="flex gap-1 border-b border-kp-border">
+        <Link
+          href="/clientes"
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === 'todos'
+              ? 'border-kp-red text-kp-white'
+              : 'border-transparent text-kp-gray hover:text-kp-white'
+          }`}
+        >
+          Todos
+        </Link>
+        <Link
+          href="/clientes?tab=deuda"
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            tab === 'deuda'
+              ? 'border-kp-red text-kp-white'
+              : 'border-transparent text-kp-gray hover:text-kp-white'
+          }`}
+        >
+          Con deuda
+          {cantDeudores > 0 && (
+            <span className="text-xs bg-kp-red/20 text-kp-red border border-kp-red/30 rounded-full px-1.5 py-0.5 tabular-nums leading-none">
+              {cantDeudores}
+            </span>
+          )}
+        </Link>
+      </div>
 
-      {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+      {/* Filtros (solo en pestaña Todos) */}
+      {tab === 'todos' && (
+        <Suspense>
+          <ClientesFiltros />
+        </Suspense>
+      )}
+
+      {/* Pestaña: Con deuda */}
+      {tab === 'deuda' && (
+        <DeudoresTable clientes={clientes} />
+      )}
+
+      {/* Pestaña: Todos */}
+      {tab === 'todos' && <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -145,7 +185,7 @@ export default async function ClientesPage({
             )}
           </tbody>
         </table>
-      </div>
+      </div>}
 
     </section>
   );
