@@ -1,4 +1,4 @@
-﻿import { Suspense } from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import NuevoCliente from './NuevoCliente';
 import ClientesFiltros from './ClientesFiltros';
@@ -45,7 +45,7 @@ export default async function ClientesPage({
 
   const hayFiltros = !!(searchParams.q || searchParams.activo);
   const tab = searchParams.tab === 'deuda' ? 'deuda' : 'todos';
-  const cantDeudores = clientes.filter((c: Cliente) => parseFloat(c.saldo_actual || '0') > 0).length;
+  const cantDeudores = (clientes as Cliente[]).filter(c => parseFloat(c.saldo_actual || '0') > 0).length;
 
   return (
     <section className="space-y-5">
@@ -94,97 +94,98 @@ export default async function ClientesPage({
         </Link>
       </div>
 
-      {/* Filtros (solo en pestaña Todos) */}
-      {tab === 'todos' && (
-        <Suspense>
-          <ClientesFiltros />
-        </Suspense>
-      )}
-
-      {/* Pestaña: Con deuda */}
+      {/* ── Pestaña: Con deuda ── */}
       {tab === 'deuda' && (
-        <DeudoresTable clientes={clientes} />
+        <DeudoresTable clientes={clientes as Cliente[]} />
       )}
 
-      {/* Pestaña: Todos */}
-      {tab === 'todos' && <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-kp-surface2 border-b border-kp-border">
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Razón Social</th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">CUIT</th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Cond. IVA</th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Lista</th>
-              {esAdmin && <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Límite Crédito</th>}
-              {esAdmin && (
-                <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
-                  <span className="text-kp-red">Saldo</span>
-                </th>
-              )}
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
-              <th className="px-3 py-3" />
-            </tr>
-          </thead>
-          <tbody className="bg-kp-surface divide-y divide-kp-border">
-            {clientes.map((c: Cliente) => {
-              const saldo = parseFloat(c.saldo_actual || '0');
-              return (
-                <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
-                  <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors">
-                    {c.razon_social}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">{c.cuit || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{c.cond_iva}</td>
-                  <td className="px-4 py-3">
-                    {c.lista_precio
-                      ? <span className="text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-kp-gray-lt">{c.lista_precio}</span>
-                      : <span className="text-xs text-kp-border">—</span>}
-                  </td>
-                  {esAdmin && <td className="px-4 py-3 text-right tabular-nums text-xs text-kp-gray">{fmt(c.limite_credito)}</td>}
+      {/* ── Pestaña: Todos ── */}
+      {tab === 'todos' && (
+        <>
+          <Suspense>
+            <ClientesFiltros />
+          </Suspense>
+
+          <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-kp-surface2 border-b border-kp-border">
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Razón Social</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">CUIT</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Cond. IVA</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Lista</th>
                   {esAdmin && (
-                    <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
-                      {(() => {
-                        const limite = parseFloat(c.limite_credito || '0');
-                        const excede = limite > 0 && saldo > limite;
-                        return (
+                    <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Límite Crédito</th>
+                  )}
+                  {esAdmin && (
+                    <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                      <span className="text-kp-red">Saldo</span>
+                    </th>
+                  )}
+                  <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody className="bg-kp-surface divide-y divide-kp-border">
+                {(clientes as Cliente[]).map((c) => {
+                  const saldo = parseFloat(c.saldo_actual || '0');
+                  const limite = parseFloat(c.limite_credito || '0');
+                  const excede = limite > 0 && saldo > limite;
+                  return (
+                    <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
+                      <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors">
+                        {c.razon_social}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">{c.cuit || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-kp-gray-lt">{c.cond_iva}</td>
+                      <td className="px-4 py-3">
+                        {c.lista_precio
+                          ? <span className="text-xs bg-kp-surface2 border border-kp-border rounded px-2 py-0.5 text-kp-gray-lt">{c.lista_precio}</span>
+                          : <span className="text-xs text-kp-border">—</span>}
+                      </td>
+                      {esAdmin && (
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-kp-gray">{fmt(c.limite_credito)}</td>
+                      )}
+                      {esAdmin && (
+                        <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
                           <span className={`inline-flex items-center gap-1.5 ${excede ? 'text-kp-red' : saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
                             {excede && (
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
-                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                               </svg>
                             )}
                             {fmt(saldo)}
                           </span>
-                        );
-                      })()}
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-center">
+                        {c.activo
+                          ? <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-red"><span className="w-1.5 h-1.5 rounded-full bg-kp-red" />Activo</span>
+                          : <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-gray"><span className="w-1.5 h-1.5 rounded-full bg-kp-border" />Inactivo</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <Link href={`/clientes/${c.id}`}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1
+                            text-xs text-kp-gray hover:text-kp-white px-2 py-1 rounded border border-transparent
+                            hover:border-kp-border hover:bg-kp-surface2">
+                          Ver →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {clientes.length === 0 && (
+                  <tr>
+                    <td colSpan={esAdmin ? 8 : 6} className="px-4 py-12 text-center text-kp-gray">
+                      {hayFiltros ? 'No hay clientes que coincidan con los filtros.' : 'No hay clientes cargados todavía.'}
                     </td>
-                  )}
-                  <td className="px-4 py-3 text-center">
-                    {c.activo
-                      ? <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-red"><span className="w-1.5 h-1.5 rounded-full bg-kp-red" />Activo</span>
-                      : <span className="inline-flex items-center gap-1 text-xs font-medium text-kp-gray"><span className="w-1.5 h-1.5 rounded-full bg-kp-border" />Inactivo</span>}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <Link href={`/clientes/${c.id}`}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1
-                        text-xs text-kp-gray hover:text-kp-white px-2 py-1 rounded border border-transparent
-                        hover:border-kp-border hover:bg-kp-surface2">
-                      Ver →
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-            {clientes.length === 0 && (
-              <tr>
-                <td colSpan={esAdmin ? 8 : 6} className="px-4 py-12 text-center text-kp-gray">
-                  {hayFiltros ? 'No hay clientes que coincidan con los filtros.' : 'No hay clientes cargados todavía.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
     </section>
   );
