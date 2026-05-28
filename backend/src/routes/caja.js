@@ -78,7 +78,7 @@ router.get('/', async (req, res, next) => {
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query(`
         SELECT
-          c.id, c.fecha_apertura, c.fecha_cierre, c.estado,
+          c.id, c.sucursal_id, c.fecha_apertura, c.fecha_cierre, c.estado,
           c.saldo_inicial, c.saldo_final_sistema, c.saldo_final_real, c.diferencia,
           s.nombre AS sucursal_nombre,
           (SELECT COUNT(*) FROM movimientos_caja m WHERE m.caja_id = c.id) AS total_movimientos

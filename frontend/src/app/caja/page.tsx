@@ -24,6 +24,7 @@ type SucursalEstado = {
 
 type CajaHistorial = {
   id: string;
+  sucursal_id: string;
   fecha_apertura: string;
   fecha_cierre: string | null;
   estado: 'abierta' | 'cerrada';
@@ -49,11 +50,36 @@ async function fetchData() {
 export const dynamic = 'force-dynamic';
 
 export default async function CajaPage() {
-  requireAuth('/caja');
-  const { sucursales, historial } = await fetchData();
+  const user = requireAuth('/caja');
+  const { sucursales: allSucursales, historial: allHistorial } = await fetchData();
+
+  const esCajero = user.rol === 'cajero';
+  const sucursalId = user.sucursal_default_id ?? null;
+
+  // Cajero sin sucursal asignada
+  if (esCajero && !sucursalId) {
+    return (
+      <section className="space-y-7">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Caja</h2>
+        </div>
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-sm text-yellow-400">
+          No tenés sucursal asignada. Contactá al administrador para que configure tu sucursal de trabajo.
+        </div>
+      </section>
+    );
+  }
+
+  // Filtrar por sucursal si es cajero
+  const sucursales: SucursalEstado[] = esCajero
+    ? allSucursales.filter((s: SucursalEstado) => s.sucursal_id === sucursalId)
+    : allSucursales;
+  const historial: CajaHistorial[] = esCajero
+    ? allHistorial.filter((c: CajaHistorial) => c.sucursal_id === sucursalId)
+    : allHistorial;
 
   const abiertas  = sucursales.filter((s: SucursalEstado) => s.estado === 'abierta');
-  const cerradas  = sucursales.filter((s: SucursalEstado) => s.estado !== 'abierta');
 
   return (
     <section className="space-y-7">
@@ -66,15 +92,17 @@ export default async function CajaPage() {
             <h2 className="text-2xl font-bold uppercase tracking-wide">Caja</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
-            {abiertas.length} {abiertas.length === 1 ? 'caja abierta' : 'cajas abiertas'}
-            {' '}de {sucursales.length} sucursales
+            {esCajero && sucursales[0]
+              ? sucursales[0].sucursal_nombre
+              : `${abiertas.length} ${abiertas.length === 1 ? 'caja abierta' : 'cajas abiertas'} de ${sucursales.length} sucursales`
+            }
           </p>
         </div>
       </div>
 
       {/* Cards por sucursal */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sucursales.map((s: SucursalEstado) => {
+        {sucursales.map((s) => {
           const abierta = s.estado === 'abierta';
           const saldoSistema = abierta
             ? parseFloat(s.saldo_inicial ?? '0')
@@ -175,7 +203,7 @@ export default async function CajaPage() {
                 </tr>
               </thead>
               <tbody className="bg-kp-surface divide-y divide-kp-border">
-                {historial.map((c: CajaHistorial) => {
+                {historial.map((c) => {
                   const diff = parseFloat(c.diferencia ?? '0');
                   const diffColor = Math.abs(diff) < 0.01
                     ? 'text-kp-gray'
