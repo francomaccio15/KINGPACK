@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 type Sucursal   = { id: string; nombre: string };
 type Proveedor  = { id: string; razon_social: string };
@@ -249,10 +250,7 @@ export default function NuevoPedido({
                   </div>
                   <div>
                     <label className={labelCls}>Costo de Flete</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <NumericInput
                       placeholder="0.00"
                       value={flete}
                       onChange={e => setFlete(e.target.value)}
@@ -345,20 +343,14 @@ export default function NuevoPedido({
                               <div className="text-xs text-kp-gray font-mono">{item.codigo}</div>
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="0.001"
-                                step="1"
+                              <NumericInput
                                 value={item.cantidad}
                                 onChange={e => updateItem(idx, 'cantidad', e.target.value)}
                                 className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                              <NumericInput
                                 value={item.precio_compra}
                                 onChange={e => updateItem(idx, 'precio_compra', e.target.value)}
                                 className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"

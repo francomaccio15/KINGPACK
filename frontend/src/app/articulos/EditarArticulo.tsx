@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ArticuloRow } from './ArticulosTabla';
+import NumericInput from '@/components/NumericInput';
 
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
@@ -182,8 +183,7 @@ export default function EditarArticulo({
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Costo</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                    <input
-                      type="number" min="0" step="0.01"
+                    <NumericInput
                       value={form.costo_base} onChange={set('costo_base')}
                       placeholder="0.00"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
@@ -194,8 +194,7 @@ export default function EditarArticulo({
                 <div>
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
                   <div className="relative">
-                    <input
-                      type="number" min="0" max="100" step="0.1"
+                    <NumericInput
                       value={form.costo_flete} onChange={set('costo_flete')}
                       placeholder="0.0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
@@ -214,8 +213,7 @@ export default function EditarArticulo({
                     )}
                   </label>
                   <div className="relative">
-                    <input
-                      type="number" min="0" max="999" step="0.1"
+                    <NumericInput
                       value={form.margen_aplicado ?? ''} onChange={set('margen_aplicado')}
                       placeholder={catActiva?.margen_default ?? '—'}
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white

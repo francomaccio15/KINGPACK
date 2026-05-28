@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
@@ -87,8 +88,7 @@ export default function ExportarPDF({
               Descuento adicional (%)
             </label>
             <div className="flex items-center gap-3">
-              <input
-                type="number" min={0} max={100} step={0.5}
+              <NumericInput
                 value={descuento}
                 onChange={e => setDescuento(Math.max(0, Math.min(100, Number(e.target.value))))}
                 className="w-24 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-kp-white focus:outline-none focus:border-kp-red"
@@ -115,8 +115,7 @@ export default function ExportarPDF({
                   <div key={c.id} className="flex items-center justify-between gap-2">
                     <span className="text-xs text-kp-gray-lt truncate flex-1">{c.nombre}</span>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <input
-                        type="number" min={0} max={100} step={0.5}
+                      <NumericInput
                         value={descCats[c.id] ?? 0}
                         onChange={e => setCatDesc(c.id, Number(e.target.value))}
                         className="w-16 bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-xs text-kp-white focus:outline-none focus:border-kp-red"

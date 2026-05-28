@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import NumericInput from '@/components/NumericInput';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -653,16 +654,14 @@ export default function NuevoEgresoPage() {
                         }
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number" min="0.001" step="1"
+                        <NumericInput
                           value={item.cantidad}
                           onChange={e => updateItem(item.key, 'cantidad', parseFloat(e.target.value) || 0)}
                           className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number" min="0" step="0.01"
+                        <NumericInput
                           value={item.precio_unitario}
                           onChange={e => updateItem(item.key, 'precio_unitario', parseFloat(e.target.value) || 0)}
                           className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
@@ -729,32 +728,32 @@ export default function NuevoEgresoPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Neto gravado *</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={netoGravado}
+              <NumericInput placeholder="0.00" value={netoGravado}
                 onChange={e => setNetoGravado(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Neto no gravado / exento</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={netoNoGravado}
+              <NumericInput placeholder="0.00" value={netoNoGravado}
                 onChange={e => setNetoNoGravado(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>IVA 21% (auto)</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={iva21}
+              <NumericInput placeholder="0.00" value={iva21}
                 onChange={e => setIva21(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>IVA 10.5%</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={iva105}
+              <NumericInput placeholder="0.00" value={iva105}
                 onChange={e => setIva105(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Percepciones IIBB</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={percepcionesIb}
+              <NumericInput placeholder="0.00" value={percepcionesIb}
                 onChange={e => setPercepcionesIb(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Otros impuestos</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={otrosImpuestos}
+              <NumericInput placeholder="0.00" value={otrosImpuestos}
                 onChange={e => setOtrosImpuestos(e.target.value)} className={inputCls} />
             </div>
           </div>
@@ -764,8 +763,8 @@ export default function NuevoEgresoPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={`${labelCls} text-kp-white`}>Total del comprobante *</label>
-            <input
-              type="number" min="0.01" step="0.01" placeholder="0.00"
+            <NumericInput
+              placeholder="0.00"
               value={totalComprobante}
               onChange={e => setTotalComprobante(e.target.value)}
               className={`${inputCls} text-lg font-bold ${TIPOS_CON_COMPROBANTE.includes(tipoOp) && !totalOk && totalNum > 0 && sumaFiscal > 0 ? 'border-kp-red' : ''}`}
@@ -825,7 +824,7 @@ export default function NuevoEgresoPage() {
 
             <div>
               <label className={labelCls}>Monto pagado</label>
-              <input type="number" min="0.01" step="0.01" placeholder={totalComprobante || '0.00'}
+              <NumericInput placeholder={totalComprobante || '0.00'}
                 value={montoPago} onChange={e => setMontoPago(e.target.value)} className={inputCls} />
             </div>
 
@@ -874,7 +873,7 @@ export default function NuevoEgresoPage() {
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className={labelCls}>Importe</label>
-                    <input type="number" min="0.01" step="0.01" placeholder="0.00" value={ch.importe}
+                    <NumericInput placeholder="0.00" value={ch.importe}
                       onChange={e => updateCheque(i, 'importe', e.target.value)} className={inputCls} />
                   </div>
                   <button type="button" onClick={() => removeCheque(i)}

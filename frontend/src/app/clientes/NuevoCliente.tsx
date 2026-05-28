@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 type CondIva  = { id: string; nombre: string };
 type Lista    = { id: string; nombre: string };
@@ -185,8 +186,7 @@ export default function NuevoCliente({
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                    <input
-                      type="number" min="0" step="0.01"
+                    <NumericInput
                       value={form.limite_credito} onChange={set('limite_credito')}
                       placeholder="0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
@@ -197,8 +197,7 @@ export default function NuevoCliente({
                 <div>
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Descuento %</label>
                   <div className="relative">
-                    <input
-                      type="number" min="0" max="100" step="0.1"
+                    <NumericInput
                       value={form.descuento_adicional} onChange={set('descuento_adicional')}
                       placeholder="0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
@@ -211,8 +210,7 @@ export default function NuevoCliente({
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Saldo Inicial</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                    <input
-                      type="number" step="0.01"
+                    <NumericInput
                       value={form.saldo_inicial} onChange={set('saldo_inicial')}
                       placeholder="0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white

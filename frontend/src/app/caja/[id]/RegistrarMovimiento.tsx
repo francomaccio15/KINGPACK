@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
@@ -145,10 +146,7 @@ export default function RegistrarMovimiento({
               {/* Monto */}
               <div>
                 <label className={labelCls}>Monto *</label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+                <NumericInput
                   placeholder="0.00"
                   value={monto}
                   onChange={e => setMonto(e.target.value)}

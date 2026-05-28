@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 type MedioPago = { id: string; nombre: string };
 type CuentaBancaria = { id: string; nombre: string; banco: string | null };
@@ -153,8 +154,7 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
 
               <div>
                 <label className={labelCls}>Monto *</label>
-                <input
-                  type="number" step="0.01" min="0.01"
+                <NumericInput
                   value={monto} onChange={e => setMonto(e.target.value)}
                   className={inputCls} required
                 />
@@ -222,7 +222,7 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
                         </div>
                         <div className="col-span-2">
                           <label className={labelCls}>Importe</label>
-                          <input type="number" step="0.01" min="0.01" value={ch.importe} onChange={e => updateCheque(i, 'importe', e.target.value)}
+                          <NumericInput value={ch.importe} onChange={e => updateCheque(i, 'importe', e.target.value)}
                             className={inputCls} />
                         </div>
                       </div>

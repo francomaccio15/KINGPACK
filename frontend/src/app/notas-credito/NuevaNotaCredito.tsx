@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NotaCredito, NcItem } from './page';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -361,14 +362,12 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                       onChange={v => updateItem(i, 'descripcion', v)}
                       onSelect={art => selectArticulo(i, art)}
                     />
-                    <input
-                      type="number" min="0.01" step="any"
+                    <NumericInput
                       value={it.cantidad}
                       onChange={e => updateItem(i, 'cantidad', e.target.value)}
                       className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-center outline-none py-0.5 tabular-nums transition-colors"
                     />
-                    <input
-                      type="number" min="0" step="any"
+                    <NumericInput
                       value={it.precio_unitario}
                       onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
                       className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-right outline-none py-0.5 tabular-nums transition-colors"

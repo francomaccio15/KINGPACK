@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Categoria } from './page';
 import { useAuth } from '@/contexts/AuthContext';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -240,7 +241,7 @@ function FormCategoria({
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Margen por defecto (%)</label>
             <div className="relative">
-              <input type="number" min="0" max="500" step="0.5"
+              <NumericInput
                 value={margen} onChange={e => setMargen(e.target.value)}
                 placeholder="Ej: 40" className={inputCls + ' pr-8'} />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm font-bold">%</span>

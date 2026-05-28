@@ -8,6 +8,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -768,13 +769,11 @@ export default function NuevaVenta({
                               >
                                 −
                               </button>
-                              <input
-                                type="number"
-                                min="1"
+                              <NumericInput
+                                decimals={0}
                                 value={item.cantidad === 0 ? '' : item.cantidad}
                                 onChange={e => setQty(item.articulo_id, e.target.value)}
                                 onBlur={() => commitQty(item.articulo_id)}
-                                onFocus={e => e.target.select()}
                                 className={[
                                   'w-14 text-center text-sm font-semibold tabular-nums',
                                   'bg-kp-surface2 border-y border-kp-border outline-none py-1',
@@ -1010,11 +1009,7 @@ export default function NuevaVenta({
                       <div>
                         <p className="text-[10px] text-kp-gray mb-1.5">Aplicar en esta venta</p>
                         <div className="flex gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            max={Math.min(saldoAFavorDisponible, subtotalFinal)}
-                            step="0.01"
+                          <NumericInput
                             value={saldoAFavorAplicado || ''}
                             onChange={e => {
                               const max = Math.min(saldoAFavorDisponible, subtotalFinal);
@@ -1158,7 +1153,7 @@ export default function NuevaVenta({
                             </div>
                             <div className="col-span-2">
                               <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Importe</p>
-                              <input type="number" step="0.01" min="0.01" placeholder="0.00" value={ch.importe}
+                              <NumericInput placeholder="0.00" value={ch.importe}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, importe: e.target.value } : c))}
                                 className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
@@ -82,8 +83,8 @@ export default function RegistrarPago({ clienteId, saldoActual }: { clienteId: s
                 <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Monto *</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                  <input
-                    required type="number" min="0.01" step="0.01"
+                  <NumericInput
+                    required
                     value={monto} onChange={e => setMonto(e.target.value)}
                     placeholder="0.00" autoFocus
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white

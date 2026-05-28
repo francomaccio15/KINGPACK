@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 type Lista = {
   id: string;
@@ -101,9 +102,7 @@ export default function ListaEditor({ lista }: { lista: Lista }) {
                   Descuento sobre precio base
                 </label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0} max={100} step={0.5}
+                  <NumericInput
                     value={descuento}
                     onChange={e => {
                       setDescuento(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)));

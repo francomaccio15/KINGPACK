@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
@@ -236,8 +237,7 @@ export default function NuevoArticulo({
                     <div>
                       <label className="block text-xs text-kp-gray mb-1">Margen %</label>
                       <div className="relative">
-                        <input
-                          type="number" min="0" max="999" step="0.1"
+                        <NumericInput
                           value={catForm.margen_default}
                           onChange={e => setCatForm(f => ({ ...f, margen_default: e.target.value }))}
                           placeholder="0"
@@ -269,8 +269,8 @@ export default function NuevoArticulo({
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Costo *</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                    <input
-                      required type="number" min="0" step="0.01"
+                    <NumericInput
+                      required
                       value={form.costo_base} onChange={set('costo_base')}
                       placeholder="0.00"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
@@ -281,8 +281,7 @@ export default function NuevoArticulo({
                 <div>
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
                   <div className="relative">
-                    <input
-                      type="number" min="0" max="100" step="0.1"
+                    <NumericInput
                       value={form.costo_flete} onChange={set('costo_flete')}
                       placeholder="0.0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
@@ -301,8 +300,7 @@ export default function NuevoArticulo({
                     )}
                   </label>
                   <div className="relative">
-                    <input
-                      type="number" min="0" max="999" step="0.1"
+                    <NumericInput
                       value={form.margen_aplicado} onChange={set('margen_aplicado')}
                       placeholder={catActiva?.margen_default ?? '—'}
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
