@@ -51,7 +51,6 @@ router.get('/', async (req, res, next) => {
         SELECT
           c.id, c.razon_social, c.cuit, c.telefono, c.direccion, c.activo,
           c.limite_credito, c.descuento_adicional, c.saldo_inicial,
-          c.plazo_dias,
           ci.nombre                           AS cond_iva,
           lp.nombre                           AS lista_precio,
           lp.id                               AS lista_precio_id,
@@ -60,11 +59,7 @@ router.get('/', async (req, res, next) => {
           -- Saldo actual = saldo_inicial + debe - haber + correcciones
           c.saldo_inicial
             + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-            + COALESCE(cs_agg.total_correcciones, 0)    AS saldo_actual,
-          -- Fecha de la última deuda registrada
-          ultima_debe.fecha                             AS fecha_ultima_deuda,
-          -- Vencimiento = última deuda + plazo_dias
-          ultima_debe.fecha + (c.plazo_dias || ' days')::interval AS fecha_vencimiento
+            + COALESCE(cs_agg.total_correcciones, 0)    AS saldo_actual
         FROM clientes c
         LEFT JOIN cond_iva ci        ON ci.id  = c.cond_iva_id
         LEFT JOIN listas_precios lp  ON lp.id  = c.lista_precio_id
@@ -74,13 +69,8 @@ router.get('/', async (req, res, next) => {
           SELECT cliente_id, SUM(monto) AS total_correcciones
             FROM correcciones_saldo_cliente GROUP BY cliente_id
         ) cs_agg ON cs_agg.cliente_id = c.id
-        LEFT JOIN LATERAL (
-          SELECT fecha FROM cuentas_corrientes_cliente
-          WHERE cliente_id = c.id AND debe > 0
-          ORDER BY fecha DESC LIMIT 1
-        ) ultima_debe ON true
         WHERE ${where}
-        GROUP BY c.id, ci.nombre, lp.nombre, lp.id, suc.nombre, cs_agg.total_correcciones, ultima_debe.fecha
+        GROUP BY c.id, ci.nombre, lp.nombre, lp.id, suc.nombre, cs_agg.total_correcciones
         ORDER BY c.razon_social
         LIMIT $${idx} OFFSET $${idx + 1}
       `, params),

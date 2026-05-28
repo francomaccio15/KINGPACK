@@ -9,8 +9,6 @@ type Cliente = {
   lista_precio: string | null;
   limite_credito: string;
   saldo_actual: string;
-  plazo_dias: number | null;
-  fecha_vencimiento: string | null;
 };
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
@@ -18,26 +16,6 @@ const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);
 };
-
-function estadoVencimiento(fechaStr: string | null): {
-  label: string;
-  className: string;
-} {
-  if (!fechaStr) return { label: 'Sin fecha', className: 'text-kp-gray' };
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const vto = new Date(fechaStr);
-  vto.setHours(0, 0, 0, 0);
-  const dias = Math.round((vto.getTime() - hoy.getTime()) / 86400000);
-
-  if (dias < 0)  return { label: `Vencido hace ${Math.abs(dias)}d`, className: 'text-kp-red font-semibold' };
-  if (dias === 0) return { label: 'Vence hoy',                       className: 'text-amber-400 font-semibold' };
-  if (dias <= 7)  return { label: `Vence en ${dias}d`,               className: 'text-amber-400' };
-  return {
-    label: new Date(fechaStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-    className: 'text-kp-gray-lt',
-  };
-}
 
 export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
   const deudores = clientes
@@ -59,7 +37,6 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Resumen */}
       <div className="flex items-center justify-between px-1">
         <p className="text-sm text-kp-gray">
           <span className="text-kp-white font-semibold">{deudores.length}</span> clientes con deuda
@@ -69,7 +46,6 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
         </p>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
           <thead>
@@ -82,17 +58,14 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
               <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                 <span className="text-kp-red">Deuda</span>
               </th>
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Plazo</th>
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Vencimiento</th>
               <th className="px-3 py-3" />
             </tr>
           </thead>
           <tbody className="bg-kp-surface divide-y divide-kp-border">
             {deudores.map((c, i) => {
-              const saldo   = parseFloat(c.saldo_actual || '0');
-              const limite  = parseFloat(c.limite_credito || '0');
-              const excede  = limite > 0 && saldo > limite;
-              const vto     = estadoVencimiento(c.fecha_vencimiento);
+              const saldo  = parseFloat(c.saldo_actual || '0');
+              const limite = parseFloat(c.limite_credito || '0');
+              const excede = limite > 0 && saldo > limite;
 
               return (
                 <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
@@ -116,12 +89,6 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
                       )}
                       {fmt(saldo)}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-center text-xs text-kp-gray tabular-nums">
-                    {c.plazo_dias ? `${c.plazo_dias}d` : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-center text-xs">
-                    <span className={vto.className}>{vto.label}</span>
                   </td>
                   <td className="px-3 py-3 text-center">
                     <Link href={`/clientes/${c.id}`}

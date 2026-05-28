@@ -10,7 +10,6 @@ type Cliente = {
   id: string; razon_social: string; cuit: string | null; telefono: string | null;
   cond_iva: string; lista_precio: string | null; sucursal_nombre: string | null;
   limite_credito: string; descuento_adicional: string; saldo_actual: string; activo: boolean;
-  plazo_dias: number | null; fecha_vencimiento: string | null;
 };
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
