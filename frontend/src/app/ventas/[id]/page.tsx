@@ -265,6 +265,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       {/* ── Estilos de control de modo de impresión ──────────────────────── */}
       <style>{`
         @media print {
+          @page { size: A4; margin: 12mm; }
           .print-layout-venta    { display: block !important; }
           .print-layout-factura  { display: none  !important; }
         }
@@ -446,7 +447,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
       {/* ── Layout de impresión FACTURA FISCAL ───────────────────────────────── */}
       {facturacion && (
-        <div className="print-layout-factura hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', color: '#111', background: 'white', width: '210mm', margin: '0 auto', padding: '15mm', boxSizing: 'border-box' }}>
+        <div className="print-layout-factura hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', color: '#111', background: 'white', width: '100%', boxSizing: 'border-box' }}>
 
           {/* ══ ENCABEZADO FISCAL — 3 columnas ══ */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', border: '2px solid #111', marginBottom: '10px' }}>
