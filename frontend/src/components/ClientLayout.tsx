@@ -67,7 +67,7 @@ function AppShell({
 
   return (
     <>
-      <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20">
+      <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20 print:hidden">
         <div className="h-full px-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
@@ -94,13 +94,13 @@ function AppShell({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <div className="print:hidden"><Sidebar /></div>
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto px-6 py-8">{children}</div>
         </main>
       </div>
 
-      <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-4 flex-shrink-0 bg-kp-surface">
+      <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-4 flex-shrink-0 bg-kp-surface print:hidden">
         KingPack &nbsp;·&nbsp; MaccioTEC &nbsp;·&nbsp;
         <span className="capitalize">{user.rol}</span>
       </footer>

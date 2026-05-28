@@ -52,7 +52,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
     <section className="space-y-6 max-w-5xl">
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-kp-gray">
+      <div className="flex items-center gap-2 text-sm text-kp-gray print:hidden">
         <Link href="/ventas" className="hover:text-kp-white transition-colors">Ventas</Link>
         <span>/</span>
         <span className="text-kp-white font-medium">#{venta.numero}</span>
