@@ -35,7 +35,10 @@ const SELECT_NC = `
     tc.letra       AS tipo_letra,
     tc.codigo_afip AS tipo_codigo_afip,
     -- Sucursal
-    s.nombre       AS sucursal_nombre,
+    s.nombre        AS sucursal_nombre,
+    s.cuit_sucursal AS sucursal_cuit,
+    s.direccion     AS sucursal_direccion,
+    s.telefono      AS sucursal_telefono,
     -- Emisor (usuario)
     u.nombre       AS emitida_por_nombre,
     -- Facturación original (opcional)

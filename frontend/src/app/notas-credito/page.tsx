@@ -28,7 +28,10 @@ export type NotaCredito = {
   tipo_letra: string | null;
   tipo_codigo_afip: number | null;
   // Sucursal / emisor
-  sucursal_nombre: string | null;
+  sucursal_nombre:    string | null;
+  sucursal_cuit:      string | null;
+  sucursal_direccion: string | null;
+  sucursal_telefono:  string | null;
   emitida_por_nombre: string | null;
   // Factura original
   factura_id: string | null;

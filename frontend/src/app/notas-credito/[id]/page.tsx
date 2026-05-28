@@ -6,15 +6,6 @@ import PrintButton from './PrintButton';
 
 export const dynamic = 'force-dynamic';
 
-// ─── Datos del emisor (King Pack) ─────────────────────────────────────────────
-const EMISOR = {
-  razon_social:  'KING PACK S.R.L.',
-  cuit:          '30-XXXXXXXX-X',       // ← actualizar con el CUIT real
-  cond_iva:      'Responsable Inscripto',
-  domicilio:     'Salta, Argentina',
-  telefono:      '',
-};
-
 async function fetchNota(id: string): Promise<NotaCredito | null> {
   try {
     const r = await serverFetch(`/api/notas-credito/${id}`, { cache: 'no-store' });
@@ -52,6 +43,14 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
   const numero  = nota.numero ? String(nota.numero).padStart(8, '0') : '—';
   const fecha   = new Date(nota.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  const emisor = {
+    razon_social: 'KING PACK S.R.L.',
+    cuit:         nota.sucursal_cuit ?? '—',
+    cond_iva:     'Responsable Inscripto',
+    domicilio:    nota.sucursal_direccion ?? 'Salta, Argentina',
+    telefono:     nota.sucursal_telefono ?? '',
+  };
+
   return (
     <>
       <PrintTrigger />
@@ -78,12 +77,12 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
             {/* Emisor */}
             <div>
               <h1 className="text-2xl font-black uppercase tracking-wide text-gray-900 mb-1">
-                {EMISOR.razon_social}
+                {emisor.razon_social}
               </h1>
-              <p className="text-sm text-gray-500">CUIT: {EMISOR.cuit}</p>
-              <p className="text-sm text-gray-500">Cond. IVA: {EMISOR.cond_iva}</p>
-              <p className="text-sm text-gray-500">{EMISOR.domicilio}</p>
-              {EMISOR.telefono && <p className="text-sm text-gray-500">Tel: {EMISOR.telefono}</p>}
+              <p className="text-sm text-gray-500">CUIT: {emisor.cuit}</p>
+              <p className="text-sm text-gray-500">Cond. IVA: {emisor.cond_iva}</p>
+              <p className="text-sm text-gray-500">{emisor.domicilio}</p>
+              {emisor.telefono && <p className="text-sm text-gray-500">Tel: {emisor.telefono}</p>}
             </div>
 
             {/* Tipo de documento + número */}
@@ -107,10 +106,10 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
             {/* Emisor detalle */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Emisor</p>
-              <Row label="Razón Social" value={EMISOR.razon_social} />
-              <Row label="CUIT" value={EMISOR.cuit} />
-              <Row label="Cond. IVA" value={EMISOR.cond_iva} />
-              <Row label="Domicilio" value={EMISOR.domicilio} />
+              <Row label="Razón Social" value={emisor.razon_social} />
+              <Row label="CUIT" value={emisor.cuit} />
+              <Row label="Cond. IVA" value={emisor.cond_iva} />
+              <Row label="Domicilio" value={emisor.domicilio} />
               {nota.sucursal_nombre && <Row label="Sucursal" value={nota.sucursal_nombre} />}
             </div>
 
@@ -203,7 +202,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
           <div className="grid grid-cols-2 gap-12 mt-12 pt-6 border-t border-gray-200">
             <div className="text-center">
               <div className="border-t border-gray-400 mt-8 pt-2">
-                <p className="text-xs text-gray-500">Firma autorizada — {EMISOR.razon_social}</p>
+                <p className="text-xs text-gray-500">Firma autorizada — {emisor.razon_social}</p>
               </div>
             </div>
             <div className="text-center">
@@ -216,7 +215,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
           {/* ══ PIE ══════════════════════════════════════════════════════════════ */}
           <div className="mt-8 pt-4 border-t border-gray-100 text-center">
             <p className="text-[9px] text-gray-400 uppercase tracking-widest">
-              {EMISOR.razon_social} · {EMISOR.cuit} · Documento emitido el {fecha}
+              {emisor.razon_social} · {emisor.cuit} · Documento emitido el {fecha}
               {nota.emitida_por_nombre ? ` · Emitido por ${nota.emitida_por_nombre}` : ''}
             </p>
             {nota.estado === 'anulada' && (
