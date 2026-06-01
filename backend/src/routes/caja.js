@@ -29,7 +29,7 @@ router.get('/estado', async (req, res, next) => {
       LEFT JOIN movimientos_caja m
         ON m.caja_id = c.id
       WHERE s.activo = true ${sucursFiltro}
-      GROUP BY s.id, s.nombre, c.id, c.fecha_apertura, c.saldo_inicial, c.estado
+      GROUP BY s.id, s.nombre, c.id, c.sucursal_id, c.fecha_apertura, c.saldo_inicial, c.estado
       ORDER BY s.nombre
     `, params);
 
@@ -129,7 +129,7 @@ router.get('/:id', async (req, res, next) => {
     const [{ rows: cajaRows }, { rows: movRows }, { rows: mediosRows }] = await Promise.all([
       pool.query(`
         SELECT
-          c.id, c.fecha_apertura, c.fecha_cierre, c.estado,
+          c.id, c.sucursal_id, c.fecha_apertura, c.fecha_cierre, c.estado,
           c.saldo_inicial, c.saldo_final_sistema, c.saldo_final_real, c.diferencia,
           s.nombre AS sucursal_nombre,
           -- Totales calculados
