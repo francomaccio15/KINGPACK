@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { KingPackLogoFull } from '@/components/KingPackLogo';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -33,9 +34,8 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="w-1 h-7 bg-kp-red rounded-full block" />
-            <h1 className="text-2xl font-bold tracking-wide uppercase">King Pack</h1>
+          <div className="flex justify-center mb-3">
+            <KingPackLogoFull />
           </div>
           <p className="text-kp-gray text-sm">Sistema de gestión integral</p>
         </div>

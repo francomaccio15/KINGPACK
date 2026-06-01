@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import SucursalSelector from './SucursalSelector';
 import NotifBell from './NotifBell';
+import { KingPackLogoWithSubtitle } from './KingPackLogo';
 
 interface Sucursal { id: string; nombre: string; }
 
@@ -69,16 +70,7 @@ function AppShell({
     <>
       <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20 print:hidden">
         <div className="h-full px-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h1 className="text-lg font-bold tracking-wide uppercase">
-              King Pack
-              <span className="text-kp-red ml-1">·</span>
-              <span className="font-normal text-kp-gray ml-1 normal-case tracking-normal text-base">
-                Gestión
-              </span>
-            </h1>
-          </div>
+          <KingPackLogoWithSubtitle subtitle="Gestión" />
           <div className="flex items-center gap-3">
             {user.rol === 'administrador' && <NotifBell />}
             {user.rol === 'cajero' ? (

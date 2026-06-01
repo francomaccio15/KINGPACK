@@ -3,6 +3,7 @@ import AccionesVenta from './AccionesVenta';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { KingPackLogoPrint } from '@/components/KingPackLogo';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (v: string | number | null) => {
@@ -281,11 +282,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
         {/* Encabezado del documento */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111', paddingBottom: '12px', marginBottom: '16px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <div style={{ width: '4px', height: '28px', background: '#dc2626', borderRadius: '2px' }} />
-              <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase' }}>King Pack</span>
-            </div>
-            <p style={{ fontSize: '11px', color: '#6b7280', marginLeft: '12px' }}>Sistema de Gestión Integral</p>
+            <KingPackLogoPrint />
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '1px' }}>VENTA #{venta.numero}</p>
@@ -439,7 +436,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
         {/* Pie del documento */}
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
-          <span>King Pack · Sistema de Gestión</span>
+          <span>KING PACK DESCARTABLES · Sistema de Gestión</span>
           <span>Documento generado el {new Date().toLocaleDateString('es-AR')}</span>
         </div>
 
@@ -454,9 +451,8 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
             {/* Emisor */}
             <div style={{ padding: '10px 12px', borderRight: '2px solid #111' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <div style={{ width: '3px', height: '22px', background: '#dc2626', borderRadius: '1px', flexShrink: 0 }} />
-                <span style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '1.5px', textTransform: 'uppercase' }}>King Pack</span>
+              <div style={{ marginBottom: '6px' }}>
+                <KingPackLogoPrint />
               </div>
               <p style={{ fontSize: '11px', marginBottom: '2px', marginLeft: '9px' }}>
                 <strong>CUIT:</strong> 30-71792696-6
