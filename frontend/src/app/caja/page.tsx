@@ -182,8 +182,8 @@ export default async function CajaPage() {
         })}
       </div>
 
-      {/* Historial de cajas */}
-      {historial.length > 0 && (
+      {/* Historial de cajas (solo admin/supervisor) */}
+      {!esCajero && historial.length > 0 && (
         <div>
           <h3 className="text-sm font-bold uppercase tracking-widest text-kp-gray mb-3">
             Historial reciente

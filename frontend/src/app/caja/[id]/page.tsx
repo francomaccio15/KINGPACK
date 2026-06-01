@@ -30,6 +30,8 @@ export const dynamic = 'force-dynamic';
 export default async function DetalleCajaPage({ params }: { params: { id: string } }) {
   const user = requireAuth('/caja');
   const esAdmin = user.rol === 'administrador';
+  const esCajero = user.rol === 'cajero';
+  const cajeroSucursalId = user.sucursal_default_id ?? null;
 
   let caja: any = null;
   let movimientos: any[] = [];
@@ -114,10 +116,10 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           <p className="text-sm text-kp-gray pl-3">Apertura: {fecha}</p>
         </div>
 
-        {/* Acciones (solo admin) */}
-        {abierta && esAdmin && (
+        {/* Acciones */}
+        {abierta && (esAdmin || (esCajero && caja.sucursal_id === cajeroSucursalId)) && (
           <div className="flex gap-2">
-            <RegistrarMovimiento cajaId={caja.id} mediosPago={mediosPago} />
+            {esAdmin && <RegistrarMovimiento cajaId={caja.id} mediosPago={mediosPago} />}
             <CerrarCaja cajaId={caja.id} saldoSistema={saldoSistema} />
           </div>
         )}
