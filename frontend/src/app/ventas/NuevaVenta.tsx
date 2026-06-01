@@ -181,6 +181,10 @@ export default function NuevaVenta({
   const esTransferencia = selectedMedio
     ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio.nombre.toLowerCase().includes(k))
     : false;
+  const esEfectivo = selectedMedio?.nombre.toLowerCase().includes('efectivo') ?? false;
+
+  // ── Efectivo: importe recibido y vuelto
+  const [montoRecibido, setMontoRecibido] = useState<string>('');
 
   // ── Saldo a favor
   const [saldoAFavorAplicado, setSaldoAFavorAplicado] = useState<number>(0);
@@ -249,6 +253,7 @@ export default function NuevaVenta({
     setSaving(null);
     setSucursalId(sucursales[0]?.id ?? '');
     setSaldoAFavorAplicado(0);
+    setMontoRecibido('');
     setCajaAbierta(null);
   }, [sucursales]);
 
@@ -431,6 +436,13 @@ export default function NuevaVenta({
     (acc, i) => acc + i.precio_unitario_final * i.cantidad, 0
   );
   const descuentoTotal = subtotalBruto - subtotalFinal;
+
+  // ─── Vuelto ────────────────────────────────────────────────────────────────
+  const totalAPagar      = Math.max(0, subtotalFinal - Math.min(saldoAFavorAplicado, subtotalFinal));
+  const montoRecibidoNum = parseFloat(montoRecibido.replace(',', '.')) || 0;
+  const vuelto           = esEfectivo && montoRecibidoNum > 0
+    ? montoRecibidoNum - totalAPagar
+    : 0;
 
   // ─── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async (estado: 'preventa' | 'confirmada') => {
@@ -1070,6 +1082,51 @@ export default function NuevaVenta({
                           <option>Cuenta Corriente</option>
                         </select>
                       )}
+                    </section>
+                  )}
+
+                  {/* ── Efectivo: importe recibido + vuelto ─────────────── */}
+                  {esEfectivo && !cartEmpty && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                    <section className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
+                      <div className="px-4 py-2.5 bg-kp-surface2 border-b border-kp-border">
+                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">Efectivo</p>
+                      </div>
+                      <div className="px-4 py-3 space-y-3">
+                        {/* Importe recibido */}
+                        <div>
+                          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+                            Importe recibido
+                          </p>
+                          <NumericInput
+                            value={montoRecibido}
+                            onChange={e => setMontoRecibido(e.target.value)}
+                            placeholder={ars.format(totalAPagar).replace('$ ', '')}
+                            className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5
+                              text-sm font-bold text-kp-white tabular-nums
+                              focus:outline-none focus:border-kp-red transition-colors"
+                          />
+                        </div>
+
+                        {/* Vuelto */}
+                        {montoRecibidoNum > 0 && (
+                          <div className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${
+                            vuelto < 0
+                              ? 'bg-kp-red/10 border border-kp-red/30'
+                              : 'bg-emerald-500/10 border border-emerald-500/25'
+                          }`}>
+                            <span className={`text-xs font-semibold uppercase tracking-wide ${
+                              vuelto < 0 ? 'text-kp-red' : 'text-emerald-400'
+                            }`}>
+                              {vuelto < 0 ? 'Falta' : 'Vuelto'}
+                            </span>
+                            <span className={`text-lg font-black tabular-nums ${
+                              vuelto < 0 ? 'text-kp-red' : 'text-emerald-400'
+                            }`}>
+                              {ars.format(Math.abs(vuelto))}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </section>
                   )}
 
