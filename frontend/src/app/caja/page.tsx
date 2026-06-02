@@ -1,5 +1,6 @@
 ﻿import Link from 'next/link';
 import AbrirCaja from './AbrirCaja';
+import CerrarCaja from './[id]/CerrarCaja';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -135,7 +136,7 @@ export default async function CajaPage() {
                     <span className="text-xs text-kp-gray/50">Sin caja activa</span>
                   )}
                 </div>
-                {abierta && (
+                {abierta && !esCajero && (
                   <Link
                     href={`/caja/${s.id}`}
                     className="text-xs text-kp-gray hover:text-kp-white border border-kp-border hover:border-kp-gray rounded-lg px-2.5 py-1.5 transition-colors"
@@ -170,12 +171,27 @@ export default async function CajaPage() {
               )}
 
               {abierta && (
-                <p className="text-xs text-kp-gray/60 border-t border-kp-border pt-3">
-                  {s.total_movimientos} {Number(s.total_movimientos) === 1 ? 'movimiento' : 'movimientos'}
-                  {s.fecha_apertura && (
-                    <> · Abierta {new Date(s.fecha_apertura).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</>
+                <div className="border-t border-kp-border pt-3 space-y-2">
+                  <p className="text-xs text-kp-gray/60">
+                    {s.total_movimientos} {Number(s.total_movimientos) === 1 ? 'movimiento' : 'movimientos'}
+                    {s.fecha_apertura && (
+                      <> · Abierta {new Date(s.fecha_apertura).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</>
+                    )}
+                  </p>
+                  {esCajero && s.id && saldoSistema !== null && (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <CerrarCaja cajaId={s.id} saldoSistema={saldoSistema} fullWidth />
+                      </div>
+                      <Link
+                        href={`/caja/${s.id}`}
+                        className="flex items-center px-3 py-2 rounded-lg border border-kp-border text-xs text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+                      >
+                        Ver →
+                      </Link>
+                    </div>
                   )}
-                </p>
+                </div>
               )}
             </div>
           );

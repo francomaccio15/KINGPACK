@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import RegistrarMovimiento from './RegistrarMovimiento';
 import CerrarCaja from './CerrarCaja';
+import MovimientosTabla from './MovimientosTabla';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -9,20 +10,6 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);
-};
-
-const TIPO_STYLE: Record<string, string> = {
-  ingreso: 'bg-green-500/10 text-green-400 border-green-500/30',
-  egreso:  'bg-kp-red/10 text-kp-red border-kp-red/30',
-  retiro:  'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  venta:   'bg-blue-500/10 text-blue-400 border-blue-500/30',
-};
-
-const TIPO_LABEL: Record<string, string> = {
-  ingreso: 'Ingreso',
-  egreso:  'Egreso',
-  retiro:  'Retiro',
-  venta:   'Venta',
 };
 
 export const dynamic = 'force-dynamic';
@@ -188,54 +175,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
       )}
 
       {/* Tabla de movimientos */}
-      <div className="rounded-xl border border-kp-border overflow-hidden">
-        <div className="bg-kp-surface2 border-b border-kp-border px-4 py-3 flex items-center justify-between">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-kp-gray">
-            Movimientos{!esAdmin ? ' — Efectivo' : ''}
-          </h3>
-          <span className="text-xs text-kp-gray/60">{movimientosFiltrados.length} registros</span>
-        </div>
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-kp-surface2/50 border-b border-kp-border">
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Hora</th>
-              <th className="text-center px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Tipo</th>
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Concepto</th>
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Medio de Pago</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Monto</th>
-            </tr>
-          </thead>
-          <tbody className="bg-kp-surface divide-y divide-kp-border">
-            {movimientosFiltrados.map((m: any) => {
-              const esIngreso = ['ingreso', 'venta'].includes(m.tipo);
-              return (
-                <tr key={m.id} className="hover:bg-kp-surface2 transition-colors">
-                  <td className="px-4 py-3 text-xs text-kp-gray whitespace-nowrap">
-                    {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${TIPO_STYLE[m.tipo] ?? ''}`}>
-                      {TIPO_LABEL[m.tipo] ?? m.tipo}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-kp-white">{m.concepto}</td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{m.medio_pago ?? '—'}</td>
-                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${esIngreso ? 'text-green-400' : 'text-kp-red'}`}>
-                    {esIngreso ? '+' : '−'}{fmt(m.monto)}
-                  </td>
-                </tr>
-              );
-            })}
-            {movimientosFiltrados.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-kp-gray text-sm">
-                  No hay movimientos{!esAdmin ? ' en efectivo' : ''} registrados en esta caja.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <MovimientosTabla movimientos={movimientosFiltrados} esAdmin={esAdmin} />
 
     </section>
   );

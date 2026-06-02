@@ -99,6 +99,11 @@ const IcoNC = () => (
     <line x1="12" y1="12" x2="12" y2="18"/>
   </svg>
 );
+const IcoTraspasos = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </svg>
+);
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -117,6 +122,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
       { label: 'Gastos',                 href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
+      { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
       { label: 'Notas de equipo',       href: '/notas',                icon: <IcoNotas /> },
       { label: 'Notas de Crédito',      href: '/notas-credito',        icon: <IcoNC /> },

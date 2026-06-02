@@ -1,6 +1,7 @@
 ﻿import { Suspense } from 'react';
 import Link from 'next/link';
 import FiltrosPedidos from './FiltrosPedidos';
+import NuevoPedido from './NuevoPedido';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -39,24 +40,29 @@ const ESTADO_LABEL: Record<string, string> = {
   cancelado:        'Cancelado',
 };
 
-async function fetchData(params: Record<string, string | undefined>) {
+async function fetchData(params: Record<string, string | undefined>, sucursalFilter?: string | null) {
   const q = new URLSearchParams();
   if (params.q)            q.set('q', params.q);
   if (params.estado)       q.set('estado', params.estado);
   if (params.proveedor_id) q.set('proveedor_id', params.proveedor_id);
   if (params.fecha_desde)  q.set('fecha_desde', params.fecha_desde);
   if (params.fecha_hasta)  q.set('fecha_hasta', params.fecha_hasta);
+  if (sucursalFilter)      q.set('sucursal_id', sucursalFilter);
   q.set('limit', '200');
 
-  const [pedidosRes, proveedoresRes] = await Promise.all([
+  const [pedidosRes, proveedoresRes, sucursalesRes, articulosRes] = await Promise.all([
     serverFetch(`/api/pedidos-compra?${q}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ pedidos: [], count: 0 })),
-    serverFetch(`/api/proveedores?limit=500`,{ cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch(`/api/proveedores?limit=500`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch(`/api/sucursales`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
+    serverFetch(`/api/articulos?limit=2000&activo=true`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ articulos: [] })),
   ]);
 
   return {
     pedidos:     pedidosRes.pedidos        ?? [],
     count:       pedidosRes.count          ?? 0,
     proveedores: proveedoresRes.proveedores ?? [],
+    sucursales:  sucursalesRes.sucursales   ?? sucursalesRes ?? [],
+    articulos:   articulosRes.articulos     ?? [],
   };
 }
 
@@ -67,8 +73,11 @@ export default async function PedidosProveedoresPage({
 }: {
   searchParams: { q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
-  requireAuth('/pedidos-proveedores');
-  const { pedidos, count, proveedores } = await fetchData(searchParams);
+  const user = requireAuth('/pedidos-proveedores');
+  const esCajero = user.rol === 'cajero';
+  const sucursalFilter = esCajero ? (user.sucursal_default_id ?? null) : null;
+
+  const { pedidos, count, proveedores, sucursales, articulos } = await fetchData(searchParams, sucursalFilter);
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.proveedor_id || searchParams.fecha_desde || searchParams.fecha_hasta);
 
   const pendienteCount = pedidos.filter((p: Pedido) => p.estado === 'pendiente').length;
@@ -89,14 +98,24 @@ export default async function PedidosProveedoresPage({
           </p>
         </div>
 
-        {pendienteCount > 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-xs font-semibold text-amber-400">
-              {pendienteCount} esperando confirmación
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {pendienteCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-xs font-semibold text-amber-400">
+                {pendienteCount} esperando confirmación
+              </span>
+            </div>
+          )}
+          <NuevoPedido
+            sucursales={esCajero && sucursalFilter
+              ? sucursales.filter((s: { id: string }) => s.id === sucursalFilter)
+              : sucursales
+            }
+            proveedores={proveedores}
+            articulos={articulos}
+          />
+        </div>
       </div>
 
       <p className="text-xs text-kp-gray/60 pl-3 -mt-2">

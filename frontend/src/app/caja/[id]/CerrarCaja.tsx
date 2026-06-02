@@ -21,9 +21,11 @@ function Spinner() {
 export default function CerrarCaja({
   cajaId,
   saldoSistema,
+  fullWidth = false,
 }: {
   cajaId: string;
   saldoSistema: number;
+  fullWidth?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen]         = useState(false);
@@ -64,7 +66,10 @@ export default function CerrarCaja({
     <>
       <button
         onClick={() => { setSaldo(''); setError(null); setOpen(true); }}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors"
+        className={[
+          'flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors',
+          fullWidth ? 'w-full' : '',
+        ].join(' ')}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
           <rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" />
