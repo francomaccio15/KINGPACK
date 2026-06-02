@@ -27,6 +27,8 @@ const IcoX      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const IcoSearch = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
 const IcoChev   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 transition-transform duration-200"><path d="M6 9l6 6 6-6"/></svg>;
 const IcoBox    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5 opacity-40"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 2 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+const IcoList   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+const IcoClose  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
 // ─── Color por inicial de categoría ──────────────────────────────────────────
 const PALETTE = [
@@ -271,17 +273,30 @@ function FormCategoria({
   );
 }
 
+// ─── Tipo artículo simplificado para panel de categoría ──────────────────────
+type ArticuloCat = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precio_madre: string;
+  margen_aplicado: string | null;
+  stock_total: string;
+  activo: boolean;
+};
+
 // ─── Tarjeta de categoría ─────────────────────────────────────────────────────
 function CategoriaCard({
-  cat, isAdmin, highlighted,
-  onSave, onDelete, onToggle,
+  cat, isAdmin, highlighted, expandida,
+  onSave, onDelete, onToggle, onExpand,
 }: {
   cat: Categoria;
   isAdmin: boolean;
   highlighted: boolean;
+  expandida: boolean;
   onSave:   (id: string, nombre: string, margen: number) => Promise<string | null>;
   onDelete: (id: string) => Promise<string | null>;
   onToggle: (id: string, activo: boolean) => Promise<void>;
+  onExpand: (id: string | null) => void;
 }) {
   const [editando,   setEditando]   = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -319,10 +334,14 @@ function CategoriaCard({
           PALETTE[idx],
           cat.activo ? '' : 'opacity-50 grayscale',
           highlighted ? 'ring-2 ring-kp-red ring-offset-2 ring-offset-kp-bg scale-[1.02]' : 'hover:scale-[1.01]',
+          expandida ? 'ring-2 ring-kp-red/60 ring-offset-1 ring-offset-kp-bg' : '',
         ].join(' ')}
       >
-        {/* Cuerpo */}
-        <div className="p-5">
+        {/* Cuerpo — clickeable para ver artículos */}
+        <div
+          className="p-5 cursor-pointer"
+          onClick={() => onExpand(expandida ? null : cat.id)}
+        >
           {/* Header: letra + nombre */}
           <div className="flex items-start gap-3 mb-4">
             <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-base font-black flex-shrink-0 ${LETTER_COLORS[idx]}`}>
@@ -364,6 +383,14 @@ function CategoriaCard({
             </span>
           </div>
 
+          {/* Hint ver artículos */}
+          {cat.articulos_count > 0 && (
+            <p className={`text-[10px] mt-3 flex items-center gap-1 transition-colors ${expandida ? 'text-kp-red' : 'text-kp-gray group-hover:text-kp-gray-lt'}`}>
+              <IcoList />
+              {expandida ? 'Clic para cerrar' : 'Clic para ver artículos'}
+            </p>
+          )}
+
           {/* Error de borrado */}
           {delError && (
             <p className="text-[11px] text-rose-400 mt-2 bg-rose-500/10 rounded-lg px-2 py-1">{delError}</p>
@@ -372,7 +399,7 @@ function CategoriaCard({
 
         {/* Acciones — footer */}
         {isAdmin && (
-          <div className="flex items-center justify-between border-t border-white/10 px-4 py-2.5">
+          <div className="flex items-center justify-between border-t border-white/10 px-4 py-2.5" onClick={e => e.stopPropagation()}>
             {/* Toggle activo */}
             <button
               onClick={() => onToggle(cat.id, !cat.activo)}
@@ -445,6 +472,10 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
   const [showForm,      setShowForm]      = useState(false);
   const [seleccionada,  setSeleccionada]  = useState('');
   const [filtroActivo,  setFiltroActivo]  = useState<'true' | 'all' | 'false'>('true');
+  const [catExpandida,  setCatExpandida]  = useState<string | null>(null);
+  const [articulosCat,  setArticulosCat]  = useState<ArticuloCat[]>([]);
+  const [loadingArt,    setLoadingArt]    = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Categorías para el buscador (respeta filtro activo pero no la selección)
   const catsParaBuscador = cats.filter(c =>
@@ -457,6 +488,32 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
   );
 
   const totalArticulos = cats.filter(c => c.activo).reduce((s, c) => s + c.articulos_count, 0);
+
+  // Fetch artículos de la categoría expandida
+  useEffect(() => {
+    if (!catExpandida) { setArticulosCat([]); return; }
+    let cancelled = false;
+    setLoadingArt(true);
+    apiFetch(`/api/articulos?categoria_id=${catExpandida}&activo=all&limit=500`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled) setArticulosCat(data.articulos ?? []);
+      })
+      .catch(() => { if (!cancelled) setArticulosCat([]); })
+      .finally(() => { if (!cancelled) setLoadingArt(false); });
+    return () => { cancelled = true; };
+  }, [catExpandida]);
+
+  // Scroll al panel cuando se expande
+  useEffect(() => {
+    if (catExpandida && panelRef.current) {
+      setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+  }, [catExpandida]);
+
+  const handleExpand = useCallback((id: string | null) => {
+    setCatExpandida(prev => prev === id ? null : id);
+  }, []);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleCreated = (c: Categoria) =>
@@ -582,13 +639,104 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
               cat={cat}
               isAdmin={isAdmin}
               highlighted={cat.id === seleccionada}
+              expandida={cat.id === catExpandida}
               onSave={handleSave}
               onDelete={handleDelete}
               onToggle={handleToggle}
+              onExpand={handleExpand}
             />
           ))}
         </div>
       )}
+
+      {/* ── Panel artículos de la categoría expandida ── */}
+      {catExpandida && (() => {
+        const cat = cats.find(c => c.id === catExpandida);
+        const idx = cat ? paletteIdx(cat.nombre) : 0;
+        const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+        return (
+          <div ref={panelRef} className={`rounded-2xl border bg-gradient-to-b from-kp-surface2 to-kp-surface border-kp-border`}>
+            {/* Header del panel */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border">
+              <div className="flex items-center gap-3">
+                {cat && (
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black flex-shrink-0 ${LETTER_COLORS[idx]}`}>
+                    {cat.nombre[0]}
+                  </span>
+                )}
+                <div>
+                  <h3 className="text-sm font-bold text-kp-white uppercase tracking-wide">{cat?.nombre}</h3>
+                  {!loadingArt && (
+                    <p className="text-[11px] text-kp-gray mt-0.5">{articulosCat.length} artículo{articulosCat.length !== 1 ? 's' : ''}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setCatExpandida(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-kp-gray hover:text-kp-white hover:bg-white/10 transition-colors"
+                title="Cerrar"
+              >
+                <IcoClose />
+              </button>
+            </div>
+
+            {/* Contenido */}
+            {loadingArt ? (
+              <div className="flex items-center justify-center py-10 text-kp-gray text-sm gap-2">
+                <span className="animate-spin text-lg">⟳</span>
+                Cargando artículos…
+              </div>
+            ) : articulosCat.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-kp-gray">
+                <p className="text-3xl mb-2">📦</p>
+                <p className="text-sm">Sin artículos en esta categoría.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] text-kp-gray uppercase tracking-wider border-b border-kp-border/60">
+                      <th className="text-left px-5 py-3 font-semibold">Código</th>
+                      <th className="text-left px-5 py-3 font-semibold">Nombre</th>
+                      <th className="text-right px-5 py-3 font-semibold">Precio madre</th>
+                      <th className="text-right px-5 py-3 font-semibold">Margen</th>
+                      <th className="text-right px-5 py-3 font-semibold">Stock total</th>
+                      <th className="text-center px-5 py-3 font-semibold">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-kp-border/30">
+                    {articulosCat.map((a, i) => (
+                      <tr key={a.id} className={`transition-colors hover:bg-white/5 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
+                        <td className="px-5 py-3 font-mono text-xs text-kp-gray-lt">{a.codigo}</td>
+                        <td className="px-5 py-3 text-kp-white font-medium max-w-xs truncate">{a.nombre}</td>
+                        <td className="px-5 py-3 text-right tabular-nums text-kp-white">
+                          {isNaN(parseFloat(a.precio_madre)) ? '—' : ars.format(parseFloat(a.precio_madre))}
+                        </td>
+                        <td className="px-5 py-3 text-right tabular-nums">
+                          {a.margen_aplicado != null
+                            ? <span className="text-green-400 font-semibold">+{parseFloat(a.margen_aplicado).toFixed(0)}%</span>
+                            : <span className="text-kp-gray text-xs">Cat. ({cat?.margen_default.toFixed(0)}%)</span>}
+                        </td>
+                        <td className="px-5 py-3 text-right tabular-nums text-kp-gray-lt">
+                          {parseFloat(a.stock_total) > 0
+                            ? <span className="text-kp-white">{parseFloat(a.stock_total).toFixed(0)}</span>
+                            : <span className="text-kp-gray">0</span>}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${a.activo ? 'bg-green-500/15 text-green-400' : 'bg-kp-surface2 text-kp-gray'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${a.activo ? 'bg-green-400' : 'bg-kp-gray'}`} />
+                            {a.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Aviso margen */}
       {isAdmin && (
