@@ -844,10 +844,16 @@ export default function NuevaVenta({
                             <button
                               onClick={() => removeFromCart(item.articulo_id)}
                               className="w-7 h-7 flex items-center justify-center rounded text-kp-gray
-                                hover:text-kp-red hover:bg-kp-red/10 transition-colors shrink-0 text-sm"
+                                hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
                               aria-label={`Eliminar ${item.nombre}`}
+                              title="Quitar artículo"
                             >
-                              ×
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6"/><path d="M14 11v6"/>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                              </svg>
                             </button>
                           </div>
                         );
