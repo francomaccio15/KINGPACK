@@ -185,7 +185,7 @@ router.post('/:id/movimiento', async (req, res, next) => {
     );
     if (cajaRows.length === 0) return res.status(409).json({ error: 'La caja no está abierta' });
 
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     const { rows } = await pool.query(`
       INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
