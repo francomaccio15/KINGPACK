@@ -65,6 +65,15 @@ export default function EditarVentaForm({
     }))
   );
 
+  // Descuento por defecto para nuevos ítems = el más frecuente en el carrito original
+  const descuentoVenta = (() => {
+    if (itemsIniciales.length === 0) return 0;
+    const descuentos = itemsIniciales.map(i => parseFloat(String(i.descuento_pct)) || 0);
+    const freq: Record<number, number> = {};
+    descuentos.forEach(d => { freq[d] = (freq[d] || 0) + 1; });
+    return Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
+  })();
+
   const [observacion, setObservacion] = useState('');
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -98,10 +107,12 @@ export default function EditarVentaForm({
         );
       }
       const precioLista = art.precio_lista || art.precio_madre;
+      const descPct     = descuentoVenta;
+      const precioFinal = +(precioLista * (1 - descPct / 100)).toFixed(4);
       return [...prev, {
         articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
-        cantidad: 1, precio_lista: precioLista, descuento_pct: 0,
-        precio_unitario_final: precioLista,
+        cantidad: 1, precio_lista: precioLista, descuento_pct: descPct,
+        precio_unitario_final: precioFinal,
       }];
     });
     setQuery('');
@@ -154,7 +165,17 @@ export default function EditarVentaForm({
 
       {/* ── Buscador de artículos ── */}
       <div className="rounded-xl border border-kp-border bg-kp-surface p-5 space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Agregar artículo</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Agregar artículo</h3>
+          {descuentoVenta > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-kp-red/10 border border-kp-red/30 text-kp-red rounded-lg px-2.5 py-1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                <line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>
+              </svg>
+              Nuevos artículos con {descuentoVenta}% desc.
+            </span>
+          )}
+        </div>
         <div className="relative">
           <input
             type="text"
