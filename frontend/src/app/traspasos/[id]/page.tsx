@@ -22,9 +22,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function DetalleTraspasoPage({ params }: { params: { id: string } }) {
   const user = requireAuth('/traspasos');
-  const esAdmin = user.rol === 'administrador';
+  const esAdmin      = user.rol === 'administrador';
   const esSupervisor = user.rol === 'supervisor';
-  const puedeAccionar = esAdmin || esSupervisor;
+  const esCajero     = user.rol === 'cajero';
+  const esPrivilegiado = esAdmin || esSupervisor;
+  const cajeroSucursalId = esCajero ? (user.sucursal_default_id ?? null) : null;
 
   let traspaso: any = null;
   let items: any[] = [];
@@ -46,6 +48,16 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
       </section>
     );
   }
+
+  // Permisos granulares por rol y sucursal
+  const esOrigen  = esCajero && cajeroSucursalId === traspaso.sucursal_origen_id;
+  const esDestino = esCajero && cajeroSucursalId === traspaso.sucursal_destino_id;
+
+  // quién puede hacer qué
+  const puedeEnviar   = esPrivilegiado || esOrigen;   // pendiente → en_transito
+  const puedeRecibir  = esPrivilegiado || esDestino;  // en_transito → recibido
+  const puedeCancelar = esPrivilegiado || esOrigen || esDestino;
+  const hayAcciones   = puedeEnviar || puedeRecibir || puedeCancelar;
 
   const fechaCreacion = new Date(traspaso.created_at).toLocaleDateString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -118,9 +130,31 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
         </div>
       )}
 
-      {/* Acciones (solo admin/supervisor y si no está cerrado) */}
-      {puedeAccionar && (
-        <AccionesTraspaso traspasoId={traspaso.id} estado={traspaso.estado} />
+      {/* Banner informativo para cajero */}
+      {esCajero && (esOrigen || esDestino) && traspaso.estado !== 'recibido' && traspaso.estado !== 'cancelado' && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-semibold
+          ${esOrigen
+            ? 'border-blue-500/30 bg-blue-500/5 text-blue-300'
+            : 'border-green-500/30 bg-green-500/5 text-green-300'
+          }`}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {esOrigen
+            ? 'Tu sucursal es el origen de este traspaso. Podés marcarlo como enviado cuando el stock salga.'
+            : 'Tu sucursal es el destino de este traspaso. Confirmá la recepción cuando el stock llegue.'}
+        </div>
+      )}
+
+      {/* Acciones según rol y sucursal */}
+      {hayAcciones && (
+        <AccionesTraspaso
+          traspasoId={traspaso.id}
+          estado={traspaso.estado}
+          puedeEnviar={puedeEnviar}
+          puedeRecibir={puedeRecibir}
+          puedeCancelar={puedeCancelar}
+        />
       )}
 
       {/* Tabla de items */}

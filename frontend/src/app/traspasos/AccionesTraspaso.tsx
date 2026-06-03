@@ -28,9 +28,15 @@ function Spinner() {
 export default function AccionesTraspaso({
   traspasoId,
   estado,
+  puedeEnviar  = true,
+  puedeRecibir = true,
+  puedeCancelar = true,
 }: {
   traspasoId: string;
   estado: string;
+  puedeEnviar?: boolean;
+  puedeRecibir?: boolean;
+  puedeCancelar?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export default function AccionesTraspaso({
       )}
 
       <div className="flex gap-2 flex-wrap">
-        {estado === 'pendiente' && (
+        {estado === 'pendiente' && puedeEnviar && (
           <>
             {confirm === 'en_transito' ? (
               <div className="flex items-center gap-2 p-3 rounded-lg border border-blue-500/30 bg-blue-500/5">
@@ -98,7 +104,7 @@ export default function AccionesTraspaso({
           </>
         )}
 
-        {estado === 'en_transito' && (
+        {estado === 'en_transito' && puedeRecibir && (
           <>
             {confirm === 'recibido' ? (
               <div className="flex items-center gap-2 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
@@ -129,32 +135,34 @@ export default function AccionesTraspaso({
           </>
         )}
 
-        {/* Cancelar siempre disponible */}
-        {confirm === 'cancelado' ? (
-          <div className="flex items-center gap-2 p-3 rounded-lg border border-kp-red/30 bg-kp-red/5">
-            <p className="text-xs text-red-300">
-              {estado === 'en_transito' ? 'El stock volverá al origen. ' : ''}
-              ¿Cancelar traspaso?
-            </p>
+        {/* Cancelar — disponible si tiene permiso */}
+        {puedeCancelar && (
+          confirm === 'cancelado' ? (
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-kp-red/30 bg-kp-red/5">
+              <p className="text-xs text-red-300">
+                {estado === 'en_transito' ? 'El stock volverá al origen. ' : ''}
+                ¿Cancelar traspaso?
+              </p>
+              <button
+                onClick={() => cambiarEstado('cancelado')}
+                disabled={!!loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-kp-red text-white text-xs font-semibold hover:bg-kp-red/80 transition-colors disabled:opacity-50"
+              >
+                {loading === 'cancelado' ? <Spinner /> : null}
+                Sí, cancelar
+              </button>
+              <button onClick={() => setConfirm(null)} className="text-xs text-kp-gray hover:text-kp-white transition-colors px-2">
+                No
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={() => cambiarEstado('cancelado')}
-              disabled={!!loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-kp-red text-white text-xs font-semibold hover:bg-kp-red/80 transition-colors disabled:opacity-50"
+              onClick={() => setConfirm('cancelado')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-red hover:border-kp-red/40 transition-colors"
             >
-              {loading === 'cancelado' ? <Spinner /> : null}
-              Sí, cancelar
+              Cancelar traspaso
             </button>
-            <button onClick={() => setConfirm(null)} className="text-xs text-kp-gray hover:text-kp-white transition-colors px-2">
-              No
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirm('cancelado')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-red hover:border-kp-red/40 transition-colors"
-          >
-            Cancelar traspaso
-          </button>
+          )
         )}
       </div>
     </div>
