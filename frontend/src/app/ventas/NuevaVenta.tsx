@@ -871,6 +871,20 @@ export default function NuevaVenta({
 
               {/* ══ RIGHT PANEL — Resumen ════════════════════════════════ */}
               <div className="w-80 shrink-0 border-l border-kp-border bg-kp-surface2 flex flex-col overflow-hidden">
+
+                {/* Banner cliente seleccionado — siempre visible aunque scrollees */}
+                {selectedClient && (
+                  <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-kp-surface border-b border-kp-border">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-amber-400 flex-shrink-0">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span className="text-xs font-semibold text-amber-400 truncate">{selectedClient.razon_social}</span>
+                    {descuentoCliente > 0 && (
+                      <span className="ml-auto text-xs text-kp-red font-bold flex-shrink-0">−{descuentoCliente}%</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
                   {/* ── Cliente ─────────────────────────────────────────── */}
@@ -1006,30 +1020,35 @@ export default function NuevaVenta({
 
                   {/* ── Discount breakdown ──────────────────────────────── */}
                   {(descuentoLista > 0 || descuentoCliente > 0) && (
-                    <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1">
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+                    <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
+                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">
                         Descuentos aplicados
                       </p>
                       {descuentoLista > 0 && (
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-gray">Descuento de lista</span>
+                          <span className="text-xs text-kp-gray">Lista de precios</span>
                           <span className="text-xs text-kp-red font-semibold">−{descuentoLista}%</span>
                         </div>
                       )}
                       {descuentoCliente > 0 && (
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-gray">Dto. adicional cliente</span>
+                          <div className="flex flex-col">
+                            <span className="text-xs text-kp-gray">Dto. adicional</span>
+                            {selectedClient && (
+                              <span className="text-[10px] text-amber-400 font-semibold truncate max-w-[130px]">
+                                {selectedClient.razon_social}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-kp-red font-semibold">−{descuentoCliente}%</span>
                         </div>
                       )}
-                      {descuentoLista > 0 && descuentoCliente > 0 && (
-                        <div className="flex items-center justify-between pt-1 border-t border-kp-border">
-                          <span className="text-xs text-kp-gray">Dto. combinado total</span>
-                          <span className="text-xs text-kp-red font-bold">
-                            −{calcCombinedDiscount(descuentoLista, descuentoCliente).toFixed(2)}%
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between pt-1 border-t border-kp-border">
+                        <span className="text-xs font-semibold text-kp-white">Total descuento</span>
+                        <span className="text-xs text-kp-red font-bold">
+                          −{calcCombinedDiscount(descuentoLista, descuentoCliente).toFixed(2)}%
+                        </span>
+                      </div>
                     </section>
                   )}
 
