@@ -35,19 +35,26 @@ router.get('/ventas', async (req, res, next) => {
           ${sucFiltro}
       `, baseParams),
 
-      // Ventas por día
+      // Ventas por día (incluye días sin ventas via generate_series)
       pool.query(`
         SELECT
-          v.fecha::date::text AS dia,
-          COUNT(*)::int AS cantidad,
-          COALESCE(SUM(v.total), 0)::float AS monto
-        FROM ventas v
-        WHERE v.deleted_at IS NULL
-          AND v.estado NOT IN ('anulada', 'preventa')
-          AND v.fecha::date BETWEEN $1 AND $2
-          ${sucFiltro}
-        GROUP BY v.fecha::date
-        ORDER BY v.fecha::date ASC
+          gs.dia::text AS dia,
+          COALESCE(d.cantidad, 0)::int AS cantidad,
+          COALESCE(d.monto, 0)::float AS monto
+        FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(dia)
+        LEFT JOIN (
+          SELECT
+            v.fecha::date AS dia,
+            COUNT(*)::int AS cantidad,
+            COALESCE(SUM(v.total), 0)::float AS monto
+          FROM ventas v
+          WHERE v.deleted_at IS NULL
+            AND v.estado NOT IN ('anulada', 'preventa')
+            AND v.fecha::date BETWEEN $1 AND $2
+            ${sucFiltro}
+          GROUP BY v.fecha::date
+        ) d ON gs.dia = d.dia
+        ORDER BY gs.dia ASC
       `, baseParams),
 
       // Por medio de pago

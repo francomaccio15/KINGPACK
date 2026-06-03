@@ -111,7 +111,7 @@ function BarChart({ data }: { data: DiaDato[] }) {
         {data.map(d => {
           const pct = (d.monto / maxMonto) * 100;
           return (
-            <div key={d.dia} className="flex flex-col items-center gap-1 flex-1 group min-w-[28px]">
+            <div key={d.dia} className="flex flex-col items-center gap-1 flex-1 group min-w-[28px] max-w-[48px]">
               {/* Bar */}
               <div className="w-full relative flex items-end justify-center" style={{ height: '100px' }}>
                 <div
