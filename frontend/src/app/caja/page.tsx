@@ -210,9 +210,9 @@ export default async function CajaPage() {
         }
 
         return (
-          <div className="space-y-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {Array.from(porSucursal.entries()).map(([sucId, { nombre, cajas }]) => (
-              <div key={sucId}>
+              <div key={sucId} className="min-w-0">
                 {/* Header de sucursal */}
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-1 h-5 bg-kp-red rounded-full block" />
@@ -229,10 +229,10 @@ export default async function CajaPage() {
                     <thead>
                       <tr className="bg-kp-surface2 border-b border-kp-border">
                         <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Apertura</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo inicial</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo sistema</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo real</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Diferencia</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. inicial</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. sistema</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. real</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Dif.</th>
                         <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
                         <th className="px-3 py-3" />
                       </tr>
