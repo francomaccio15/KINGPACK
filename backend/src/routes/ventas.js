@@ -80,7 +80,8 @@ router.get('/', async (req, res, next) => {
           lp.nombre        AS lista_precio,
           f.cae            AS cae,
           f.ok             AS facturada_ok,
-          (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count
+          (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
+          EXISTS(SELECT 1 FROM venta_ediciones ve WHERE ve.venta_id = v.id) AS fue_editada
         FROM ventas v
         LEFT JOIN clientes c ON c.id = v.cliente_id
         LEFT JOIN sucursales s ON s.id = v.sucursal_id

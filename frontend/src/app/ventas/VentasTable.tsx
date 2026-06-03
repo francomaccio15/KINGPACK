@@ -18,6 +18,7 @@ type Venta = {
   cae: string | null;
   facturada_ok: boolean | null;
   items_count: number;
+  fue_editada: boolean;
 };
 
 type VentaItem = {
@@ -154,12 +155,32 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                     {fmt(v.total)}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[v.estado] ?? ''}`}>
-                      {v.cae && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5 opacity-70" />
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[v.estado] ?? ''}`}>
+                        {v.cae && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5 opacity-70" />
+                        )}
+                        {ESTADO_LABEL[v.estado] ?? v.estado}
+                      </span>
+                      {v.fue_editada && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                          Editada
+                        </span>
                       )}
-                      {ESTADO_LABEL[v.estado] ?? v.estado}
-                    </span>
+                      {v.estado === 'anulada' && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                          </svg>
+                          Anulada
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                     <Link
