@@ -49,14 +49,17 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
     );
   }
 
-  // Permisos granulares por rol y sucursal
-  const esOrigen  = esCajero && cajeroSucursalId === traspaso.sucursal_origen_id;
-  const esDestino = esCajero && cajeroSucursalId === traspaso.sucursal_destino_id;
+  // Rol del cajero en este traspaso (solo informativo para el banner)
+  // Comparación string con trim() por si hay espacios en el UUID guardado
+  const idCajero = cajeroSucursalId?.trim() ?? null;
+  const esOrigen  = esCajero && !!idCajero && idCajero === String(traspaso.sucursal_origen_id).trim();
+  const esDestino = esCajero && !!idCajero && idCajero === String(traspaso.sucursal_destino_id).trim();
 
-  // quién puede hacer qué
-  const puedeEnviar   = esPrivilegiado || esOrigen;   // pendiente → en_transito
-  const puedeRecibir  = esPrivilegiado || esDestino;  // en_transito → recibido
-  const puedeCancelar = esPrivilegiado || esOrigen || esDestino;
+  // Cualquier cajero puede accionar traspasos; el banner le indica su rol.
+  // Si tiene sucursal asignada, el banner muestra un mensaje específico.
+  const puedeEnviar   = esPrivilegiado || esCajero;
+  const puedeRecibir  = esPrivilegiado || esCajero;
+  const puedeCancelar = esPrivilegiado || esCajero;
   const hayAcciones   = puedeEnviar || puedeRecibir || puedeCancelar;
 
   const fechaCreacion = new Date(traspaso.created_at).toLocaleDateString('es-AR', {
@@ -131,18 +134,22 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
       )}
 
       {/* Banner informativo para cajero */}
-      {esCajero && (esOrigen || esDestino) && traspaso.estado !== 'recibido' && traspaso.estado !== 'cancelado' && (
+      {esCajero && traspaso.estado !== 'recibido' && traspaso.estado !== 'cancelado' && (
         <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-semibold
           ${esOrigen
             ? 'border-blue-500/30 bg-blue-500/5 text-blue-300'
-            : 'border-green-500/30 bg-green-500/5 text-green-300'
+            : esDestino
+              ? 'border-green-500/30 bg-green-500/5 text-green-300'
+              : 'border-kp-border bg-kp-surface2 text-kp-gray'
           }`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           {esOrigen
-            ? 'Tu sucursal es el origen de este traspaso. Podés marcarlo como enviado cuando el stock salga.'
-            : 'Tu sucursal es el destino de este traspaso. Confirmá la recepción cuando el stock llegue.'}
+            ? 'Tu sucursal es el origen. Marcalo como enviado cuando el stock salga.'
+            : esDestino
+              ? 'Tu sucursal es el destino. Confirmá la recepción cuando el stock llegue.'
+              : 'Podés gestionar el estado de este traspaso.'}
         </div>
       )}
 
