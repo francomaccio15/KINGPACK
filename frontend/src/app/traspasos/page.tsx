@@ -104,13 +104,11 @@ export default async function TraspasosPage() {
               )}
             </div>
           )}
-          {!esCajero && (
-            <NuevoTraspaso
-              sucursales={sucursales}
-              articulos={articulos}
-              sucursalDefaultId={null}
-            />
-          )}
+          <NuevoTraspaso
+            sucursales={sucursales}
+            articulos={articulos}
+            sucursalDefaultId={esCajero ? sucursalId : null}
+          />
         </div>
       </div>
 

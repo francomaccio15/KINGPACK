@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RegistrarMovimiento from './RegistrarMovimiento';
+import RegistrarGasto from './RegistrarGasto';
 import CerrarCaja from './CerrarCaja';
 import MovimientosTabla from './MovimientosTabla';
 
@@ -105,8 +106,9 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
 
         {/* Acciones */}
         {abierta && (esAdmin || (esCajero && caja.sucursal_id === cajeroSucursalId)) && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {esAdmin && <RegistrarMovimiento cajaId={caja.id} mediosPago={mediosPago} />}
+            {esCajero && <RegistrarGasto cajaId={caja.id} />}
             <CerrarCaja cajaId={caja.id} saldoSistema={saldoSistema} />
           </div>
         )}
