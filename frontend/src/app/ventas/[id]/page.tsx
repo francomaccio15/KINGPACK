@@ -41,7 +41,7 @@ async function fetchVenta(id: string) {
 }
 
 export default async function VentaDetallePage({ params }: { params: { id: string } }) {
-  requireAuth('/ventas');
+  const user = requireAuth('/ventas');
   const data = await fetchVenta(params.id);
 
   if (!data) {
@@ -55,6 +55,16 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
   const { venta, items, pagos, facturacion } = data;
   const descuento = parseFloat(venta.descuento_total || '0');
+
+  // Historial de ediciones (solo para admin/supervisor)
+  const esAdmin = user.rol === 'administrador' || user.rol === 'supervisor';
+  let ediciones: any[] = [];
+  if (esAdmin) {
+    try {
+      const resEd = await serverFetch(`/api/ventas/${params.id}/ediciones`, { cache: 'no-store' });
+      if (resEd.ok) ediciones = (await resEd.json()).ediciones ?? [];
+    } catch { /* silencioso */ }
+  }
 
   return (
     <section className="space-y-6 max-w-5xl">
@@ -274,6 +284,95 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
         </div>
       </div>
+
+      {/* ── Historial de ediciones (solo admins) ─────────────────────────── */}
+      {esAdmin && ediciones.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden print:hidden">
+          <div className="bg-amber-500/10 px-5 py-3 border-b border-amber-500/30 flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-amber-400 flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400">
+              Historial de ediciones ({ediciones.length})
+            </h3>
+          </div>
+          <div className="divide-y divide-amber-500/20">
+            {ediciones.map((ed: any) => {
+              const fecha = new Date(ed.fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              const anteriores: any[] = ed.items_anteriores ?? [];
+              const nuevos: any[]    = ed.items_nuevos ?? [];
+
+              // Detectar cambios
+              const eliminados = anteriores.filter(a => !nuevos.find(n => n.articulo_id === a.articulo_id));
+              const agregados  = nuevos.filter(n => !anteriores.find(a => a.articulo_id === n.articulo_id));
+              const modificados = nuevos.filter(n => {
+                const ant = anteriores.find(a => a.articulo_id === n.articulo_id);
+                return ant && (parseFloat(ant.cantidad) !== parseFloat(n.cantidad) || parseFloat(ant.descuento_pct) !== parseFloat(n.descuento_pct));
+              });
+
+              return (
+                <div key={ed.id} className="px-5 py-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-amber-300">{fecha}</p>
+                      <p className="text-xs text-kp-gray mt-0.5">por <span className="text-kp-white">{ed.usuario_nombre ?? 'Usuario desconocido'}</span></p>
+                    </div>
+                    {ed.observacion && (
+                      <span className="text-xs bg-amber-500/15 border border-amber-500/30 text-amber-200 rounded-lg px-3 py-1.5 max-w-xs text-right">
+                        "{ed.observacion}"
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Cambios detectados */}
+                  <div className="space-y-1.5">
+                    {eliminados.map((it: any) => (
+                      <div key={it.articulo_id} className="flex items-center gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 font-bold flex-shrink-0">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          Eliminado
+                        </span>
+                        <span className="text-kp-gray">{it.nombre}</span>
+                        <span className="text-kp-gray font-mono text-[10px]">({it.codigo})</span>
+                        <span className="text-kp-gray ml-auto">x{parseFloat(it.cantidad).toFixed(0)} · {fmt(it.precio_unitario_final)}</span>
+                      </div>
+                    ))}
+                    {agregados.map((it: any) => (
+                      <div key={it.articulo_id} className="flex items-center gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-bold flex-shrink-0">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          Agregado
+                        </span>
+                        <span className="text-kp-gray">{it.nombre}</span>
+                        <span className="text-kp-gray font-mono text-[10px]">({it.codigo})</span>
+                        <span className="text-kp-gray ml-auto">x{parseFloat(it.cantidad).toFixed(0)} · {fmt(it.precio_unitario_final)}</span>
+                      </div>
+                    ))}
+                    {modificados.map((it: any) => {
+                      const ant = anteriores.find(a => a.articulo_id === it.articulo_id);
+                      return (
+                        <div key={it.articulo_id} className="flex items-center gap-2 text-xs">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 font-bold flex-shrink-0">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Modificado
+                          </span>
+                          <span className="text-kp-gray">{it.nombre}</span>
+                          {ant && parseFloat(ant.cantidad) !== parseFloat(it.cantidad) && (
+                            <span className="text-kp-gray">cant: <span className="line-through text-rose-400/70">{parseFloat(ant.cantidad).toFixed(0)}</span> → <span className="text-emerald-400">{parseFloat(it.cantidad).toFixed(0)}</span></span>
+                          )}
+                          {ant && parseFloat(ant.descuento_pct) !== parseFloat(it.descuento_pct) && (
+                            <span className="text-kp-gray">desc: <span className="line-through text-rose-400/70">{parseFloat(ant.descuento_pct).toFixed(1)}%</span> → <span className="text-emerald-400">{parseFloat(it.descuento_pct).toFixed(1)}%</span></span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Estilos de control de modo de impresión ──────────────────────── */}
       <style>{`

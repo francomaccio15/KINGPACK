@@ -849,4 +849,156 @@ router.patch('/:id/observaciones', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── PUT /api/ventas/:id/items — editar items de una venta existente ──────────
+router.put('/:id/items', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { items = [], observacion } = req.body;
+
+    if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
+
+    await client.query('BEGIN');
+
+    // Verificar que la venta existe y no está anulada
+    const { rows: ventaRows } = await client.query(
+      `SELECT id, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [id]
+    );
+    if (!ventaRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Venta no encontrada' }); }
+    if (ventaRows[0].estado === 'anulada') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede editar una venta anulada' }); }
+    const sucursal_id = ventaRows[0].sucursal_id;
+
+    // Guardar items anteriores para el audit log
+    const { rows: itemsAnteriores } = await client.query(
+      `SELECT vi.articulo_id, a.nombre, a.codigo, vi.cantidad::float,
+              vi.precio_lista::float, vi.descuento_pct::float,
+              vi.precio_unitario_final::float
+       FROM venta_items vi
+       JOIN articulos a ON a.id = vi.articulo_id
+       WHERE vi.venta_id = $1`,
+      [id]
+    );
+
+    // Devolver stock de items anteriores a la sucursal
+    for (const item of itemsAnteriores) {
+      await client.query(
+        `UPDATE stock SET cantidad = cantidad + $1::numeric, ultima_actualizacion = NOW()
+         WHERE articulo_id = $2 AND sucursal_id = $3`,
+        [item.cantidad, item.articulo_id, sucursal_id]
+      );
+    }
+
+    // Verificar y calcular nuevos items (igual que al crear)
+    const articuloIds = items.map(i => i.articulo_id);
+    const { rows: artRows } = await client.query(
+      `SELECT a.id, a.nombre, a.codigo, a.precio_madre::float, a.margen_aplicado::float,
+              ai.porcentaje::float AS iva_pct
+       FROM articulos a
+       LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+       WHERE a.id = ANY($1) AND a.deleted_at IS NULL`,
+      [articuloIds]
+    );
+    const artMap = Object.fromEntries(artRows.map(a => [a.id, a]));
+
+    const itemsCalculados = items.map(item => {
+      const art = artMap[item.articulo_id];
+      if (!art) throw new Error(`Artículo ${item.articulo_id} no encontrado`);
+      const precioLista = parseFloat(item.precio_lista) || art.precio_madre;
+      const descPct     = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
+      const precioFinal = +(precioLista * (1 - descPct / 100)).toFixed(4);
+      const cantidad    = parseFloat(item.cantidad) || 1;
+      const ivaMonto    = +(precioFinal * cantidad * ((art.iva_pct || 0) / 100)).toFixed(4);
+      return { ...item, cantidad, precioLista, descPct, precioFinal, ivaMonto, art };
+    });
+
+    // Eliminar items anteriores e insertar nuevos
+    await client.query(`DELETE FROM venta_items WHERE venta_id = $1`, [id]);
+
+    for (const item of itemsCalculados) {
+      await client.query(
+        `INSERT INTO venta_items (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, item.articulo_id, item.cantidad, item.precioLista, item.descPct, item.precioFinal, item.ivaMonto]
+      );
+    }
+
+    // Descontar stock nuevo
+    for (const item of itemsCalculados) {
+      await client.query(
+        `UPDATE stock SET cantidad = cantidad - $1::numeric, ultima_actualizacion = NOW()
+         WHERE articulo_id = $2 AND sucursal_id = $3`,
+        [item.cantidad, item.articulo_id, sucursal_id]
+      );
+    }
+
+    // Recalcular totales de la venta
+    const subtotal       = itemsCalculados.reduce((s, i) => s + i.precioFinal * i.cantidad, 0);
+    const totalDescuento = itemsCalculados.reduce((s, i) => s + (i.precioLista - i.precioFinal) * i.cantidad, 0);
+    const total          = subtotal;
+
+    // Actualizar observaciones si se provee motivo
+    const obsUpdate = observacion?.trim()
+      ? `, observaciones = CONCAT('[Editada: ', $3::text, ']', CASE WHEN observaciones IS NOT NULL AND observaciones <> '' THEN E'\n' || observaciones ELSE '' END)`
+      : '';
+    const obsParams = observacion?.trim() ? [subtotal, total, observacion.trim(), totalDescuento, id] : [subtotal, total, totalDescuento, id];
+    const obsIdx    = observacion?.trim() ? 5 : 4;
+
+    await client.query(
+      `UPDATE ventas SET subtotal = $1, total = $2${obsUpdate}, descuento_total = $${obsIdx - 1} WHERE id = $${obsIdx}`,
+      obsParams
+    );
+
+    // Registrar en audit log
+    const itemsNuevos = itemsCalculados.map(i => ({
+      articulo_id: i.articulo_id, nombre: i.art.nombre, codigo: i.art.codigo,
+      cantidad: i.cantidad, precio_lista: i.precioLista,
+      descuento_pct: i.descPct, precio_unitario_final: i.precioFinal,
+    }));
+
+    // Obtener usuario desde JWT
+    const userId = req.user?.id || null;
+    await client.query(
+      `INSERT INTO venta_ediciones (venta_id, usuario_id, observacion, items_anteriores, items_nuevos)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, userId, observacion?.trim() || null, JSON.stringify(itemsAnteriores), JSON.stringify(itemsNuevos)]
+    );
+
+    await client.query('COMMIT');
+
+    // Devolver venta actualizada
+    const { rows: updatedRows } = await pool.query(
+      `SELECT v.id, v.numero, v.total, v.subtotal, v.descuento_total, v.estado, v.observaciones,
+              c.razon_social AS cliente_nombre
+       FROM ventas v
+       LEFT JOIN clientes c ON c.id = v.cliente_id
+       WHERE v.id = $1`,
+      [id]
+    );
+    res.json({ venta: updatedRows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/ventas/:id/ediciones — historial de ediciones (admin) ───────────
+router.get('/:id/ediciones', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `SELECT ve.id, ve.fecha, ve.observacion, ve.items_anteriores, ve.items_nuevos,
+              u.nombre AS usuario_nombre
+       FROM venta_ediciones ve
+       LEFT JOIN usuarios u ON u.id = ve.usuario_id
+       WHERE ve.venta_id = $1
+       ORDER BY ve.fecha DESC`,
+      [id]
+    );
+    res.json({ ediciones: rows });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
