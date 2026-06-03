@@ -44,10 +44,12 @@ interface CartItem {
 export default function EditarVentaForm({
   ventaId,
   itemsIniciales,
+  listaPrecioId,
   observacionesActuales,
 }: {
   ventaId: string;
   itemsIniciales: ItemVenta[];
+  listaPrecioId: string | null;
   observacionesActuales: string;
 }) {
   const router = useRouter();
@@ -65,15 +67,8 @@ export default function EditarVentaForm({
     }))
   );
 
-  // Descuento por defecto para nuevos ítems = el no-cero más frecuente del carrito original
-  // (usa Map para evitar que JS ordene las claves numéricas y devuelva 0 antes que 36)
-  const descuentoVenta = (() => {
-    const descuentos = itemsIniciales.map(i => parseFloat(String(i.descuento_pct)) || 0).filter(d => d > 0);
-    if (descuentos.length === 0) return 0;
-    const freq = new Map<number, number>();
-    descuentos.forEach(d => freq.set(d, (freq.get(d) ?? 0) + 1));
-    return [...freq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
-  })();
+  // Nuevos artículos se agregan con el precio de la lista original de la venta (descuento_pct = 0)
+  // El precio ya viene correcto desde la API con lista_id
 
   const [observacion, setObservacion] = useState('');
   const [saving, setSaving]           = useState(false);
@@ -91,7 +86,8 @@ export default function EditarVentaForm({
     debounceRef.current = setTimeout(async () => {
       setBuscando(true);
       try {
-        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&activo=true&limit=8`);
+        const listaParam = listaPrecioId ? `&lista_id=${listaPrecioId}` : '';
+        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&activo=true&limit=8${listaParam}`);
         const data = await res.json();
         setResultados(data.articulos ?? []);
       } finally { setBuscando(false); }
@@ -107,13 +103,12 @@ export default function EditarVentaForm({
           : i
         );
       }
+      // El precio ya viene de la lista seleccionada — descuento_pct = 0
       const precioLista = art.precio_lista || art.precio_madre;
-      const descPct     = descuentoVenta;
-      const precioFinal = +(precioLista * (1 - descPct / 100)).toFixed(4);
       return [...prev, {
         articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
-        cantidad: 1, precio_lista: precioLista, descuento_pct: descPct,
-        precio_unitario_final: precioFinal,
+        cantidad: 1, precio_lista: precioLista, descuento_pct: 0,
+        precio_unitario_final: precioLista,
       }];
     });
     setQuery('');
@@ -168,13 +163,8 @@ export default function EditarVentaForm({
       <div className="rounded-xl border border-kp-border bg-kp-surface p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Agregar artículo</h3>
-          {descuentoVenta > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-kp-red/10 border border-kp-red/30 text-kp-red rounded-lg px-2.5 py-1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-                <line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>
-              </svg>
-              Nuevos artículos con {descuentoVenta}% desc.
-            </span>
+          {listaPrecioId && (
+            <span className="text-xs text-kp-gray">Precios de la lista original de la venta</span>
           )}
         </div>
         <div className="relative">

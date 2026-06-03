@@ -47,7 +47,12 @@ export default async function EditarVentaPage({ params }: { params: { id: string
         <h2 className="text-2xl font-bold uppercase tracking-wide">Editar Venta #{venta.numero}</h2>
       </div>
 
-      <EditarVentaForm ventaId={params.id} itemsIniciales={items} observacionesActuales={venta.observaciones ?? ''} />
+      <EditarVentaForm
+        ventaId={params.id}
+        itemsIniciales={items}
+        listaPrecioId={venta.lista_precio_id ?? null}
+        observacionesActuales={venta.observaciones ?? ''}
+      />
     </section>
   );
 }
