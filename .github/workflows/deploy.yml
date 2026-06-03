@@ -1,4 +1,4 @@
-﻿name: Build & Deploy
+name: Build & Deploy
 
 on:
   push:
@@ -21,15 +21,30 @@ jobs:
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Build frontend (TypeScript check + compile)
+      - name: Build frontend
         working-directory: frontend
         env:
           API_URL_INTERNAL: http://127.0.0.1:3001
           NEXT_PUBLIC_API_URL: http://76.13.112.206
         run: npm run build
 
-      - name: Deploy to VPS
-        if: success()
+      - name: Install rsync
+        run: sudo apt-get install -y rsync
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 76.13.112.206 >> ~/.ssh/known_hosts
+
+      - name: Copy build to VPS
+        run: |
+          rsync -az --delete \
+            --exclude='node_modules' \
+            frontend/.next/ root@76.13.112.206:/var/www/KINGPACK/frontend/.next/
+
+      - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 76.13.112.206
@@ -40,7 +55,7 @@ jobs:
             cd /var/www/KINGPACK
             git pull --ff-only
             cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
-            cd frontend && rm -rf .next && npm install --no-audit --no-fund && npm run build && cd ..
+            cd frontend && npm install --no-audit --no-fund && cd ..
             pm2 restart ecosystem.config.js --update-env
             pm2 save
             sleep 2
