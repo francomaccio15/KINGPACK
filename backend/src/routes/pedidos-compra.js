@@ -303,7 +303,7 @@ router.patch('/:id/recibir', async (req, res, next) => {
       const { rows } = await client.query(
         `SELECT ei.articulo_id, ei.cantidad,
                 COALESCE(pi.cantidad_recibida, 0)::float AS ya_recibida,
-                pi.id AS item_id,
+                (pi.articulo_id IS NOT NULL) AS item_exists,
                 ei.sucursal_imputacion_id AS sucursal_id
          FROM egreso_items ei
          LEFT JOIN pedido_items pi ON pi.pedido_id = $1 AND pi.articulo_id = ei.articulo_id
@@ -315,7 +315,7 @@ router.patch('/:id/recibir', async (req, res, next) => {
       const { rows } = await client.query(
         `SELECT articulo_id, cantidad::float,
                 cantidad_recibida::float AS ya_recibida,
-                id AS item_id,
+                TRUE AS item_exists,
                 $2::uuid AS sucursal_id
          FROM pedido_items WHERE pedido_id = $1`,
         [id, pedido.sucursal_id]
@@ -354,10 +354,11 @@ router.patch('/:id/recibir', async (req, res, next) => {
       `, [articulo_id, itemPedido.sucursal_id, cantRec, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`]);
 
       // Actualizar cantidad_recibida en pedido_items
-      if (itemPedido.item_id) {
+      if (itemPedido.item_exists) {
         await client.query(
-          `UPDATE pedido_items SET cantidad_recibida = cantidad_recibida + $1 WHERE id = $2`,
-          [cantRec, itemPedido.item_id]
+          `UPDATE pedido_items SET cantidad_recibida = cantidad_recibida + $1
+           WHERE pedido_id = $2 AND articulo_id = $3`,
+          [cantRec, id, articulo_id]
         );
       } else {
         // Para pedidos desde egreso que no tienen pedido_items, insertar
