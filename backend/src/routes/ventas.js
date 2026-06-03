@@ -347,9 +347,12 @@ router.post('/', async (req, res, next) => {
               ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
         }
 
-        // Registrar movimiento en la caja (omitir "Saldo a favor" — no es ingreso de efectivo)
+        // Registrar movimiento en la caja
+        // Omitir "Saldo a favor" y "Cuenta Corriente" — no son ingresos físicos de efectivo
         const medio = mediosMap[pago.medio_pago_id];
-        if (cajaId && medio?.nombre !== 'Saldo a favor') {
+        const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
+        const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
+        if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(`
             INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
             VALUES ($1, 'venta', $2, $3, $4)
@@ -359,6 +362,42 @@ router.post('/', async (req, res, next) => {
             parseFloat(pago.monto),
             pago.medio_pago_id || null,
           ]);
+        }
+      }
+
+      // Registrar deuda en cuenta corriente del cliente si algún pago fue en "Cuenta Corriente"
+      if (cliente_id) {
+        const pagosCuentaCorr = pagos.filter(p => {
+          const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
+          return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
+        });
+
+        if (pagosCuentaCorr.length > 0) {
+          const totalCC = pagosCuentaCorr.reduce((s, p) => s + parseFloat(p.monto), 0);
+
+          // Saldo actual del cliente para calcular el saldo corrido
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (
+                SELECT cliente_id, SUM(monto) AS total_correcciones
+                  FROM correcciones_saldo_cliente GROUP BY cliente_id
+              ) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [cliente_id]);
+
+          const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const nuevoSaldo  = parseFloat((saldoActual + totalCC).toFixed(2));
+
+          await client.query(`
+            INSERT INTO cuentas_corrientes_cliente
+              (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+            VALUES ($1, $2, 0, $3, 'venta', $4)
+          `, [cliente_id, totalCC, nuevoSaldo, venta.id]);
         }
       }
     }

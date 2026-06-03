@@ -91,18 +91,52 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
 
       {/* Tarjetas de resumen */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
-          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Saldo Actual</p>
-          <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : saldoActual > 0 ? 'text-amber-400' : saldoActual < 0 ? 'text-green-400' : 'text-kp-white'}`}>
-            {fmt(saldoActual)}
-          </p>
-        </div>
+
+        {/* Saldo: split en Deuda vs Saldo a Favor */}
+        {saldoActual > 0 ? (
+          <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/50' : 'bg-amber-500/5 border-amber-500/30'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-amber-400">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold">
+                {excedeCredito ? 'Crédito Excedido' : 'Deuda'}
+              </p>
+            </div>
+            <p className={`text-xl font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-amber-400'}`}>
+              {fmt(saldoActual)}
+            </p>
+            <p className="text-[10px] text-kp-gray mt-1">debe a King Pack</p>
+          </div>
+        ) : saldoActual < 0 ? (
+          <div className="rounded-xl border bg-emerald-500/5 border-emerald-500/30 px-5 py-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-emerald-400">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Saldo a Favor</p>
+            </div>
+            <p className="text-xl font-bold tabular-nums text-emerald-400">{fmt(Math.abs(saldoActual))}</p>
+            <p className="text-[10px] text-kp-gray mt-1">tiene crédito disponible</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border bg-kp-surface border-kp-border px-5 py-4">
+            <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Saldo</p>
+            <p className="text-xl font-bold tabular-nums text-kp-white">$0,00</p>
+            <p className="text-[10px] text-kp-gray mt-1">al día</p>
+          </div>
+        )}
+
         <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
           <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</p>
           <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-kp-white'}`}>
             {fmt(limiteCredito)}
           </p>
+          {excedeCredito && limiteCredito > 0 && (
+            <p className="text-[10px] text-kp-red mt-1">excedido en {fmt(saldoActual - limiteCredito)}</p>
+          )}
         </div>
+
         {[
           { label: 'Descuento Extra', value: `${parseFloat(cliente.descuento_adicional || '0').toFixed(1)}%`, color: 'text-kp-white' },
           { label: 'Lista de Precios', value: cliente.lista_precio ?? '—', color: 'text-kp-gray-lt' },
