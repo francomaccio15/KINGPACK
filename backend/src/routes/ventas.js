@@ -504,7 +504,7 @@ router.patch('/:id/estado', async (req, res, next) => {
       `UPDATE ventas
        SET estado = $1,
            observaciones = CASE
-             WHEN $1 = 'anulada' AND $3::text IS NOT NULL
+             WHEN $1::text = 'anulada' AND $3::text IS NOT NULL
              THEN CONCAT('[Anulada: ', $3::text, ']', CASE WHEN observaciones IS NOT NULL AND observaciones <> '' THEN E'\n' || observaciones ELSE '' END)
              ELSE observaciones
            END
