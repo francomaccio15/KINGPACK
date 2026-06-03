@@ -5,49 +5,7 @@ on:
     branches: [master]
 
 jobs:
-  # ── Detectar qué cambió ──────────────────────────────────────────────────────
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend:  ${{ steps.filter.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-            backend:
-              - 'backend/**'
-
-  # ── Deploy backend (solo SSH, sin build) ────────────────────────────────────
-  deploy-backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy backend on VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 76.13.112.206
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            cd /var/www/KINGPACK
-            git pull --ff-only
-            cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
-            pm2 restart ecosystem.config.js --update-env
-            pm2 save
-            sleep 2
-            curl -fsS http://127.0.0.1:3001/api/health
-
-  # ── Deploy frontend (build + rsync) ─────────────────────────────────────────
-  deploy-frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,39 +17,19 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Cache Next.js build
-        uses: actions/cache@v4
-        with:
-          path: frontend/.next/cache
-          key: nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/src/**') }}
-          restore-keys: |
-            nextjs-${{ hashFiles('frontend/package-lock.json') }}-
-
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Build frontend
+      - name: Build frontend (TypeScript check + compile)
         working-directory: frontend
         env:
           API_URL_INTERNAL: http://127.0.0.1:3001
           NEXT_PUBLIC_API_URL: http://76.13.112.206
         run: npm run build
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 76.13.112.206 >> ~/.ssh/known_hosts
-
-      - name: Copy build to VPS
-        run: |
-          rsync -az --delete \
-            --exclude='node_modules' \
-            frontend/.next/ root@76.13.112.206:/var/www/KINGPACK/frontend/.next/
-
-      - name: Restart frontend on VPS
+      - name: Deploy to VPS
+        if: success()
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 76.13.112.206
@@ -101,6 +39,9 @@ jobs:
             set -e
             cd /var/www/KINGPACK
             git pull --ff-only
-            cd frontend && npm install --no-audit --no-fund && cd ..
+            cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
+            cd frontend && rm -rf .next && npm install --no-audit --no-fund && npm run build && cd ..
             pm2 restart ecosystem.config.js --update-env
             pm2 save
+            sleep 2
+            curl -fsS http://127.0.0.1:3001/api/health
