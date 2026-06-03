@@ -406,7 +406,7 @@ router.get('/', async (req, res, next) => {
     }
 
     const where       = conditions.join(' AND ');
-    const countParams = params.slice(0, joinParamCount > 0 ? -joinParamCount : undefined);
+    const countParams = params.slice(0, -(2 + joinParamCount));
 
     params.push(Math.min(parseInt(limit) || 500, 1000));
     params.push(Math.max(parseInt(offset) || 0, 0));
