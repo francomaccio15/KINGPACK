@@ -104,20 +104,36 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
         </div>
 
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="w-1 h-6 bg-kp-red rounded-full block" />
-              <h2 className="text-2xl font-bold">
-                {traspaso.sucursal_origen_nombre}
-                <span className="text-kp-gray mx-2">→</span>
-                {traspaso.sucursal_destino_nombre}
-              </h2>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[traspaso.estado] ?? ''}`}>
-                {ESTADO_LABEL[traspaso.estado] ?? traspaso.estado}
-              </span>
-            </div>
-            <p className="text-sm text-kp-gray pl-3">Creado: {fechaCreacion}{traspaso.usuario_nombre ? ` · por ${traspaso.usuario_nombre}` : ''}</p>
+        <div className="flex flex-wrap items-center gap-3 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block flex-shrink-0" />
+          <h2 className="text-xl sm:text-2xl font-bold">Traspaso de sucursal</h2>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[traspaso.estado] ?? ''}`}>
+            {ESTADO_LABEL[traspaso.estado] ?? traspaso.estado}
+          </span>
+        </div>
+        <p className="text-sm text-kp-gray pl-3 -mt-4">
+          Creado: {fechaCreacion}{traspaso.usuario_nombre ? ` · por ${traspaso.usuario_nombre}` : ''}
+        </p>
+
+        {/* Cards origen → destino */}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
+          {/* Origen */}
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70 mb-1">Envía</p>
+            <p className="text-base font-bold text-kp-white">{traspaso.sucursal_origen_nombre}</p>
+          </div>
+
+          {/* Flecha */}
+          <div className="flex items-center justify-center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-kp-gray rotate-90 sm:rotate-0">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+
+          {/* Destino */}
+          <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-green-400/70 mb-1">Recibe</p>
+            <p className="text-base font-bold text-kp-white">{traspaso.sucursal_destino_nombre}</p>
           </div>
         </div>
 
