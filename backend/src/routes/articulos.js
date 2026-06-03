@@ -406,6 +406,7 @@ router.get('/', async (req, res, next) => {
     }
 
     const where       = conditions.join(' AND ');
+    // countParams excluye limit, offset y params de JOIN (no usados en COUNT simple)
     const countParams = params.slice(0, -(2 + joinParamCount));
 
     params.push(Math.min(parseInt(limit) || 500, 1000));
