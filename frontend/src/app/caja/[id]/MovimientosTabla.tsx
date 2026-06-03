@@ -29,6 +29,7 @@ type Movimiento = {
   concepto: string;
   monto: string | number;
   medio_pago?: string | null;
+  usuario_nombre?: string | null;
 };
 
 type Filtro = 'todos' | 'venta' | 'ingreso' | 'egreso' | 'retiro';
@@ -129,7 +130,17 @@ export default function MovimientosTabla({
                     {TIPO_LABEL[m.tipo] ?? m.tipo}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-kp-white">{m.concepto}</td>
+                <td className="px-4 py-3">
+                  <span className="block text-kp-white">{m.concepto}</span>
+                  {m.usuario_nombre && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-kp-gray mt-0.5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      {m.usuario_nombre}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-xs text-kp-gray-lt">{m.medio_pago ?? '—'}</td>
                 <td className={`px-4 py-3 text-right tabular-nums font-semibold ${esIngreso ? 'text-green-400' : 'text-kp-red'}`}>
                   {esIngreso ? '+' : '−'}{fmt(m.monto)}

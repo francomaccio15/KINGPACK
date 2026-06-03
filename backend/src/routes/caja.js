@@ -146,9 +146,11 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           m.id, m.tipo, m.concepto, m.monto, m.fecha,
           m.origen_tipo, m.origen_id,
-          mp.nombre AS medio_pago
+          mp.nombre AS medio_pago,
+          u.nombre   AS usuario_nombre
         FROM movimientos_caja m
         LEFT JOIN medios_pago mp ON mp.id = m.medio_pago_id
+        LEFT JOIN usuarios    u  ON u.id  = m.usuario_id
         WHERE m.caja_id = $1
         ORDER BY m.fecha DESC
       `, [id]),
@@ -183,11 +185,13 @@ router.post('/:id/movimiento', async (req, res, next) => {
     );
     if (cajaRows.length === 0) return res.status(409).json({ error: 'La caja no está abierta' });
 
+    const usuario_id = req.user?.id ?? null;
+
     const { rows } = await pool.query(`
-      INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id, tipo, concepto, monto, fecha
-    `, [id, tipo, concepto.trim(), parseFloat(monto), medio_pago_id || null]);
+    `, [id, tipo, concepto.trim(), parseFloat(monto), medio_pago_id || null, usuario_id]);
 
     res.status(201).json({ movimiento: rows[0] });
   } catch (err) { next(err); }
