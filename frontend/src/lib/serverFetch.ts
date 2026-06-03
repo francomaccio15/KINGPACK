@@ -13,11 +13,15 @@ export async function serverFetch(path: string, init: RequestInit = {}): Promise
   const token    = jar.get('kp_token')?.value;
   const sucursal = jar.get('kp_sucursal_id')?.value; // '' = Todas, UUID = una sucursal
 
-  // Inyectar sucursal_id en la query string solo si hay un UUID real seleccionado
+  // Inyectar sucursal_id solo si hay UUID real Y no está ya en la URL (evita duplicados)
   let fullPath = path;
   if (sucursal) {
-    const separator = path.includes('?') ? '&' : '?';
-    fullPath = `${path}${separator}sucursal_id=${encodeURIComponent(sucursal)}`;
+    const [base, qs] = path.split('?');
+    const params = new URLSearchParams(qs || '');
+    if (!params.has('sucursal_id')) {
+      params.set('sucursal_id', sucursal);
+    }
+    fullPath = `${base}?${params.toString()}`;
   }
 
   const headers: Record<string, string> = {
