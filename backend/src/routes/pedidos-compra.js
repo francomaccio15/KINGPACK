@@ -292,8 +292,9 @@ router.patch('/:id/recibir', async (req, res, next) => {
       [id]
     );
     if (!pedidoRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pedido no encontrado' }); }
-    if (pedidoRows[0].estado === 'cancelado') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede recibir un pedido cancelado' }); }
-    if (pedidoRows[0].estado === 'recibido')  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El pedido ya fue recibido completamente' }); }
+    if (pedidoRows[0].estado === 'cancelado')       { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede recibir un pedido cancelado' }); }
+    if (pedidoRows[0].estado === 'recibido')        { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El pedido ya fue recibido completamente' }); }
+    if (pedidoRows[0].stock_acreditado)             { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El stock ya fue acreditado para este pedido' }); }
 
     const pedido = pedidoRows[0];
 
@@ -364,7 +365,7 @@ router.patch('/:id/recibir', async (req, res, next) => {
         // Para pedidos desde egreso que no tienen pedido_items, insertar
         await client.query(
           `INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, cantidad_recibida, precio_compra)
-           SELECT $1, $2, ei.cantidad, $3, COALESCE(ei.precio_compra, 0)
+           SELECT $1, $2, ei.cantidad, $3, COALESCE(ei.precio_unitario, 0)
            FROM egreso_items ei WHERE ei.egreso_id = $4 AND ei.articulo_id = $2
            ON CONFLICT DO NOTHING`,
           [id, articulo_id, cantRec, pedido.egreso_id]
@@ -375,15 +376,30 @@ router.patch('/:id/recibir', async (req, res, next) => {
     }
 
     // Determinar nuevo estado: ver si TODOS los ítems están completamente recibidos
-    const { rows: estadoItems } = await client.query(
-      `SELECT SUM(cantidad)::float AS total_pedido,
-              SUM(cantidad_recibida)::float AS total_recibido
-       FROM pedido_items WHERE pedido_id = $1`,
-      [id]
-    );
-
-    const totalPedido   = parseFloat(estadoItems[0]?.total_pedido  ?? '0');
-    const totalRecibidoDB = parseFloat(estadoItems[0]?.total_recibido ?? '0');
+    // Para pedidos con egreso_id usamos egreso_items como fuente de verdad del total pedido,
+    // porque pedido_items solo tiene filas para artículos ya recibidos al menos una vez.
+    let totalPedido = 0, totalRecibidoDB = 0;
+    if (pedido.egreso_id) {
+      const { rows: estadoItems } = await client.query(
+        `SELECT SUM(ei.cantidad)::float AS total_pedido,
+                SUM(COALESCE(pi.cantidad_recibida, 0))::float AS total_recibido
+         FROM egreso_items ei
+         LEFT JOIN pedido_items pi ON pi.pedido_id = $1 AND pi.articulo_id = ei.articulo_id
+         WHERE ei.egreso_id = $2 AND ei.articulo_id IS NOT NULL`,
+        [id, pedido.egreso_id]
+      );
+      totalPedido     = parseFloat(estadoItems[0]?.total_pedido  ?? '0');
+      totalRecibidoDB = parseFloat(estadoItems[0]?.total_recibido ?? '0');
+    } else {
+      const { rows: estadoItems } = await client.query(
+        `SELECT SUM(cantidad)::float AS total_pedido,
+                SUM(cantidad_recibida)::float AS total_recibido
+         FROM pedido_items WHERE pedido_id = $1`,
+        [id]
+      );
+      totalPedido     = parseFloat(estadoItems[0]?.total_pedido  ?? '0');
+      totalRecibidoDB = parseFloat(estadoItems[0]?.total_recibido ?? '0');
+    }
     const completo = totalRecibidoDB >= totalPedido - 0.001;
 
     const nuevoEstado = completo ? 'recibido' : 'recibido_parcial';
