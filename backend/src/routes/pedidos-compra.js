@@ -175,7 +175,8 @@ router.get('/:id', async (req, res, next) => {
       `, [id]),
       pool.query(`
         SELECT
-          pi.articulo_id, pi.cantidad, pi.precio_compra, pi.costo_flete_asignado,
+          pi.articulo_id, pi.cantidad, pi.cantidad_recibida,
+          pi.precio_compra, pi.costo_flete_asignado,
           a.nombre  AS articulo_nombre,
           a.codigo  AS articulo_codigo,
           a.precio_madre
@@ -261,6 +262,142 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
 
     await client.query('COMMIT');
     res.json({ ok: true, items_acreditados: itemsToProcess.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── PATCH /api/pedidos-compra/:id/recibir ───────────────────────────────────
+// Registra cantidades reales recibidas ítem por ítem.
+// Soporta recepciones parciales: si no llega todo → recibido_parcial.
+// Se puede llamar múltiples veces hasta completar el pedido.
+// Body: { items: [{ articulo_id, cantidad_recibida }] }
+router.patch('/:id/recibir', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id }    = req.params;
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Se requiere al menos un ítem con cantidad recibida' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: pedidoRows } = await client.query(
+      `SELECT id, estado, sucursal_id, egreso_id FROM pedidos_compra WHERE id = $1`,
+      [id]
+    );
+    if (!pedidoRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pedido no encontrado' }); }
+    if (pedidoRows[0].estado === 'cancelado') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede recibir un pedido cancelado' }); }
+    if (pedidoRows[0].estado === 'recibido')  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El pedido ya fue recibido completamente' }); }
+
+    const pedido = pedidoRows[0];
+
+    // Determinar los ítems del pedido y su sucursal de imputación
+    let pedidoItems = [];
+    if (pedido.egreso_id) {
+      const { rows } = await client.query(
+        `SELECT ei.articulo_id, ei.cantidad,
+                COALESCE(pi.cantidad_recibida, 0)::float AS ya_recibida,
+                pi.id AS item_id,
+                ei.sucursal_imputacion_id AS sucursal_id
+         FROM egreso_items ei
+         LEFT JOIN pedido_items pi ON pi.pedido_id = $1 AND pi.articulo_id = ei.articulo_id
+         WHERE ei.egreso_id = $2 AND ei.articulo_id IS NOT NULL`,
+        [id, pedido.egreso_id]
+      );
+      pedidoItems = rows;
+    } else {
+      const { rows } = await client.query(
+        `SELECT articulo_id, cantidad::float,
+                cantidad_recibida::float AS ya_recibida,
+                id AS item_id,
+                $2::uuid AS sucursal_id
+         FROM pedido_items WHERE pedido_id = $1`,
+        [id, pedido.sucursal_id]
+      );
+      pedidoItems = rows;
+    }
+
+    const itemMap = Object.fromEntries(pedidoItems.map(i => [i.articulo_id, i]));
+    let totalRecibido = 0;
+
+    for (const recibido of items) {
+      const { articulo_id, cantidad_recibida } = recibido;
+      const cantRec = parseFloat(cantidad_recibida) || 0;
+      if (cantRec <= 0) continue;
+
+      const itemPedido = itemMap[articulo_id];
+      if (!itemPedido) continue;
+
+      const pendiente = parseFloat(itemPedido.cantidad) - parseFloat(itemPedido.ya_recibida || 0);
+      if (cantRec > pendiente + 0.001) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Cantidad recibida (${cantRec}) supera la pendiente (${pendiente.toFixed(2)}) para artículo ${articulo_id}` });
+      }
+
+      // Acreditar stock
+      await client.query(`
+        INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
+        VALUES ($1, $2, $3, 0)
+        ON CONFLICT (articulo_id, sucursal_id)
+        DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
+      `, [articulo_id, itemPedido.sucursal_id, cantRec]);
+
+      await client.query(`
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
+        VALUES ($1, $2, $3, $4)
+      `, [articulo_id, itemPedido.sucursal_id, cantRec, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`]);
+
+      // Actualizar cantidad_recibida en pedido_items
+      if (itemPedido.item_id) {
+        await client.query(
+          `UPDATE pedido_items SET cantidad_recibida = cantidad_recibida + $1 WHERE id = $2`,
+          [cantRec, itemPedido.item_id]
+        );
+      } else {
+        // Para pedidos desde egreso que no tienen pedido_items, insertar
+        await client.query(
+          `INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, cantidad_recibida, precio_compra)
+           SELECT $1, $2, ei.cantidad, $3, COALESCE(ei.precio_compra, 0)
+           FROM egreso_items ei WHERE ei.egreso_id = $4 AND ei.articulo_id = $2
+           ON CONFLICT DO NOTHING`,
+          [id, articulo_id, cantRec, pedido.egreso_id]
+        );
+      }
+
+      totalRecibido += cantRec;
+    }
+
+    // Determinar nuevo estado: ver si TODOS los ítems están completamente recibidos
+    const { rows: estadoItems } = await client.query(
+      `SELECT SUM(cantidad)::float AS total_pedido,
+              SUM(cantidad_recibida)::float AS total_recibido
+       FROM pedido_items WHERE pedido_id = $1`,
+      [id]
+    );
+
+    const totalPedido   = parseFloat(estadoItems[0]?.total_pedido  ?? '0');
+    const totalRecibidoDB = parseFloat(estadoItems[0]?.total_recibido ?? '0');
+    const completo = totalRecibidoDB >= totalPedido - 0.001;
+
+    const nuevoEstado = completo ? 'recibido' : 'recibido_parcial';
+
+    await client.query(`
+      UPDATE pedidos_compra
+      SET estado = $1,
+          stock_acreditado = $2,
+          fecha_recepcion = CASE WHEN $2 THEN NOW() ELSE fecha_recepcion END,
+          updated_at = NOW()
+      WHERE id = $3
+    `, [nuevoEstado, completo, id]);
+
+    await client.query('COMMIT');
+    res.json({ ok: true, estado: nuevoEstado, items_acreditados: totalRecibido });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);

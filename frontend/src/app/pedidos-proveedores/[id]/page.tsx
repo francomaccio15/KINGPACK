@@ -29,7 +29,8 @@ const ESTADO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function DetallePedidoPage({ params }: { params: { id: string } }) {
-  requireAuth('/pedidos-proveedores');
+  const user = requireAuth('/pedidos-proveedores');
+  const esCajero = user.rol === 'cajero';
   let pedido: any = null;
   let items: any[] = [];
 
@@ -95,7 +96,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
             {fechaRecepcion && <> · Recibido: {fechaRecepcion}</>}
           </p>
         </div>
-        <AccionesPedido pedido={pedido} />
+        <AccionesPedido pedido={pedido} items={items} esCajero={esCajero} />
       </div>
 
       {/* Banner: generado desde egreso */}
@@ -142,27 +143,40 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
             <tr className="bg-kp-surface2/50 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Artículo</th>
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Código</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Cantidad</th>
+              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Pedido</th>
+              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Recibido</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">P. Compra</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Subtotal</th>
             </tr>
           </thead>
           <tbody className="bg-kp-surface divide-y divide-kp-border">
             {items.map((item: any) => {
-              const sub = parseFloat(item.precio_compra) * parseFloat(item.cantidad);
+              const sub       = parseFloat(item.precio_compra) * parseFloat(item.cantidad);
+              const pedida    = parseFloat(item.cantidad) || 0;
+              const recibida  = parseFloat(item.cantidad_recibida) || 0;
+              const pct       = pedida > 0 ? Math.min(100, (recibida / pedida) * 100) : 0;
+              const completo  = recibida >= pedida;
               return (
                 <tr key={item.articulo_id} className="hover:bg-kp-surface2 transition-colors">
                   <td className="px-4 py-3 font-medium text-kp-white">{item.articulo_nombre}</td>
                   <td className="px-4 py-3 font-mono text-xs text-kp-gray">{item.articulo_codigo}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt">
-                    {parseFloat(item.cantidad).toLocaleString('es-AR')}
+                  <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt">{pedida.toLocaleString('es-AR')}</td>
+                  <td className="px-4 py-3 text-right">
+                    {recibida > 0 ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`tabular-nums text-sm font-semibold ${completo ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {recibida.toLocaleString('es-AR')}
+                        </span>
+                        <div className="w-16 h-1 rounded-full bg-kp-border overflow-hidden">
+                          <div className={`h-full rounded-full ${completo ? 'bg-emerald-400' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-kp-border text-xs">—</span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-kp-white">
-                    {fmt(item.precio_compra)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
-                    {fmt(sub)}
-                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(item.precio_compra)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">{fmt(sub)}</td>
                 </tr>
               );
             })}
