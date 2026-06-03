@@ -176,6 +176,11 @@ export default function NuevaVenta({
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [cuentaDestinoId, setCuentaDestinoId]   = useState<string>('');
 
+  // ── Pago dividido (2 medios)
+  const [usarSegundoMedio, setUsarSegundoMedio] = useState(false);
+  const [medioPagoId2, setMedioPagoId2]         = useState<string>('');
+  const [monto1Str, setMonto1Str]               = useState<string>('');
+
   const selectedMedio = mediosPago.find(m => m.id === medioPagoId);
   const esCheque       = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
   const esTransferencia = selectedMedio
@@ -213,6 +218,7 @@ export default function NuevaVenta({
         const list: MedioPago[] = data.medios_pago ?? data ?? [];
         setMediosPago(list);
         setMedioPagoId(list[0]?.id ?? '');
+        setMedioPagoId2(list[1]?.id ?? list[0]?.id ?? '');
       })
       .catch(() => {});
     apiFetch(`/api/cuentas-bancarias`)
@@ -254,6 +260,8 @@ export default function NuevaVenta({
     setSucursalId(sucursales[0]?.id ?? '');
     setSaldoAFavorAplicado(0);
     setMontoRecibido('');
+    setUsarSegundoMedio(false);
+    setMonto1Str('');
     setCajaAbierta(null);
   }, [sucursales]);
 
@@ -444,6 +452,10 @@ export default function NuevaVenta({
     ? montoRecibidoNum - totalAPagar
     : 0;
 
+  // ── Pago dividido
+  const monto1Num = Math.min(totalAPagar, Math.max(0, parseFloat(monto1Str.replace(',', '.')) || 0));
+  const monto2Num = Math.max(0, totalAPagar - monto1Num);
+
   // ─── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async (estado: 'preventa' | 'confirmada') => {
     if (cart.length === 0) return;
@@ -465,7 +477,15 @@ export default function NuevaVenta({
       pagos.push({ medio_pago_id: SALDO_FAVOR_MP_ID, monto: saldoAplicado });
     }
 
-    if (saldoRestante > 0.001 && medioPagoId) {
+    if (usarSegundoMedio) {
+      // Pago dividido: dos medios con montos explícitos
+      if (monto1Num > 0.001 && medioPagoId) {
+        pagos.push({ medio_pago_id: medioPagoId, monto: monto1Num });
+      }
+      if (monto2Num > 0.001 && medioPagoId2) {
+        pagos.push({ medio_pago_id: medioPagoId2, monto: monto2Num });
+      }
+    } else if (saldoRestante > 0.001 && medioPagoId) {
       pagos.push({
         medio_pago_id:  medioPagoId,
         monto:          saldoRestante,
@@ -1055,38 +1075,96 @@ export default function NuevaVenta({
 
                   {/* ── Medio de pago ────────────────────────────────────── */}
                   {(saldoAFavorAplicado < subtotalFinal - 0.001 || cartEmpty) && (
-                    <section>
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
-                        {saldoAFavorAplicado > 0 ? 'Medio de pago (resto)' : 'Medio de pago'}
-                      </p>
-                      {mediosPago.length > 0 ? (
-                        <select
-                          value={medioPagoId}
-                          onChange={e => setMedioPagoId(e.target.value)}
-                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                            focus:outline-none focus:border-kp-red transition-colors"
-                        >
-                          {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
-                            <option key={m.id} value={m.id}>{m.nombre}</option>
-                          ))}
-                        </select>
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">
+                          {saldoAFavorAplicado > 0 ? 'Medio de pago (resto)' : 'Medio de pago'}
+                        </p>
+                        {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).length >= 2 && !cartEmpty && (
+                          <button
+                            type="button"
+                            onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); }}
+                            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                              usarSegundoMedio
+                                ? 'bg-kp-red/10 border-kp-red/40 text-kp-red'
+                                : 'border-kp-border text-kp-gray hover:border-kp-gray hover:text-kp-white'
+                            }`}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Dividir pago
+                          </button>
+                        )}
+                      </div>
+
+                      {!usarSegundoMedio ? (
+                        mediosPago.length > 0 ? (
+                          <select
+                            value={medioPagoId}
+                            onChange={e => setMedioPagoId(e.target.value)}
+                            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                              focus:outline-none focus:border-kp-red transition-colors"
+                          >
+                            {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
+                              <option key={m.id} value={m.id}>{m.nombre}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-gray focus:outline-none transition-colors" disabled>
+                            <option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option>
+                          </select>
+                        )
                       ) : (
-                        <select
-                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-gray
-                            focus:outline-none transition-colors"
-                          disabled
-                        >
-                          <option>Efectivo</option>
-                          <option>Tarjeta</option>
-                          <option>Transferencia</option>
-                          <option>Cuenta Corriente</option>
-                        </select>
+                        <div className="rounded-xl border border-kp-border overflow-hidden">
+                          {/* Medio 1 */}
+                          <div className="p-3 space-y-2 border-b border-kp-border">
+                            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 1</p>
+                            <select
+                              value={medioPagoId}
+                              onChange={e => setMedioPagoId(e.target.value)}
+                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                            >
+                              {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
+                                <option key={m.id} value={m.id}>{m.nombre}</option>
+                              ))}
+                            </select>
+                            <div>
+                              <p className="text-[10px] text-kp-gray mb-1">Monto</p>
+                              <NumericInput
+                                value={monto1Str}
+                                onChange={e => setMonto1Str(e.target.value)}
+                                placeholder="0,00"
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm font-bold text-kp-white tabular-nums focus:outline-none focus:border-kp-red transition-colors"
+                              />
+                            </div>
+                          </div>
+                          {/* Medio 2 */}
+                          <div className="p-3 space-y-2 bg-kp-surface2/30">
+                            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 2</p>
+                            <select
+                              value={medioPagoId2}
+                              onChange={e => setMedioPagoId2(e.target.value)}
+                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                            >
+                              {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
+                                <option key={m.id} value={m.id}>{m.nombre}</option>
+                              ))}
+                            </select>
+                            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-kp-surface border border-kp-border">
+                              <span className="text-xs text-kp-gray">Resto automático</span>
+                              <span className="text-sm font-bold tabular-nums text-kp-white">
+                                {ars.format(monto2Num)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </section>
                   )}
 
                   {/* ── Efectivo: importe recibido + vuelto ─────────────── */}
-                  {esEfectivo && !cartEmpty && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                  {esEfectivo && !cartEmpty && !usarSegundoMedio && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
                       <div className="px-4 py-2.5 bg-kp-surface2 border-b border-kp-border">
                         <p className="text-[10px] text-kp-gray uppercase tracking-widest">Efectivo</p>
@@ -1131,7 +1209,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
-                  {esTransferencia && cuentasBancarias.length > 0 && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                  {esTransferencia && !usarSegundoMedio && cuentasBancarias.length > 0 && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
@@ -1164,7 +1242,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cheques ──────────────────────────────────────────── */}
-                  {esCheque && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                  {esCheque && !usarSegundoMedio && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
