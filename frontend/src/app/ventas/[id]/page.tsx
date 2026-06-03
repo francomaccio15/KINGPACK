@@ -183,7 +183,19 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               <div className="px-5 py-4 space-y-1.5">
                 {venta.cliente_nombre ? (
                   <>
-                    <p className="font-semibold text-kp-white text-sm">{venta.cliente_nombre}</p>
+                    <Link
+                      href={`/clientes/${venta.cliente_id}`}
+                      className="group flex items-center gap-1.5 hover:gap-2 transition-all"
+                    >
+                      <span className="font-semibold text-kp-white text-sm group-hover:text-kp-red transition-colors">
+                        {venta.cliente_nombre}
+                      </span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-kp-gray group-hover:text-kp-red transition-colors flex-shrink-0">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                      </svg>
+                    </Link>
                     {venta.cliente_cuit && <p className="text-xs text-kp-gray font-mono">{venta.cliente_cuit}</p>}
                     {venta.cliente_cond_iva && <p className="text-xs text-kp-gray-lt">{venta.cliente_cond_iva}</p>}
                     {venta.lista_precio && (
