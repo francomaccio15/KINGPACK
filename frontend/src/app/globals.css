@@ -25,6 +25,23 @@ body {
   @apply bg-kp-red;
 }
 
+/* ── Tablas responsivas en mobile ───────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Cualquier tabla dentro del contenido principal scrollea horizontalmente */
+  main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  /* Excepto las tablas de documentos imprimibles */
+  main .print\:block table {
+    display: table;
+    overflow-x: visible;
+    white-space: normal;
+  }
+}
+
 /* ── Print styles ────────────────────────────────────────────────────────── */
 @media print {
   @page { margin: 12mm; size: A4; }

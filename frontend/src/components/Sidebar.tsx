@@ -17,6 +17,11 @@ const ChevronRight = () => (
     <path d="M9 18l6-6-6-6" />
   </svg>
 );
+const IcoClose = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
 
 const IcoVentas = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
@@ -104,6 +109,7 @@ const IcoTraspasos = () => (
     <path d="M5 12h14M12 5l7 7-7 7" />
   </svg>
 );
+
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -120,7 +126,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Ventas',                href: '/ventas',               icon: <IcoVentas /> },
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
-      { label: 'Gastos',                 href: '/gastos',               icon: <IcoGastos /> },
+      { label: 'Gastos',                href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
@@ -131,9 +137,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Catálogo',
     items: [
-      { label: 'Artículos',         href: '/articulos',      icon: <IcoArticulos />   },
-      { label: 'Administración de Listas', href: '/listas-precios', icon: <IcoListas />      },
-      { label: 'Categorías',        href: '/categorias',     icon: <IcoCategorias /> },
+      { label: 'Artículos',             href: '/articulos',      icon: <IcoArticulos />   },
+      { label: 'Administración de Listas', href: '/listas-precios', icon: <IcoListas />   },
+      { label: 'Categorías',            href: '/categorias',     icon: <IcoCategorias /> },
     ],
   },
   {
@@ -141,21 +147,32 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Usuarios',   href: '/usuarios',  icon: <IcoUsuarios />  },
       { label: 'Empleados',  href: '/empleados', icon: <IcoEmpleados /> },
-      { label: 'Reportes',   href: '/reportes',  icon: <IcoReportes /> },
+      { label: 'Reportes',   href: '/reportes',  icon: <IcoReportes />  },
     ],
   },
 ];
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface SidebarProps {
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
 // ─── Componente ───────────────────────────────────────────────────────────────
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  // Persistir estado en localStorage
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     setCollapsed(localStorage.getItem('kp_sidebar_collapsed') === '1');
   }, []);
+
+  // Cerrar drawer al navegar
+  useEffect(() => {
+    onMobileClose();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const toggle = () => {
     setCollapsed(c => {
@@ -166,83 +183,127 @@ export default function Sidebar() {
   };
 
   return (
-    <aside
-      className={[
-        'relative flex flex-col flex-shrink-0 z-10',
-        'bg-kp-surface border-r border-kp-border',
-        'transition-[width] duration-200 ease-in-out',
-        collapsed ? 'w-16' : 'w-60',
-      ].join(' ')}
-    >
-      {/* Toggle en el borde derecho */}
-      <button
-        onClick={toggle}
-        aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-        className="absolute -right-3 top-5 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-kp-surface border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-red transition-colors duration-150"
+    <>
+      {/* ── Backdrop mobile ── */}
+      <div
+        aria-hidden="true"
+        onClick={onMobileClose}
+        className={[
+          'fixed inset-0 bg-black/60 z-40 md:hidden transition-opacity duration-200',
+          mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+        ].join(' ')}
+      />
+
+      {/* ── Sidebar ── */}
+      <aside
+        className={[
+          'flex flex-col flex-shrink-0 bg-kp-surface border-r border-kp-border',
+          // Mobile: drawer fijo que entra/sale por la izquierda
+          'fixed inset-y-0 left-0 z-50',
+          // Desktop: vuelve al flujo normal
+          'md:relative md:z-10',
+          // Transición suave en ambas dimensiones
+          'transition-all duration-200 ease-in-out',
+          // Mobile: translate según estado; desktop: siempre visible
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          // Ancho: móvil siempre ancho, desktop según collapsed
+          collapsed ? 'w-72 md:w-16' : 'w-72 md:w-60',
+        ].join(' ')}
       >
-        {collapsed ? <ChevronRight /> : <ChevronLeft />}
-      </button>
+        {/* Toggle colapsar/expandir — solo desktop */}
+        <button
+          onClick={toggle}
+          aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          className="hidden md:flex absolute -right-3 top-5 z-20 w-6 h-6 rounded-full items-center justify-center bg-kp-surface border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-red transition-colors duration-150"
+        >
+          {collapsed ? <ChevronRight /> : <ChevronLeft />}
+        </button>
 
-      {/* Nav scrollable */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-5">
-        {NAV_GROUPS.map(group => {
-          const visibles = group.items.filter(item =>
-            !user || puedeAcceder(user.rol, item.href)
-          );
-          if (visibles.length === 0) return null;
-          return (
-          <div key={group.label}>
-            {/* Label del grupo o separador */}
-            {collapsed ? (
-              <hr className="border-kp-border mx-3 mb-2" />
-            ) : (
-              <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
-                {group.label}
-              </p>
-            )}
+        {/* Botón cerrar — solo mobile */}
+        <button
+          onClick={onMobileClose}
+          aria-label="Cerrar menú"
+          className="md:hidden absolute right-3 top-3.5 z-20 p-1.5 rounded-md text-kp-gray hover:text-kp-white hover:bg-kp-surface2 transition-colors"
+        >
+          <IcoClose />
+        </button>
 
-            <ul className="space-y-0.5">
-              {visibles.map(item => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-                const cls = [
-                  'group relative flex items-center gap-3 px-3 py-2.5 mx-1 rounded-md',
-                  'text-sm font-medium transition-colors duration-150 border-l-2',
-                  isActive
-                    ? 'bg-kp-red/10 border-kp-red text-kp-red'
-                    : item.disabled
-                      ? 'border-transparent text-kp-gray/40 cursor-not-allowed'
-                      : 'border-transparent text-kp-gray-lt hover:bg-kp-surface2 hover:text-kp-white',
-                ].join(' ');
-
-                const inner = (
+        {/* Nav scrollable */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-5">
+          {NAV_GROUPS.map(group => {
+            const visibles = group.items.filter(item =>
+              !user || puedeAcceder(user.rol, item.href)
+            );
+            if (visibles.length === 0) return null;
+            return (
+              <div key={group.label}>
+                {/* Etiqueta del grupo:
+                    - Mobile: siempre visible (texto)
+                    - Desktop collapsed: separador horizontal
+                    - Desktop expanded: texto */}
+                {collapsed ? (
                   <>
-                    <span className={isActive ? 'text-kp-red' : ''}>{item.icon}</span>
-                    {!collapsed && <span className="truncate leading-none">{item.label}</span>}
-                    {/* Tooltip en modo colapsado */}
-                    {collapsed && (
-                      <span className="pointer-events-none absolute left-full ml-3 px-2.5 py-1.5 z-50 bg-kp-surface2 border border-kp-border rounded-md text-xs font-semibold text-kp-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150">
-                        {item.label}
-                      </span>
-                    )}
+                    <hr className="hidden md:block border-kp-border mx-3 mb-2" />
+                    <p className="md:hidden px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
+                      {group.label}
+                    </p>
                   </>
-                );
+                ) : (
+                  <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
+                    {group.label}
+                  </p>
+                )}
 
-                return (
-                  <li key={item.href}>
-                    {item.disabled ? (
-                      <div className={cls}>{inner}</div>
-                    ) : (
-                      <Link href={item.href} className={cls}>{inner}</Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          );
-        })}
-      </nav>
+                <ul className="space-y-0.5">
+                  {visibles.map(item => {
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                    const cls = [
+                      'group relative flex items-center gap-3 px-3 py-2.5 mx-1 rounded-md',
+                      'text-sm font-medium transition-colors duration-150 border-l-2',
+                      isActive
+                        ? 'bg-kp-red/10 border-kp-red text-kp-red'
+                        : item.disabled
+                          ? 'border-transparent text-kp-gray/40 cursor-not-allowed'
+                          : 'border-transparent text-kp-gray-lt hover:bg-kp-surface2 hover:text-kp-white',
+                    ].join(' ');
 
-    </aside>
+                    const inner = (
+                      <>
+                        <span className={isActive ? 'text-kp-red' : ''}>{item.icon}</span>
+
+                        {/* Label: mobile siempre visible; desktop oculto cuando collapsed */}
+                        <span className={[
+                          'truncate leading-none',
+                          collapsed ? 'md:hidden' : '',
+                        ].join(' ')}>
+                          {item.label}
+                        </span>
+
+                        {/* Tooltip — solo desktop collapsed */}
+                        {collapsed && (
+                          <span className="hidden md:block pointer-events-none absolute left-full ml-3 px-2.5 py-1.5 z-50 bg-kp-surface2 border border-kp-border rounded-md text-xs font-semibold text-kp-white whitespace-nowrap opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150">
+                            {item.label}
+                          </span>
+                        )}
+                      </>
+                    );
+
+                    return (
+                      <li key={item.href}>
+                        {item.disabled ? (
+                          <div className={cls}>{inner}</div>
+                        ) : (
+                          <Link href={item.href} className={cls}>{inner}</Link>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 }
