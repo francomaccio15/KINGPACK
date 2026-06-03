@@ -37,6 +37,30 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
+// ─── PATCH /api/articulos/:id/stock-minimo ───────────────────────────────────
+router.patch('/:id/stock-minimo', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { stock_minimo } = req.body;
+    const val = Math.max(0, parseFloat(stock_minimo) || 0);
+
+    // Verificar que el artículo existe
+    const { rows: artRows } = await pool.query(
+      'SELECT id FROM articulos WHERE id = $1 AND deleted_at IS NULL',
+      [id]
+    );
+    if (!artRows[0]) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+    // Actualizar stock_minimo en todos los registros de stock existentes
+    await pool.query(
+      'UPDATE stock SET stock_minimo = $1 WHERE articulo_id = $2',
+      [val, id]
+    );
+
+    res.json({ ok: true, stock_minimo: val });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/articulos/alicuotas ────────────────────────────────────────────
 router.get('/alicuotas', async (req, res, next) => {
   try {
@@ -351,6 +375,7 @@ router.get('/', async (req, res, next) => {
         SELECT articulo_id,
                COALESCE(cantidad, 0)                                            AS cantidad_total,
                (COALESCE(cantidad, 0) <= stock_minimo AND stock_minimo > 0)     AS stock_bajo,
+               COALESCE(stock_minimo, 0)                                        AS stock_minimo,
                NULL::json                                                       AS stock_detalle
           FROM stock
          WHERE sucursal_id = $${idx++}
@@ -361,6 +386,7 @@ router.get('/', async (req, res, next) => {
         SELECT st.articulo_id,
                SUM(st.cantidad)                                                      AS cantidad_total,
                BOOL_OR(st.cantidad <= st.stock_minimo AND st.stock_minimo > 0)      AS stock_bajo,
+               COALESCE(MAX(st.stock_minimo), 0)                                    AS stock_minimo,
                json_agg(
                  json_build_object(
                    'nombre',    s.nombre,
@@ -397,6 +423,7 @@ router.get('/', async (req, res, next) => {
           ${precioListaExpr},
           COALESCE(st.cantidad_total, 0)::numeric  AS stock_total,
           COALESCE(st.stock_bajo,    false)         AS stock_bajo,
+          COALESCE(st.stock_minimo,  0)::numeric    AS stock_minimo,
           st.stock_detalle
         FROM articulos a
         LEFT JOIN categorias c ON c.id = a.categoria_id

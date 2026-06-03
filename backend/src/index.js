@@ -28,6 +28,7 @@ const notasCreditoRouter      = require('./routes/notas-credito');
 const usuariosRouter          = require('./routes/usuarios');
 const empleadosRouter         = require('./routes/empleados');
 const traspasosRouter         = require('./routes/traspasos');
+const reportesRouter          = require('./routes/reportes');
 const { verifyToken }         = require('./middleware/auth');
 
 const app = express();
@@ -68,6 +69,7 @@ app.use('/api/notas-credito',         notasCreditoRouter);
 app.use('/api/usuarios',              usuariosRouter);
 app.use('/api/empleados',             empleadosRouter);
 app.use('/api/traspasos',             traspasosRouter);
+app.use('/api/reportes',              reportesRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });

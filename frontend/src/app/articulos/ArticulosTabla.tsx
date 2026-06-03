@@ -25,6 +25,7 @@ export type ArticuloRow = {
   categoria: string;
   stock_total: string;
   stock_bajo: boolean;
+  stock_minimo: number;
   stock_detalle: StockDetalle[] | null;
 };
 

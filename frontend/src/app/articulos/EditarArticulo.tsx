@@ -18,6 +18,7 @@ type Articulo = {
   alicuota_iva_id?: string;
   alicuota_porcentaje?: string;
   categoria_id: string;
+  stock_minimo?: number;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -49,6 +50,8 @@ export default function EditarArticulo({
     costo_flete:     articulo.costo_flete    ?? '',
     margen_aplicado: articulo.margen_aplicado ?? '',
   });
+
+  const [stockMin, setStockMin] = useState(String(articulo.stock_minimo ?? 0));
 
   const catActiva  = categorias.find(c => c.id === form.categoria_id);
   const margenReal = form.margen_aplicado !== '' && form.margen_aplicado !== null
@@ -89,6 +92,16 @@ export default function EditarArticulo({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
 
+      // Update stock_minimo separately if changed
+      const nuevoMin  = parseFloat(stockMin) || 0;
+      const actualMin = parseFloat(String(articulo.stock_minimo ?? 0)) || 0;
+      if (Math.abs(nuevoMin - actualMin) > 0.001) {
+        await apiFetch(`/api/articulos/${articulo.id}/stock-minimo`, {
+          method: 'PATCH',
+          body: JSON.stringify({ stock_minimo: nuevoMin }),
+        });
+      }
+
       // Actualización optimista: propagar el nuevo precio_madre al padre inmediatamente.
       // NO llamamos router.refresh() aquí porque causaría que useEffect sobreescriba
       // el estado local con datos potencialmente desactualizados.
@@ -115,6 +128,9 @@ export default function EditarArticulo({
       setLoading(false);
     }
   };
+
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const labelCls = 'block text-xs text-kp-gray uppercase tracking-widest mb-1';
 
   return (
     <>
@@ -155,7 +171,7 @@ export default function EditarArticulo({
 
               {/* Nombre */}
               <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Nombre</label>
+                <label className={labelCls}>Nombre</label>
                 <input
                   required value={form.nombre} onChange={set('nombre')}
                   className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
@@ -165,7 +181,7 @@ export default function EditarArticulo({
 
               {/* Categoría */}
               <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Categoría</label>
+                <label className={labelCls}>Categoría</label>
                 <select
                   value={form.categoria_id} onChange={set('categoria_id')}
                   className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
@@ -180,7 +196,7 @@ export default function EditarArticulo({
               {/* Costo + Flete + Margen */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Costo</label>
+                  <label className={labelCls}>Costo</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
                     <NumericInput
@@ -192,7 +208,7 @@ export default function EditarArticulo({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
+                  <label className={labelCls}>Flete %</label>
                   <div className="relative">
                     <NumericInput
                       value={form.costo_flete} onChange={set('costo_flete')}
@@ -204,7 +220,7 @@ export default function EditarArticulo({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">
+                  <label className={labelCls}>
                     Margen %
                     {(form.margen_aplicado === '' || form.margen_aplicado === null) && catActiva?.margen_default && (
                       <span className="ml-1 text-kp-gray normal-case tracking-normal">
@@ -237,6 +253,20 @@ export default function EditarArticulo({
                 <span className="text-xl font-bold tabular-nums text-kp-white">
                   {ars.format(precioRef)}
                 </span>
+              </div>
+
+              {/* Stock mínimo de alerta */}
+              <div>
+                <label className={labelCls}>Stock mínimo de alerta</label>
+                <NumericInput
+                  value={stockMin}
+                  onChange={e => setStockMin(e.target.value)}
+                  placeholder="0"
+                  className={inputCls}
+                />
+                <p className="text-xs text-kp-gray/60 mt-1">
+                  Recibirás una alerta cuando el stock caiga por debajo de este valor.
+                </p>
               </div>
 
               {error && (

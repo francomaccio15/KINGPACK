@@ -18,20 +18,33 @@ function Spinner() {
   );
 }
 
+type CierreData = {
+  saldo_final_real: number;
+  saldo_final_sistema: number;
+  diferencia: number;
+};
+
 export default function CerrarCaja({
   cajaId,
   saldoSistema,
   fullWidth = false,
+  saldoInicial,
+  sucursalNombre,
+  fechaApertura,
 }: {
   cajaId: string;
   saldoSistema: number;
   fullWidth?: boolean;
+  saldoInicial?: number;
+  sucursalNombre?: string;
+  fechaApertura?: string;
 }) {
   const router = useRouter();
   const [open, setOpen]         = useState(false);
   const [saldoReal, setSaldo]   = useState('');
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [cierre, setCierre]     = useState<CierreData | null>(null);
 
   const saldoRealNum  = parseFloat(saldoReal) || 0;
   const diferencia    = saldoSistema - saldoRealNum;
@@ -50,8 +63,8 @@ export default function CerrarCaja({
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Error al cerrar'); return; }
-      setOpen(false);
-      router.refresh();
+      setCierre(data.caja);
+      setOpen(true);
     } catch {
       setError('Error de conexión');
     } finally {
@@ -59,13 +72,33 @@ export default function CerrarCaja({
     }
   };
 
+  const handleOpenModal = () => {
+    setSaldo('');
+    setError(null);
+    setCierre(null);
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    if (cierre) {
+      setCierre(null);
+      router.refresh();
+    }
+  };
+
   const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
+
+  const cierreReal    = cierre ? parseFloat(String(cierre.saldo_final_real))    : 0;
+  const cierreSistema = cierre ? parseFloat(String(cierre.saldo_final_sistema)) : 0;
+  const cierreDiff    = cierre ? parseFloat(String(cierre.diferencia))          : 0;
+  const diffOk        = Math.abs(cierreDiff) < 0.01;
 
   return (
     <>
       <button
-        onClick={() => { setSaldo(''); setError(null); setOpen(true); }}
+        onClick={handleOpenModal}
         className={[
           'flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors',
           fullWidth ? 'w-full' : '',
@@ -84,89 +117,149 @@ export default function CerrarCaja({
             <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
               <div className="flex items-center gap-2">
                 <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide">Cerrar Caja — Arqueo</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wide">
+                  {cierre ? 'Caja Cerrada ✓' : 'Cerrar Caja — Arqueo'}
+                </h3>
               </div>
-              <button onClick={() => setOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors">
+              <button onClick={handleClose} className="text-kp-gray hover:text-kp-white transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            {cierre ? (
+              /* ── Summary / success view ── */
+              <div className="p-5 space-y-4">
 
-              {/* Saldo sistema (read-only) */}
-              <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-0.5">Saldo sistema</p>
-                  <p className="text-xs text-kp-gray/60">Calculado automáticamente</p>
+                {/* Green success banner */}
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-semibold">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Caja cerrada correctamente
                 </div>
-                <p className="text-xl font-bold tabular-nums text-kp-white">
-                  {ars.format(saldoSistema)}
-                </p>
-              </div>
 
-              {/* Saldo real */}
-              <div>
-                <label className={labelCls}>Saldo real contado *</label>
-                <NumericInput
-                  placeholder="0.00"
-                  value={saldoReal}
-                  onChange={e => setSaldo(e.target.value)}
-                  autoFocus
-                  className={inputCls}
-                />
-                <p className="text-xs text-kp-gray/60 mt-1">
-                  Contá el efectivo físico en la caja e ingresá el total.
-                </p>
-              </div>
+                {/* Metrics grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
+                    <p className="text-xs text-kp-gray mb-0.5">Saldo inicial</p>
+                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(saldoInicial ?? 0)}</p>
+                  </div>
+                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
+                    <p className="text-xs text-kp-gray mb-0.5">Saldo sistema</p>
+                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreSistema)}</p>
+                  </div>
+                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
+                    <p className="text-xs text-kp-gray mb-0.5">Saldo real</p>
+                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreReal)}</p>
+                  </div>
+                  <div className={`border rounded-lg p-3 ${diffOk ? 'bg-green-500/10 border-green-500/30' : cierreDiff > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-kp-red/10 border-kp-red/30'}`}>
+                    <p className="text-xs text-kp-gray mb-0.5">Diferencia</p>
+                    <p className={`text-sm font-bold tabular-nums ${diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-amber-400' : 'text-kp-red'}`}>
+                      {ars.format(cierreDiff)}
+                    </p>
+                  </div>
+                </div>
 
-              {/* Diferencia en tiempo real */}
-              {saldoReal !== '' && (
-                <div className={[
-                  'rounded-xl border p-3 flex justify-between items-center',
-                  !hayDiferencia
-                    ? 'border-green-500/30 bg-green-500/5'
-                    : diferencia > 0
-                      ? 'border-amber-500/30 bg-amber-500/5'
-                      : 'border-kp-red/30 bg-kp-red/5',
-                ].join(' ')}>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Diferencia</p>
-                  <p className={[
-                    'text-lg font-bold tabular-nums',
-                    !hayDiferencia ? 'text-green-400'
-                      : diferencia > 0 ? 'text-amber-400'
-                      : 'text-kp-red',
-                  ].join(' ')}>
-                    {hayDiferencia && (diferencia > 0 ? '+' : '')}{ars.format(diferencia)}
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-white text-sm font-semibold hover:border-kp-gray transition-colors"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <polyline points="6 9 6 2 18 2 18 9" />
+                      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                      <rect x="6" y="14" width="12" height="8" />
+                    </svg>
+                    Imprimir cierre
+                  </button>
+                  <button
+                    onClick={handleClose}
+                    className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── Original form ── */
+              <div className="p-5 space-y-4">
+
+                {/* Saldo sistema (read-only) */}
+                <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-0.5">Saldo sistema</p>
+                    <p className="text-xs text-kp-gray/60">Calculado automáticamente</p>
+                  </div>
+                  <p className="text-xl font-bold tabular-nums text-kp-white">
+                    {ars.format(saldoSistema)}
                   </p>
                 </div>
-              )}
 
-              {!hayDiferencia && saldoReal !== '' && (
-                <p className="text-xs text-green-400 text-center">✓ Caja cuadrada perfectamente</p>
-              )}
+                {/* Saldo real */}
+                <div>
+                  <label className={labelCls}>Saldo real contado *</label>
+                  <NumericInput
+                    placeholder="0.00"
+                    value={saldoReal}
+                    onChange={e => setSaldo(e.target.value)}
+                    autoFocus
+                    className={inputCls}
+                  />
+                  <p className="text-xs text-kp-gray/60 mt-1">
+                    Contá el efectivo físico en la caja e ingresá el total.
+                  </p>
+                </div>
 
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
+                {/* Diferencia en tiempo real */}
+                {saldoReal !== '' && (
+                  <div className={[
+                    'rounded-xl border p-3 flex justify-between items-center',
+                    !hayDiferencia
+                      ? 'border-green-500/30 bg-green-500/5'
+                      : diferencia > 0
+                        ? 'border-amber-500/30 bg-amber-500/5'
+                        : 'border-kp-red/30 bg-kp-red/5',
+                  ].join(' ')}>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Diferencia</p>
+                    <p className={[
+                      'text-lg font-bold tabular-nums',
+                      !hayDiferencia ? 'text-green-400'
+                        : diferencia > 0 ? 'text-amber-400'
+                        : 'text-kp-red',
+                    ].join(' ')}>
+                      {hayDiferencia && (diferencia > 0 ? '+' : '')}{ars.format(diferencia)}
+                    </p>
+                  </div>
+                )}
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={handleCerrar}
-                  disabled={saving || saldoReal === ''}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
-                >
-                  {saving ? <><Spinner /> Cerrando…</> : 'Confirmar Cierre'}
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                >
-                  Cancelar
-                </button>
+                {!hayDiferencia && saldoReal !== '' && (
+                  <p className="text-xs text-green-400 text-center">✓ Caja cuadrada perfectamente</p>
+                )}
+
+                {error && (
+                  <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleCerrar}
+                    disabled={saving || saldoReal === ''}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? <><Spinner /> Cerrando…</> : 'Confirmar Cierre'}
+                  </button>
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

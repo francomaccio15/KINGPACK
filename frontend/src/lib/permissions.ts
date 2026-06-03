@@ -12,7 +12,7 @@ type Rol = AuthUser['rol'];
  */
 const PERMISOS: Record<Rol, string[] | '*'> = {
   administrador: '*',
-  supervisor:    ['/empleados', '/clientes', '/ventas', '/articulos', '/categorias', '/dashboard', '/pedidos-proveedores', '/traspasos'],
+  supervisor:    ['/empleados', '/clientes', '/ventas', '/articulos', '/categorias', '/dashboard', '/pedidos-proveedores', '/traspasos', '/reportes'],
   cajero:        ['/caja', '/ventas', '/clientes', '/notas', '/notas-credito', '/pedidos-proveedores', '/traspasos', '/articulos'],
   vendedor:      [],   // definir más adelante
 };

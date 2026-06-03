@@ -109,7 +109,13 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           <div className="flex gap-2 flex-wrap">
             {esAdmin && <RegistrarMovimiento cajaId={caja.id} mediosPago={mediosPago} />}
             {esCajero && <RegistrarGasto cajaId={caja.id} />}
-            <CerrarCaja cajaId={caja.id} saldoSistema={saldoSistema} />
+            <CerrarCaja
+              cajaId={caja.id}
+              saldoSistema={saldoSistema}
+              saldoInicial={parseFloat(String(caja.saldo_inicial ?? 0))}
+              sucursalNombre={caja.sucursal_nombre ?? ''}
+              fechaApertura={caja.fecha_apertura ?? ''}
+            />
           </div>
         )}
       </div>
@@ -131,7 +137,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
         <div className="bg-kp-surface2 border border-kp-red/20 rounded-xl p-4">
           <p className="text-xs text-kp-red/70 uppercase tracking-widest font-semibold mb-1">Egresos</p>
           <p className="text-lg font-bold tabular-nums text-kp-red">
-            −{fmt(esAdmin ? caja.total_egresos : totalEgresosVista)}
+            -{fmt(esAdmin ? caja.total_egresos : totalEgresosVista)}
           </p>
         </div>
         <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4">
@@ -178,6 +184,54 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
 
       {/* Tabla de movimientos */}
       <MovimientosTabla movimientos={movimientosFiltrados} esAdmin={esAdmin} />
+
+      {/* Print layout — cierre de caja (hidden on screen, visible on print) */}
+      {caja.estado === 'cerrada' && (
+        <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', color: '#111', background: 'white' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #111', paddingBottom: '12px', marginBottom: '16px' }}>
+            <div>
+              <p style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '1px', margin: 0 }}>KING PACK DESCARTABLES</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0' }}>REPORTE DE CIERRE DE CAJA</p>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: '12px' }}>
+              <p style={{ margin: '0 0 2px' }}><strong>Sucursal:</strong> {caja.sucursal_nombre}</p>
+              <p style={{ margin: '0 0 2px' }}>
+                <strong>Fecha apertura:</strong>{' '}
+                {new Date(caja.fecha_apertura).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Fecha cierre:</strong>{' '}
+                {caja.fecha_cierre ? new Date(caja.fecha_cierre).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </p>
+            </div>
+          </div>
+
+          {/* Resumen de saldos */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '16px' }}>
+            <tbody>
+              {([
+                ['Saldo inicial',          fmt(caja.saldo_inicial)],
+                ['Total ingresos',         '+' + fmt(caja.total_ingresos)],
+                ['Total egresos',          '−' + fmt(caja.total_egresos)],
+                ['Saldo sistema',          fmt(caja.saldo_final_sistema)],
+                ['Saldo real (contado)',   fmt(caja.saldo_final_real)],
+                ['Diferencia',             fmt(caja.diferencia)],
+              ] as [string, string][]).map(([label, val]) => (
+                <tr key={label} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '6px 8px', color: '#6b7280' }}>{label}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>{val}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Footer */}
+          <p style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '8px', margin: 0 }}>
+            KingPack — Generado el {new Date().toLocaleDateString('es-AR')}
+          </p>
+        </div>
+      )}
 
     </section>
   );

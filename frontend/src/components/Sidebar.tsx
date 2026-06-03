@@ -141,7 +141,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Usuarios',   href: '/usuarios',  icon: <IcoUsuarios />  },
       { label: 'Empleados',  href: '/empleados', icon: <IcoEmpleados /> },
-      { label: 'Reportes',   href: '/reportes',  icon: <IcoReportes />,  disabled: true },
+      { label: 'Reportes',   href: '/reportes',  icon: <IcoReportes /> },
     ],
   },
 ];
