@@ -236,10 +236,13 @@ export default function EditarVentaForm({
                     min="0"
                     max="100"
                     step="0.1"
-                    value={item.descuento_pct || ''}
-                    placeholder="0"
+                    value={item.descuento_pct}
                     onChange={e => actualizarDescuento(item.articulo_id, e.target.value)}
-                    className="w-16 text-center bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                    className={`w-16 text-center bg-kp-surface2 border rounded px-2 py-1 text-sm focus:outline-none transition-colors ${
+                      item.descuento_pct > 0
+                        ? 'border-kp-red text-kp-red font-semibold focus:border-kp-red'
+                        : 'border-kp-border text-kp-white focus:border-kp-red'
+                    }`}
                   />
                 </div>
 
