@@ -30,6 +30,7 @@ type Movimiento = {
   monto: string | number;
   medio_pago?: string | null;
   usuario_nombre?: string | null;
+  empleado_nombre?: string | null;
 };
 
 type Filtro = 'todos' | 'venta' | 'ingreso' | 'egreso' | 'retiro';
@@ -132,6 +133,14 @@ export default function MovimientosTabla({
                 </td>
                 <td className="px-4 py-3">
                   <span className="block text-kp-white">{m.concepto}</span>
+                  {m.empleado_nombre && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-400/80 mt-0.5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                      </svg>
+                      {m.empleado_nombre}
+                    </span>
+                  )}
                   {m.usuario_nombre && (
                     <span className="inline-flex items-center gap-1 text-[11px] text-kp-gray mt-0.5">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">

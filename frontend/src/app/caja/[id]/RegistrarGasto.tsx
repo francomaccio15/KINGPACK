@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 
@@ -26,17 +26,34 @@ function Spinner() {
   );
 }
 
+type Empleado = { id: string; nombre: string; cargo: string | null };
+
 export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
   const router = useRouter();
-  const [open, setOpen]         = useState(false);
-  const [concepto, setConcepto] = useState('');
-  const [monto, setMonto]       = useState('');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [open, setOpen]             = useState(false);
+  const [concepto, setConcepto]     = useState('');
+  const [monto, setMonto]           = useState('');
+  const [empleadoId, setEmpleadoId] = useState('');
+  const [empleados, setEmpleados]   = useState<Empleado[]>([]);
+  const [loadingEmps, setLoadingEmps] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+
+  // Cargar empleados al abrir el modal
+  useEffect(() => {
+    if (!open) return;
+    setLoadingEmps(true);
+    apiFetch('/api/empleados?activo=true&limit=500')
+      .then(r => r.json())
+      .then(d => setEmpleados(d.empleados ?? []))
+      .catch(() => setEmpleados([]))
+      .finally(() => setLoadingEmps(false));
+  }, [open]);
 
   const reset = () => {
     setConcepto('');
     setMonto('');
+    setEmpleadoId('');
     setError(null);
   };
 
@@ -47,13 +64,19 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
     setSaving(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = {
+        tipo: 'egreso',
+        concepto: concepto.trim(),
+        monto: parseFloat(monto),
+      };
+      if (empleadoId) {
+        body.origen_tipo = 'empleado';
+        body.origen_id   = empleadoId;
+      }
+
       const res = await apiFetch(`/api/caja/${cajaId}/movimiento`, {
         method: 'POST',
-        body: JSON.stringify({
-          tipo: 'egreso',
-          concepto: concepto.trim(),
-          monto: parseFloat(monto),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Error al guardar'); return; }
@@ -131,6 +154,32 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
                   onChange={e => setMonto(e.target.value)}
                   className={inputCls}
                 />
+              </div>
+
+              {/* Empleado (opcional) */}
+              <div>
+                <label className={labelCls}>
+                  Empleado
+                  <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
+                </label>
+                {loadingEmps ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-kp-gray">
+                    <Spinner /> Cargando empleados…
+                  </div>
+                ) : (
+                  <select
+                    value={empleadoId}
+                    onChange={e => setEmpleadoId(e.target.value)}
+                    className={`${inputCls} appearance-none`}
+                  >
+                    <option value="">— Sin asignar —</option>
+                    {empleados.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.nombre}{emp.cargo ? ` · ${emp.cargo}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {error && (

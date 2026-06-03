@@ -147,10 +147,12 @@ router.get('/:id', async (req, res, next) => {
           m.id, m.tipo, m.concepto, m.monto, m.fecha,
           m.origen_tipo, m.origen_id,
           mp.nombre AS medio_pago,
-          u.nombre   AS usuario_nombre
+          u.nombre  AS usuario_nombre,
+          CASE WHEN m.origen_tipo = 'empleado' THEN e.nombre ELSE NULL END AS empleado_nombre
         FROM movimientos_caja m
         LEFT JOIN medios_pago mp ON mp.id = m.medio_pago_id
         LEFT JOIN usuarios    u  ON u.id  = m.usuario_id
+        LEFT JOIN empleados   e  ON e.id  = m.origen_id AND m.origen_tipo = 'empleado'
         WHERE m.caja_id = $1
         ORDER BY m.fecha DESC
       `, [id]),
@@ -170,7 +172,7 @@ router.get('/:id', async (req, res, next) => {
 router.post('/:id/movimiento', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { tipo, concepto, monto, medio_pago_id } = req.body;
+    const { tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id } = req.body;
 
     if (!['ingreso', 'egreso', 'retiro'].includes(tipo)) {
       return res.status(400).json({ error: 'tipo debe ser ingreso, egreso o retiro' });
@@ -188,10 +190,11 @@ router.post('/:id/movimiento', async (req, res, next) => {
     const usuario_id = req.usuario?.id ?? null;
 
     const { rows } = await pool.query(`
-      INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, tipo, concepto, monto, fecha
-    `, [id, tipo, concepto.trim(), parseFloat(monto), medio_pago_id || null, usuario_id]);
+    `, [id, tipo, concepto.trim(), parseFloat(monto), medio_pago_id || null, usuario_id,
+        origen_tipo || null, origen_id || null]);
 
     res.status(201).json({ movimiento: rows[0] });
   } catch (err) { next(err); }
