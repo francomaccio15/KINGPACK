@@ -40,7 +40,7 @@ type CajaHistorial = {
 async function fetchData() {
   const [estadoRes, historialRes] = await Promise.all([
     serverFetch(`/api/caja/estado`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ sucursales: [] })),
-    serverFetch(`/api/caja?limit=20`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ cajas: [] })),
+    serverFetch(`/api/caja?limit=100`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ cajas: [] })),
   ]);
   return {
     sucursales:  estadoRes.sucursales  ?? [],
@@ -198,79 +198,100 @@ export default async function CajaPage() {
         })}
       </div>
 
-      {/* Historial de cajas (solo admin/supervisor) */}
-      {!esCajero && historial.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold uppercase tracking-widest text-kp-gray mb-3">
-            Historial reciente
-          </h3>
-          <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-kp-surface2 border-b border-kp-border">
-                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Apertura</th>
-                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Sucursal</th>
-                  <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo inicial</th>
-                  <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo sistema</th>
-                  <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo real</th>
-                  <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Diferencia</th>
-                  <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
-                  <th className="px-3 py-3" />
-                </tr>
-              </thead>
-              <tbody className="bg-kp-surface divide-y divide-kp-border">
-                {historial.map((c) => {
-                  const diff = parseFloat(c.diferencia ?? '0');
-                  const diffColor = Math.abs(diff) < 0.01
-                    ? 'text-kp-gray'
-                    : diff < 0
-                      ? 'text-kp-red font-semibold'
-                      : 'text-green-400 font-semibold';
+      {/* Historial por sucursal (solo admin/supervisor) */}
+      {!esCajero && historial.length > 0 && (() => {
+        // Agrupar historial por sucursal, preservando el orden de aparición
+        const porSucursal = new Map<string, { nombre: string; cajas: CajaHistorial[] }>();
+        for (const c of historial) {
+          if (!porSucursal.has(c.sucursal_id)) {
+            porSucursal.set(c.sucursal_id, { nombre: c.sucursal_nombre, cajas: [] });
+          }
+          porSucursal.get(c.sucursal_id)!.cajas.push(c);
+        }
 
-                  const fecha = new Date(c.fecha_apertura).toLocaleDateString('es-AR', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                  });
+        return (
+          <div className="space-y-8">
+            {Array.from(porSucursal.entries()).map(([sucId, { nombre, cajas }]) => (
+              <div key={sucId}>
+                {/* Header de sucursal */}
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-1 h-5 bg-kp-red rounded-full block" />
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">
+                    {nombre}
+                  </h3>
+                  <span className="text-xs text-kp-gray">
+                    — {cajas.length} {cajas.length === 1 ? 'registro' : 'registros'}
+                  </span>
+                </div>
 
-                  return (
-                    <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
-                      <td className="px-4 py-3 text-xs text-kp-gray whitespace-nowrap">{fecha}</td>
-                      <td className="px-4 py-3 font-medium text-kp-white">{c.sucursal_nombre}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt">{fmt(c.saldo_inicial)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_sistema)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_real)}</td>
-                      <td className={`px-4 py-3 text-right tabular-nums ${diffColor}`}>
-                        {c.diferencia != null ? fmt(diff) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {c.estado === 'abierta' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-green-500/10 text-green-400 border-green-500/30">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                            Abierta
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border bg-kp-border/30 text-kp-gray border-kp-border/50">
-                            Cerrada
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <Link
-                          href={`/caja/${c.id}`}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1
-                            text-xs text-kp-gray hover:text-kp-white px-2 py-1 rounded border border-transparent
-                            hover:border-kp-border hover:bg-kp-surface2"
-                        >
-                          Ver →
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-kp-surface2 border-b border-kp-border">
+                        <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Apertura</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo inicial</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo sistema</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Saldo real</th>
+                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Diferencia</th>
+                        <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
+                        <th className="px-3 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody className="bg-kp-surface divide-y divide-kp-border">
+                      {cajas.map((c) => {
+                        const diff = parseFloat(c.diferencia ?? '0');
+                        const diffColor = Math.abs(diff) < 0.01
+                          ? 'text-kp-gray'
+                          : diff < 0
+                            ? 'text-kp-red font-semibold'
+                            : 'text-green-400 font-semibold';
+
+                        const fecha = new Date(c.fecha_apertura).toLocaleDateString('es-AR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                        });
+
+                        return (
+                          <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
+                            <td className="px-4 py-3 text-xs text-kp-gray whitespace-nowrap">{fecha}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt">{fmt(c.saldo_inicial)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_sistema)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_real)}</td>
+                            <td className={`px-4 py-3 text-right tabular-nums ${diffColor}`}>
+                              {c.diferencia != null ? fmt(diff) : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {c.estado === 'abierta' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-green-500/10 text-green-400 border-green-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                  Abierta
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border bg-kp-border/30 text-kp-gray border-kp-border/50">
+                                  Cerrada
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <Link
+                                href={`/caja/${c.id}`}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1
+                                  text-xs text-kp-gray hover:text-kp-white px-2 py-1 rounded border border-transparent
+                                  hover:border-kp-border hover:bg-kp-surface2"
+                              >
+                                Ver →
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </section>
   );
