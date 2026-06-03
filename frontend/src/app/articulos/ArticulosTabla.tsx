@@ -47,6 +47,7 @@ interface Props {
   sucursalActiva: Sucursal | null;
   modeTodas: boolean;
   hasFilters: boolean;
+  esCajero?: boolean;
 }
 
 export default function ArticulosTabla({
@@ -57,6 +58,7 @@ export default function ArticulosTabla({
   sucursalActiva,
   modeTodas,
   hasFilters,
+  esCajero = false,
 }: Props) {
   const [articulos, setArticulos] = useState<ArticuloRow[]>(serverArticulos);
   // IDs editados recientemente — el useEffect no los sobreescribe
@@ -153,8 +155,8 @@ export default function ArticulosTabla({
               )}
             </td>
 
-            {/* Precio base (columna extra si no estamos en la lista madre) */}
-            {!esBase && (
+            {/* Precio base (columna extra si no estamos en la lista madre, oculta para cajero) */}
+            {!esBase && !esCajero && (
               <td className="px-4 py-3 text-right tabular-nums text-kp-gray text-xs whitespace-nowrap">
                 {fmt(a.precio_madre)}
               </td>
@@ -206,14 +208,16 @@ export default function ArticulosTabla({
               )}
             </td>
 
-            {/* Editar */}
+            {/* Editar (oculto para cajero) */}
             <td className="px-3 py-3 text-center">
-              <EditarArticulo
-                articulo={a}
-                categorias={categorias}
-                alicuotas={alicuotas}
-                onSave={handleSave}
-              />
+              {!esCajero && (
+                <EditarArticulo
+                  articulo={a}
+                  categorias={categorias}
+                  alicuotas={alicuotas}
+                  onSave={handleSave}
+                />
+              )}
             </td>
           </tr>
         );
@@ -221,7 +225,7 @@ export default function ArticulosTabla({
 
       {articulos.length === 0 && (
         <tr>
-          <td colSpan={esBase ? 6 : 7} className="px-4 py-12 text-center text-kp-gray">
+          <td colSpan={esCajero || esBase ? 7 : 8} className="px-4 py-12 text-center text-kp-gray">
             {hasFilters
               ? 'No se encontraron artículos con esos filtros.'
               : 'No hay artículos cargados todavía.'}

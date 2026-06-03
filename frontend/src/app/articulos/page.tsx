@@ -7,7 +7,6 @@ import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
 import Paginador from './Paginador';
-import { redirect } from 'next/navigation';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -139,7 +138,7 @@ export default async function ArticulosPage({
   searchParams: Record<string, string>;
 }) {
   const user = requireAuth('/articulos');
-  if (user.rol === 'cajero') redirect('/ventas');
+  const esCajero = user.rol === 'cajero';
   const sucursalActivaId = getSucursalActivaId();
 
   const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
@@ -150,7 +149,7 @@ export default async function ArticulosPage({
     fetchSucursales(),
     fetchAlicuotas(),
     fetchStockBajoCount(sucursalActivaId),
-    fetchRanking(sucursalActivaId),
+    esCajero ? Promise.resolve(null) : fetchRanking(sucursalActivaId),
   ]);
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
@@ -222,12 +221,14 @@ export default async function ArticulosPage({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
-          {listaActiva && (
-            <ExportarPDF lista={listaActiva} categorias={categorias} />
-          )}
-        </div>
+        {!esCajero && (
+          <div className="flex items-center gap-3">
+            <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
+            {listaActiva && (
+              <ExportarPDF lista={listaActiva} categorias={categorias} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Tabs por lista ── */}
@@ -285,7 +286,7 @@ export default async function ArticulosPage({
                   </span>
                 )}
               </th>
-              {!esBase && (
+              {!esBase && !esCajero && (
                 <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                   Precio Base
                 </th>
@@ -306,6 +307,7 @@ export default async function ArticulosPage({
             sucursalActiva={sucursalActiva}
             modeTodas={modeTodas}
             hasFilters={!!(searchParams.q || searchParams.categoria_id)}
+            esCajero={esCajero}
           />
         </table>
       </div>
@@ -322,7 +324,7 @@ export default async function ArticulosPage({
       )}
 
       {/* ── Ranking de ventas del mes ── */}
-      {ranking && (
+      {!esCajero && ranking && (
         <RankingArticulos
           mes={ranking.mes}
           masVendidos={ranking.mas_vendidos}
