@@ -96,8 +96,10 @@ function recalcItem(
   descuentoLista: number,
   descuentoCliente: number,
 ): CartItem {
+  // Siempre recalcular sobre precio_madre (precio original sin descuentos)
+  // para evitar aplicar el descuento de lista dos veces
   const descuento_pct = calcCombinedDiscount(descuentoLista, descuentoCliente);
-  const precio_unitario_final = calcFinalPrice(item.precio_lista, descuento_pct);
+  const precio_unitario_final = calcFinalPrice(item.precio_madre, descuento_pct);
   return { ...item, descuento_pct, precio_unitario_final };
 }
 
@@ -370,9 +372,11 @@ export default function NuevaVenta({
             : item
         );
       }
-      const basePrice   = art.precio_lista ?? art.precio_madre;
-      const descuento   = calcCombinedDiscount(descuentoLista, descuentoCliente);
-      const finalPrice  = calcFinalPrice(basePrice, descuento);
+      // precio_lista en el carrito = siempre precio_madre (base sin descuentos)
+      // El descuento de lista se aplica vía descuento_pct combinado, no doblando
+      const precio_madre = art.precio_madre;
+      const descuento    = calcCombinedDiscount(descuentoLista, descuentoCliente);
+      const finalPrice   = calcFinalPrice(precio_madre, descuento);
       return [
         ...prev,
         {
@@ -380,8 +384,8 @@ export default function NuevaVenta({
           nombre:                art.nombre,
           codigo:                art.codigo,
           cantidad:              1,
-          precio_lista:          basePrice,
-          precio_madre:          art.precio_madre,
+          precio_lista:          precio_madre,
+          precio_madre:          precio_madre,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
@@ -438,7 +442,7 @@ export default function NuevaVenta({
 
   // ─── Totals ────────────────────────────────────────────────────────────────
   const subtotalBruto = cart.reduce(
-    (acc, i) => acc + i.precio_lista * i.cantidad, 0
+    (acc, i) => acc + i.precio_madre * i.cantidad, 0
   );
   const subtotalFinal = cart.reduce(
     (acc, i) => acc + i.precio_unitario_final * i.cantidad, 0
