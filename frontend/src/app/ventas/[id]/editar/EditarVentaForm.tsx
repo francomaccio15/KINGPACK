@@ -67,8 +67,12 @@ export default function EditarVentaForm({
     }))
   );
 
-  // Nuevos artículos se agregan con el precio de la lista original de la venta (descuento_pct = 0)
-  // El precio ya viene correcto desde la API con lista_id
+  // Descuento por defecto para artículos nuevos = primer ítem con descuento > 0
+  const descuentoVenta = itemsIniciales.find(
+    i => parseFloat(String(i.descuento_pct)) > 0
+  )?.descuento_pct
+    ? parseFloat(String(itemsIniciales.find(i => parseFloat(String(i.descuento_pct)) > 0)!.descuento_pct))
+    : 0;
 
   const [observacion, setObservacion] = useState('');
   const [saving, setSaving]           = useState(false);
@@ -103,12 +107,13 @@ export default function EditarVentaForm({
           : i
         );
       }
-      // El precio ya viene de la lista seleccionada — descuento_pct = 0
-      const precioLista = art.precio_lista || art.precio_madre;
+      // Aplicar el mismo descuento que tienen los ítems existentes de la venta
+      const precioLista = art.precio_madre || art.precio_lista;
+      const precioFinal = +(precioLista * (1 - descuentoVenta / 100)).toFixed(4);
       return [...prev, {
         articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
-        cantidad: 1, precio_lista: precioLista, descuento_pct: 0,
-        precio_unitario_final: precioLista,
+        cantidad: 1, precio_lista: precioLista, descuento_pct: descuentoVenta,
+        precio_unitario_final: precioFinal,
       }];
     });
     setQuery('');
@@ -163,8 +168,10 @@ export default function EditarVentaForm({
       <div className="rounded-xl border border-kp-border bg-kp-surface p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Agregar artículo</h3>
-          {listaPrecioId && (
-            <span className="text-xs text-kp-gray">Precios de la lista original de la venta</span>
+          {descuentoVenta > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-kp-red/10 border border-kp-red/30 text-kp-red rounded-lg px-2 py-0.5">
+              Nuevos con {descuentoVenta}% dto.
+            </span>
           )}
         </div>
         <div className="relative">
