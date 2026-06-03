@@ -5,7 +5,49 @@ on:
     branches: [master]
 
 jobs:
-  deploy:
+  # ── Detectar qué cambió ──────────────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend:  ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+
+  # ── Deploy backend (solo SSH, sin build) ────────────────────────────────────
+  deploy-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 76.13.112.206
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/KINGPACK
+            git pull --ff-only
+            cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
+            pm2 restart ecosystem.config.js --update-env
+            pm2 save
+            sleep 2
+            curl -fsS http://127.0.0.1:3001/api/health
+
+  # ── Deploy frontend (build + rsync) ─────────────────────────────────────────
+  deploy-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +91,7 @@ jobs:
             --exclude='node_modules' \
             frontend/.next/ root@76.13.112.206:/var/www/KINGPACK/frontend/.next/
 
-      - name: Deploy on VPS
+      - name: Restart frontend on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 76.13.112.206
@@ -59,9 +101,6 @@ jobs:
             set -e
             cd /var/www/KINGPACK
             git pull --ff-only
-            cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
             cd frontend && npm install --no-audit --no-fund && cd ..
             pm2 restart ecosystem.config.js --update-env
             pm2 save
-            sleep 2
-            curl -fsS http://127.0.0.1:3001/api/health
