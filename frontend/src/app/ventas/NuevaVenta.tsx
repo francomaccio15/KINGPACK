@@ -1080,7 +1080,7 @@ export default function NuevaVenta({
                         <p className="text-[10px] text-kp-gray uppercase tracking-widest">
                           {saldoAFavorAplicado > 0 ? 'Medio de pago (resto)' : 'Medio de pago'}
                         </p>
-                        {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).length >= 2 && !cartEmpty && (
+                        {mediosPago.length >= 1 && (
                           <button
                             type="button"
                             onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); }}
