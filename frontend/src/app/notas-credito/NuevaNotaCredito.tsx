@@ -126,6 +126,14 @@ type Cliente        = { id: string; razon_social: string; cuit: string | null };
 type Sucursal       = { id: string; nombre: string };
 type TipoComprobante = { id: string; codigo_afip: number; letra: string; descripcion: string };
 
+type VentaItem = {
+  articulo_id: string;
+  cantidad: string | number;
+  precio_unitario_final: string | number;
+  iva_monto: string | number;
+  nombre: string;
+};;
+
 const MOTIVOS_PRESET = [
   'Devolución de mercadería',
   'Error en precio cobrado de más',
@@ -166,6 +174,61 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [items,           setItems]            = useState<NcItem[]>([emptyItem()]);
   const [saving,          setSaving]           = useState(false);
   const [error,           setError]            = useState('');
+
+  // — Devolución de venta completa —
+  const [modoDevolucion,  setModoDevolucion]   = useState(false);
+  const [ventaNumero,     setVentaNumero]      = useState('');
+  const [ventaCargada,    setVentaCargada]     = useState<{ numero: number; cliente: string | null } | null>(null);
+  const [buscandoVenta,   setBuscandoVenta]    = useState(false);
+  const [errorVenta,      setErrorVenta]       = useState('');
+
+  const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[]) => {
+    if (venta.cliente_id)  setClienteId(String(venta.cliente_id));
+    if (venta.sucursal_id) setSucursalId(String(venta.sucursal_id));
+    setNumRef(`Venta #${venta.numero}`);
+    setMotivo('Devolución de mercadería');
+
+    // Calcular IVA efectivo ponderado
+    const netTotal = ventaItems.reduce((s, it) => s + parseFloat(String(it.precio_unitario_final)) * parseFloat(String(it.cantidad)), 0);
+    const ivaTotal = ventaItems.reduce((s, it) => s + parseFloat(String(it.iva_monto)) * parseFloat(String(it.cantidad)), 0);
+    const pctEfectivo = netTotal > 0 ? (ivaTotal / netTotal) * 100 : 21;
+    const opciones = [0, 10.5, 21, 27];
+    const ivaMasCercano = opciones.reduce((a, b) => Math.abs(b - pctEfectivo) < Math.abs(a - pctEfectivo) ? b : a);
+    setIvaPct(ivaMasCercano);
+
+    setItems(ventaItems.map(it => ({
+      descripcion:     it.nombre,
+      cantidad:        parseFloat(String(it.cantidad)),
+      precio_unitario: parseFloat(String(it.precio_unitario_final)),
+      subtotal:        parseFloat(String(it.cantidad)) * parseFloat(String(it.precio_unitario_final)),
+      articulo_id:     it.articulo_id,
+    })));
+
+    setVentaCargada({ numero: Number(venta.numero), cliente: (venta.cliente_nombre as string | null) ?? null });
+    setErrorVenta('');
+  };
+
+  const buscarVenta = async () => {
+    const q = ventaNumero.trim();
+    if (!q) return;
+    setBuscandoVenta(true);
+    setErrorVenta('');
+    setVentaCargada(null);
+    try {
+      const r = await apiFetch(`/api/ventas?q=${encodeURIComponent(q)}&limit=5`);
+      const data = await r.json();
+      const match = (data.ventas ?? []).find((v: Record<string, unknown>) => String(v.numero) === q) ?? data.ventas?.[0];
+      if (!match) { setErrorVenta('No se encontró ninguna venta con ese número'); return; }
+      const r2 = await apiFetch(`/api/ventas/${match.id}`);
+      const data2 = await r2.json();
+      if (!r2.ok) { setErrorVenta(data2.error ?? 'Error al cargar la venta'); return; }
+      cargarVenta(data2.venta, data2.items ?? []);
+    } catch {
+      setErrorVenta('Error de conexión al buscar la venta');
+    } finally {
+      setBuscandoVenta(false);
+    }
+  };
 
   // Calcular totales
   const subtotal = items.reduce((s, it) => s + it.cantidad * it.precio_unitario, 0);
@@ -252,6 +315,75 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+          {/* ── Devolución de venta completa ── */}
+          <div className={`rounded-xl border transition-colors ${modoDevolucion ? 'border-blue-500/30 bg-blue-500/5' : 'border-kp-border bg-kp-surface2'}`}>
+            <button
+              type="button"
+              onClick={() => { setModoDevolucion(v => !v); setVentaNumero(''); setVentaCargada(null); setErrorVenta(''); }}
+              className="w-full flex items-center justify-between px-4 py-3 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <span className={`text-xs font-bold uppercase tracking-wider ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
+                  Devolver venta completa
+                </span>
+                {ventaCargada && (
+                  <span className="ml-1 text-xs font-semibold text-green-400">— Venta #{ventaCargada.numero} cargada ✓</span>
+                )}
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 text-kp-gray transition-transform ${modoDevolucion ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {modoDevolucion && (
+              <div className="px-4 pb-4 space-y-3 border-t border-kp-border/40">
+                <p className="text-xs text-kp-gray pt-3">
+                  Ingresá el número de venta para cargar todos sus artículos automáticamente.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={ventaNumero}
+                    onChange={e => setVentaNumero(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarVenta())}
+                    placeholder="Número de venta…"
+                    className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={buscarVenta}
+                    disabled={buscandoVenta || !ventaNumero.trim()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {buscandoVenta ? (
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    )}
+                    {buscandoVenta ? 'Buscando…' : 'Cargar'}
+                  </button>
+                </div>
+                {errorVenta && (
+                  <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{errorVenta}</p>
+                )}
+                {ventaCargada && (
+                  <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-400">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mt-0.5 flex-shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                    <div>
+                      <p className="font-semibold">Venta #{ventaCargada.numero} cargada correctamente</p>
+                      {ventaCargada.cliente && <p className="text-green-400/70 mt-0.5">Cliente: {ventaCargada.cliente}</p>}
+                      <p className="text-green-400/70 mt-0.5">Podés ajustar los ítems, cantidades y motivo antes de emitir.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Fila 1: Tipo + Fecha + Referencia */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

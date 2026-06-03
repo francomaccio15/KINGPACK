@@ -382,6 +382,7 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           v.id, v.numero, v.fecha, v.estado, v.observaciones,
           v.subtotal, v.descuento_total, v.total,
+          v.sucursal_id,
           c.id           AS cliente_id,
           c.razon_social AS cliente_nombre,
           c.cuit         AS cliente_cuit,
