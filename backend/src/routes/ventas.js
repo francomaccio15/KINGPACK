@@ -473,7 +473,7 @@ router.patch('/:id/estado', async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: ventaRows } = await client.query(
-      `SELECT id, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT id, estado, sucursal_id, observaciones FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [id]
     );
     if (!ventaRows[0]) {
@@ -499,18 +499,16 @@ router.patch('/:id/estado', async (req, res, next) => {
       }
     }
 
+    // Construir observaciones en JS para evitar ambigüedad de tipos en SQL
     const motivoAnulacion = req.body.motivo?.trim() || null;
+    let nuevaObs = venta.observaciones || null;
+    if (estado === 'anulada' && motivoAnulacion) {
+      nuevaObs = `[Anulada: ${motivoAnulacion}]` + (nuevaObs ? '\n' + nuevaObs : '');
+    }
+
     const { rows } = await client.query(
-      `UPDATE ventas
-       SET estado = $1,
-           observaciones = CASE
-             WHEN $1::text = 'anulada' AND $3::text IS NOT NULL
-             THEN CONCAT('[Anulada: ', $3::text, ']', CASE WHEN observaciones IS NOT NULL AND observaciones <> '' THEN E'\n' || observaciones ELSE '' END)
-             ELSE observaciones
-           END
-       WHERE id = $2
-       RETURNING id, estado`,
-      [estado, id, motivoAnulacion]
+      `UPDATE ventas SET estado = $1, observaciones = $3 WHERE id = $2 RETURNING id, estado`,
+      [estado, id, nuevaObs]
     );
 
     await client.query('COMMIT');
