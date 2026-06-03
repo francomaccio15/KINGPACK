@@ -465,6 +465,10 @@ router.patch('/:id/estado', async (req, res, next) => {
       return res.status(400).json({ error: 'Estado inválido' });
     }
 
+    if (estado === 'anulada' && !req.body.motivo?.trim()) {
+      return res.status(400).json({ error: 'El motivo de anulación es obligatorio' });
+    }
+
     await client.query('BEGIN');
 
     const { rows: ventaRows } = await client.query(
@@ -494,9 +498,18 @@ router.patch('/:id/estado', async (req, res, next) => {
       }
     }
 
+    const motivoAnulacion = req.body.motivo?.trim() || null;
     const { rows } = await client.query(
-      `UPDATE ventas SET estado = $1 WHERE id = $2 RETURNING id, estado`,
-      [estado, id]
+      `UPDATE ventas
+       SET estado = $1,
+           observaciones = CASE
+             WHEN $1 = 'anulada' AND $3::text IS NOT NULL
+             THEN CONCAT('[Anulada: ', $3::text, ']', CASE WHEN observaciones IS NOT NULL AND observaciones <> '' THEN E'\n' || observaciones ELSE '' END)
+             ELSE observaciones
+           END
+       WHERE id = $2
+       RETURNING id, estado`,
+      [estado, id, motivoAnulacion]
     );
 
     await client.query('COMMIT');
@@ -819,6 +832,20 @@ router.get('/:id/pdf', async (req, res, next) => {
        .text('  ·  Tel: 3872220486', ML + 143, curY);
 
     doc.end();
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/ventas/:id/observaciones
+router.patch('/:id/observaciones', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE ventas SET observaciones = $1 WHERE id = $2 AND deleted_at IS NULL AND estado != 'anulada' RETURNING id, observaciones`,
+      [observaciones?.trim() || null, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Venta no encontrada o anulada' });
+    res.json({ venta: rows[0] });
   } catch (err) { next(err); }
 });
 

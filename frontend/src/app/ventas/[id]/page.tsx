@@ -83,7 +83,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
             <p className="text-sm text-kp-gray pl-3">{fechaFmt(venta.fecha)}</p>
           </div>
-          <AccionesVenta ventaId={params.id} estado={venta.estado} total={venta.total} facturacion={facturacion} />
+          <AccionesVenta ventaId={params.id} estado={venta.estado} total={venta.total} facturacion={facturacion} observaciones={venta.observaciones ?? null} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

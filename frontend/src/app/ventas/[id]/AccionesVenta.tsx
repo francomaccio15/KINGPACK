@@ -17,16 +17,25 @@ type Facturacion = {
 } | null;
 
 export default function AccionesVenta({
-  ventaId, estado, total, facturacion,
+  ventaId, estado, total, facturacion, observaciones,
 }: {
   ventaId: string;
   estado: string;
   total: string;
   facturacion: Facturacion;
+  observaciones: string | null;
 }) {
   const router = useRouter();
   const [loadingFactura, setLoadingFactura] = useState(false);
   const [resultFactura,  setResultFactura]  = useState<{ CAE?: string; _mock?: boolean; error?: string } | null>(null);
+  const [anularOpen,    setAnularOpen]    = useState(false);
+  const [anularMotivo,  setAnularMotivo]  = useState('');
+  const [anularLoading, setAnularLoading] = useState(false);
+  const [anularError,   setAnularError]   = useState('');
+  const [editObsOpen,   setEditObsOpen]   = useState(false);
+  const [editObsText,   setEditObsText]   = useState('');
+  const [editObsLoading,setEditObsLoading]= useState(false);
+  const [editObsError,  setEditObsError]  = useState('');
 
   const generarFacturaTest = async () => {
     setLoadingFactura(true);
@@ -44,11 +53,78 @@ export default function AccionesVenta({
     }
   };
 
+  const handleAnular = async () => {
+    if (!anularMotivo.trim() || anularMotivo.trim().length < 5) {
+      setAnularError('El motivo debe tener al menos 5 caracteres');
+      return;
+    }
+    setAnularLoading(true);
+    setAnularError('');
+    try {
+      const res = await apiFetch(`/api/ventas/${ventaId}/estado`, {
+        method: 'PATCH',
+        body: JSON.stringify({ estado: 'anulada', motivo: anularMotivo.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAnularError(data.error ?? 'Error al anular'); return; }
+      setAnularOpen(false);
+      router.refresh();
+    } catch { setAnularError('Error de conexión'); }
+    finally { setAnularLoading(false); }
+  };
+
+  const handleEditObs = async () => {
+    setEditObsLoading(true);
+    setEditObsError('');
+    try {
+      const res = await apiFetch(`/api/ventas/${ventaId}/observaciones`, {
+        method: 'PATCH',
+        body: JSON.stringify({ observaciones: editObsText }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditObsError(data.error ?? 'Error al guardar'); return; }
+      setEditObsOpen(false);
+      router.refresh();
+    } catch { setEditObsError('Error de conexión'); }
+    finally { setEditObsLoading(false); }
+  };
+
   const yaFacturada = !!(facturacion?.cae);
 
   return (
+    <>
     <div className="flex flex-col items-end gap-3 print:hidden">
       <div className="flex flex-wrap gap-2">
+
+        {/* Anular venta */}
+        {estado !== 'anulada' && (
+          <button
+            onClick={() => { setAnularMotivo(''); setAnularError(''); setAnularOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+              border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/60
+              transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            Anular venta
+          </button>
+        )}
+
+        {/* Editar observaciones */}
+        {estado !== 'anulada' && (
+          <button
+            onClick={() => { setEditObsText(observaciones ?? ''); setEditObsError(''); setEditObsOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+              border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray
+              transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Editar
+          </button>
+        )}
 
         {/* Imprimir venta */}
         <button
@@ -149,5 +225,104 @@ export default function AccionesVenta({
         </div>
       )}
     </div>
+
+    {anularOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-5 bg-rose-500 rounded-full block" />
+              <h3 className="text-sm font-bold uppercase tracking-wide text-rose-400">Anular Venta</h3>
+            </div>
+            <button onClick={() => setAnularOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Esta acción es irreversible. El stock de los artículos será restaurado automáticamente.
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Motivo de anulación *</label>
+              <textarea
+                value={anularMotivo}
+                onChange={e => setAnularMotivo(e.target.value)}
+                rows={3}
+                placeholder="Ej: Error en los artículos cargados, pedido cancelado por el cliente..."
+                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-rose-500 transition-colors resize-none"
+              />
+            </div>
+            {anularError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{anularError}</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleAnular}
+                disabled={anularLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {anularLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : null}
+                {anularLoading ? 'Anulando…' : 'Confirmar Anulación'}
+              </button>
+              <button
+                onClick={() => setAnularOpen(false)}
+                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {editObsOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-5 bg-kp-red rounded-full block" />
+              <h3 className="text-sm font-bold uppercase tracking-wide">Editar Observaciones</h3>
+            </div>
+            <button onClick={() => setEditObsOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Observaciones</label>
+              <textarea
+                value={editObsText}
+                onChange={e => setEditObsText(e.target.value)}
+                rows={4}
+                placeholder="Observaciones opcionales…"
+                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
+              />
+            </div>
+            {editObsError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{editObsError}</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleEditObs}
+                disabled={editObsLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red hover:bg-kp-red/90 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {editObsLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : null}
+                {editObsLoading ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button
+                onClick={() => setEditObsOpen(false)}
+                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
