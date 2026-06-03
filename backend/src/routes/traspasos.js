@@ -186,7 +186,7 @@ router.patch('/:id/estado', async (req, res, next) => {
     const t = tRows[0];
 
     // Validar transición
-    const transicionesValidas: Record<string, string[]> = {
+    const transicionesValidas = {
       pendiente:   ['en_transito', 'cancelado'],
       en_transito: ['recibido', 'cancelado'],
     };
