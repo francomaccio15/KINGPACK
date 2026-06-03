@@ -65,13 +65,14 @@ export default function EditarVentaForm({
     }))
   );
 
-  // Descuento por defecto para nuevos ítems = el más frecuente en el carrito original
+  // Descuento por defecto para nuevos ítems = el no-cero más frecuente del carrito original
+  // (usa Map para evitar que JS ordene las claves numéricas y devuelva 0 antes que 36)
   const descuentoVenta = (() => {
-    if (itemsIniciales.length === 0) return 0;
-    const descuentos = itemsIniciales.map(i => parseFloat(String(i.descuento_pct)) || 0);
-    const freq: Record<number, number> = {};
-    descuentos.forEach(d => { freq[d] = (freq[d] || 0) + 1; });
-    return Number(Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]);
+    const descuentos = itemsIniciales.map(i => parseFloat(String(i.descuento_pct)) || 0).filter(d => d > 0);
+    if (descuentos.length === 0) return 0;
+    const freq = new Map<number, number>();
+    descuentos.forEach(d => freq.set(d, (freq.get(d) ?? 0) + 1));
+    return [...freq.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
   })();
 
   const [observacion, setObservacion] = useState('');
