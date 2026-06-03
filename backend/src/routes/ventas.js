@@ -995,7 +995,7 @@ router.put('/:id/items', async (req, res, next) => {
     }));
 
     // Obtener usuario desde JWT
-    const userId = req.user?.id || null;
+    const userId = req.usuario?.id || null;
     await client.query(
       `INSERT INTO venta_ediciones (venta_id, usuario_id, observacion, items_anteriores, items_nuevos)
        VALUES ($1, $2, $3, $4, $5)`,

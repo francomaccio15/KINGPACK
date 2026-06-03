@@ -546,13 +546,29 @@ router.get('/:id', async (req, res, next) => {
         c.id           AS categoria_id,
         c.nombre       AS categoria,
         ${precioListaExpr},
-        COALESCE(0, 0)::numeric AS stock_total,
-        FALSE           AS stock_bajo,
-        NULL            AS stock_detalle
+        COALESCE(st.stock_total, 0)::numeric AS stock_total,
+        COALESCE(st.stock_bajo, FALSE)        AS stock_bajo,
+        st.stock_detalle
       FROM articulos a
       LEFT JOIN categorias    c  ON c.id  = a.categoria_id
       LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
       ${listaJoin}
+      LEFT JOIN (
+        SELECT
+          s.articulo_id,
+          SUM(s.cantidad)::numeric                                              AS stock_total,
+          BOOL_OR(s.cantidad <= s.stock_minimo AND s.stock_minimo > 0)         AS stock_bajo,
+          JSON_AGG(JSON_BUILD_OBJECT(
+            'sucursal_id', s.sucursal_id,
+            'sucursal_nombre', su.nombre,
+            'cantidad', s.cantidad,
+            'stock_minimo', s.stock_minimo
+          ) ORDER BY su.nombre)                                                 AS stock_detalle
+        FROM stock s
+        JOIN sucursales su ON su.id = s.sucursal_id
+        WHERE s.articulo_id = $1
+        GROUP BY s.articulo_id
+      ) st ON st.articulo_id = a.id
       WHERE a.id = $1 AND a.deleted_at IS NULL
     `, params);
 

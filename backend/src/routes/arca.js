@@ -10,6 +10,17 @@ const router = require('express').Router();
 const arca   = require('../services/arca');
 const fs     = require('fs');
 const path   = require('path');
+const { pool } = require('../config/db');
+
+// GET /api/arca/tipos-comprobante
+router.get('/tipos-comprobante', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, codigo_afip, letra, descripcion FROM tipos_comprobante ORDER BY codigo_afip`
+    );
+    res.json({ tipos: rows });
+  } catch (err) { next(err); }
+});
 
 // GET /api/arca/status
 router.get('/status', (req, res) => {
