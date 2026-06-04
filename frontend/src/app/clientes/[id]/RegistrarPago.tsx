@@ -1,33 +1,73 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
+const apiFetch = (p: string, o: RequestInit = {}) => {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
+  return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } });
+};
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
-export default function RegistrarPago({ clienteId, saldoActual }: { clienteId: string; saldoActual: number }) {
-  const router = useRouter();
-  const [open, setOpen]       = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [monto, setMonto]     = useState('');
-  const [concepto, setConcepto] = useState('');
+interface MedioPago { id: string; nombre: string; }
 
-  const cerrar = () => { setOpen(false); setError(''); setMonto(''); setConcepto(''); };
+export default function RegistrarPago({
+  clienteId,
+  saldoActual,
+  sucursalId,
+}: {
+  clienteId: string;
+  saldoActual: number;
+  sucursalId?: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen]             = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [monto, setMonto]           = useState('');
+  const [concepto, setConcepto]     = useState('');
+  const [medioPagoId, setMedioPagoId] = useState('');
+  const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    apiFetch('/api/ventas/medios-pago')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const lista: MedioPago[] = (d.medios_pago ?? []).filter((m: MedioPago) =>
+          m.nombre !== 'Saldo a favor' && m.nombre !== 'Cuenta Corriente'
+        );
+        setMediosPago(lista);
+        if (lista.length > 0 && !medioPagoId) setMedioPagoId(lista[0].id);
+      })
+      .catch(() => {});
+  }, [open]);
+
+  const cerrar = () => {
+    setOpen(false);
+    setError('');
+    setMonto('');
+    setConcepto('');
+    setMedioPagoId('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
     setError('');
     setLoading(true);
     try {
       const res = await apiFetch(`/api/clientes/${clienteId}/pagos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monto: parseFloat(monto), concepto }),
+        body: JSON.stringify({
+          monto: parseFloat(monto),
+          concepto,
+          medio_pago_id: medioPagoId,
+          sucursal_id: sucursalId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al registrar pago');
@@ -40,8 +80,8 @@ export default function RegistrarPago({ clienteId, saldoActual }: { clienteId: s
     }
   };
 
-  const montoNum    = parseFloat(monto) || 0;
-  const saldoNuevo  = saldoActual - montoNum;
+  const montoNum   = parseFloat(monto) || 0;
+  const saldoNuevo = saldoActual - montoNum;
 
   return (
     <>
@@ -93,12 +133,37 @@ export default function RegistrarPago({ clienteId, saldoActual }: { clienteId: s
                 </div>
               </div>
 
+              {/* Método de pago */}
+              <div>
+                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Método de Pago *</label>
+                {mediosPago.length === 0 ? (
+                  <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {mediosPago.map(mp => (
+                      <button
+                        key={mp.id}
+                        type="button"
+                        onClick={() => setMedioPagoId(mp.id)}
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-left
+                          ${medioPagoId === mp.id
+                            ? 'border-green-500 bg-green-500/10 text-green-300'
+                            : 'border-kp-border bg-kp-surface2 text-kp-gray hover:border-kp-gray hover:text-kp-white'
+                          }`}
+                      >
+                        {mp.nombre}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Concepto */}
               <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Concepto</label>
+                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Concepto (opcional)</label>
                 <input
                   value={concepto} onChange={e => setConcepto(e.target.value)}
-                  placeholder="ej: Transferencia banco, efectivo..."
+                  placeholder="ej: Pago cuota septiembre..."
                   className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
                     placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
                 />
@@ -123,7 +188,7 @@ export default function RegistrarPago({ clienteId, saldoActual }: { clienteId: s
                   className="flex-1 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-white hover:border-kp-gray transition-colors">
                   Cancelar
                 </button>
-                <button type="submit" disabled={loading || !monto}
+                <button type="submit" disabled={loading || !monto || !medioPagoId}
                   className="flex-1 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
                   {loading ? 'Guardando…' : 'Confirmar Pago'}
                 </button>

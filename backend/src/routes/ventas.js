@@ -495,6 +495,170 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── PATCH /api/ventas/:id/confirmar-preventa ────────────────────────────────
+// Convierte una preventa en venta confirmada, descuenta stock y registra pagos.
+// Body: { pagos: [{ medio_pago_id, monto, cuenta_destino? }] }
+router.patch('/:id/confirmar-preventa', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { pagos = [] } = req.body;
+
+    await client.query('BEGIN');
+
+    // Verificar que la venta existe y es una preventa
+    const { rows: ventaRows } = await client.query(
+      `SELECT v.id, v.numero, v.estado, v.sucursal_id, v.cliente_id, v.total
+       FROM ventas v WHERE v.id = $1 AND v.deleted_at IS NULL FOR UPDATE`,
+      [id]
+    );
+    if (!ventaRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Venta no encontrada' });
+    }
+    if (ventaRows[0].estado !== 'preventa') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo se puede confirmar una preventa' });
+    }
+
+    const { sucursal_id, cliente_id, numero } = ventaRows[0];
+
+    // Verificar caja abierta
+    const { rows: cajaRows } = await client.query(
+      `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+      [sucursal_id]
+    );
+    if (!cajaRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja antes de confirmar la venta.' });
+    }
+    const cajaId = cajaRows[0].id;
+
+    // Obtener items y descontar stock
+    const { rows: itemRows } = await client.query(
+      `SELECT articulo_id, cantidad FROM venta_items WHERE venta_id = $1`,
+      [id]
+    );
+    for (const item of itemRows) {
+      const { rows: stockRows } = await client.query(
+        `SELECT cantidad FROM stock WHERE articulo_id = $1 AND sucursal_id = $2 FOR UPDATE`,
+        [item.articulo_id, sucursal_id]
+      );
+      const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
+      const cantidad = parseFloat(item.cantidad);
+      if (stockActual < cantidad) {
+        const { rows: artRows } = await client.query(`SELECT nombre FROM articulos WHERE id = $1`, [item.articulo_id]);
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: `Stock insuficiente para "${artRows[0]?.nombre ?? item.articulo_id}"`,
+          detalle: { articulo_id: item.articulo_id, disponible: stockActual, solicitado: cantidad },
+        });
+      }
+      await client.query(
+        `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (articulo_id, sucursal_id)
+         DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
+        [item.articulo_id, sucursal_id, parseFloat((stockActual - cantidad).toFixed(3))]
+      );
+    }
+
+    // Registrar pagos
+    if (pagos.length > 0) {
+      const medioIds = [...new Set(pagos.map(p => p.medio_pago_id).filter(Boolean))];
+      let mediosMap = {};
+      if (medioIds.length > 0) {
+        const { rows: mediosRows } = await client.query(
+          `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
+        );
+        mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
+      }
+
+      // Verificar y consumir saldo a favor si aplica
+      const pagosSaldoFavor = pagos.filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor');
+      if (pagosSaldoFavor.length > 0) {
+        if (!cliente_id) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Se requiere un cliente para usar saldo a favor' });
+        }
+        const { rows: [saldoRow] } = await client.query(`
+          SELECT c.saldo_inicial
+                 + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                 + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual
+            FROM clientes c
+            LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+            LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs_agg ON cs_agg.cliente_id = c.id
+           WHERE c.id = $1 AND c.deleted_at IS NULL
+           GROUP BY c.id, c.saldo_inicial, cs_agg.total_correcciones
+        `, [cliente_id]);
+        const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+        const saldoDisponible = saldoActual < 0 ? Math.abs(saldoActual) : 0;
+        const totalSF = pagosSaldoFavor.reduce((s, p) => s + parseFloat(p.monto), 0);
+        if (totalSF > saldoDisponible + 0.01) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: `Saldo a favor insuficiente. Disponible: $${saldoDisponible.toFixed(2)}` });
+        }
+        const saldoDespues = parseFloat((saldoActual + totalSF).toFixed(2));
+        await client.query(
+          `INSERT INTO cuentas_corrientes_cliente (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+           VALUES ($1, $2, 0, $3, 'consumo_nc', $4)`,
+          [cliente_id, totalSF, saldoDespues, id]
+        );
+      }
+
+      for (const pago of pagos) {
+        await client.query(
+          `INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino) VALUES ($1,$2,$3,$4)`,
+          [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]
+        );
+        const medio = mediosMap[pago.medio_pago_id];
+        const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
+        const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
+        if (medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
+          await client.query(
+            `INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id) VALUES ($1,'venta',$2,$3,$4)`,
+            [cajaId, `Venta #${numero}`, parseFloat(pago.monto), pago.medio_pago_id]
+          );
+        }
+        // Registrar deuda en cuenta corriente si pago en cuenta corriente
+        if (cliente_id && esCuentaCorriente) {
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [cliente_id]);
+          const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const nuevoSaldo  = parseFloat((saldoActual + parseFloat(pago.monto)).toFixed(2));
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+             VALUES ($1, $2, 0, $3, 'venta', $4)`,
+            [cliente_id, parseFloat(pago.monto), nuevoSaldo, id]
+          );
+        }
+      }
+    }
+
+    // Confirmar la venta
+    await client.query(
+      `UPDATE ventas SET estado = 'confirmada', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, venta_id: id });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
 router.patch('/:id/estado', async (req, res, next) => {
   const client = await pool.connect();
@@ -887,12 +1051,12 @@ router.patch('/:id/observaciones', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── PUT /api/ventas/:id/items — editar items de una venta existente ──────────
+// ─── PUT /api/ventas/:id/items — editar items y pagos de una venta existente ───
 router.put('/:id/items', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { items = [], observacion } = req.body;
+    const { items = [], observacion, pagos } = req.body;
 
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
 
@@ -900,12 +1064,13 @@ router.put('/:id/items', async (req, res, next) => {
 
     // Verificar que la venta existe y no está anulada
     const { rows: ventaRows } = await client.query(
-      `SELECT id, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT id, numero, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [id]
     );
     if (!ventaRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Venta no encontrada' }); }
     if (ventaRows[0].estado === 'anulada') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede editar una venta anulada' }); }
-    const sucursal_id = ventaRows[0].sucursal_id;
+    const sucursal_id  = ventaRows[0].sucursal_id;
+    const ventaNumero  = ventaRows[0].numero;
 
     // Guardar items anteriores para el audit log
     const { rows: itemsAnteriores } = await client.query(
@@ -986,6 +1151,54 @@ router.put('/:id/items', async (req, res, next) => {
       `UPDATE ventas SET subtotal = $1, total = $2${obsUpdate}, descuento_total = $${obsIdx - 1} WHERE id = $${obsIdx}`,
       obsParams
     );
+
+    // Actualizar pagos si se enviaron
+    if (Array.isArray(pagos) && pagos.length > 0) {
+      // Resolver medios de pago para filtrar movimientos de caja
+      const medioIds = [...new Set(pagos.map(p => p.medio_pago_id).filter(Boolean))];
+      let mediosMap = {};
+      if (medioIds.length > 0) {
+        const { rows: mediosRows } = await client.query(
+          `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
+        );
+        mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
+      }
+
+      // Eliminar pagos anteriores
+      await client.query(`DELETE FROM venta_pagos WHERE venta_id = $1`, [id]);
+
+      // Obtener caja abierta para reemplazar movimientos
+      const { rows: cajaRows } = await client.query(
+        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+        [sucursal_id]
+      );
+      const cajaId = cajaRows[0]?.id ?? null;
+
+      // Eliminar movimientos anteriores de esta venta en la caja abierta
+      if (cajaId) {
+        await client.query(
+          `DELETE FROM movimientos_caja WHERE caja_id = $1 AND tipo = 'venta' AND concepto = $2`,
+          [cajaId, `Venta #${ventaNumero}`]
+        );
+      }
+
+      for (const pago of pagos) {
+        await client.query(`
+          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
+          VALUES ($1,$2,$3,$4)
+        `, [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]);
+
+        const medio = mediosMap[pago.medio_pago_id];
+        const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
+        const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
+        if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
+          await client.query(`
+            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
+            VALUES ($1, 'venta', $2, $3, $4)
+          `, [cajaId, `Venta #${ventaNumero}`, parseFloat(pago.monto), pago.medio_pago_id || null]);
+        }
+      }
+    }
 
     // Registrar en audit log
     const itemsNuevos = itemsCalculados.map(i => ({

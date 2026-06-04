@@ -220,20 +220,21 @@ router.get('/:id/movimientos', async (req, res, next) => {
 // ─── POST /api/clientes/:id/pagos ─────────────────────────────────────────────
 router.post('/:id/pagos', async (req, res, next) => {
   try {
-    const { monto, concepto } = req.body;
+    const { monto, concepto, medio_pago_id, sucursal_id } = req.body;
     if (!monto || parseFloat(monto) <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
 
-    const client = await pool.connect();
+    const dbClient = await pool.connect();
     try {
-      await client.query('BEGIN');
+      await dbClient.query('BEGIN');
 
       // Saldo actual antes del pago
-      const { rows: [saldoRow] } = await client.query(`
+      const { rows: [saldoRow] } = await dbClient.query(`
         SELECT c.saldo_inicial
                + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-               + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual
+               + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual,
+               c.razon_social
           FROM clientes c
           LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
           LEFT JOIN (
@@ -241,19 +242,19 @@ router.post('/:id/pagos', async (req, res, next) => {
               FROM correcciones_saldo_cliente GROUP BY cliente_id
           ) cs_agg ON cs_agg.cliente_id = c.id
          WHERE c.id = $1 AND c.deleted_at IS NULL
-         GROUP BY c.id, c.saldo_inicial, cs_agg.total_correcciones
+         GROUP BY c.id, c.saldo_inicial, c.razon_social, cs_agg.total_correcciones
       `, [req.params.id]);
 
       if (!saldoRow) {
-        await client.query('ROLLBACK');
+        await dbClient.query('ROLLBACK');
         return res.status(404).json({ error: 'Cliente no encontrado' });
       }
 
-      const saldoAntes  = parseFloat(saldoRow.saldo_actual) || 0;
-      const montoNum    = parseFloat(monto);
+      const saldoAntes   = parseFloat(saldoRow.saldo_actual) || 0;
+      const montoNum     = parseFloat(monto);
       const saldoDespues = saldoAntes - montoNum;
 
-      const { rows: [mov] } = await client.query(`
+      const { rows: [mov] } = await dbClient.query(`
         INSERT INTO cuentas_corrientes_cliente
           (cliente_id, debe, haber, saldo, origen_tipo)
         VALUES ($1, 0, $2, $3, 'pago')
@@ -262,19 +263,39 @@ router.post('/:id/pagos', async (req, res, next) => {
 
       // Si hay concepto, registrar corrección de texto
       if (concepto?.trim()) {
-        await client.query(`
+        await dbClient.query(`
           INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
           VALUES ($1, 0, $2)
         `, [req.params.id, concepto.trim()]);
       }
 
-      await client.query('COMMIT');
+      // Registrar en caja si hay medio_pago_id y caja abierta
+      if (medio_pago_id) {
+        const sucId = sucursal_id || req.usuario?.sucursal_default_id || null;
+        if (sucId) {
+          const { rows: cajaRows } = await dbClient.query(
+            `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+            [sucId]
+          );
+          if (cajaRows[0]) {
+            const conceptoCaja = concepto?.trim()
+              ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
+              : `Pago cliente — ${saldoRow.razon_social}`;
+            await dbClient.query(`
+              INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
+              VALUES ($1, 'ingreso', $2, $3, $4)
+            `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id]);
+          }
+        }
+      }
+
+      await dbClient.query('COMMIT');
       res.status(201).json({ movimiento: mov, saldo_nuevo: saldoDespues });
     } catch (err) {
-      await client.query('ROLLBACK');
+      await dbClient.query('ROLLBACK');
       throw err;
     } finally {
-      client.release();
+      dbClient.release();
     }
   } catch (err) { next(err); }
 });

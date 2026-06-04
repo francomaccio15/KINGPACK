@@ -19,7 +19,7 @@ export default async function EditarVentaPage({ params }: { params: { id: string
   }
 
   const data = await res.json();
-  const { venta, items } = data;
+  const { venta, items, pagos = [] } = data;
 
   if (venta.estado === 'anulada') {
     return (
@@ -50,6 +50,8 @@ export default async function EditarVentaPage({ params }: { params: { id: string
       <EditarVentaForm
         ventaId={params.id}
         itemsIniciales={items}
+        pagosIniciales={pagos}
+        ventaEstado={venta.estado}
         listaPrecioId={venta.lista_precio_id ?? null}
         observacionesActuales={venta.observaciones ?? ''}
       />

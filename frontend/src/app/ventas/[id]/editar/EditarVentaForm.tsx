@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -41,14 +41,21 @@ interface CartItem {
   precio_unitario_final: number;
 }
 
+interface MedioPago { id: string; nombre: string; }
+interface PagoItem { medio_pago_id: string; monto: string; }
+
 export default function EditarVentaForm({
   ventaId,
   itemsIniciales,
+  pagosIniciales = [],
+  ventaEstado,
   listaPrecioId,
   observacionesActuales,
 }: {
   ventaId: string;
   itemsIniciales: ItemVenta[];
+  pagosIniciales?: { medio_pago: string; monto: string; }[];
+  ventaEstado?: string;
   listaPrecioId: string | null;
   observacionesActuales: string;
 }) {
@@ -77,6 +84,49 @@ export default function EditarVentaForm({
   const [observacion, setObservacion] = useState('');
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+
+  // Medios de pago (solo para ventas confirmadas)
+  const esConfirmada = ventaEstado === 'confirmada' || ventaEstado === 'facturada';
+  const [mediosPago, setMediosPago]   = useState<MedioPago[]>([]);
+  const [pagos, setPagos]             = useState<PagoItem[]>(
+    pagosIniciales.length > 0
+      ? pagosIniciales.map(p => ({ medio_pago_id: '', monto: String(parseFloat(p.monto) || '') }))
+      : []
+  );
+  const [editarPagos, setEditarPagos] = useState(false);
+
+  useEffect(() => {
+    if (!esConfirmada) return;
+    apiFetch('/api/ventas/medios-pago')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const lista: MedioPago[] = d.medios_pago ?? [];
+        setMediosPago(lista);
+        // Mapear pagos iniciales a IDs
+        if (pagosIniciales.length > 0) {
+          setPagos(pagosIniciales.map(p => {
+            const mp = lista.find(m => m.nombre === p.medio_pago);
+            return { medio_pago_id: mp?.id ?? '', monto: String(parseFloat(p.monto) || '') };
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [esConfirmada]);
+
+  const agregarPago = () => {
+    const primero = mediosPago[0]?.id ?? '';
+    setPagos(prev => [...prev, { medio_pago_id: primero, monto: '' }]);
+  };
+
+  const actualizarPago = (idx: number, field: keyof PagoItem, val: string) => {
+    setPagos(prev => prev.map((p, i) => i === idx ? { ...p, [field]: val } : p));
+  };
+
+  const eliminarPago = (idx: number) => {
+    setPagos(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const totalPagos = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
 
   // Buscador de artículos
   const [query, setQuery]           = useState('');
@@ -143,12 +193,23 @@ export default function EditarVentaForm({
   const guardar = async () => {
     if (cart.length === 0) { setError('Agregá al menos un artículo.'); return; }
     if (!observacion.trim()) { setError('El motivo de la edición es obligatorio.'); return; }
+
+    // Validar pagos si se editaron
+    if (editarPagos && pagos.length > 0) {
+      const invalido = pagos.some(p => !p.medio_pago_id || !parseFloat(p.monto));
+      if (invalido) { setError('Completá todos los métodos de pago y montos.'); return; }
+    }
+
     setSaving(true);
     setError('');
     try {
+      const body: any = { items: cart, observacion: observacion.trim() };
+      if (editarPagos && pagos.length > 0) {
+        body.pagos = pagos.map(p => ({ medio_pago_id: p.medio_pago_id, monto: parseFloat(p.monto) }));
+      }
       const res = await apiFetch(`/api/ventas/${ventaId}/items`, {
         method: 'PUT',
-        body: JSON.stringify({ items: cart, observacion: observacion.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
@@ -304,6 +365,92 @@ export default function EditarVentaForm({
           </div>
         )}
       </div>
+
+      {/* ── Medios de pago (solo ventas confirmadas) ── */}
+      {esConfirmada && (
+        <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
+          <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Medios de Pago</h3>
+              {pagosIniciales.length > 0 && !editarPagos && (
+                <span className="text-xs text-kp-gray">
+                  {pagosIniciales.map(p => `${p.medio_pago} ${fmt(parseFloat(p.monto) || 0)}`).join(' · ')}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEditarPagos(!editarPagos); if (!editarPagos && pagos.length === 0) agregarPago(); }}
+              className={`text-xs font-semibold px-3 py-1 rounded-lg border transition-colors ${
+                editarPagos
+                  ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                  : 'border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray'
+              }`}
+            >
+              {editarPagos ? 'Cancelar edición' : 'Editar pagos'}
+            </button>
+          </div>
+
+          {editarPagos && (
+            <div className="p-5 space-y-3">
+              {pagos.map((pago, idx) => (
+                <div key={idx} className="flex items-center gap-3">
+                  <select
+                    value={pago.medio_pago_id}
+                    onChange={e => actualizarPago(idx, 'medio_pago_id', e.target.value)}
+                    className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                  >
+                    <option value="">— Seleccionar —</option>
+                    {mediosPago.map(mp => (
+                      <option key={mp.id} value={mp.id}>{mp.nombre}</option>
+                    ))}
+                  </select>
+                  <div className="relative w-36">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={pago.monto}
+                      onChange={e => actualizarPago(idx, 'monto', e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => eliminarPago(idx)}
+                    className="text-kp-gray hover:text-rose-400 transition-colors p-1"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={agregarPago}
+                  className="text-xs text-kp-red hover:text-red-400 font-semibold transition-colors flex items-center gap-1"
+                >
+                  + Agregar método
+                </button>
+                {pagos.length > 0 && totalPagos > 0 && (
+                  <div className={`text-xs font-semibold px-3 py-1 rounded-lg border ${
+                    Math.abs(totalPagos - subtotal) < 0.01
+                      ? 'text-green-400 border-green-500/30 bg-green-500/10'
+                      : 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                  }`}>
+                    Total pagos: {fmt(totalPagos)} / {fmt(subtotal)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Motivo de edición (obligatorio) ── */}
       <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3">

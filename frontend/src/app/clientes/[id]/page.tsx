@@ -14,12 +14,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
   requireAuth('/clientes');
-  const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes] = await Promise.all([
+  const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes, ventasRes] = await Promise.all([
     serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
     serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
     serverFetch(`/api/clientes/cond-iva`,                 { cache: 'no-store' }),
     serverFetch(`/api/listas-precios`,                    { cache: 'no-store' }),
     serverFetch(`/api/sucursales`,                        { cache: 'no-store' }),
+    serverFetch(`/api/ventas?cliente_id=${params.id}&limit=50`, { cache: 'no-store' }),
   ]);
 
   if (!clienteRes.ok) {
@@ -36,6 +37,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
   const condIva    = condIvaRes.ok  ? (await condIvaRes.json()).cond_iva    ?? [] : [];
   const listas     = listasRes.ok   ? (await listasRes.json()).listas       ?? [] : [];
   const sucursales = sucursalesRes.ok ? (await sucursalesRes.json()).sucursales ?? [] : [];
+  const ventasCliente: any[] = ventasRes.ok ? ((await ventasRes.json()).ventas ?? []) : [];
 
   const saldoActual  = parseFloat(cliente.saldo_actual  || '0');
   const limiteCredito = parseFloat(cliente.limite_credito || '0');
@@ -46,6 +48,17 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
     facturacion:'Facturación',
     pago:       'Pago',
     correccion: 'Corrección',
+  };
+
+  const VENTA_ESTADO_STYLE: Record<string, string> = {
+    preventa:   'text-amber-400 bg-amber-400/10 border-amber-400/30',
+    confirmada: 'text-green-400 bg-green-400/10 border-green-400/30',
+    facturada:  'text-blue-400 bg-blue-400/10 border-blue-400/30',
+    anulada:    'text-kp-gray bg-kp-surface2 border-kp-border',
+  };
+
+  const VENTA_ESTADO_LABEL: Record<string, string> = {
+    preventa: 'Preventa', confirmada: 'Confirmada', facturada: 'Facturada', anulada: 'Anulada',
   };
 
   return (
@@ -73,7 +86,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
         <div className="flex items-center gap-2">
           <EstadoCuentaPDF clienteId={cliente.id} />
           <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
-          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} />
+          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={cliente.sucursal_default_id} />
         </div>
       </div>
 
@@ -210,14 +223,21 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                 <tr key={m.id} className="hover:bg-kp-surface2 transition-colors">
                   <td className="px-4 py-2.5 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(m.fecha)}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded border
-                      ${m.origen_tipo === 'pago'
-                        ? 'text-green-400 bg-green-400/10 border-green-400/30'
-                        : m.origen_tipo === 'venta'
-                        ? 'text-amber-400 bg-amber-400/10 border-amber-400/30'
-                        : 'text-kp-gray-lt bg-kp-surface2 border-kp-border'}`}>
-                      {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
-                    </span>
+                    {m.origen_tipo === 'venta' && m.origen_id ? (
+                      <Link
+                        href={`/ventas/${m.origen_id}`}
+                        className="text-xs font-medium px-2 py-0.5 rounded border text-amber-400 bg-amber-400/10 border-amber-400/30 hover:bg-amber-400/20 transition-colors"
+                      >
+                        Venta →
+                      </Link>
+                    ) : (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded border
+                        ${m.origen_tipo === 'pago'
+                          ? 'text-green-400 bg-green-400/10 border-green-400/30'
+                          : 'text-kp-gray-lt bg-kp-surface2 border-kp-border'}`}>
+                        {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-xs">
                     {parseFloat(m.debe) > 0
@@ -240,6 +260,56 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           </table>
         </div>
       </div>
+
+      {/* Ventas del cliente */}
+      {ventasCliente.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-4 bg-kp-red rounded-full block" />
+            <h3 className="font-bold uppercase tracking-wide text-sm">Ventas</h3>
+            <span className="text-xs text-kp-gray">({ventasCliente.length})</span>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-kp-surface2 border-b border-kp-border">
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">#</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Fecha</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
+                  <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Sucursal</th>
+                  <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Total</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="bg-kp-surface divide-y divide-kp-border">
+                {ventasCliente.map((v: any) => (
+                  <tr key={v.id} className="hover:bg-kp-surface2 transition-colors">
+                    <td className="px-4 py-2.5 text-xs font-mono text-kp-gray-lt">#{v.numero}</td>
+                    <td className="px-4 py-2.5 text-xs text-kp-gray whitespace-nowrap">
+                      {new Date(v.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded border ${VENTA_ESTADO_STYLE[v.estado] ?? 'text-kp-gray border-kp-border bg-kp-surface2'}`}>
+                        {VENTA_ESTADO_LABEL[v.estado] ?? v.estado}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-kp-gray">{v.sucursal_nombre ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-xs font-bold text-kp-white">{fmt(v.total)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Link
+                        href={`/ventas/${v.id}`}
+                        className="text-xs text-kp-red hover:text-red-400 font-semibold hover:underline transition-colors"
+                      >
+                        Ver →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Correcciones */}
       {correcciones.length > 0 && (
