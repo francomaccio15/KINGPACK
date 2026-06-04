@@ -216,9 +216,9 @@ router.patch('/:id/estado', async (req, res, next) => {
         // Descontar del origen
         await client.query(`
           INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
-          VALUES ($1, $2, -$3, 0)
+          VALUES ($1, $2, (-$3::numeric), 0)
           ON CONFLICT (articulo_id, sucursal_id)
-          DO UPDATE SET cantidad = stock.cantidad - $3, ultima_actualizacion = NOW()
+          DO UPDATE SET cantidad = stock.cantidad - $3::numeric, ultima_actualizacion = NOW()
         `, [item.articulo_id, t.sucursal_origen_id, item.cantidad]);
 
         await client.query(`
