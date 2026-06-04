@@ -87,6 +87,8 @@ router.get('/', async (req, res, next) => {
 //   proveedor_id, sucursal_id,
 //   numero_factura_prov (opcional), costo_flete_total (default 0),
 //   items: [{ articulo_id, cantidad, precio_compra }]
+// Efecto secundario: crea automáticamente un egreso tipo 'compra_mercaderia'
+// vinculado al pedido, para que aparezca en el módulo de Gastos.
 router.post('/', async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -95,6 +97,7 @@ router.post('/', async (req, res, next) => {
       numero_factura_prov, costo_flete_total = 0,
       items = [],
     } = req.body;
+    const usuario_id = req.user?.id ?? null;
 
     if (!proveedor_id) return res.status(400).json({ error: 'proveedor_id es requerido' });
     if (!sucursal_id)  return res.status(400).json({ error: 'sucursal_id es requerido' });
@@ -102,21 +105,35 @@ router.post('/', async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    // Calcular monto total
+    // ── Cálculos base ─────────────────────────────────────────────────────────
     const flete = parseFloat(costo_flete_total) || 0;
     let monto_mercaderia = 0;
     for (const item of items) {
       monto_mercaderia += (parseFloat(item.precio_compra) || 0) * (parseFloat(item.cantidad) || 0);
     }
     const monto_total = monto_mercaderia + flete;
-
-    // Distribuir flete proporcionalmente entre items
     const fleteUnitario = items.length > 0 ? flete / items.length : 0;
 
+    // ── Datos del proveedor y artículos (para el egreso) ──────────────────────
+    const { rows: provRows } = await client.query(
+      `SELECT razon_social FROM proveedores WHERE id = $1`, [proveedor_id]
+    );
+    const proveedor_nombre = provRows[0]?.razon_social ?? 'Proveedor';
+
+    const articuloIds = items.map(i => i.articulo_id).filter(Boolean);
+    let articuloMap = {};
+    if (articuloIds.length > 0) {
+      const { rows: artRows } = await client.query(
+        `SELECT id, nombre FROM articulos WHERE id = ANY($1::uuid[])`, [articuloIds]
+      );
+      articuloMap = Object.fromEntries(artRows.map(a => [a.id, a.nombre]));
+    }
+
+    // ── 1. Crear pedido ───────────────────────────────────────────────────────
     const { rows: pedidoRows } = await client.query(`
       INSERT INTO pedidos_compra
-        (proveedor_id, sucursal_id, numero_factura_prov, costo_flete_total, monto_total)
-      VALUES ($1, $2, $3, $4, $5)
+        (proveedor_id, sucursal_id, numero_factura_prov, costo_flete_total, monto_total, usuario_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id, fecha_pedido, estado, monto_total
     `, [
       proveedor_id,
@@ -124,9 +141,11 @@ router.post('/', async (req, res, next) => {
       numero_factura_prov?.trim() || null,
       flete.toFixed(2),
       monto_total.toFixed(2),
+      usuario_id,
     ]);
     const pedido = pedidoRows[0];
 
+    // ── 2. Crear ítems del pedido ─────────────────────────────────────────────
     for (const item of items) {
       await client.query(`
         INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, precio_compra, costo_flete_asignado)
@@ -140,8 +159,70 @@ router.post('/', async (req, res, next) => {
       ]);
     }
 
-    await client.query('COMMIT');
-    res.status(201).json({ pedido });
+    // ── 3. Crear egreso automático en Gastos ──────────────────────────────────
+    if (monto_total > 0) {
+      const descripcionEgreso = numero_factura_prov?.trim()
+        ? `Compra mercadería — ${proveedor_nombre} (Fac. ${numero_factura_prov.trim()})`
+        : `Compra mercadería — ${proveedor_nombre}`;
+
+      const { rows: egresoRows } = await client.query(`
+        INSERT INTO egresos
+          (tipo_operacion, proveedor_id, sucursal_id, descripcion,
+           numero_comprobante, total, estado_pago, usuario_id)
+        VALUES ('compra_mercaderia', $1, $2, $3, $4, $5, 'pendiente', $6)
+        RETURNING id
+      `, [
+        proveedor_id,
+        sucursal_id,
+        descripcionEgreso,
+        numero_factura_prov?.trim() || null,
+        monto_total.toFixed(2),
+        usuario_id,
+      ]);
+      const egreso = egresoRows[0];
+
+      // ── 4. Crear egreso_items (uno por artículo + flete si aplica) ──────────
+      let orden = 0;
+      for (const item of items) {
+        const cantidad       = parseFloat(item.cantidad)      || 1;
+        const precio_unitario = parseFloat(item.precio_compra) || 0;
+        const neto_linea     = cantidad * precio_unitario;
+        const nombre         = articuloMap[item.articulo_id] ?? 'Artículo';
+
+        await client.query(`
+          INSERT INTO egreso_items
+            (egreso_id, articulo_id, descripcion, cantidad, precio_unitario, neto_linea, sucursal_imputacion_id, orden)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [egreso.id, item.articulo_id, nombre, cantidad, precio_unitario, neto_linea.toFixed(2), sucursal_id, orden++]);
+      }
+
+      if (flete > 0) {
+        await client.query(`
+          INSERT INTO egreso_items
+            (egreso_id, articulo_id, descripcion, cantidad, precio_unitario, neto_linea, sucursal_imputacion_id, orden)
+          VALUES ($1, NULL, 'Costo de flete', 1, $2, $2, $3, $4)
+        `, [egreso.id, flete.toFixed(2), sucursal_id, orden]);
+      }
+
+      // ── 5. Vincular pedido ↔ egreso ─────────────────────────────────────────
+      await client.query(
+        `UPDATE pedidos_compra SET egreso_id = $1 WHERE id = $2`,
+        [egreso.id, pedido.id]
+      );
+
+      // ── 6. Registrar deuda en cuenta corriente del proveedor ────────────────
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
+        VALUES ($1, $2, 0, $2, 'egreso', $3, $4)
+      `, [proveedor_id, monto_total.toFixed(2), egreso.id, descripcionEgreso]);
+
+      await client.query('COMMIT');
+      res.status(201).json({ pedido: { ...pedido, egreso_id: egreso.id } });
+    } else {
+      await client.query('COMMIT');
+      res.status(201).json({ pedido });
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
