@@ -65,6 +65,34 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     : parseFloat(caja.saldo_inicial) + totalIngresosVista - totalEgresosVista;
 
   const diff = caja.diferencia != null ? parseFloat(caja.diferencia) : null;
+
+  // ── Resumen del día — totales completos (todos los medios de pago) ─────────
+  const totalVentasDia = movimientos
+    .filter((m: any) => m.tipo === 'venta')
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+
+  const totalIngresosDia = movimientos
+    .filter((m: any) => m.tipo === 'ingreso')
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+
+  const totalEgresosDia = movimientos
+    .filter((m: any) => m.tipo === 'egreso')
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+
+  const totalRetirosDia = movimientos
+    .filter((m: any) => m.tipo === 'retiro')
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+
+  const resultadoNeto = totalVentasDia + totalIngresosDia - totalEgresosDia - totalRetirosDia;
+
+  // Ventas agrupadas por medio de pago
+  const ventasPorMedio: Record<string, number> = {};
+  for (const m of movimientos) {
+    if (m.tipo !== 'venta') continue;
+    const k = m.medio_pago ?? 'Otro';
+    ventasPorMedio[k] = (ventasPorMedio[k] ?? 0) + parseFloat(m.monto ?? 0);
+  }
+  const ventasMedios = Object.entries(ventasPorMedio).sort((a, b) => b[1] - a[1]);
   const diffColor = diff == null || Math.abs(diff) < 0.01
     ? 'text-kp-gray'
     : diff < 0 ? 'text-kp-red' : 'text-green-400';
@@ -181,6 +209,95 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           )}
         </div>
       )}
+
+      {/* ── Resumen del Día ─────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
+        <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-4 bg-kp-red rounded-full block" />
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-white">Resumen del Día</h3>
+          </div>
+          <span className="text-xs text-kp-gray">
+            {new Date(caja.fecha_apertura).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+          {/* Columna izquierda: ventas por medio de pago */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-kp-gray uppercase tracking-widest">Ventas por medio de pago</p>
+            {ventasMedios.length === 0 ? (
+              <p className="text-sm text-kp-gray italic">Sin ventas registradas</p>
+            ) : (
+              <div className="space-y-2">
+                {ventasMedios.map(([medio, monto]) => {
+                  const pct = totalVentasDia > 0 ? (monto / totalVentasDia) * 100 : 0;
+                  return (
+                    <div key={medio}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm text-kp-white font-medium">{medio}</span>
+                        <span className="text-sm tabular-nums font-bold text-green-400">{fmt(monto)}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-kp-border overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between items-center pt-1 border-t border-kp-border">
+                  <span className="text-xs text-kp-gray uppercase tracking-widest font-bold">Total ventas</span>
+                  <span className="text-base tabular-nums font-bold text-green-400">{fmt(totalVentasDia)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Columna derecha: otros movimientos + resultado */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-kp-gray uppercase tracking-widest">Otros movimientos</p>
+            <div className="space-y-2">
+              {totalIngresosDia > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-kp-gray">Ingresos manuales</span>
+                  <span className="tabular-nums text-green-400 font-semibold">{fmt(totalIngresosDia)}</span>
+                </div>
+              )}
+              {totalEgresosDia > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-kp-gray">Gastos / egresos</span>
+                  <span className="tabular-nums text-kp-red font-semibold">−{fmt(totalEgresosDia)}</span>
+                </div>
+              )}
+              {totalRetirosDia > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-kp-gray">Retiros</span>
+                  <span className="tabular-nums text-kp-red font-semibold">−{fmt(totalRetirosDia)}</span>
+                </div>
+              )}
+              {totalIngresosDia === 0 && totalEgresosDia === 0 && totalRetirosDia === 0 && (
+                <p className="text-sm text-kp-gray italic">Sin otros movimientos</p>
+              )}
+            </div>
+
+            {/* Resultado neto — destacado */}
+            <div className={`rounded-xl border px-4 py-3 mt-2 ${
+              resultadoNeto >= 0
+                ? 'border-green-500/30 bg-green-500/5'
+                : 'border-kp-red/30 bg-kp-red/5'
+            }`}>
+              <p className="text-xs text-kp-gray uppercase tracking-widest font-bold mb-1">Resultado del día</p>
+              <p className={`text-2xl font-bold tabular-nums ${resultadoNeto >= 0 ? 'text-green-400' : 'text-kp-red'}`}>
+                {resultadoNeto >= 0 ? '+' : ''}{fmt(resultadoNeto)}
+              </p>
+              <p className="text-xs text-kp-gray mt-1">
+                Ventas {fmt(totalVentasDia + totalIngresosDia)} — Gastos {fmt(totalEgresosDia + totalRetirosDia)}
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       {/* Tabla de movimientos */}
       <MovimientosTabla movimientos={movimientosFiltrados} esAdmin={esAdmin} />
