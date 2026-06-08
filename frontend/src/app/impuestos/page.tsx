@@ -4,6 +4,7 @@ import Link from 'next/link';
 import LibroIVAVentas from './LibroIVAVentas';
 import LibroIVACompras from './LibroIVACompras';
 import PosicionIVA from './PosicionIVA';
+import ImpresionButton from './ImpresionButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,8 +84,26 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
   return (
     <section className="space-y-6 max-w-7xl">
 
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {/* Encabezado solo para impresión */}
+      <div className="hidden print:block border-b-2 border-gray-300 pb-4 mb-2">
+        <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-0.5">KING PACK — Módulo Impuestos</p>
+        <h1 className="text-xl font-bold text-gray-900">
+          {tab === 'posicion' ? `Posición IVA ${anio}`
+            : tab === 'ventas'   ? 'Libro IVA Ventas'
+            : 'Libro IVA Compras'}
+        </h1>
+        {tab !== 'posicion' && (
+          <p className="text-sm text-gray-600 mt-0.5">
+            Período: {desde} al {hasta}
+          </p>
+        )}
+        <p className="text-xs text-gray-400 mt-1">
+          Impreso el {new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+
+      {/* Header (pantalla) */}
+      <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
@@ -92,10 +111,11 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
           </div>
           <p className="text-sm text-kp-gray pl-3">Libro IVA Ventas · Libro IVA Compras · Posición Fiscal</p>
         </div>
+        <ImpresionButton />
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-end bg-kp-surface border border-kp-border rounded-xl px-5 py-4">
+      <div className="flex flex-wrap gap-3 items-end bg-kp-surface border border-kp-border rounded-xl px-5 py-4 print:hidden">
 
         {/* Sucursal */}
         {sucursales.length > 1 && (
@@ -212,7 +232,7 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-kp-border">
+      <div className="flex gap-1 border-b border-kp-border print:hidden">
         {TABS.map(t => (
           <Link
             key={t.value}
@@ -241,7 +261,7 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
 
       {tab === 'ventas' && ventasData && (
         <>
-          <p className="text-xs text-kp-gray">
+          <p className="text-xs text-kp-gray print:hidden">
             Período: <span className="text-kp-white font-medium">{desde}</span> al <span className="text-kp-white font-medium">{hasta}</span>
             {' · '}Solo ventas confirmadas y facturadas · Preventas y anuladas excluidas
           </p>
@@ -254,7 +274,7 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
 
       {tab === 'compras' && comprasData && (
         <>
-          <p className="text-xs text-kp-gray">
+          <p className="text-xs text-kp-gray print:hidden">
             Período: <span className="text-kp-white font-medium">{desde}</span> al <span className="text-kp-white font-medium">{hasta}</span>
             {' · '}Solo egresos con comprobante fiscal · Informales excluidos
           </p>
