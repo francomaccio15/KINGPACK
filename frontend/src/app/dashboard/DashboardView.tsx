@@ -595,10 +595,11 @@ function CuentasBancariasPanel({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardView({
-  data, userName,
+  data, userName, userRol,
 }: {
   data: DashboardData | null;
   userName: string;
+  userRol?: string;
 }) {
   const router   = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -788,8 +789,8 @@ export default function DashboardView({
         <AreaChart data={d.ventas_7dias} />
       </section>
 
-      {/* ── Cheques próximos ── */}
-      {tienesCheques && (
+      {/* ── Cheques próximos — solo administrador ── */}
+      {tienesCheques && userRol === 'administrador' && (
         <section>
           <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
             <span className="w-5 h-px bg-kp-border inline-block" />

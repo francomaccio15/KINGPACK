@@ -11,5 +11,5 @@ export default async function DashboardPage() {
   if (user.rol === 'cajero') redirect('/ventas');
   const res  = await serverFetch('/api/dashboard');
   const data: DashboardData | null = res.ok ? await res.json() : null;
-  return <DashboardView data={data} userName={user.nombre} />;
+  return <DashboardView data={data} userName={user.nombre} userRol={user.rol} />;
 }
