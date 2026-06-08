@@ -53,7 +53,7 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const TIPOS_CON_PROVEEDOR: TipoOperacion[] = ['compra_mercaderia', 'compra_gasto', 'inversion_bien_uso', 'anticipo_proveedor'];
-const TIPOS_CON_ITEMS: TipoOperacion[] = ['compra_mercaderia', 'compra_gasto'];
+const TIPOS_CON_ITEMS: TipoOperacion[] = ['compra_mercaderia'];
 const TIPOS_CON_COMPROBANTE: TipoOperacion[] = ['compra_mercaderia', 'compra_gasto', 'inversion_bien_uso'];
 
 function esFacturaEnBlanco(tc: TipoComprobante) {
@@ -753,10 +753,12 @@ export default function NuevoEgresoPage() {
 
       {/* ── Sección 6: Impuestos y totales ─── */}
       <div className={sectionCls}>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Montos y totales</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+          {tipoOp === 'compra_mercaderia' ? 'Montos y totales' : 'Total de la compra'}
+        </h3>
 
-        {/* Campos fiscales solo para facturas en blanco */}
-        {TIPOS_CON_COMPROBANTE.includes(tipoOp) && esFacturaEnBlanco(tipoComp) && (
+        {/* Campos fiscales — solo Compra de Mercadería con factura en blanco */}
+        {tipoOp === 'compra_mercaderia' && esFacturaEnBlanco(tipoComp) && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Neto gravado *</label>
@@ -803,8 +805,8 @@ export default function NuevoEgresoPage() {
             />
           </div>
 
-          {/* Indicador de validación de total */}
-          {TIPOS_CON_COMPROBANTE.includes(tipoOp) && esFacturaEnBlanco(tipoComp) && totalNum > 0 && sumaFiscal > 0 && (
+          {/* Indicador de validación de total — solo para Mercadería */}
+          {tipoOp === 'compra_mercaderia' && esFacturaEnBlanco(tipoComp) && totalNum > 0 && sumaFiscal > 0 && (
             <div className="flex items-end pb-1">
               {totalOk
                 ? <span className="flex items-center gap-2 text-sm text-green-400">
