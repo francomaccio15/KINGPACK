@@ -52,9 +52,9 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const TIPOS_CON_PROVEEDOR: TipoOperacion[] = ['compra_mercaderia', 'compra_gasto', 'inversion_bien_uso', 'anticipo_proveedor'];
+const TIPOS_CON_PROVEEDOR: TipoOperacion[] = ['compra_mercaderia', 'inversion_bien_uso', 'anticipo_proveedor'];
 const TIPOS_CON_ITEMS: TipoOperacion[] = ['compra_mercaderia'];
-const TIPOS_CON_COMPROBANTE: TipoOperacion[] = ['compra_mercaderia', 'compra_gasto', 'inversion_bien_uso'];
+const TIPOS_CON_COMPROBANTE: TipoOperacion[] = ['compra_mercaderia', 'inversion_bien_uso'];
 
 function esFacturaEnBlanco(tc: TipoComprobante) {
   return tc !== '' && tc !== 'informal';
