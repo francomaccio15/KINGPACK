@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiFetch } from '@/lib/auth';
 
 const TRANSICIONES: Record<string, Record<string, string[]>> = {
   recibido: {
