@@ -99,65 +99,58 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
 
         {/* Sucursal */}
         {sucursales.length > 1 && (
-          <div className="flex flex-col gap-1">
+          <form action="/impuestos" method="get" className="flex flex-col gap-1">
             <label className="text-xs text-kp-gray font-medium">Sucursal</label>
-            <form action="/impuestos" method="get" className="flex gap-2">
-              <input type="hidden" name="tab"   value={tab} />
-              <input type="hidden" name="desde" value={desde} />
-              <input type="hidden" name="hasta" value={hasta} />
-              <input type="hidden" name="anio"  value={anio} />
+            <input type="hidden" name="tab"   value={tab} />
+            <input type="hidden" name="desde" value={desde} />
+            <input type="hidden" name="hasta" value={hasta} />
+            <input type="hidden" name="anio"  value={anio} />
+            <div className="flex gap-2">
               <select
                 name="sucursal_id"
                 defaultValue={sucursalId}
                 className="h-9 px-3 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white focus:outline-none focus:border-kp-red"
-                onChange="this.form.submit()"
               >
                 <option value="">Todas las sucursales</option>
                 {sucursales.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.nombre}</option>
                 ))}
               </select>
-            </form>
-          </div>
+              <button type="submit" className="h-9 px-3 text-xs font-semibold rounded-md border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
+                OK
+              </button>
+            </div>
+          </form>
         )}
 
         {/* Período (para libros) */}
         {(tab === 'ventas' || tab === 'compras') && (
-          <>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-kp-gray font-medium">Desde</label>
-              <Link
-                href="#"
-                className="hidden"
-              />
-              <form id="periodo-form" action="/impuestos" method="get">
-                <input type="hidden" name="tab" value={tab} />
-                {sucursalId && <input type="hidden" name="sucursal_id" value={sucursalId} />}
-                <div className="flex gap-2 items-end">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-kp-gray font-medium">Desde</label>
-                    <input
-                      type="date" name="desde" defaultValue={desde}
-                      className="h-9 px-3 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white focus:outline-none focus:border-kp-red"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-kp-gray font-medium">Hasta</label>
-                    <input
-                      type="date" name="hasta" defaultValue={hasta}
-                      className="h-9 px-3 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white focus:outline-none focus:border-kp-red"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="h-9 px-4 text-sm font-semibold rounded-md bg-kp-red text-white hover:bg-red-700 transition-colors"
-                  >
-                    Aplicar
-                  </button>
-                </div>
-              </form>
+          <form action="/impuestos" method="get">
+            <input type="hidden" name="tab" value={tab} />
+            {sucursalId && <input type="hidden" name="sucursal_id" value={sucursalId} />}
+            <div className="flex gap-2 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-kp-gray font-medium">Desde</label>
+                <input
+                  type="date" name="desde" defaultValue={desde}
+                  className="h-9 px-3 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white focus:outline-none focus:border-kp-red"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-kp-gray font-medium">Hasta</label>
+                <input
+                  type="date" name="hasta" defaultValue={hasta}
+                  className="h-9 px-3 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white focus:outline-none focus:border-kp-red"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-9 px-4 text-sm font-semibold rounded-md bg-kp-red text-white hover:bg-red-700 transition-colors"
+              >
+                Aplicar
+              </button>
             </div>
-          </>
+          </form>
         )}
 
         {/* Año (para posición) */}
