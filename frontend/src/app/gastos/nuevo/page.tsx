@@ -355,6 +355,32 @@ export default function NuevoEgresoPage() {
         </Link>
       </div>
 
+      {/* ── Tipo simplificado: Mercadería o Gasto Varios ─── */}
+      <div className="flex gap-3">
+        {([
+          ['compra_mercaderia', 'Compra de Mercadería', 'Actualiza stock · requiere artículos'],
+          ['compra_gasto',      'Gasto Varios',         'Servicios, insumos · sin stock'],
+        ] as [TipoOperacion, string, string][]).map(([val, label, hint]) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => setTipoOp(val)}
+            className={[
+              'flex-1 text-left px-5 py-3.5 rounded-xl border-2 transition-colors',
+              tipoOp === val
+                ? 'border-kp-red bg-kp-red/10'
+                : 'border-kp-border bg-kp-surface hover:border-kp-gray',
+            ].join(' ')}
+          >
+            <div className={`text-sm font-bold ${tipoOp === val ? 'text-kp-white' : 'text-kp-gray-lt'}`}>
+              {tipoOp === val && <span className="inline-block w-2 h-2 rounded-full bg-kp-red mr-2 align-middle" />}
+              {label}
+            </div>
+            <div className="text-xs text-kp-gray mt-0.5">{hint}</div>
+          </button>
+        ))}
+      </div>
+
       {/* ── Sección 2: Cabecera del comprobante ─── */}
       {TIPOS_CON_COMPROBANTE.includes(tipoOp) && (
         <div className={sectionCls}>
