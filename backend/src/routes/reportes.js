@@ -122,89 +122,157 @@ router.get('/ventas', async (req, res, next) => {
 });
 
 // ─── GET /api/reportes/gastos ─────────────────────────────────────────────────
-// ?fecha_desde= &fecha_hasta= &sucursal_id=
+// ?fecha_desde=  ISO date  (default: primer día del mes)
+// ?fecha_hasta=  ISO date  (default: hoy)
+// ?rubro_id=     UUID      (opcional — filtra un rubro específico)
 router.get('/gastos', async (req, res, next) => {
   try {
-    const { fecha_desde, fecha_hasta } = req.query;
-    const hoy = new Date().toISOString().slice(0, 10);
-    const primerDiaMes = hoy.slice(0, 8) + '01';
-    const desde = fecha_desde || primerDiaMes;
-    const hasta  = fecha_hasta || hoy;
+    const { fecha_desde, fecha_hasta, rubro_id } = req.query;
+    const hoy   = new Date().toISOString().slice(0, 10);
+    const desde = fecha_desde || hoy.slice(0, 8) + '01';
+    const hasta = fecha_hasta || hoy;
 
     const sucId = sucursalEfectiva(req);
-    const sucFiltro = sucId ? 'AND e.sucursal_id = $3' : '';
-    const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
 
-    const [resumen, porRubro, porDia, porTipo] = await Promise.all([
+    // Construir filtros reutilizables
+    const condiciones = [`e.deleted_at IS NULL`, `e.fecha_emision::date BETWEEN $1 AND $2`];
+    const params = [desde, hasta];
+    let idx = 3;
 
-      // KPIs del período
+    if (sucId) {
+      condiciones.push(`e.sucursal_id = $${idx++}`);
+      params.push(sucId);
+    }
+    if (rubro_id) {
+      condiciones.push(`rg.id = $${idx++}`);
+      params.push(rubro_id);
+    }
+
+    const where = condiciones.join(' AND ');
+
+    const [resumen, porRubro, porDia, porSucursal, rubrosDisp, detalle] = await Promise.all([
+
+      // ── Resumen total ──────────────────────────────────────────────
       pool.query(`
         SELECT
-          COUNT(*)::int               AS cantidad_egresos,
-          COALESCE(SUM(e.total), 0)::float  AS total_gastos,
-          COALESCE(AVG(e.total), 0)::float  AS promedio_egreso
-        FROM egresos e
-        WHERE e.fecha_emision BETWEEN $1 AND $2
-          ${sucFiltro}
-      `, baseParams),
-
-      // Por rubro → subrubro
-      pool.query(`
-        SELECT
-          COALESCE(rg.nombre, 'Sin clasificar')  AS rubro,
-          COALESCE(sg.nombre, 'Sin subrubro')    AS subrubro,
-          COUNT(*)::int                           AS cantidad,
-          COALESCE(SUM(e.total), 0)::float        AS total,
-          COALESCE(AVG(e.total), 0)::float        AS promedio,
-          e.tipo_operacion
+          COUNT(e.id)::int                              AS cantidad_egresos,
+          COALESCE(SUM(e.total), 0)::float              AS total_gastos,
+          COALESCE(AVG(e.total), 0)::float              AS promedio,
+          COALESCE(SUM(e.total) FILTER (
+            WHERE e.estado_pago = 'pagado'), 0)::float  AS total_pagado,
+          COALESCE(SUM(e.total) FILTER (
+            WHERE e.estado_pago = 'pendiente'), 0)::float AS total_pendiente
         FROM egresos e
         LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
         LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
-        WHERE e.fecha_emision BETWEEN $1 AND $2
-          ${sucFiltro}
-        GROUP BY rg.nombre, sg.nombre, e.tipo_operacion
-        ORDER BY SUM(e.total) DESC
-      `, baseParams),
+        WHERE ${where}
+      `, params),
 
-      // Gastos por día
+      // ── Por rubro > subrubro ───────────────────────────────────────
+      pool.query(`
+        SELECT
+          COALESCE(rg.nombre, 'Sin rubro')   AS rubro,
+          rg.id                              AS rubro_id,
+          COALESCE(sg.nombre, 'Sin subrubro') AS subrubro,
+          sg.id                              AS subrubro_id,
+          COUNT(e.id)::int                   AS cantidad,
+          COALESCE(SUM(e.total), 0)::float   AS monto
+        FROM egresos e
+        LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+        LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
+        WHERE ${where}
+        GROUP BY rg.id, rg.nombre, sg.id, sg.nombre
+        ORDER BY monto DESC
+      `, params),
+
+      // ── Por día ───────────────────────────────────────────────────
       pool.query(`
         SELECT
           gs.dia::text AS dia,
-          COALESCE(d.cantidad, 0)::int AS cantidad,
-          COALESCE(d.total, 0)::float  AS total
-        FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(dia)
+          COALESCE(d.cantidad, 0)::int   AS cantidad,
+          COALESCE(d.monto,    0)::float AS monto
+        FROM generate_series($1::date, $2::date, '1 day') AS gs(dia)
         LEFT JOIN (
-          SELECT fecha_emision::date AS dia,
-                 COUNT(*)::int AS cantidad,
-                 SUM(total)::float AS total
+          SELECT
+            e.fecha_emision::date AS dia,
+            COUNT(e.id)::int      AS cantidad,
+            SUM(e.total)::float   AS monto
           FROM egresos e
-          WHERE e.fecha_emision BETWEEN $1 AND $2
-            ${sucFiltro}
-          GROUP BY fecha_emision::date
+          LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+          LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
+          WHERE ${where}
+          GROUP BY e.fecha_emision::date
         ) d ON gs.dia = d.dia
         ORDER BY gs.dia ASC
-      `, baseParams),
+      `, params),
 
-      // Por tipo de operación
+      // ── Por sucursal ──────────────────────────────────────────────
+      sucId
+        ? Promise.resolve({ rows: [] })
+        : pool.query(`
+            SELECT
+              s.nombre                        AS sucursal,
+              COUNT(e.id)::int                AS cantidad,
+              COALESCE(SUM(e.total), 0)::float AS monto
+            FROM egresos e
+            JOIN sucursales s ON s.id = e.sucursal_id
+            LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+            LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
+            WHERE ${where}
+            GROUP BY s.nombre
+            ORDER BY monto DESC
+          `, params),
+
+      // ── Rubros disponibles (para el filtro del frontend) ──────────
+      pool.query(`SELECT id, nombre FROM rubros_gastos ORDER BY nombre`),
+
+      // ── Detalle de egresos ─────────────────────────────────────────
       pool.query(`
         SELECT
-          e.tipo_operacion,
-          COUNT(*)::int            AS cantidad,
-          SUM(e.total)::float      AS total
+          e.id,
+          e.fecha_emision::text           AS fecha,
+          COALESCE(rg.nombre, 'Sin rubro')    AS rubro,
+          COALESCE(sg.nombre, 'Sin subrubro') AS subrubro,
+          COALESCE(pr.razon_social, e.descripcion_general, '—') AS proveedor,
+          e.descripcion_general           AS descripcion,
+          e.total::float                  AS monto,
+          e.estado_pago,
+          s.nombre                        AS sucursal
         FROM egresos e
-        WHERE e.fecha_emision BETWEEN $1 AND $2
-          ${sucFiltro}
-        GROUP BY e.tipo_operacion
-        ORDER BY total DESC
-      `, baseParams),
+        LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+        LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
+        LEFT JOIN proveedores     pr ON pr.id = e.proveedor_id
+        LEFT JOIN sucursales       s ON s.id  = e.sucursal_id
+        WHERE ${where}
+        ORDER BY e.fecha_emision DESC, e.total DESC
+        LIMIT 300
+      `, params),
     ]);
 
+    // Agrupar subrubros bajo su rubro para la respuesta
+    const rubroMap: Record<string, { rubro: string; rubro_id: string | null; monto: number; cantidad: number; subrubros: any[] }> = {};
+    for (const row of porRubro.rows) {
+      const key = row.rubro_id ?? '__sin_rubro__';
+      if (!rubroMap[key]) {
+        rubroMap[key] = { rubro: row.rubro, rubro_id: row.rubro_id, monto: 0, cantidad: 0, subrubros: [] };
+      }
+      rubroMap[key].monto    += row.monto;
+      rubroMap[key].cantidad += row.cantidad;
+      rubroMap[key].subrubros.push({ subrubro: row.subrubro, subrubro_id: row.subrubro_id, monto: row.monto, cantidad: row.cantidad });
+    }
+    const totalGastos = resumen.rows[0].total_gastos || 1;
+    const porRubroAgrupado = Object.values(rubroMap)
+      .sort((a, b) => b.monto - a.monto)
+      .map(r => ({ ...r, porcentaje: parseFloat(((r.monto / totalGastos) * 100).toFixed(1)) }));
+
     res.json({
-      periodo:  { desde, hasta },
-      resumen:  resumen.rows[0],
-      por_rubro: porRubro.rows,
-      por_dia:   porDia.rows,
-      por_tipo:  porTipo.rows,
+      periodo:      { desde, hasta },
+      resumen:      resumen.rows[0],
+      por_rubro:    porRubroAgrupado,
+      por_dia:      porDia.rows,
+      por_sucursal: porSucursal.rows,
+      rubros:       rubrosDisp.rows,
+      detalle:      detalle.rows,
     });
   } catch (err) { next(err); }
 });

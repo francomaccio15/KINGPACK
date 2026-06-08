@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { requireAuth } from '@/lib/requireAuth';
 import { serverFetch } from '@/lib/serverFetch';
 import FiltrosReportes from './FiltrosReportes';
+import ReporteGastos from './ReporteGastos';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,19 +138,6 @@ function BarChart({ data }: { data: DiaDato[] }) {
   );
 }
 
-// ─── Tipos Gastos ─────────────────────────────────────────────────────────────
-interface GastosResumen { cantidad_egresos: number; total_gastos: number; promedio_egreso: number; }
-interface GastoRubro  { rubro: string; subrubro: string; cantidad: number; total: number; promedio: number; tipo_operacion: string; }
-interface GastoDia    { dia: string; cantidad: number; total: number; }
-interface GastoTipo   { tipo_operacion: string; cantidad: number; total: number; }
-interface GastosData  { periodo: { desde: string; hasta: string }; resumen: GastosResumen; por_rubro: GastoRubro[]; por_dia: GastoDia[]; por_tipo: GastoTipo[]; }
-
-const TIPO_OP_LABEL: Record<string, string> = {
-  compra_mercaderia: 'Compra mercadería', compra_gasto: 'Gasto varios',
-  carga_social_laboral: 'Carga social', gasto_manual: 'Gasto manual',
-  inversion_bien_uso: 'Inversión', anticipo_proveedor: 'Anticipo',
-};
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function ReportesPage({
   searchParams,
@@ -157,39 +146,37 @@ export default async function ReportesPage({
 }) {
   requireAuth('/reportes');
 
-  const tab        = (searchParams.tab as string) || 'ventas';
+  const tab       = (searchParams.tab as string) || 'ventas';
   const fechaDesde = (searchParams.fecha_desde as string) || defaultDesde();
   const fechaHasta = (searchParams.fecha_hasta as string) || defaultHasta();
+  const rubroId   = searchParams.rubro_id as string | undefined;
 
-  const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+  // Fetch de datos según el tab activo
+  let data: ReportesData | null = null;
+  let gastosData: any = null;
 
-  // Fetch según tab
-  const [resV, resG] = await Promise.all([
-    tab === 'ventas' ? serverFetch(`/api/reportes/ventas?${qs}`) : Promise.resolve(null),
-    tab === 'gastos' ? serverFetch(`/api/reportes/gastos?${qs}`) : Promise.resolve(null),
-  ]);
-
-  const dataV: ReportesData | null = resV?.ok ? await resV.json() : null;
-  const dataG: GastosData  | null = resG?.ok ? await resG.json() : null;
-
-  const resumen      = dataV?.resumen;
-  const porDia       = dataV?.por_dia       ?? [];
-  const porMedioPago = dataV?.por_medio_pago ?? [];
-  const topArticulos = dataV?.top_articulos  ?? [];
-  const porSucursal  = dataV?.por_sucursal   ?? [];
-
-  // Gastos agrupados por rubro (para la tabla anidada)
-  const rubrosMap = new Map<string, { subrubros: GastoRubro[]; total: number }>();
-  for (const r of (dataG?.por_rubro ?? [])) {
-    if (!rubrosMap.has(r.rubro)) rubrosMap.set(r.rubro, { subrubros: [], total: 0 });
-    const entry = rubrosMap.get(r.rubro)!;
-    entry.subrubros.push(r);
-    entry.total += r.total;
+  if (tab === 'gastos') {
+    const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    if (rubroId) qs.set('rubro_id', rubroId);
+    const res = await serverFetch(`/api/reportes/gastos?${qs}`, { cache: 'no-store' });
+    gastosData = res.ok ? await res.json() : null;
+  } else {
+    const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    const res = await serverFetch(`/api/reportes/ventas?${qs.toString()}`);
+    data = res.ok ? await res.json() : null;
   }
-  const rubrosOrdenados = [...rubrosMap.entries()].sort((a, b) => b[1].total - a[1].total);
 
-  // URLs de tab
-  const tabUrl = (t: string) => `/reportes?tab=${t}&fecha_desde=${fechaDesde}&fecha_hasta=${fechaHasta}`;
+  const resumen      = data?.resumen;
+  const porDia       = data?.por_dia ?? [];
+  const porMedioPago = data?.por_medio_pago ?? [];
+  const topArticulos = data?.top_articulos ?? [];
+  const porSucursal  = data?.por_sucursal ?? [];
+
+  // Tabs helper
+  const makeTabHref = (t: string) => {
+    const p = new URLSearchParams({ tab: t, fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    return `/reportes?${p}`;
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
@@ -201,18 +188,18 @@ export default async function ReportesPage({
             Período: {fmtDia(fechaDesde)} — {fmtDia(fechaHasta)}
           </p>
         </div>
-        <FiltrosReportes fechaDesde={fechaDesde} fechaHasta={fechaHasta} tab={tab} />
+        {tab === 'ventas' && <FiltrosReportes fechaDesde={fechaDesde} fechaHasta={fechaHasta} />}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-kp-border">
         {[
-          { value: 'ventas', label: 'Ventas' },
-          { value: 'gastos', label: 'Gastos' },
+          { label: 'Ventas', value: 'ventas' },
+          { label: 'Gastos', value: 'gastos' },
         ].map(t => (
-          <a
+          <Link
             key={t.value}
-            href={tabUrl(t.value)}
+            href={makeTabHref(t.value)}
             className={[
               'px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors',
               tab === t.value
@@ -221,159 +208,32 @@ export default async function ReportesPage({
             ].join(' ')}
           >
             {t.label}
-          </a>
+          </Link>
         ))}
       </div>
 
+      {/* ── TAB GASTOS ─────────────────────────────────────────────── */}
+      {tab === 'gastos' && (
+        gastosData
+          ? <ReporteGastos data={gastosData} fechaDesde={fechaDesde} fechaHasta={fechaHasta} rubroId={rubroId} />
+          : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
+              <p className="text-kp-gray text-sm">No se pudo cargar el reporte de gastos.</p>
+            </div>
+      )}
+
+      {/* ── TAB VENTAS ─────────────────────────────────────────────── */}
+      {tab === 'ventas' && (<>
+
       {/* Error state */}
-      {tab === 'ventas' && !dataV && (
+      {!data && (
         <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
-          <p className="text-kp-gray text-sm">No se pudo cargar el reporte de ventas.</p>
-        </div>
-      )}
-      {tab === 'gastos' && !dataG && (
-        <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
-          <p className="text-kp-gray text-sm">No se pudo cargar el reporte de gastos.</p>
+          <p className="text-kp-gray text-sm">No se pudo cargar el reporte. Intenta de nuevo.</p>
         </div>
       )}
 
-      {/* ══ GASTOS ══ */}
-      {tab === 'gastos' && dataG && (
+      {data && (
         <>
-          {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <StatCard label="Total gastos"      value={fmt(dataG.resumen.total_gastos)} />
-            <StatCard label="Cant. egresos"     value={fmtNum(dataG.resumen.cantidad_egresos)} />
-            <StatCard label="Promedio egreso"   value={fmt(dataG.resumen.promedio_egreso)} />
-          </div>
-
-          {/* Barra por día */}
-          <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
-            <SectionHeader title="Gastos por día" />
-            <div className="mt-4 pb-6">
-              {dataG.por_dia.length === 0 ? (
-                <p className="text-sm text-kp-gray py-4 text-center">Sin gastos en el período</p>
-              ) : (() => {
-                const maxTotal = Math.max(...dataG.por_dia.map(d => d.total), 1);
-                return (
-                  <div className="overflow-x-auto pb-1">
-                    <div className="flex items-end gap-1.5" style={{ minWidth: `${dataG.por_dia.length * 36}px` }}>
-                      {dataG.por_dia.map(d => {
-                        const pct = (d.total / maxTotal) * 100;
-                        return (
-                          <div key={d.dia} className="flex flex-col items-center gap-1 group" style={{ flex: '1 1 0', minWidth: 28, maxWidth: 48 }}>
-                            <div className="w-full relative flex items-end justify-center" style={{ height: '100px' }}>
-                              <div
-                                className="w-full bg-amber-600/70 group-hover:bg-amber-500 rounded-t transition-colors"
-                                style={{ height: `${Math.max(pct, 2)}%` }}
-                              />
-                              <div className="pointer-events-none absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-10 bg-kp-surface2 border border-kp-border rounded-md px-2 py-1.5 text-xs text-kp-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity text-center">
-                                <span className="block font-bold">{fmt(d.total)}</span>
-                                <span className="block text-kp-gray">{fmtNum(d.cantidad)} egresos</span>
-                              </div>
-                            </div>
-                            <span className="text-[9px] text-kp-gray rotate-45 origin-left whitespace-nowrap translate-y-1">{fmtDia(d.dia)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Tabla por rubro/subrubro */}
-          <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
-            <SectionHeader title="Por rubro y subrubro" />
-            {rubrosOrdenados.length === 0 ? (
-              <p className="text-sm text-kp-gray py-2">Sin datos</p>
-            ) : (
-              <div className="space-y-3">
-                {rubrosOrdenados.map(([rubro, data]) => {
-                  const pctTotal = dataG.resumen.total_gastos > 0
-                    ? (data.total / dataG.resumen.total_gastos) * 100
-                    : 0;
-                  return (
-                    <div key={rubro} className="rounded-xl border border-kp-border overflow-hidden">
-                      {/* Cabecera del rubro */}
-                      <div className="flex items-center justify-between px-4 py-3 bg-kp-surface2">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="text-sm font-bold text-kp-white truncate">{rubro}</span>
-                          <div className="flex-1 max-w-[160px] h-1.5 rounded-full bg-kp-border overflow-hidden">
-                            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pctTotal}%` }} />
-                          </div>
-                          <span className="text-xs text-kp-gray">{pctTotal.toFixed(1)}%</span>
-                        </div>
-                        <span className="text-sm font-bold tabular-nums text-amber-400 ml-4">{fmt(data.total)}</span>
-                      </div>
-                      {/* Subrubros */}
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-kp-border/50">
-                            <th className="text-left px-4 py-2 text-xs text-kp-gray uppercase tracking-wide font-semibold">Subrubro</th>
-                            <th className="text-left px-4 py-2 text-xs text-kp-gray uppercase tracking-wide font-semibold">Tipo</th>
-                            <th className="text-right px-4 py-2 text-xs text-kp-gray uppercase tracking-wide font-semibold">Cant.</th>
-                            <th className="text-right px-4 py-2 text-xs text-kp-gray uppercase tracking-wide font-semibold">Promedio</th>
-                            <th className="text-right px-4 py-2 text-xs text-kp-gray uppercase tracking-wide font-semibold">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-kp-border/30">
-                          {data.subrubros.map((s, i) => (
-                            <tr key={i} className="hover:bg-kp-surface2 transition-colors">
-                              <td className="px-4 py-2.5 text-kp-white font-medium">{s.subrubro}</td>
-                              <td className="px-4 py-2.5 text-kp-gray text-xs">{TIPO_OP_LABEL[s.tipo_operacion] ?? s.tipo_operacion}</td>
-                              <td className="px-4 py-2.5 text-right tabular-nums text-kp-gray">{fmtNum(s.cantidad)}</td>
-                              <td className="px-4 py-2.5 text-right tabular-nums text-kp-gray">{fmt(s.promedio)}</td>
-                              <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-kp-white">{fmt(s.total)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })}
-
-                {/* Total general */}
-                <div className="flex justify-end items-center gap-3 pt-1">
-                  <span className="text-xs text-kp-gray uppercase tracking-widest font-bold">Total período</span>
-                  <span className="text-xl font-bold tabular-nums text-amber-400">{fmt(dataG.resumen.total_gastos)}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Por tipo de operación */}
-          {dataG.por_tipo.length > 0 && (
-            <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
-              <SectionHeader title="Por tipo de operación" />
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-kp-border">
-                    <th className="text-left py-2 text-xs font-semibold uppercase tracking-widest text-kp-gray">Tipo</th>
-                    <th className="text-right py-2 text-xs font-semibold uppercase tracking-widest text-kp-gray">Cant.</th>
-                    <th className="text-right py-2 text-xs font-semibold uppercase tracking-widest text-kp-gray">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dataG.por_tipo.map((t, i) => (
-                    <tr key={i} className="border-b border-kp-border/50 hover:bg-kp-surface2 transition-colors">
-                      <td className="py-2.5 pr-3 text-kp-white font-medium">{TIPO_OP_LABEL[t.tipo_operacion] ?? t.tipo_operacion}</td>
-                      <td className="py-2.5 text-right tabular-nums text-kp-gray">{fmtNum(t.cantidad)}</td>
-                      <td className="py-2.5 text-right tabular-nums text-kp-white font-semibold">{fmt(t.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ══ VENTAS ══ */}
-      {tab === 'ventas' && dataV && (
-        <>
-          {/* Summary cards — Ventas */}
+          {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
             <StatCard
               label="Total ventas"
@@ -514,6 +374,7 @@ export default async function ReportesPage({
           </div>
         </>
       )}
+      </>)}
     </div>
   );
 }
