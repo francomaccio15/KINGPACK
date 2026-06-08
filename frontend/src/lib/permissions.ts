@@ -21,7 +21,8 @@ const PERMISOS: Record<Rol, string[] | '*'> = {
 export function puedeAcceder(rol: Rol, href: string): boolean {
   const p = PERMISOS[rol];
   if (p === '*') return true;
-  return p.some(m => href === m || href.startsWith(m + '/'));
+  const path = href.split('?')[0]; // ignorar query params al chequear permisos
+  return p.some(m => path === m || path.startsWith(m + '/'));
 }
 
 /** Devuelve la lista de hrefs permitidos (o '*' para admin). */

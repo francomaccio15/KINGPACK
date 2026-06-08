@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { puedeAcceder } from '@/lib/permissions';
@@ -164,7 +164,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Usuarios',   href: '/usuarios',   icon: <IcoUsuarios />   },
       { label: 'Empleados',  href: '/empleados',  icon: <IcoEmpleados />  },
-      { label: 'Reportes',   href: '/reportes',   icon: <IcoReportes />   },
+      { label: 'Rep. Ventas',  href: '/reportes',                    icon: <IcoReportes />  },
+      { label: 'Rep. Gastos',  href: '/reportes?tab=gastos',         icon: <IcoGastos />    },
       { label: 'Impuestos',  href: '/impuestos',  icon: <IcoImpuestos />  },
     ],
   },
@@ -178,7 +179,8 @@ interface SidebarProps {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
-  const pathname = usePathname();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -274,7 +276,26 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
                 <ul className="space-y-0.5">
                   {visibles.map(item => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                    const [itemPath, itemQS] = item.href.split('?');
+                    const itemParams = new URLSearchParams(itemQS ?? '');
+                    const pathMatch = pathname === itemPath || pathname.startsWith(itemPath + '/');
+                    let isActive: boolean;
+                    if (!itemQS) {
+                      // Link sin query string → activo solo si el path coincide
+                      // Y ninguno de sus query params "exclusivos" está activo en la URL actual
+                      // (ej: /reportes activo solo cuando NO hay ?tab=gastos u otro tab con item propio)
+                      const siblingQSTabs = visibles
+                        .filter(si => si !== item && si.href.startsWith(itemPath + '?'))
+                        .map(si => new URLSearchParams(si.href.split('?')[1] ?? ''));
+                      const currentMatchesSibling = siblingQSTabs.some(sp =>
+                        [...sp.entries()].every(([k, v]) => searchParams.get(k) === v)
+                      );
+                      isActive = pathMatch && !currentMatchesSibling;
+                    } else {
+                      // Link con query string → activo solo si todos sus params coinciden
+                      isActive = pathMatch && [...itemParams.entries()].every(([k, v]) => searchParams.get(k) === v);
+                    }
+
                     const cls = [
                       'group relative flex items-center gap-3 px-3 py-2.5 mx-1 rounded-md',
                       'text-sm font-medium transition-colors duration-150 border-l-2',
