@@ -261,6 +261,90 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
       [tipo, id, estadoActual, estado_nuevo, observacion || null, usuario_id]
     );
 
+    // ── Efecto en Caja ─────────────────────────────────────────────────────────
+    // Cheque RECIBIDO rechazado → reversal en caja (el ingreso original queda anulado)
+    if (tipo === 'recibido' && estado_nuevo === 'rechazado') {
+      const { rows: chequeInfo } = await client.query(`
+        SELECT vc.banco, vc.numero_cheque, vc.importe,
+               v.numero AS venta_numero, v.sucursal_id,
+               cl.razon_social AS cliente_nombre
+          FROM venta_cheques vc
+          JOIN ventas v    ON v.id  = vc.venta_id
+          LEFT JOIN clientes cl ON cl.id = v.cliente_id
+         WHERE vc.id = $1
+      `, [id]);
+
+      if (chequeInfo[0]) {
+        const ch = chequeInfo[0];
+        const { rows: cajaRows } = await client.query(
+          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+          [ch.sucursal_id]
+        );
+        if (cajaRows[0]) {
+          const motivo = observacion?.trim()
+            ? ` (${observacion.trim()})`
+            : '';
+          await client.query(`
+            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
+            SELECT $1, 'egreso',
+                   $2,
+                   $3,
+                   mp.id
+              FROM medios_pago mp
+             WHERE LOWER(mp.nombre) LIKE '%cheque%' LIMIT 1
+          `, [
+            cajaRows[0].id,
+            `Cheque rechazado — ${ch.banco} #${ch.numero_cheque} — ${ch.cliente_nombre ?? 'Cliente'}${motivo} [Venta #${ch.venta_numero}]`,
+            parseFloat(ch.importe),
+          ]);
+        }
+      }
+    }
+
+    // Cheque RECIBIDO acreditado → confirmar ingreso en caja (en caso de no haber sido registrado al crear la venta)
+    if (tipo === 'recibido' && estado_nuevo === 'acreditado') {
+      const { rows: chequeInfo } = await client.query(`
+        SELECT vc.banco, vc.numero_cheque, vc.importe,
+               v.numero AS venta_numero, v.sucursal_id,
+               cl.razon_social AS cliente_nombre
+          FROM venta_cheques vc
+          JOIN ventas v    ON v.id  = vc.venta_id
+          LEFT JOIN clientes cl ON cl.id = v.cliente_id
+         WHERE vc.id = $1
+      `, [id]);
+
+      if (chequeInfo[0]) {
+        const ch = chequeInfo[0];
+        // Solo registrar si hay caja abierta Y no existe ya un movimiento positivo para esta venta
+        const { rows: cajaRows } = await client.query(
+          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+          [ch.sucursal_id]
+        );
+        if (cajaRows[0]) {
+          const conceptoVenta = `Venta #${ch.venta_numero}`;
+          const { rows: yaExiste } = await client.query(
+            `SELECT id FROM movimientos_caja
+              WHERE caja_id = $1 AND tipo = 'venta' AND concepto = $2 LIMIT 1`,
+            [cajaRows[0].id, conceptoVenta]
+          );
+          // Registrar movimiento de acreditación del cheque (separado de la venta)
+          await client.query(`
+            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
+            SELECT $1, 'ingreso',
+                   $2,
+                   $3,
+                   mp.id
+              FROM medios_pago mp
+             WHERE LOWER(mp.nombre) LIKE '%cheque%' LIMIT 1
+          `, [
+            cajaRows[0].id,
+            `Cheque acreditado — ${ch.banco} #${ch.numero_cheque} — ${ch.cliente_nombre ?? 'Cliente'} [Venta #${ch.venta_numero}]`,
+            parseFloat(ch.importe),
+          ]);
+        }
+      }
+    }
+
     await client.query('COMMIT');
 
     res.json({ ok: true, estado_anterior: estadoActual, estado_nuevo });
@@ -270,6 +354,128 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// ─── GET /api/cheques/por-cliente ─────────────────────────────────────────────
+// Cheques recibidos agrupados por cliente con detalle
+router.get('/por-cliente', async (req, res, next) => {
+  try {
+    const { estado, banco } = req.query;
+    const sucId = sucursalEfectiva(req);
+
+    const conditions = [`v.deleted_at IS NULL`];
+    const params = [];
+    let idx = 1;
+
+    if (sucId) {
+      conditions.push(`v.sucursal_id = $${idx++}`);
+      params.push(sucId);
+    }
+    if (estado) {
+      conditions.push(`vc.estado = $${idx++}`);
+      params.push(estado);
+    }
+    if (banco) {
+      conditions.push(`LOWER(vc.banco) LIKE $${idx++}`);
+      params.push(`%${banco.toLowerCase()}%`);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const { rows } = await pool.query(`
+      SELECT
+        cl.id            AS cliente_id,
+        cl.razon_social  AS cliente_nombre,
+        cl.telefono      AS cliente_telefono,
+        COUNT(vc.id)     AS cantidad,
+        COALESCE(SUM(vc.importe), 0)                                                  AS total,
+        COALESCE(SUM(vc.importe) FILTER (WHERE vc.estado = 'en_cartera'),  0)         AS en_cartera,
+        COALESCE(SUM(vc.importe) FILTER (WHERE vc.estado = 'depositado'),  0)         AS depositado,
+        COALESCE(SUM(vc.importe) FILTER (WHERE vc.estado = 'acreditado'),  0)         AS acreditado,
+        COALESCE(SUM(vc.importe) FILTER (WHERE vc.estado = 'rechazado'),   0)         AS rechazado,
+        COUNT(vc.id)     FILTER (WHERE vc.estado = 'rechazado')                       AS rechazado_cant,
+        COUNT(vc.id)     FILTER (WHERE vc.fecha_vencimiento < CURRENT_DATE
+                                   AND vc.estado NOT IN ('acreditado','rechazado','anulado')) AS vencidos_cant,
+        json_agg(
+          json_build_object(
+            'id',                vc.id,
+            'banco',             vc.banco,
+            'numero_cheque',     vc.numero_cheque,
+            'fecha_emision',     vc.fecha_emision,
+            'fecha_vencimiento', vc.fecha_vencimiento,
+            'importe',           vc.importe,
+            'estado',            vc.estado,
+            'fecha_estado',      vc.fecha_estado,
+            'venta_numero',      v.numero,
+            'venta_id',          v.id,
+            'vencido',           (vc.fecha_vencimiento < CURRENT_DATE AND vc.estado NOT IN ('acreditado','rechazado','anulado'))
+          ) ORDER BY vc.fecha_vencimiento ASC
+        ) AS cheques
+      FROM venta_cheques vc
+      JOIN ventas   v  ON v.id  = vc.venta_id
+      JOIN clientes cl ON cl.id = v.cliente_id
+      WHERE ${where}
+      GROUP BY cl.id, cl.razon_social, cl.telefono
+      ORDER BY SUM(vc.importe) FILTER (WHERE vc.estado IN ('en_cartera','depositado')) DESC NULLS LAST,
+               cl.razon_social
+    `, params);
+
+    res.json({ clientes: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/cheques/emitidos-resumen ────────────────────────────────────────
+// Cheques emitidos por proveedor + nro factura, con columnas por mes
+router.get('/emitidos-resumen', async (req, res, next) => {
+  try {
+    const { meses = 6 } = req.query;
+    const sucId = sucursalEfectiva(req);
+
+    const conditions = [`ec.estado NOT IN ('anulado')`];
+    const params = [];
+    let idx = 1;
+
+    if (sucId) {
+      conditions.push(`e.sucursal_id = $${idx++}`);
+      params.push(sucId);
+    }
+
+    const where = conditions.join(' AND ');
+
+    // Cheques emitidos con info del proveedor y egreso
+    const { rows } = await pool.query(`
+      SELECT
+        COALESCE(pr.razon_social, 'Sin proveedor')  AS proveedor_nombre,
+        pr.id                                        AS proveedor_id,
+        e.numero_comprobante                         AS nro_factura,
+        e.id                                         AS egreso_id,
+        ec.id                                        AS cheque_id,
+        ec.banco,
+        ec.numero_cheque,
+        ec.fecha_emision,
+        ec.fecha_vencimiento,
+        ec.importe,
+        ec.estado,
+        ec.fecha_estado,
+        DATE_TRUNC('month', ec.fecha_vencimiento)    AS mes_venc,
+        s.nombre                                     AS sucursal_nombre
+      FROM egreso_cheques ec
+      JOIN egreso_pagos   ep ON ep.id  = ec.egreso_pago_id
+      JOIN egresos        e  ON e.id   = ep.egreso_id
+      LEFT JOIN proveedores pr ON pr.id = e.proveedor_id
+      JOIN sucursales     s  ON s.id   = e.sucursal_id
+      WHERE ${where}
+        AND ec.fecha_vencimiento >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+        AND ec.fecha_vencimiento <  DATE_TRUNC('month', CURRENT_DATE) + (${parseInt(meses) || 6} || ' months')::INTERVAL
+      ORDER BY ec.fecha_vencimiento ASC, pr.razon_social
+    `, params);
+
+    // Extraer meses únicos presentes
+    const mesesSet = new Set(rows.map(r => r.mes_venc?.toISOString?.().slice(0, 7) ?? ''));
+    const mesesOrdenados = [...mesesSet].filter(Boolean).sort();
+
+    res.json({ cheques: rows, meses: mesesOrdenados });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
