@@ -250,7 +250,7 @@ router.get('/gastos', async (req, res, next) => {
     ]);
 
     // Agrupar subrubros bajo su rubro para la respuesta
-    const rubroMap: Record<string, { rubro: string; rubro_id: string | null; monto: number; cantidad: number; subrubros: any[] }> = {};
+    const rubroMap = {};
     for (const row of porRubro.rows) {
       const key = row.rubro_id ?? '__sin_rubro__';
       if (!rubroMap[key]) {
