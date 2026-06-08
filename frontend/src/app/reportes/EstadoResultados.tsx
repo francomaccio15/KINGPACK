@@ -1,4 +1,5 @@
 import FiltrosEstadoResultados from './FiltrosEstadoResultados';
+import PrintButton from './PrintButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Subrubro {
@@ -150,12 +151,7 @@ export default function EstadoResultados({
             </h2>
             <p className="text-sm text-kp-gray mt-0.5">{tituloPeriodo}</p>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="print:hidden px-4 py-2 text-xs font-semibold rounded-lg border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-white transition-colors"
-          >
-            ⎙ Imprimir
-          </button>
+          <PrintButton />
         </div>
 
         {/* Tabla P&L */}
