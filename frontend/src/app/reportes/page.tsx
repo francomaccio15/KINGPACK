@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import { serverFetch } from '@/lib/serverFetch';
 import FiltrosReportes from './FiltrosReportes';
 import ReporteGastos from './ReporteGastos';
+import EstadoResultados from './EstadoResultados';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,20 +147,25 @@ export default async function ReportesPage({
 }) {
   requireAuth('/reportes');
 
-  const tab       = (searchParams.tab as string) || 'ventas';
+  const tab        = (searchParams.tab as string) || 'ventas';
   const fechaDesde = (searchParams.fecha_desde as string) || defaultDesde();
   const fechaHasta = (searchParams.fecha_hasta as string) || defaultHasta();
-  const rubroId   = searchParams.rubro_id as string | undefined;
+  const rubroId    = searchParams.rubro_id as string | undefined;
 
   // Fetch de datos según el tab activo
   let data: ReportesData | null = null;
-  let gastosData: any = null;
+  let gastosData: any           = null;
+  let erData: any               = null;
 
   if (tab === 'gastos') {
     const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
     if (rubroId) qs.set('rubro_id', rubroId);
     const res = await serverFetch(`/api/reportes/gastos?${qs}`, { cache: 'no-store' });
     gastosData = res.ok ? await res.json() : null;
+  } else if (tab === 'er') {
+    const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    const res = await serverFetch(`/api/reportes/estado-resultados?${qs}`, { cache: 'no-store' });
+    erData = res.ok ? await res.json() : null;
   } else {
     const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
     const res = await serverFetch(`/api/reportes/ventas?${qs.toString()}`);
@@ -194,8 +200,9 @@ export default async function ReportesPage({
       {/* Tabs */}
       <div className="flex gap-1 border-b border-kp-border">
         {[
-          { label: 'Ventas', value: 'ventas' },
-          { label: 'Gastos', value: 'gastos' },
+          { label: 'Ventas',             value: 'ventas' },
+          { label: 'Gastos',             value: 'gastos' },
+          { label: 'Estado de Resultados', value: 'er'   },
         ].map(t => (
           <Link
             key={t.value}
@@ -218,6 +225,15 @@ export default async function ReportesPage({
           ? <ReporteGastos data={gastosData} fechaDesde={fechaDesde} fechaHasta={fechaHasta} rubroId={rubroId} />
           : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
               <p className="text-kp-gray text-sm">No se pudo cargar el reporte de gastos.</p>
+            </div>
+      )}
+
+      {/* ── TAB ESTADO DE RESULTADOS ────────────────────────────────── */}
+      {tab === 'er' && (
+        erData
+          ? <EstadoResultados data={erData} fechaDesde={fechaDesde} fechaHasta={fechaHasta} />
+          : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
+              <p className="text-kp-gray text-sm">No se pudo cargar el estado de resultados.</p>
             </div>
       )}
 

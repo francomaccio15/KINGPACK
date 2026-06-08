@@ -164,8 +164,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Usuarios',   href: '/usuarios',   icon: <IcoUsuarios />   },
       { label: 'Empleados',  href: '/empleados',  icon: <IcoEmpleados />  },
-      { label: 'Rep. Ventas',  href: '/reportes',                    icon: <IcoReportes />  },
-      { label: 'Rep. Gastos',  href: '/reportes?tab=gastos',         icon: <IcoGastos />    },
+      { label: 'Rep. Ventas',    href: '/reportes',                    icon: <IcoReportes />   },
+      { label: 'Rep. Gastos',    href: '/reportes?tab=gastos',        icon: <IcoGastos />     },
+      { label: 'Edo. Resultados',href: '/reportes?tab=er',            icon: <IcoImpuestos />  },
       { label: 'Impuestos',  href: '/impuestos',  icon: <IcoImpuestos />  },
     ],
   },

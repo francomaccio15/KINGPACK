@@ -277,4 +277,122 @@ router.get('/gastos', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/reportes/estado-resultados ─────────────────────────────────────
+// ?fecha_desde=  ISO date  (default: primer día del mes)
+// ?fecha_hasta=  ISO date  (default: hoy)
+router.get('/estado-resultados', async (req, res, next) => {
+  try {
+    const { fecha_desde, fecha_hasta } = req.query;
+    const hoy   = new Date().toISOString().slice(0, 10);
+    const desde = fecha_desde || hoy.slice(0, 8) + '01';
+    const hasta = fecha_hasta || hoy;
+
+    const sucId = sucursalEfectiva(req);
+    const sucVenta   = sucId ? 'AND v.sucursal_id   = $3' : '';
+    const sucEgreso  = sucId ? 'AND e.sucursal_id   = $3' : '';
+    const sucNC      = sucId ? 'AND nc.sucursal_id  = $3' : '';
+    const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
+
+    const [ventasRes, ncRes, egresosRes] = await Promise.all([
+
+      // ── Ventas del período ────────────────────────────────────────
+      pool.query(`
+        SELECT
+          COALESCE(SUM(v.total),            0)::float AS ventas_brutas,
+          COALESCE(SUM(v.descuento_total),  0)::float AS descuentos,
+          COUNT(v.id)::int                            AS cantidad_ventas
+        FROM ventas v
+        WHERE v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND v.fecha::date BETWEEN $1 AND $2
+          ${sucVenta}
+      `, baseParams),
+
+      // ── Notas de crédito del período ──────────────────────────────
+      pool.query(`
+        SELECT COALESCE(SUM(nc.total), 0)::float AS total_nc
+        FROM notas_credito nc
+        WHERE nc.deleted_at IS NULL
+          AND nc.fecha::date BETWEEN $1 AND $2
+          ${sucNC}
+      `, baseParams).catch(() => ({ rows: [{ total_nc: 0 }] })),
+
+      // ── TODOS los subrubros (catálogo completo) LEFT JOIN egresos ──
+      // Esto garantiza que aparezcan aunque tengan $0 en el período
+      pool.query(`
+        SELECT
+          rg.id        AS rubro_id,
+          rg.nombre    AS rubro,
+          rg.orden     AS rubro_orden,
+          sg.id        AS subrubro_id,
+          sg.nombre    AS subrubro,
+          COALESCE(SUM(e.total), 0)::float AS monto,
+          COUNT(e.id)::int                 AS cantidad
+        FROM rubros_gastos rg
+        JOIN subrubro_gastos sg ON sg.rubro_id = rg.id
+        LEFT JOIN egresos e
+          ON  e.subrubro_gasto_id = sg.id
+          AND e.deleted_at IS NULL
+          AND e.fecha_emision::date BETWEEN $1 AND $2
+          ${sucEgreso}
+        GROUP BY rg.id, rg.nombre, rg.orden, sg.id, sg.nombre
+        ORDER BY rg.orden ASC, rg.nombre ASC, monto DESC, sg.nombre ASC
+      `, baseParams),
+    ]);
+
+    const ventas_brutas  = parseFloat(ventasRes.rows[0].ventas_brutas)  || 0;
+    const descuentos     = parseFloat(ventasRes.rows[0].descuentos)     || 0;
+    const notas_credito  = parseFloat(ncRes.rows[0].total_nc)           || 0;
+    const ventas_netas   = ventas_brutas - descuentos - notas_credito;
+
+    // Agrupar subrubros bajo su rubro
+    const rubroMap = {};
+    for (const row of egresosRes.rows) {
+      const k = row.rubro_id;
+      if (!rubroMap[k]) {
+        rubroMap[k] = {
+          rubro_id:    row.rubro_id,
+          rubro:       row.rubro,
+          rubro_orden: row.rubro_orden,
+          total:       0,
+          subrubros:   [],
+        };
+      }
+      rubroMap[k].total += row.monto;
+      rubroMap[k].subrubros.push({
+        subrubro_id: row.subrubro_id,
+        subrubro:    row.subrubro,
+        monto:       row.monto,
+        cantidad:    row.cantidad,
+        es_cero:     row.monto === 0,
+      });
+    }
+
+    const rubros       = Object.values(rubroMap).sort((a, b) => a.rubro_orden - b.rubro_orden);
+    const total_gastos = rubros.reduce((s, r) => s + r.total, 0);
+    const resultado    = ventas_netas - total_gastos;
+
+    res.json({
+      periodo: { desde, hasta },
+      ingresos: {
+        ventas_brutas,
+        descuentos,
+        notas_credito,
+        ventas_netas,
+        cantidad_ventas: ventasRes.rows[0].cantidad_ventas,
+      },
+      gastos: {
+        rubros,
+        total_gastos,
+      },
+      resultado: {
+        resultado_periodo: resultado,
+        margen_pct: ventas_netas > 0
+          ? parseFloat(((resultado / ventas_netas) * 100).toFixed(1))
+          : 0,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
