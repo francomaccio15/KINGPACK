@@ -348,41 +348,11 @@ export default function NuevoEgresoPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Nuevo Egreso</h2>
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Comprobante — Compra</h2>
         </div>
         <Link href="/gastos" className="text-sm text-kp-gray hover:text-kp-white transition-colors">
           ← Volver a Gastos
         </Link>
-      </div>
-
-      {/* ── Sección 1: Tipo de operación ─── */}
-      <div className={sectionCls}>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Tipo de operación</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {([
-            ['compra_mercaderia',    'Compra de Mercadería',    'Actualiza stock'],
-            ['compra_gasto',         'Compra / Gasto',          'Con comprobante, sin stock'],
-            ['carga_social_laboral', 'Carga Social y Laboral',  'Formulario 931, sueldos...'],
-            ['gasto_manual',         'Gasto Manual',            'Sin comprobante comercial'],
-            ['inversion_bien_uso',   'Inversión / Bien de Uso', 'Con factura'],
-            ['anticipo_proveedor',   'Anticipo a Proveedor',    'Pago adelantado'],
-          ] as [TipoOperacion, string, string][]).map(([val, label, hint]) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => setTipoOp(val)}
-              className={[
-                'text-left p-3 rounded-lg border transition-colors',
-                tipoOp === val
-                  ? 'border-kp-red bg-kp-red/10 text-kp-white'
-                  : 'border-kp-border bg-kp-surface hover:border-kp-gray text-kp-gray hover:text-kp-white',
-              ].join(' ')}
-            >
-              <div className="text-sm font-semibold">{label}</div>
-              <div className="text-xs text-kp-gray mt-0.5">{hint}</div>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ── Sección 2: Cabecera del comprobante ─── */}
@@ -537,6 +507,42 @@ export default function NuevoEgresoPage() {
 
           <div>
             <label className={labelCls}>Rubro / Subrubro</label>
+
+            {/* Acceso rápido: Compra de mercadería (más usado) */}
+            {(() => {
+              const subCompra = rubros.flatMap(r => r.subrubros).find(
+                s => s.nombre.toLowerCase().includes('compra de mercader')
+              );
+              if (!subCompra) return null;
+              const activo = subrubroId === subCompra.id;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setSubrubroId(activo ? '' : subCompra.id)}
+                  className={[
+                    'w-full flex items-center gap-2 mb-2 px-3 py-2 rounded-lg border text-sm font-semibold transition-colors',
+                    activo
+                      ? 'border-kp-red bg-kp-red/10 text-kp-white'
+                      : 'border-amber-500/50 bg-amber-500/5 text-amber-400 hover:bg-amber-500/10',
+                  ].join(' ')}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
+                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                  </svg>
+                  Compra de mercadería
+                  {activo && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
+                      className="w-4 h-4 ml-auto text-kp-red">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                  {!activo && <span className="ml-auto text-xs opacity-60">más usado</span>}
+                </button>
+              );
+            })()}
+
             <select value={subrubroId} onChange={e => setSubrubroId(e.target.value)} className={inputCls}>
               <option value="">— Sin clasificar —</option>
               {rubros.map(r => (
@@ -916,7 +922,7 @@ export default function NuevoEgresoPage() {
             disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? <><Spinner /> Guardando…</> : 'Confirmar Egreso'}
+            {saving ? <><Spinner /> Guardando…</> : 'Confirmar Compra'}
           </button>
         </div>
       </div>
