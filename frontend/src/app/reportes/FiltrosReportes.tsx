@@ -6,9 +6,10 @@ import { useState } from 'react';
 interface Props {
   fechaDesde: string;
   fechaHasta: string;
+  tab?: string;
 }
 
-export default function FiltrosReportes({ fechaDesde, fechaHasta }: Props) {
+export default function FiltrosReportes({ fechaDesde, fechaHasta, tab }: Props) {
   const router = useRouter();
   const [desde, setDesde] = useState(fechaDesde);
   const [hasta, setHasta] = useState(fechaHasta);
@@ -18,6 +19,15 @@ export default function FiltrosReportes({ fechaDesde, fechaHasta }: Props) {
     const params = new URLSearchParams();
     if (desde) params.set('fecha_desde', desde);
     if (hasta) params.set('fecha_hasta', hasta);
+    if (tab)   params.set('tab', tab);
+    router.push(`/reportes?${params.toString()}`);
+  }
+
+  function pushWithTab(d: string, h: string) {
+    const params = new URLSearchParams();
+    if (d)   params.set('fecha_desde', d);
+    if (h)   params.set('fecha_hasta', h);
+    if (tab) params.set('tab', tab);
     router.push(`/reportes?${params.toString()}`);
   }
 
@@ -26,8 +36,8 @@ export default function FiltrosReportes({ fechaDesde, fechaHasta }: Props) {
     const primer = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
     const ultimoDate = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
     const ultimo = `${ultimoDate.getFullYear()}-${String(ultimoDate.getMonth() + 1).padStart(2, '0')}-${String(ultimoDate.getDate()).padStart(2, '0')}`;
-    setDesde(primer);
-    setHasta(ultimo);
+    setDesde(primer); setHasta(ultimo);
+    pushWithTab(primer, ultimo);
   }
 
   function setMesAnterior() {
@@ -36,14 +46,14 @@ export default function FiltrosReportes({ fechaDesde, fechaHasta }: Props) {
     const ultimoDate = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
     const toIso = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    setDesde(toIso(primerDate));
-    setHasta(toIso(ultimoDate));
+    setDesde(toIso(primerDate)); setHasta(toIso(ultimoDate));
+    pushWithTab(toIso(primerDate), toIso(ultimoDate));
   }
 
   function setHoy() {
     const hoy = new Date().toISOString().slice(0, 10);
-    setDesde(hoy);
-    setHasta(hoy);
+    setDesde(hoy); setHasta(hoy);
+    pushWithTab(hoy, hoy);
   }
 
   return (

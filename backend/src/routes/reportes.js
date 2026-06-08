@@ -121,4 +121,92 @@ router.get('/ventas', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/reportes/gastos ─────────────────────────────────────────────────
+// ?fecha_desde= &fecha_hasta= &sucursal_id=
+router.get('/gastos', async (req, res, next) => {
+  try {
+    const { fecha_desde, fecha_hasta } = req.query;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const primerDiaMes = hoy.slice(0, 8) + '01';
+    const desde = fecha_desde || primerDiaMes;
+    const hasta  = fecha_hasta || hoy;
+
+    const sucId = sucursalEfectiva(req);
+    const sucFiltro = sucId ? 'AND e.sucursal_id = $3' : '';
+    const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
+
+    const [resumen, porRubro, porDia, porTipo] = await Promise.all([
+
+      // KPIs del período
+      pool.query(`
+        SELECT
+          COUNT(*)::int               AS cantidad_egresos,
+          COALESCE(SUM(e.total), 0)::float  AS total_gastos,
+          COALESCE(AVG(e.total), 0)::float  AS promedio_egreso
+        FROM egresos e
+        WHERE e.fecha_emision BETWEEN $1 AND $2
+          ${sucFiltro}
+      `, baseParams),
+
+      // Por rubro → subrubro
+      pool.query(`
+        SELECT
+          COALESCE(rg.nombre, 'Sin clasificar')  AS rubro,
+          COALESCE(sg.nombre, 'Sin subrubro')    AS subrubro,
+          COUNT(*)::int                           AS cantidad,
+          COALESCE(SUM(e.total), 0)::float        AS total,
+          COALESCE(AVG(e.total), 0)::float        AS promedio,
+          e.tipo_operacion
+        FROM egresos e
+        LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+        LEFT JOIN rubros_gastos   rg ON rg.id = sg.rubro_id
+        WHERE e.fecha_emision BETWEEN $1 AND $2
+          ${sucFiltro}
+        GROUP BY rg.nombre, sg.nombre, e.tipo_operacion
+        ORDER BY SUM(e.total) DESC
+      `, baseParams),
+
+      // Gastos por día
+      pool.query(`
+        SELECT
+          gs.dia::text AS dia,
+          COALESCE(d.cantidad, 0)::int AS cantidad,
+          COALESCE(d.total, 0)::float  AS total
+        FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(dia)
+        LEFT JOIN (
+          SELECT fecha_emision::date AS dia,
+                 COUNT(*)::int AS cantidad,
+                 SUM(total)::float AS total
+          FROM egresos e
+          WHERE e.fecha_emision BETWEEN $1 AND $2
+            ${sucFiltro}
+          GROUP BY fecha_emision::date
+        ) d ON gs.dia = d.dia
+        ORDER BY gs.dia ASC
+      `, baseParams),
+
+      // Por tipo de operación
+      pool.query(`
+        SELECT
+          e.tipo_operacion,
+          COUNT(*)::int            AS cantidad,
+          SUM(e.total)::float      AS total
+        FROM egresos e
+        WHERE e.fecha_emision BETWEEN $1 AND $2
+          ${sucFiltro}
+        GROUP BY e.tipo_operacion
+        ORDER BY total DESC
+      `, baseParams),
+    ]);
+
+    res.json({
+      periodo:  { desde, hasta },
+      resumen:  resumen.rows[0],
+      por_rubro: porRubro.rows,
+      por_dia:   porDia.rows,
+      por_tipo:  porTipo.rows,
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
