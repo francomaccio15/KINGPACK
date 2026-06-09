@@ -19,7 +19,7 @@ async function queryWithUser(sql, params, usuarioId) {
   const client = await pool.connect();
   try {
     if (usuarioId) {
-      await client.query(`SET LOCAL app.usuario_id = '${usuarioId}'`);
+      await client.query('SET LOCAL app.usuario_id = $1', [String(usuarioId)]);
     }
     const result = await client.query(sql, params);
     return result;

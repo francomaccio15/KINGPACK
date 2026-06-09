@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme-set-in-env';
+if (!process.env.JWT_SECRET) {
+  console.error('[FATAL] JWT_SECRET no está definido en el entorno. El servidor no puede arrancar de forma segura.');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function verifyToken(req, res, next) {
   const auth = req.headers.authorization;
@@ -9,7 +13,7 @@ function verifyToken(req, res, next) {
   }
   const token = auth.slice(7);
   try {
-    req.usuario = jwt.verify(token, JWT_SECRET);
+    req.usuario = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido o expirado' });

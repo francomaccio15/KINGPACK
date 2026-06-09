@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const arca = require('../services/arca');
-const { sucursalEfectiva } = require('../middleware/auth');
+const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -660,7 +660,7 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
 });
 
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
-router.patch('/:id/estado', async (req, res, next) => {
+router.patch('/:id/estado', requireRol('admin', 'vendedor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
@@ -1052,7 +1052,7 @@ router.patch('/:id/observaciones', async (req, res, next) => {
 });
 
 // ─── PUT /api/ventas/:id/items — editar items y pagos de una venta existente ───
-router.put('/:id/items', async (req, res, next) => {
+router.put('/:id/items', requireRol('admin', 'vendedor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;

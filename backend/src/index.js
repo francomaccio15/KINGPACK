@@ -39,8 +39,12 @@ const PORT = parseInt(process.env.PORT, 10) || 3001;
 // Confiar en el proxy inverso (nginx) para que express-rate-limit funcione correctamente
 app.set('trust proxy', 1);
 
+if (!process.env.FRONTEND_URL) {
+  console.error('[FATAL] FRONTEND_URL no está definido en el entorno. El servidor no puede arrancar de forma segura.');
+  process.exit(1);
+}
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL || true }));
+app.use(cors({ origin: process.env.FRONTEND_URL }));
 app.use(express.json({ limit: '1mb' }));
 
 // Rutas públicas (sin JWT)
