@@ -159,10 +159,10 @@ router.get('/:id', async (req, res, next) => {
 
 // ─── PATCH /api/traspasos/:id/estado ─────────────────────────────────────────
 // Transiciones válidas:
-//   pendiente   → en_transito : sin cambio de stock (solo registra envío)
+//   pendiente   → en_transito : descuenta stock del origen (mercadería sale)
 //   pendiente   → cancelado   : sin cambio de stock
-//   en_transito → recibido    : descuenta origen Y acredita destino en un solo paso
-//   en_transito → cancelado   : sin cambio de stock (nunca se tocó)
+//   en_transito → recibido    : acredita stock en destino
+//   en_transito → cancelado   : revierte deducción del origen
 router.patch('/:id/estado', async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -204,16 +204,8 @@ router.patch('/:id/estado', async (req, res, next) => {
     await client.query('BEGIN');
 
     if (nuevoEstado === 'en_transito') {
-      // Solo registra la fecha de envío — el stock no se toca hasta confirmar recepción
-      await client.query(
-        `UPDATE traspasos SET estado = 'en_transito', fecha_envio = NOW() WHERE id = $1`,
-        [id]
-      );
-
-    } else if (nuevoEstado === 'recibido') {
-      // El destinatario confirmó: descuenta del origen y acredita en destino en una sola transacción
+      // Confirmar envío: descuenta del origen inmediatamente
       for (const item of items) {
-        // Descontar del origen
         await client.query(`
           INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
           VALUES ($1, $2, (-$3::numeric), 0)
@@ -225,9 +217,17 @@ router.patch('/:id/estado', async (req, res, next) => {
           INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
           VALUES ($1, $2, $3, $4)
         `, [item.articulo_id, t.sucursal_origen_id, -item.cantidad,
-            `Traspaso recibido — salida de ${t.sucursal_origen_nombre} → ${t.sucursal_destino_nombre} (${id})`]);
+            `Traspaso enviado — salida de ${t.sucursal_origen_nombre} → ${t.sucursal_destino_nombre} (${id})`]);
+      }
 
-        // Acreditar en destino
+      await client.query(
+        `UPDATE traspasos SET estado = 'en_transito', fecha_envio = NOW() WHERE id = $1`,
+        [id]
+      );
+
+    } else if (nuevoEstado === 'recibido') {
+      // El destinatario confirmó: solo acredita en destino (origen ya fue descontado al enviar)
+      for (const item of items) {
         await client.query(`
           INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
           VALUES ($1, $2, $3, 0)
@@ -248,7 +248,23 @@ router.patch('/:id/estado', async (req, res, next) => {
       );
 
     } else if (nuevoEstado === 'cancelado') {
-      // No hubo movimiento de stock en ningún estado previo, solo cambiar estado
+      if (t.estado === 'en_transito') {
+        // El stock ya fue descontado del origen al enviar — revertir
+        for (const item of items) {
+          await client.query(`
+            INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
+            VALUES ($1, $2, $3, 0)
+            ON CONFLICT (articulo_id, sucursal_id)
+            DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
+          `, [item.articulo_id, t.sucursal_origen_id, item.cantidad]);
+
+          await client.query(`
+            INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
+            VALUES ($1, $2, $3, $4)
+          `, [item.articulo_id, t.sucursal_origen_id, item.cantidad,
+              `Traspaso cancelado — reingreso a ${t.sucursal_origen_nombre} (${id})`]);
+        }
+      }
       await client.query(
         `UPDATE traspasos SET estado = 'cancelado' WHERE id = $1`,
         [id]

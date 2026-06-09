@@ -183,8 +183,10 @@ export default function NuevaVenta({
   const [medioPagoId2, setMedioPagoId2]         = useState<string>('');
   const [monto1Str, setMonto1Str]               = useState<string>('');
 
-  const selectedMedio = mediosPago.find(m => m.id === medioPagoId);
+  const selectedMedio  = mediosPago.find(m => m.id === medioPagoId);
+  const selectedMedio2 = mediosPago.find(m => m.id === medioPagoId2);
   const esCheque       = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
+  const esCheque2      = selectedMedio2?.nombre.toLowerCase().includes('cheque') ?? false;
   const esTransferencia = selectedMedio
     ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio.nombre.toLowerCase().includes(k))
     : false;
@@ -483,11 +485,22 @@ export default function NuevaVenta({
 
     if (usarSegundoMedio) {
       // Pago dividido: dos medios con montos explícitos
+      const chequesValidos = cheques
+        .filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
+        .map(c => ({ ...c, importe: parseFloat(c.importe) }));
       if (monto1Num > 0.001 && medioPagoId) {
-        pagos.push({ medio_pago_id: medioPagoId, monto: monto1Num });
+        pagos.push({
+          medio_pago_id: medioPagoId,
+          monto: monto1Num,
+          cheques: esCheque ? chequesValidos : undefined,
+        });
       }
       if (monto2Num > 0.001 && medioPagoId2) {
-        pagos.push({ medio_pago_id: medioPagoId2, monto: monto2Num });
+        pagos.push({
+          medio_pago_id: medioPagoId2,
+          monto: monto2Num,
+          cheques: esCheque2 ? chequesValidos : undefined,
+        });
       }
     } else if (saldoRestante > 0.001 && medioPagoId) {
       pagos.push({
@@ -1271,7 +1284,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cheques ──────────────────────────────────────────── */}
-                  {esCheque && !usarSegundoMedio && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                  {(usarSegundoMedio ? (esCheque || esCheque2) : esCheque) && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
