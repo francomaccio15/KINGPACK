@@ -1,8 +1,10 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { sucursalEfectiva } = require('../middleware/auth');
+const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 
 const router = express.Router();
+
+router.use(requireRol('administrador', 'supervisor'));
 
 router.get('/', async (req, res, next) => {
   try {

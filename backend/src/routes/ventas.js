@@ -660,7 +660,7 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
 });
 
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
-router.patch('/:id/estado', requireRol('admin', 'vendedor'), async (req, res, next) => {
+router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
@@ -1052,7 +1052,7 @@ router.patch('/:id/observaciones', async (req, res, next) => {
 });
 
 // ─── PUT /api/ventas/:id/items — editar items y pagos de una venta existente ───
-router.put('/:id/items', requireRol('admin', 'vendedor'), async (req, res, next) => {
+router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;

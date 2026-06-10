@@ -1,7 +1,9 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { sucursalEfectiva } = require('../middleware/auth');
+const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 const router = express.Router();
+
+router.use(requireRol('administrador', 'supervisor'));
 
 // GET /api/reportes/ventas
 // ?fecha_desde=  ISO date (default: first day of current month)
