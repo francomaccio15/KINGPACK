@@ -222,14 +222,14 @@ export default async function ArticulosPage({
             )}
           </div>
         </div>
-        {!esCajero && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          {!esCajero && (
             <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
-            {listaActiva && (
-              <ExportarPDF lista={listaActiva} categorias={categorias} />
-            )}
-          </div>
-        )}
+          )}
+          {listaActiva && (
+            <ExportarPDF lista={listaActiva} categorias={categorias} />
+          )}
+        </div>
       </div>
 
       {/* ── Tabs por lista ── */}
