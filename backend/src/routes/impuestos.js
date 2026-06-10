@@ -80,10 +80,11 @@ router.get('/libro-iva-ventas', async (req, res, next) => {
       LEFT JOIN articulos   a  ON a.id  = vi.articulo_id
       LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
       LEFT JOIN LATERAL (
-        SELECT tipo_comprobante, punto_venta, numero, cae
-          FROM facturaciones
-         WHERE venta_id = v.id AND ok = true
-         ORDER BY created_at DESC LIMIT 1
+        SELECT tc.descripcion AS tipo_comprobante, f.punto_venta, f.numero, f.cae
+          FROM facturaciones f
+          LEFT JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
+         WHERE f.venta_id = v.id AND f.ok = true
+         ORDER BY f.created_at DESC LIMIT 1
       ) f ON true
       WHERE ${where}
       GROUP BY

@@ -233,8 +233,8 @@ router.get('/gastos', async (req, res, next) => {
           e.fecha_emision::text           AS fecha,
           COALESCE(rg.nombre, 'Sin rubro')    AS rubro,
           COALESCE(sg.nombre, 'Sin subrubro') AS subrubro,
-          COALESCE(pr.razon_social, e.descripcion_general, '—') AS proveedor,
-          e.descripcion_general           AS descripcion,
+          COALESCE(pr.razon_social, e.descripcion, '—') AS proveedor,
+          e.descripcion                   AS descripcion,
           e.total::float                  AS monto,
           e.estado_pago,
           s.nombre                        AS sucursal
