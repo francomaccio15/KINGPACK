@@ -202,7 +202,9 @@ router.post('/:id/movimiento', async (req, res, next) => {
 
 // ─── PATCH /api/caja/movimiento/:movId ───────────────────────────────────────
 // Body: concepto, monto  — solo retiros y egresos (gastos)
+// La edición queda registrada en audit_log (trigger sobre movimientos_caja).
 router.patch('/movimiento/:movId', async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { movId } = req.params;
     const { concepto, monto } = req.body;
@@ -210,17 +212,34 @@ router.patch('/movimiento/:movId', async (req, res, next) => {
     if (!concepto?.trim()) return res.status(400).json({ error: 'concepto es requerido' });
     if (!monto || parseFloat(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
-    const { rows } = await pool.query(`
+    await client.query('BEGIN');
+
+    // Setear el usuario en la sesión para que el trigger de auditoría lo capture
+    const usuario_id = req.usuario?.id ?? null;
+    if (usuario_id) {
+      await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+    }
+
+    const { rows } = await client.query(`
       UPDATE movimientos_caja
       SET concepto = $1, monto = $2
       WHERE id = $3 AND tipo IN ('retiro', 'egreso')
       RETURNING id, tipo, concepto, monto, fecha
     `, [concepto.trim(), parseFloat(monto), movId]);
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Movimiento no encontrado o no editable' });
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Movimiento no encontrado o no editable' });
+    }
 
+    await client.query('COMMIT');
     res.json({ movimiento: rows[0] });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── POST /api/caja/:id/cerrar ────────────────────────────────────────────────
