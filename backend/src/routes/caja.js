@@ -201,7 +201,7 @@ router.post('/:id/movimiento', async (req, res, next) => {
 });
 
 // ─── PATCH /api/caja/movimiento/:movId ───────────────────────────────────────
-// Body: concepto, monto  — solo retiros
+// Body: concepto, monto  — solo retiros y egresos (gastos)
 router.patch('/movimiento/:movId', async (req, res, next) => {
   try {
     const { movId } = req.params;
@@ -213,11 +213,11 @@ router.patch('/movimiento/:movId', async (req, res, next) => {
     const { rows } = await pool.query(`
       UPDATE movimientos_caja
       SET concepto = $1, monto = $2
-      WHERE id = $3 AND tipo = 'retiro'
+      WHERE id = $3 AND tipo IN ('retiro', 'egreso')
       RETURNING id, tipo, concepto, monto, fecha
     `, [concepto.trim(), parseFloat(monto), movId]);
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Retiro no encontrado' });
+    if (rows.length === 0) return res.status(404).json({ error: 'Movimiento no encontrado o no editable' });
 
     res.json({ movimiento: rows[0] });
   } catch (err) { next(err); }

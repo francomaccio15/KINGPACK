@@ -44,14 +44,25 @@ const FILTROS: { key: Filtro; label: string }[] = [
   { key: 'retiro',  label: 'Retiros' },
 ];
 
-function EditRetiroModal({
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiFetch = (p: string, o: RequestInit = {}) => {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
+  return fetch(`${API}${p}`, {
+    ...o,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(o.headers as Record<string, string> || {}),
+      ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    },
+  });
+};
+
+function EditMovimientoModal({
   movimiento,
-  apiBase,
   onClose,
   onSaved,
 }: {
   movimiento: Movimiento;
-  apiBase: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -60,15 +71,15 @@ function EditRetiroModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const tipoLabel = TIPO_LABEL[movimiento.tipo] ?? movimiento.tipo;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${apiBase}/api/caja/movimiento/${movimiento.id}`, {
+      const res = await apiFetch(`/api/caja/movimiento/${movimiento.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ concepto, monto: parseFloat(monto) }),
       });
       const data = await res.json();
@@ -87,7 +98,7 @@ function EditRetiroModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border">
           <div className="flex items-center gap-2">
             <span className="w-1 h-5 bg-amber-400 rounded-full block" />
-            <h2 className="text-base font-bold">Editar Retiro</h2>
+            <h2 className="text-base font-bold">Editar {tipoLabel}</h2>
           </div>
           <button
             onClick={onClose}
@@ -171,8 +182,6 @@ export default function MovimientosTabla({
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [editando, setEditando] = useState<Movimiento | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
-
   const filtrados = filtro === 'todos'
     ? movimientos
     : movimientos.filter(m => m.tipo === filtro);
@@ -194,9 +203,8 @@ export default function MovimientosTabla({
   return (
     <>
       {editando && (
-        <EditRetiroModal
+        <EditMovimientoModal
           movimiento={editando}
-          apiBase={apiBase}
           onClose={() => setEditando(null)}
           onSaved={() => { setEditando(null); router.refresh(); }}
         />
@@ -247,7 +255,7 @@ export default function MovimientosTabla({
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Concepto</th>
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Medio de Pago</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Monto</th>
-              {esAdmin && <th className="w-10 px-2 py-3" />}
+              <th className="w-10 px-2 py-3" />
             </tr>
           </thead>
           <tbody className="bg-kp-surface divide-y divide-kp-border">
@@ -286,28 +294,26 @@ export default function MovimientosTabla({
                   <td className={`px-4 py-3 text-right tabular-nums font-semibold ${esIngreso ? 'text-green-400' : 'text-kp-red'}`}>
                     {esIngreso ? '+' : '−'}{fmt(m.monto)}
                   </td>
-                  {esAdmin && (
-                    <td className="px-2 py-3 text-center">
-                      {m.tipo === 'retiro' && (
-                        <button
-                          onClick={() => setEditando(m)}
-                          title="Editar retiro"
-                          className="p-1.5 rounded-lg text-kp-gray hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                      )}
-                    </td>
-                  )}
+                  <td className="px-2 py-3 text-center">
+                    {(m.tipo === 'retiro' || m.tipo === 'egreso') && (
+                      <button
+                        onClick={() => setEditando(m)}
+                        title={`Editar ${TIPO_LABEL[m.tipo] ?? m.tipo}`}
+                        className="p-1.5 rounded-lg text-kp-gray hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={esAdmin ? 6 : 5} className="px-4 py-10 text-center text-kp-gray text-sm">
+                <td colSpan={6} className="px-4 py-10 text-center text-kp-gray text-sm">
                   No hay movimientos{filtro !== 'todos' ? ` de tipo "${TIPO_LABEL[filtro] ?? filtro}"` : !esAdmin ? ' en efectivo' : ''}.
                 </td>
               </tr>
@@ -330,7 +336,7 @@ export default function MovimientosTabla({
                     {totalIngresos - totalEgresos >= 0 ? '+' : ''}{fmt(totalIngresos - totalEgresos)}
                   </span>
                 </td>
-                {esAdmin && <td />}
+                <td />
               </tr>
             </tfoot>
           )}
