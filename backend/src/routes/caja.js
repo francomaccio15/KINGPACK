@@ -200,6 +200,29 @@ router.post('/:id/movimiento', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── PATCH /api/caja/movimiento/:movId ───────────────────────────────────────
+// Body: concepto, monto  — solo retiros
+router.patch('/movimiento/:movId', async (req, res, next) => {
+  try {
+    const { movId } = req.params;
+    const { concepto, monto } = req.body;
+
+    if (!concepto?.trim()) return res.status(400).json({ error: 'concepto es requerido' });
+    if (!monto || parseFloat(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
+
+    const { rows } = await pool.query(`
+      UPDATE movimientos_caja
+      SET concepto = $1, monto = $2
+      WHERE id = $3 AND tipo = 'retiro'
+      RETURNING id, tipo, concepto, monto, fecha
+    `, [concepto.trim(), parseFloat(monto), movId]);
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Retiro no encontrado' });
+
+    res.json({ movimiento: rows[0] });
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/caja/:id/cerrar ────────────────────────────────────────────────
 // Body: saldo_final_real
 router.post('/:id/cerrar', async (req, res, next) => {
