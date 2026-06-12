@@ -24,6 +24,9 @@ build/
 *.sql.gz
 *.dump
 
+# Artefactos generados de migración
+KingPack-Articulos-Correccion.xlsx
+
 # Claude / agent local state
 .claude/
 .agent/
