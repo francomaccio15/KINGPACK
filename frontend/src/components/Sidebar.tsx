@@ -126,6 +126,23 @@ const IcoCheques = () => (
     <line x1="14" y1="15" x2="18" y2="15" />
   </svg>
 );
+const IcoProveedores = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M1 3h15v13H1z" /><path d="M16 8h4l3 3v5h-7V8z" />
+    <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+  </svg>
+);
+const IcoRubros = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+const IcoBanco = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <line x1="3" y1="22" x2="21" y2="22" /><line x1="6" y1="18" x2="6" y2="11" /><line x1="10" y1="18" x2="10" y2="11" />
+    <line x1="14" y1="18" x2="14" y2="11" /><line x1="18" y1="18" x2="18" y2="11" /><polygon points="12 2 20 7 4 7" />
+  </svg>
+);
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -144,6 +161,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
       { label: 'Gastos',                href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
+      { label: 'Proveedores',           href: '/proveedores',          icon: <IcoProveedores /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
       { label: 'Cheques',               href: '/cheques',              icon: <IcoCheques /> },
@@ -168,6 +186,13 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Rep. Gastos',    href: '/reportes?tab=gastos',        icon: <IcoGastos />     },
       { label: 'Edo. Resultados',href: '/reportes?tab=er',            icon: <IcoImpuestos />  },
       { label: 'Impuestos',  href: '/impuestos',  icon: <IcoImpuestos />  },
+    ],
+  },
+  {
+    label: 'Configuración',
+    items: [
+      { label: 'Rubros de Gastos',   href: '/rubros-gastos',      icon: <IcoRubros /> },
+      { label: 'Cuentas Bancarias',  href: '/cuentas-bancarias',  icon: <IcoBanco /> },
     ],
   },
 ];
