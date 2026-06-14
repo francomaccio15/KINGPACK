@@ -25,16 +25,16 @@ router.get('/', async (req, res, next) => {
 });
 
 // ─── POST /api/cuentas-bancarias ──────────────────────────────────────────────
-// Body: { nombre, banco?, cbu? }
+// Body: { nombre, banco?, titular?, alias?, cbu? }
 router.post('/', async (req, res, next) => {
   try {
-    const { nombre, banco, cbu } = req.body;
+    const { nombre, banco, titular, alias, cbu } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ error: 'nombre es requerido' });
 
     const { rows } = await pool.query(
-      `INSERT INTO cuentas_bancarias_empresa (nombre, banco, cbu)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [nombre.trim(), banco?.trim() || null, cbu?.trim() || null]
+      `INSERT INTO cuentas_bancarias_empresa (nombre, banco, titular, alias, cbu)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [nombre.trim(), banco?.trim() || null, titular?.trim() || null, alias?.trim() || null, cbu?.trim() || null]
     );
     res.status(201).json({ cuenta: rows[0] });
   } catch (err) { next(err); }
@@ -43,7 +43,7 @@ router.post('/', async (req, res, next) => {
 // ─── PUT /api/cuentas-bancarias/:id ──────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
   try {
-    const fields = ['nombre', 'banco', 'cbu', 'activo'];
+    const fields = ['nombre', 'banco', 'titular', 'alias', 'cbu', 'activo'];
     const updates = [];
     const params = [];
     let idx = 1;

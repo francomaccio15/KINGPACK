@@ -51,6 +51,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 // ─── Formulario simple de nombre ──────────────────────────────────────────────
 function FormNombre({
   label, placeholder, accion, onGuardar, onCerrar, extraOrden,
+  inicialNombre, inicialOrden, textoBoton,
 }: {
   label: string;
   placeholder: string;
@@ -58,9 +59,12 @@ function FormNombre({
   onGuardar: () => void;
   onCerrar: () => void;
   extraOrden?: boolean;
+  inicialNombre?: string;
+  inicialOrden?: number;
+  textoBoton?: string;
 }) {
-  const [nombre, setNombre] = useState('');
-  const [orden,  setOrden]  = useState('');
+  const [nombre, setNombre] = useState(inicialNombre ?? '');
+  const [orden,  setOrden]  = useState(inicialOrden != null ? String(inicialOrden) : '');
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
@@ -106,7 +110,7 @@ function FormNombre({
         </button>
         <button onClick={handleSubmit} disabled={saving}
           className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
-          {saving ? <><Spinner /> Guardando…</> : 'Guardar'}
+          {saving ? <><Spinner /> Guardando…</> : (textoBoton ?? 'Guardar')}
         </button>
       </div>
     </div>
@@ -120,6 +124,8 @@ export default function RubrosClient() {
 
   const [modalRubro,    setModalRubro]    = useState(false);
   const [modalSubrubro, setModalSubrubro] = useState<Rubro | null>(null);
+  const [editRubro,     setEditRubro]     = useState<Rubro | null>(null);
+  const [editSubrubro,  setEditSubrubro]  = useState<Subrubro | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -172,12 +178,21 @@ export default function RubrosClient() {
             <div key={r.id} className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden flex flex-col">
               <div className="flex items-center justify-between px-4 py-3 bg-kp-surface2 border-b border-kp-border">
                 <h3 className="font-semibold text-kp-white text-sm">{r.nombre}</h3>
-                <button onClick={() => setModalSubrubro(r)} title="Agregar subrubro"
-                  className="p-1.5 rounded-lg text-kp-gray hover:text-kp-red hover:bg-kp-red/10 transition-colors">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEditRubro(r)} title="Editar rubro"
+                    className="p-1.5 rounded-lg text-kp-gray hover:text-kp-white hover:bg-kp-border/40 transition-colors">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button onClick={() => setModalSubrubro(r)} title="Agregar subrubro"
+                    className="p-1.5 rounded-lg text-kp-gray hover:text-kp-red hover:bg-kp-red/10 transition-colors">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="p-4 flex-1">
                 {r.subrubros.length === 0 ? (
@@ -185,9 +200,16 @@ export default function RubrosClient() {
                 ) : (
                   <ul className="space-y-1.5">
                     {r.subrubros.map(s => (
-                      <li key={s.id} className="flex items-center gap-2 text-sm text-kp-gray-lt">
+                      <li key={s.id} className="group flex items-center gap-2 text-sm text-kp-gray-lt">
                         <span className="w-1 h-1 rounded-full bg-kp-red shrink-0" />
-                        {s.nombre}
+                        <span className="flex-1">{s.nombre}</span>
+                        <button onClick={() => setEditSubrubro(s)} title="Editar subrubro"
+                          className="p-1 rounded text-kp-gray opacity-0 group-hover:opacity-100 hover:text-kp-white transition-all">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -221,6 +243,38 @@ export default function RubrosClient() {
             accion={(nombre) => apiFetch(`/api/rubros-gastos/${modalSubrubro.id}/subrubros`, { method: 'POST', body: JSON.stringify({ nombre }) })}
             onGuardar={() => { setModalSubrubro(null); cargar(); }}
             onCerrar={() => setModalSubrubro(null)}
+          />
+        </Modal>
+      )}
+
+      {/* Modal Editar rubro */}
+      {editRubro && (
+        <Modal title="Editar rubro" onClose={() => setEditRubro(null)}>
+          <FormNombre
+            label="Nombre del rubro"
+            placeholder="Ej: Servicios, Impuestos, Logística…"
+            extraOrden
+            inicialNombre={editRubro.nombre}
+            inicialOrden={editRubro.orden}
+            textoBoton="Guardar cambios"
+            accion={(nombre, orden) => apiFetch(`/api/rubros-gastos/${editRubro.id}`, { method: 'PUT', body: JSON.stringify({ nombre, orden }) })}
+            onGuardar={() => { setEditRubro(null); cargar(); }}
+            onCerrar={() => setEditRubro(null)}
+          />
+        </Modal>
+      )}
+
+      {/* Modal Editar subrubro */}
+      {editSubrubro && (
+        <Modal title="Editar subrubro" onClose={() => setEditSubrubro(null)}>
+          <FormNombre
+            label="Nombre del subrubro"
+            placeholder="Ej: Luz, Agua, Combustible…"
+            inicialNombre={editSubrubro.nombre}
+            textoBoton="Guardar cambios"
+            accion={(nombre) => apiFetch(`/api/rubros-gastos/subrubros/${editSubrubro.id}`, { method: 'PUT', body: JSON.stringify({ nombre }) })}
+            onGuardar={() => { setEditSubrubro(null); cargar(); }}
+            onCerrar={() => setEditSubrubro(null)}
           />
         </Modal>
       )}

@@ -65,11 +65,13 @@ function FormCuenta({
 }) {
   const esEdicion = !!inicial;
 
-  const [nombre, setNombre] = useState(inicial?.nombre ?? '');
-  const [banco,  setBanco]  = useState(inicial?.banco  ?? '');
-  const [cbu,    setCbu]    = useState(inicial?.cbu    ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
+  const [nombre,  setNombre]  = useState(inicial?.nombre  ?? '');
+  const [banco,   setBanco]   = useState(inicial?.banco   ?? '');
+  const [titular, setTitular] = useState(inicial?.titular ?? '');
+  const [alias,   setAlias]   = useState(inicial?.alias   ?? '');
+  const [cbu,     setCbu]     = useState(inicial?.cbu     ?? '');
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
 
   const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
@@ -79,7 +81,13 @@ function FormCuenta({
     if (!nombre.trim()) return setError('El nombre es requerido');
     setSaving(true);
     try {
-      const body = { nombre: nombre.trim(), banco: banco.trim() || null, cbu: cbu.trim() || null };
+      const body = {
+        nombre:  nombre.trim(),
+        banco:   banco.trim()   || null,
+        titular: titular.trim() || null,
+        alias:   alias.trim()   || null,
+        cbu:     cbu.trim()     || null,
+      };
       const res  = await apiFetch(
         esEdicion ? `/api/cuentas-bancarias/${inicial!.id}` : '/api/cuentas-bancarias',
         { method: esEdicion ? 'PUT' : 'POST', body: JSON.stringify(body) }
@@ -107,9 +115,19 @@ function FormCuenta({
           placeholder="Ej: Banco Macro" className={inputCls} />
       </div>
       <div>
-        <label className={labelCls}>CBU / Alias</label>
+        <label className={labelCls}>Titular</label>
+        <input type="text" value={titular} onChange={e => setTitular(e.target.value)}
+          placeholder="Titular de la cuenta" className={inputCls} />
+      </div>
+      <div>
+        <label className={labelCls}>Alias</label>
+        <input type="text" value={alias} onChange={e => setAlias(e.target.value)}
+          placeholder="Alias de la cuenta" className={inputCls} />
+      </div>
+      <div>
+        <label className={labelCls}>CBU</label>
         <input type="text" value={cbu} onChange={e => setCbu(e.target.value)}
-          placeholder="CBU o alias de la cuenta" className={inputCls} />
+          placeholder="CBU de la cuenta" className={inputCls} />
       </div>
       {error && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>}
       <div className="flex gap-3 pt-2">
@@ -206,8 +224,15 @@ export default function CuentasClient() {
               {cuentas.map(c => (
                 <tr key={c.id} className={`bg-kp-surface hover:bg-kp-surface2 transition-colors ${!c.activo ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3 font-medium text-kp-white">{c.nombre}</td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{c.banco || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-kp-gray">{c.cbu || c.alias || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-kp-gray-lt">
+                    {c.banco || '—'}
+                    {c.titular && <span className="block text-kp-gray">{c.titular}</span>}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-kp-gray">
+                    {c.alias && <span className="block">{c.alias}</span>}
+                    {c.cbu && <span className="block">{c.cbu}</span>}
+                    {!c.alias && !c.cbu && '—'}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => toggleActivo(c)}
