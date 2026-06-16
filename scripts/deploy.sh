@@ -23,9 +23,14 @@ echo "[3/6] Frontend: npm install + build..."
 # sirve como "Could not find a production build". Borrarlo garantiza build sano.
 (cd frontend && rm -rf .next && npm run build)
 
-echo "[4/6] PM2 reload..."
+echo "[4/6] PM2..."
 if pm2 describe kingpack-backend >/dev/null 2>&1; then
-  pm2 reload ecosystem.config.js
+  # Backend: reload graceful (es node plano, sin estado de build en disco).
+  pm2 reload kingpack-backend
+  # Frontend: restart DURO, no reload. Tras el 'rm -rf .next' el proceso viejo de
+  # 'next start' queda con referencias a chunks borrados -> MODULE_NOT_FOUND. Un
+  # reload graceful no lo arregla; hay que matar y arrancar fresco contra el .next nuevo.
+  pm2 restart kingpack-frontend
 else
   pm2 start ecosystem.config.js
   pm2 save
@@ -35,8 +40,14 @@ echo "[5/6] Nginx reload..."
 nginx -t && systemctl reload nginx
 
 echo "[6/6] Health check..."
-sleep 2
 curl -fsS http://127.0.0.1:3001/api/health && echo
-curl -fsS -o /dev/null -w "Frontend HTTP %{http_code}\n" http://127.0.0.1:3000/
+# El frontend (next start) tarda unos segundos en quedar listo tras el restart;
+# reintentar hasta 30s antes de dar el deploy por fallido.
+for i in $(seq 1 15); do
+  code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/login || true)
+  if [ "$code" = "200" ]; then echo "Frontend HTTP 200 (listo en ${i}x2s)"; break; fi
+  if [ "$i" = "15" ]; then echo "✗ Frontend no respondió 200 (último: $code)"; exit 1; fi
+  sleep 2
+done
 
 echo "✓ Deploy OK."
