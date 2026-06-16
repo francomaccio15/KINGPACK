@@ -23,7 +23,14 @@ function esErrorDeChunk(error: Error & { name?: string }) {
     msg.includes('loading css chunk') ||
     msg.includes('failed to fetch dynamically imported module') ||
     msg.includes('error loading dynamically imported module') ||
-    msg.includes('importing a module script failed')
+    msg.includes('importing a module script failed') ||
+    // Desfase de deploy: la SPA vieja pide un Server Action / payload RSC que
+    // ya no existe en el build nuevo del servidor. Mismo origen que el
+    // ChunkLoadError (bundle viejo en una pestaña abierta), distinto síntoma.
+    msg.includes('failed to find server action') ||
+    msg.includes('older or newer deployment') ||
+    msg.includes('connection closed') ||
+    (msg.includes('failed to fetch') && msg.includes('rsc'))
   );
 }
 
