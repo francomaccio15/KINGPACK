@@ -18,7 +18,10 @@ echo "[2/6] Backend: npm install + migraciones..."
 
 echo "[3/6] Frontend: npm install + build..."
 (cd frontend && npm install --no-audit --no-fund)
-(cd frontend && npm run build)
+# Build limpio: un .next de un build previo provoca ENOENT en collect-build-traces
+# (busca .nft.json que no se regeneran) y deja artefactos viejos que el server
+# sirve como "Could not find a production build". Borrarlo garantiza build sano.
+(cd frontend && rm -rf .next && npm run build)
 
 echo "[4/6] PM2 reload..."
 if pm2 describe kingpack-backend >/dev/null 2>&1; then
