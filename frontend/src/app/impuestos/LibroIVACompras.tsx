@@ -31,12 +31,14 @@ function fmt(n: string | number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(Number(n));
 }
 function fmtFecha(iso: string) {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR');
+  // El backend puede mandar 'YYYY-MM-DD' o un ISO completo 'YYYY-MM-DDTHH:mm:ssZ'.
+  // Tomamos solo la fecha y forzamos medianoche local para evitar corrimiento de zona horaria.
+  return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('es-AR');
 }
-function fmtComp(tipo: string, pv: string | null, nro: string | null) {
+function fmtComp(tipo: string, pv: string | number | null, nro: string | number | null) {
   const label = tipo.replace('factura_', 'F ').replace('nota_credito_', 'NC ').replace('nota_debito_', 'ND ').toUpperCase();
   if (!pv || !nro) return label;
-  return `${label} ${pv.padStart(5, '0')}-${nro.padStart(8, '0')}`;
+  return `${label} ${String(pv).padStart(5, '0')}-${String(nro).padStart(8, '0')}`;
 }
 const TIPO_OP_LABEL: Record<string, string> = {
   compra_mercaderia:    'Mercadería',
