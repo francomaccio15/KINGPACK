@@ -641,7 +641,7 @@ export default function DashboardView({
             <h1 className="text-xl font-bold text-kp-white">Resumen diario</h1>
           </div>
           <p className="text-sm text-kp-gray pl-3">
-            {greeting}, <span className="text-kp-white font-medium">{userName.split(' ')[0]}</span>
+            {greeting}, <span className="text-kp-white font-medium">{(userName ?? '').split(' ')[0]}</span>
             {' · '}
             <span className="capitalize">
               {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
