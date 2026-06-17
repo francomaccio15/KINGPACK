@@ -109,8 +109,8 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
 
   promises.push(
     serverFetch(`/api/ventas/medios-pago`, { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : { medios: [] })
-      .then(d => { mediosPago = d.medios ?? []; })
+      .then(r => r.ok ? r.json() : { medios_pago: [] })
+      .then(d => { mediosPago = d.medios_pago ?? d.medios ?? []; })
       .catch(() => {})
   );
 
