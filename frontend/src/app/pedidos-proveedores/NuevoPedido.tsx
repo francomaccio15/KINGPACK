@@ -52,7 +52,6 @@ export default function NuevoPedido({
   const [sucursalId, setSucursalId]   = useState(sucursales[0]?.id ?? '');
   const [proveedorId, setProveedorId] = useState('');
   const [nroFactura, setNroFactura]   = useState('');
-  const [flete, setFlete]             = useState('');
   const [items, setItems]             = useState<LineItem[]>([]);
 
   // ── Artículo dropdown ───────────────────────────────────────────────────────
@@ -86,7 +85,6 @@ export default function NuevoPedido({
     setSucursalId(sucursales[0]?.id ?? '');
     setProveedorId('');
     setNroFactura('');
-    setFlete('');
     setItems([]);
     setArtQ('');
     setDropOpen(false);
@@ -125,9 +123,8 @@ export default function NuevoPedido({
   };
 
   // ── Totales ─────────────────────────────────────────────────────────────────
-  const fleteNum      = parseFloat(flete) || 0;
   const totalMerc     = items.reduce((s, i) => s + i.precio_compra * i.cantidad, 0);
-  const totalGeneral  = totalMerc + fleteNum;
+  const totalGeneral  = totalMerc;
 
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -145,7 +142,6 @@ export default function NuevoPedido({
           proveedor_id: proveedorId,
           sucursal_id: sucursalId,
           numero_factura_prov: nroFactura || null,
-          costo_flete_total: fleteNum,
           items: items.map(i => ({
             articulo_id: i.articulo_id,
             cantidad: i.cantidad,
@@ -236,27 +232,16 @@ export default function NuevoPedido({
                   </div>
                 </div>
 
-                {/* Nº Factura + Flete */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls}>Nº Factura Proveedor</label>
-                    <input
-                      type="text"
-                      placeholder="0001-00012345"
-                      value={nroFactura}
-                      onChange={e => setNroFactura(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Costo de Flete</label>
-                    <NumericInput
-                      placeholder="0.00"
-                      value={flete}
-                      onChange={e => setFlete(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
+                {/* Nº Factura */}
+                <div>
+                  <label className={labelCls}>Nº Factura Proveedor</label>
+                  <input
+                    type="text"
+                    placeholder="0001-00012345"
+                    value={nroFactura}
+                    onChange={e => setNroFactura(e.target.value)}
+                    className={inputCls}
+                  />
                 </div>
 
                 {/* Dropdown de artículos */}
@@ -387,10 +372,6 @@ export default function NuevoPedido({
                   <div className="flex justify-between text-sm">
                     <span className="text-kp-gray">Mercadería</span>
                     <span className="tabular-nums text-kp-white">{ars.format(totalMerc)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-kp-gray">Flete</span>
-                    <span className="tabular-nums text-kp-gray-lt">{ars.format(fleteNum)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-kp-gray">Artículos</span>
