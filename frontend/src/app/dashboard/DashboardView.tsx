@@ -45,17 +45,21 @@ export type DashboardData = {
   ventas_ayer:       { cantidad: number; monto: number };
   ventas_mes:        { cantidad: number; monto: number };
   ventas_mes_ant:    { cantidad: number; monto: number };
-  egresos_hoy:       { monto: number };
-  egresos_ayer:      { monto: number };
-  egresos_mes:       { monto: number };
-  egresos_mes_ant:   { monto: number };
+  costo_mercaderia_hoy:     { monto: number };
+  costo_mercaderia_ayer:    { monto: number };
+  costo_mercaderia_mes:     { monto: number };
+  costo_mercaderia_mes_ant: { monto: number };
+  gastos_operativos_hoy:     { monto: number };
+  gastos_operativos_ayer:    { monto: number };
+  gastos_operativos_mes:     { monto: number };
+  gastos_operativos_mes_ant: { monto: number };
   resultado_hoy:     number;
   resultado_ayer:    number;
   resultado_mes:     number;
   resultado_mes_ant: number;
   stock_bajo:        number;
   pedidos_pendientes: number;
-  ventas_7dias:      DayData[];
+  ventas_mes_diario: DayData[];
   ultimas_ventas: {
     id: string; numero: number; total: number;
     fecha: string; estado: string; cliente: string | null;
@@ -160,75 +164,6 @@ function QuickAction({ href, label, sub, iconBg, iconColor, icon }: {
         <p className="text-xs text-kp-gray mt-1">{sub}</p>
       </div>
     </Link>
-  );
-}
-
-function AreaChart({ data }: { data: DayData[] }) {
-  const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  const W = 560; const H = 110;
-  const PL = 4; const PR = 4; const PT = 20; const PB = 26;
-  const cW = W - PL - PR;
-  const cH = H - PT - PB;
-  const n   = data.length;
-  const max = Math.max(...data.map(d => d.monto), 1);
-
-  const pts = data.map((d, i) => ({
-    x: PL + (n === 1 ? cW / 2 : (i / (n - 1)) * cW),
-    y: PT + cH - (d.monto / max) * cH,
-    ...d,
-    dayLabel: DAYS[new Date(d.dia + 'T12:00:00').getDay()],
-    isToday: i === n - 1,
-  }));
-
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const area = n > 1
-    ? `${line} L${pts[n-1].x.toFixed(1)},${(PT+cH).toFixed(1)} L${pts[0].x.toFixed(1)},${(PT+cH).toFixed(1)} Z`
-    : '';
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 110 }}>
-      <defs>
-        <linearGradient id="kp-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="#e3000f" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#e3000f" stopOpacity="0.01" />
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines */}
-      {[0.33, 0.66].map(f => (
-        <line key={f}
-          x1={PL} y1={(PT + cH * (1 - f)).toFixed(1)}
-          x2={W - PR} y2={(PT + cH * (1 - f)).toFixed(1)}
-          stroke="#2d2d2d" strokeWidth="1" strokeDasharray="3 4"
-        />
-      ))}
-
-      {/* Area + line */}
-      {n > 1 && <path d={area} fill="url(#kp-area)" />}
-      {n > 1 && <path d={line} fill="none" stroke="#e3000f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
-
-      {/* Points + labels */}
-      {pts.map(p => (
-        <g key={p.dia}>
-          {/* Value above dot */}
-          {p.monto > 0 && (
-            <text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="9" fill={p.isToday ? '#ffffff' : '#8a8a8a'} fontWeight={p.isToday ? '700' : '400'}>
-              {fmtCompact(p.monto)}
-            </text>
-          )}
-          {/* Outer ring on today */}
-          {p.isToday && <circle cx={p.x} cy={p.y} r="7" fill="none" stroke="#e3000f" strokeWidth="1.5" strokeOpacity="0.4" />}
-          {/* Dot */}
-          <circle cx={p.x} cy={p.y} r={p.isToday ? 4.5 : 3} fill={p.isToday ? '#e3000f' : '#b80000'} />
-          {/* Day label */}
-          <text x={p.x} y={H - 5} textAnchor="middle" fontSize="10"
-            fill={p.isToday ? '#e3000f' : '#8a8a8a'}
-            fontWeight={p.isToday ? '700' : '400'}>
-            {p.isToday ? 'Hoy' : p.dayLabel}
-          </text>
-        </g>
-      ))}
-    </svg>
   );
 }
 
@@ -343,7 +278,6 @@ function ChequesPanel({ titulo, cheques, acento }: {
 const IcoCart   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
 const IcoReceipt= () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="9" x2="16" y2="9"/></svg>;
 const IcoTrend  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
-const IcoPct    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4.5 h-4.5"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>;
 const IcoBox    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 2 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>;
 const IcoOrder  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
 const IcoRefresh= () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg>;
@@ -593,6 +527,99 @@ function CuentasBancariasPanel({
   );
 }
 
+// ─── VentasMesTabla: registro diario del mes en curso ─────────────────────────
+function VentasMesTabla({ data }: { data: DayData[] }) {
+  const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const totalMonto = data.reduce((a, d) => a + d.monto, 0);
+  const totalOps   = data.reduce((a, d) => a + d.cantidad, 0);
+  const maxMonto   = Math.max(...data.map(d => d.monto), 1);
+  const hoyStr     = new Date().toISOString().slice(0, 10);
+
+  // Acumulado del mes hasta cada día (orden ascendente)
+  let acum = 0;
+  const filas = data.map(d => {
+    acum += d.monto;
+    const fecha = new Date(d.dia + 'T12:00:00');
+    return {
+      ...d,
+      acumulado: acum,
+      esHoy: d.dia === hoyStr,
+      dayLabel: DAYS[fecha.getDay()],
+      diaNum: fecha.getDate(),
+    };
+  });
+
+  const mesLabel = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+
+  return (
+    <section className="rounded-xl border border-kp-border overflow-hidden">
+      <div className="px-4 py-3 border-b border-kp-border bg-kp-surface2 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-kp-white">Registro de ventas del mes</p>
+          <p className="text-xs text-kp-gray mt-0.5 capitalize">
+            {mesLabel} · día por día hasta hoy
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span className="text-xs text-kp-gray">{totalOps} operaciones</span>
+          <span className="text-sm font-bold text-kp-white">{fmt(totalMonto)}</span>
+        </div>
+      </div>
+      <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+        <table className="w-full text-sm bg-kp-surface">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-kp-border bg-kp-surface2">
+              <th className="px-4 py-2.5 text-left  text-[10px] font-bold uppercase tracking-wider text-kp-gray">Día</th>
+              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Operaciones</th>
+              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Ventas del día</th>
+              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Acumulado mes</th>
+              <th className="px-4 py-2.5 text-left  text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell w-[28%]"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-kp-border">
+            {filas.map(f => {
+              const pct = (f.monto / maxMonto) * 100;
+              return (
+                <tr key={f.dia} className={`transition-colors ${f.esHoy ? 'bg-kp-red/5' : 'hover:bg-kp-surface2'}`}>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <span className={`text-xs font-semibold ${f.esHoy ? 'text-kp-red' : 'text-kp-white'}`}>
+                      {String(f.diaNum).padStart(2, '0')}
+                    </span>
+                    <span className="text-[11px] text-kp-gray ml-2">{f.esHoy ? 'Hoy' : f.dayLabel}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray">
+                    {f.cantidad > 0 ? f.cantidad : '—'}
+                  </td>
+                  <td className={`px-4 py-2.5 text-right text-sm font-bold tabular-nums whitespace-nowrap ${f.monto > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
+                    {f.monto > 0 ? fmt(f.monto) : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray whitespace-nowrap hidden sm:table-cell">
+                    {fmt(f.acumulado)}
+                  </td>
+                  <td className="px-4 py-2.5 hidden md:table-cell">
+                    <div className="h-1.5 rounded-full bg-kp-border/40 overflow-hidden">
+                      <div className="h-full rounded-full bg-kp-red opacity-70" style={{ width: `${pct}%` }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-kp-border bg-kp-surface2">
+              <td className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-kp-gray">Total mes</td>
+              <td className="px-4 py-2.5 text-right text-xs font-bold tabular-nums text-kp-white">{totalOps}</td>
+              <td className="px-4 py-2.5 text-right text-sm font-bold tabular-nums text-kp-white whitespace-nowrap">{fmt(totalMonto)}</td>
+              <td className="px-4 py-2.5 hidden sm:table-cell" />
+              <td className="px-4 py-2.5 hidden md:table-cell" />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DashboardView({
   data, userName, userRol,
@@ -624,9 +651,6 @@ export default function DashboardView({
   }
 
   const d = data;
-  const margenHoy = d.ventas_hoy.monto > 0 ? (d.resultado_hoy / d.ventas_hoy.monto) * 100 : 0;
-  const margenMes = d.ventas_mes.monto > 0 ? (d.resultado_mes / d.ventas_mes.monto) * 100 : 0;
-  const totalSemana = d.ventas_7dias.reduce((a, b) => a + b.monto, 0);
   const tienesCheques = d.cheques_a_cobrar.length > 0 || d.cheques_a_pagar.length > 0;
   const chequesVencidos = [...d.cheques_a_cobrar, ...d.cheques_a_pagar].filter(c => c.dias < 0).length;
 
@@ -710,9 +734,14 @@ export default function DashboardView({
             trendAhora={d.ventas_hoy.monto} trendAntes={d.ventas_ayer.monto} trendLabel="vs ayer"
           />
           <KpiCard
-            label="Egresos" value={fmt(d.egresos_hoy.monto)}
+            label="Costo de mercadería" value={fmt(d.costo_mercaderia_hoy.monto)}
+            iconBg="bg-orange-500/10" iconColor="text-orange-400" icon={<IcoBox />}
+            trendAhora={d.costo_mercaderia_hoy.monto} trendAntes={d.costo_mercaderia_ayer.monto} trendLabel="vs ayer"
+          />
+          <KpiCard
+            label="Gastos operativos" value={fmt(d.gastos_operativos_hoy.monto)}
             iconBg="bg-amber-500/10" iconColor="text-amber-400" icon={<IcoReceipt />}
-            trendAhora={d.egresos_hoy.monto} trendAntes={d.egresos_ayer.monto} trendLabel="vs ayer"
+            trendAhora={d.gastos_operativos_hoy.monto} trendAntes={d.gastos_operativos_ayer.monto} trendLabel="vs ayer"
           />
           <KpiCard
             label="Resultado" value={fmt(d.resultado_hoy)}
@@ -720,11 +749,6 @@ export default function DashboardView({
             iconColor={d.resultado_hoy >= 0 ? 'text-sky-400' : 'text-rose-400'} icon={<IcoTrend />}
             trendAhora={d.resultado_hoy} trendAntes={d.resultado_ayer} trendLabel="vs ayer"
             negative={d.resultado_hoy < 0}
-          />
-          <KpiCard
-            label="Margen" value={`${margenHoy.toFixed(1)}%`}
-            iconBg="bg-violet-500/10" iconColor="text-violet-400" icon={<IcoPct />}
-            negative={margenHoy < 0}
           />
         </div>
       </section>
@@ -756,9 +780,14 @@ export default function DashboardView({
             trendAhora={d.ventas_mes.monto} trendAntes={d.ventas_mes_ant.monto} trendLabel="vs mes ant."
           />
           <KpiCard
-            label="Egresos" value={fmt(d.egresos_mes.monto)}
+            label="Costo de mercadería" value={fmt(d.costo_mercaderia_mes.monto)}
+            iconBg="bg-orange-500/10" iconColor="text-orange-400" icon={<IcoBox />}
+            trendAhora={d.costo_mercaderia_mes.monto} trendAntes={d.costo_mercaderia_mes_ant.monto} trendLabel="vs mes ant."
+          />
+          <KpiCard
+            label="Gastos operativos" value={fmt(d.gastos_operativos_mes.monto)}
             iconBg="bg-amber-500/10" iconColor="text-amber-400" icon={<IcoReceipt />}
-            trendAhora={d.egresos_mes.monto} trendAntes={d.egresos_mes_ant.monto} trendLabel="vs mes ant."
+            trendAhora={d.gastos_operativos_mes.monto} trendAntes={d.gastos_operativos_mes_ant.monto} trendLabel="vs mes ant."
           />
           <KpiCard
             label="Resultado" value={fmt(d.resultado_mes)}
@@ -767,27 +796,11 @@ export default function DashboardView({
             trendAhora={d.resultado_mes} trendAntes={d.resultado_mes_ant} trendLabel="vs mes ant."
             negative={d.resultado_mes < 0}
           />
-          <KpiCard
-            label="Margen" value={`${margenMes.toFixed(1)}%`}
-            iconBg="bg-violet-500/10" iconColor="text-violet-400" icon={<IcoPct />}
-            negative={margenMes < 0}
-          />
         </div>
       </section>
 
-      {/* ── Chart ── */}
-      <section className="rounded-xl border border-kp-border bg-kp-surface p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-sm font-semibold text-kp-white">Ventas — últimos 7 días</p>
-            <p className="text-xs text-kp-gray mt-0.5">Total del período: <span className="text-kp-white font-semibold">{fmt(totalSemana)}</span></p>
-          </div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-kp-gray px-2 py-1 rounded border border-kp-border">
-            {d.ventas_7dias.reduce((a, b) => a + b.cantidad, 0)} operaciones
-          </span>
-        </div>
-        <AreaChart data={d.ventas_7dias} />
-      </section>
+      {/* ── Registro de ventas del mes (día por día) ── */}
+      <VentasMesTabla data={d.ventas_mes_diario ?? []} />
 
       {/* ── Cheques próximos — solo administrador ── */}
       {tienesCheques && userRol === 'administrador' && (

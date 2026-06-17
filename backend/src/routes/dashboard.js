@@ -19,7 +19,7 @@ router.get('/', async (req, res, next) => {
       egresosMes, egresosMesAnt,
       stockBajo,
       pedidosPendientes,
-      ventas7Dias,
+      ventasMesDiario,
       ultimasVentas,
       chequesACobrar,
       chequesAPagar,
@@ -45,17 +45,25 @@ router.get('/', async (req, res, next) => {
         FROM ventas WHERE deleted_at IS NULL AND estado NOT IN ('anulada','preventa')
         AND date_trunc('month', fecha) = date_trunc('month', CURRENT_DATE - INTERVAL '1 month') ${sf}`, p),
 
-      pool.query(`SELECT COALESCE(SUM(total),0) AS monto
+      pool.query(`SELECT
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion <> 'compra_mercaderia'),0) AS gastos
         FROM egresos WHERE deleted_at IS NULL AND fecha_emision = CURRENT_DATE ${sf}`, p),
 
-      pool.query(`SELECT COALESCE(SUM(total),0) AS monto
+      pool.query(`SELECT
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion <> 'compra_mercaderia'),0) AS gastos
         FROM egresos WHERE deleted_at IS NULL AND fecha_emision = CURRENT_DATE - 1 ${sf}`, p),
 
-      pool.query(`SELECT COALESCE(SUM(total),0) AS monto
+      pool.query(`SELECT
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion <> 'compra_mercaderia'),0) AS gastos
         FROM egresos WHERE deleted_at IS NULL
         AND date_trunc('month', fecha_emision) = date_trunc('month', CURRENT_DATE) ${sf}`, p),
 
-      pool.query(`SELECT COALESCE(SUM(total),0) AS monto
+      pool.query(`SELECT
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
+          COALESCE(SUM(total) FILTER (WHERE tipo_operacion <> 'compra_mercaderia'),0) AS gastos
         FROM egresos WHERE deleted_at IS NULL
         AND date_trunc('month', fecha_emision) = date_trunc('month', CURRENT_DATE - INTERVAL '1 month') ${sf}`, p),
 
@@ -67,18 +75,19 @@ router.get('/', async (req, res, next) => {
       pool.query(`SELECT COUNT(*) AS cantidad FROM pedidos_compra
         WHERE estado IN ('pendiente','confirmado')`),
 
-      // 7-day breakdown with generate_series so empty days return 0
+      // Detalle diario del mes en curso (día 1 → hoy) con generate_series
+      // para que los días sin ventas devuelvan 0.
       pool.query(`
         SELECT d.dia::text, COALESCE(v.cantidad,0)::int AS cantidad,
                COALESCE(v.monto,0)::float AS monto
         FROM (
-          SELECT generate_series(CURRENT_DATE - 6, CURRENT_DATE, INTERVAL '1 day')::date AS dia
+          SELECT generate_series(date_trunc('month', CURRENT_DATE)::date, CURRENT_DATE, INTERVAL '1 day')::date AS dia
         ) d
         LEFT JOIN (
           SELECT fecha::date AS dia, COUNT(*) AS cantidad, SUM(total) AS monto
           FROM ventas
           WHERE deleted_at IS NULL AND estado NOT IN ('anulada','preventa')
-            AND fecha::date >= CURRENT_DATE - 6
+            AND date_trunc('month', fecha) = date_trunc('month', CURRENT_DATE)
             ${sucId ? 'AND sucursal_id = $1' : ''}
           GROUP BY fecha::date
         ) v ON v.dia = d.dia
@@ -202,27 +211,40 @@ router.get('/', async (req, res, next) => {
     const va  = parseFloat(ventasAyer.rows[0].monto);
     const vm  = parseFloat(ventasMes.rows[0].monto);
     const vma = parseFloat(ventasMesAnt.rows[0].monto);
-    const eh  = parseFloat(egresosHoy.rows[0].monto);
-    const ea  = parseFloat(egresosAyer.rows[0].monto);
-    const em  = parseFloat(egresosMes.rows[0].monto);
-    const ema = parseFloat(egresosMesAnt.rows[0].monto);
+
+    // Egresos divididos: costo de mercadería vs gastos operativos (no mercadería)
+    const ch  = parseFloat(egresosHoy.rows[0].mercaderia);
+    const ca  = parseFloat(egresosAyer.rows[0].mercaderia);
+    const cm  = parseFloat(egresosMes.rows[0].mercaderia);
+    const cma = parseFloat(egresosMesAnt.rows[0].mercaderia);
+    const gh  = parseFloat(egresosHoy.rows[0].gastos);
+    const ga  = parseFloat(egresosAyer.rows[0].gastos);
+    const gm  = parseFloat(egresosMes.rows[0].gastos);
+    const gma = parseFloat(egresosMesAnt.rows[0].gastos);
+
+    // Egreso total (costo + gastos) usado para el resultado
+    const eh = ch + gh, ea = ca + ga, em = cm + gm, ema = cma + gma;
 
     res.json({
       ventas_hoy:      { cantidad: parseInt(ventasHoy.rows[0].cantidad),  monto: vh },
       ventas_ayer:     { cantidad: parseInt(ventasAyer.rows[0].cantidad), monto: va },
       ventas_mes:      { cantidad: parseInt(ventasMes.rows[0].cantidad),  monto: vm },
       ventas_mes_ant:  { cantidad: parseInt(ventasMesAnt.rows[0].cantidad), monto: vma },
-      egresos_hoy:     { monto: eh },
-      egresos_ayer:    { monto: ea },
-      egresos_mes:     { monto: em },
-      egresos_mes_ant: { monto: ema },
+      costo_mercaderia_hoy:     { monto: ch },
+      costo_mercaderia_ayer:    { monto: ca },
+      costo_mercaderia_mes:     { monto: cm },
+      costo_mercaderia_mes_ant: { monto: cma },
+      gastos_operativos_hoy:     { monto: gh },
+      gastos_operativos_ayer:    { monto: ga },
+      gastos_operativos_mes:     { monto: gm },
+      gastos_operativos_mes_ant: { monto: gma },
       resultado_hoy:   parseFloat((vh - eh).toFixed(2)),
       resultado_ayer:  parseFloat((va - ea).toFixed(2)),
       resultado_mes:   parseFloat((vm - em).toFixed(2)),
       resultado_mes_ant: parseFloat((vma - ema).toFixed(2)),
       stock_bajo:          parseInt(stockBajo.rows[0].cantidad),
       pedidos_pendientes:  parseInt(pedidosPendientes.rows[0].cantidad),
-      ventas_7dias:        ventas7Dias.rows,
+      ventas_mes_diario:   ventasMesDiario.rows,
       ultimas_ventas:      ultimasVentas.rows,
       cheques_a_cobrar:    chequesACobrar.rows,
       cheques_a_pagar:     chequesAPagar.rows,
