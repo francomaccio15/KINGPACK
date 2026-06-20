@@ -152,7 +152,7 @@ export default function NotifBell() {
     for (const a of data.alertas) {
       const cfg = NIVEL_ALERTA[a.nivel];
       items.push({
-        key:        `alerta-${a.tipo}`,
+        key:        `alerta-${a.tipo}-${items.length}`,
         dot:        cfg.dot,
         labelColor: cfg.color,
         tagLabel:   a.nivel === 'error' ? 'Urgente' : a.nivel === 'warning' ? 'Atención' : 'Info',

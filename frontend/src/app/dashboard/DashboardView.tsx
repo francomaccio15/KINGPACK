@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ConciliacionCard from './ConciliacionCard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type DayData = { dia: string; cantidad: number; monto: number };
@@ -764,6 +765,9 @@ export default function DashboardView({
         hoy={d.cobros_por_cuenta_hoy ?? []}
         mes={d.cobros_por_cuenta_mes ?? []}
       />
+
+      {/* ── Conciliación bancaria (acreditado vs ARCA del mes anterior) ── */}
+      <ConciliacionCard />
 
       {/* ── KPI Mes ── */}
       <section>

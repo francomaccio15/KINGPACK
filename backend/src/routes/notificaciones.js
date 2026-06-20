@@ -26,6 +26,8 @@ router.get('/', async (req, res, next) => {
       chequesHoy,
       chequesSemana,
       pedidosPendientes,
+      fechaInfo,
+      concPrev,
     ] = await Promise.all([
 
       // Notas creadas después de la última vista
@@ -85,6 +87,28 @@ router.get('/', async (req, res, next) => {
           FROM pedidos_compra
          WHERE estado IN ('pendiente','confirmado')
       `),
+
+      // Info de fecha (en hora del servidor/DB): día del mes, primer día hábil
+      // del mes (lun-vie, sin feriados) y primer día del mes anterior.
+      pool.query(`
+        SELECT
+          EXTRACT(DAY FROM CURRENT_DATE)::int AS dia_mes,
+          EXTRACT(DAY FROM (
+            SELECT MIN(d)::date
+              FROM generate_series(date_trunc('month', CURRENT_DATE)::date,
+                                   date_trunc('month', CURRENT_DATE)::date + 6,
+                                   INTERVAL '1 day') d
+             WHERE EXTRACT(ISODOW FROM d) < 6
+          ))::int AS primer_habil_dia,
+          (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date AS periodo_ant
+      `),
+
+      // ¿Ya se cargó la conciliación del mes anterior?
+      pool.query(`
+        SELECT 1
+          FROM conciliacion_bancaria
+         WHERE periodo = (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date
+      `),
     ]);
 
     // Construir alertas del sistema
@@ -131,6 +155,54 @@ router.get('/', async (req, res, next) => {
       href: '/pedidos-proveedores',
       label: `${pp} pedido${pp !== 1 ? 's' : ''} pendiente${pp !== 1 ? 's' : ''}`,
     });
+
+    // ── Recordatorios de obligaciones impositivas (por día del mes) ──
+    // Ventana: 3 días antes (warning) → el día (error "vence hoy") → hasta 3
+    // días después (error "vencido"). Lista fija de obligaciones del comercio.
+    const diaMes = parseInt(fechaInfo.rows[0].dia_mes, 10);
+    const OBLIGACIONES = [
+      { dia: 7,  label: 'Cargas sociales y laborales' },
+      { dia: 7,  label: 'Autónomos' },
+      { dia: 14, label: 'Impuestos municipales (TISH)' },
+      { dia: 14, label: 'Rentas Salta' },
+      { dia: 17, label: 'Impuestos nacionales' },
+      { dia: 19, label: 'Monotributo' },
+    ];
+    const DIAS_ANTES = 3, DIAS_DESPUES = 3;
+    for (const o of OBLIGACIONES) {
+      const diff = diaMes - o.dia; // <0 faltan días · 0 hoy · >0 vencido hace
+      if (diff < -DIAS_ANTES || diff > DIAS_DESPUES) continue;
+      let nivel, label;
+      if (diff < 0) {
+        nivel = 'warning';
+        label = `${o.label}: vence en ${-diff} día${-diff !== 1 ? 's' : ''} (día ${o.dia})`;
+      } else if (diff === 0) {
+        nivel = 'error';
+        label = `${o.label}: vence hoy`;
+      } else {
+        nivel = 'error';
+        label = `${o.label}: vencido hace ${diff} día${diff !== 1 ? 's' : ''}`;
+      }
+      alertas.push({ tipo: 'impuesto', nivel, href: '/impuestos', label });
+    }
+
+    // ── Recordatorio: conciliación bancaria del mes anterior ──
+    // Desde el primer día hábil del mes hasta el día 10, si todavía no se cargó
+    // el monto acreditado en banco del mes anterior.
+    const primerHabilDia = parseInt(fechaInfo.rows[0].primer_habil_dia, 10);
+    const concCargada     = concPrev.rows.length > 0;
+    if (!concCargada && diaMes >= primerHabilDia && diaMes <= 10) {
+      const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      const pa  = new Date(fechaInfo.rows[0].periodo_ant);
+      const lbl = `${MESES[pa.getUTCMonth()]} ${pa.getUTCFullYear()}`;
+      alertas.push({
+        tipo: 'conciliacion',
+        nivel: 'warning',
+        href: '/dashboard',
+        label: `Cargar lo acreditado en banco de ${lbl} y comparar con ARCA`,
+      });
+    }
 
     res.json({
       no_leidas:    notasNuevas.rows.length,
