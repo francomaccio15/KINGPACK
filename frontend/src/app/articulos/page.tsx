@@ -7,6 +7,8 @@ import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
 import Paginador from './Paginador';
+import VistaTabs from './VistaTabs';
+import StockEditor from './StockEditor';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -155,6 +157,30 @@ export default async function ArticulosPage({
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
 
+  // ── Vista Stock (sub-pestaña) — solo administrador / supervisor ──
+  const puedeEditarStock = user.rol === 'administrador' || user.rol === 'supervisor';
+  const vista = searchParams.vista === 'stock' && puedeEditarStock ? 'stock' : 'precios';
+
+  if (vista === 'stock') {
+    return (
+      <section className="space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+          {sucursalActiva && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest
+              bg-kp-surface2 border border-kp-red/30 text-kp-red rounded px-2 py-0.5 ml-1">
+              <span className="w-1 h-1 rounded-full bg-kp-red" />
+              {sucursalActiva.nombre}
+            </span>
+          )}
+        </div>
+        <VistaTabs vista="stock" puedeEditarStock={puedeEditarStock} />
+        <StockEditor sucursales={sucursales} sucursalActivaId={sucursalActivaId} />
+      </section>
+    );
+  }
+
   const listaActivaId = searchParams.lista_id || listas[0]?.id || '';
   const listaActiva   = listas.find(l => l.id === listaActivaId) ?? listas[0];
 
@@ -231,6 +257,9 @@ export default async function ArticulosPage({
           )}
         </div>
       </div>
+
+      {/* ── Conmutador de vista (Precios / Stock) ── */}
+      <VistaTabs vista="precios" puedeEditarStock={puedeEditarStock} />
 
       {/* ── Tabs por lista ── */}
       <Suspense fallback={null}>

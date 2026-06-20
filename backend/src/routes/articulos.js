@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -59,6 +60,64 @@ router.patch('/:id/stock-minimo', async (req, res, next) => {
 
     res.json({ ok: true, stock_minimo: val });
   } catch (err) { next(err); }
+});
+
+// ─── PUT /api/articulos/:id/stock ────────────────────────────────────────────
+// Fija la cantidad ABSOLUTA de stock de un artículo en una sucursal y registra
+// el ajuste (delta = nueva − actual) en ajustes_stock para auditoría.
+// Body: { sucursal_id, cantidad, motivo? }
+router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { sucursal_id, cantidad, motivo } = req.body;
+
+    if (!sucursal_id) return res.status(400).json({ error: 'Se requiere sucursal_id' });
+    const nueva = parseFloat(cantidad);
+    if (!Number.isFinite(nueva) || nueva < 0) {
+      return res.status(400).json({ error: 'Cantidad inválida' });
+    }
+
+    await client.query('BEGIN');
+
+    const art = await client.query('SELECT id FROM articulos WHERE id = $1 AND deleted_at IS NULL', [id]);
+    if (!art.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Artículo no encontrado' }); }
+
+    const suc = await client.query('SELECT id FROM sucursales WHERE id = $1', [sucursal_id]);
+    if (!suc.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Sucursal no encontrada' }); }
+
+    // Cantidad actual (0 si todavía no hay registro de stock para esa sucursal)
+    const cur = await client.query(
+      'SELECT cantidad FROM stock WHERE articulo_id = $1 AND sucursal_id = $2',
+      [id, sucursal_id]
+    );
+    const actual = cur.rows[0] ? parseFloat(cur.rows[0].cantidad) : 0;
+    const delta  = parseFloat((nueva - actual).toFixed(3));
+
+    // Upsert de la cantidad
+    await client.query(`
+      INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (articulo_id, sucursal_id)
+      DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()
+    `, [id, sucursal_id, nueva]);
+
+    // Registrar el ajuste solo si la cantidad cambió
+    if (Math.abs(delta) > 0.0001) {
+      await client.query(`
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [id, sucursal_id, delta, (motivo && motivo.trim()) || 'Ajuste manual de stock', req.usuario?.id || null]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, cantidad: nueva, delta });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── GET /api/articulos/alicuotas ────────────────────────────────────────────
