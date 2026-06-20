@@ -54,7 +54,14 @@ export default function Error({
       const ultimo = parseInt(sessionStorage.getItem(KEY) || '0', 10);
       if (ahora - ultimo > 10000) {
         sessionStorage.setItem(KEY, String(ahora));
-        window.location.reload();
+        // `location.reload()` NO fuerza bypass de caché: el navegador puede
+        // re-servir el documento viejo (mismos chunks muertos) y dejar al
+        // usuario pegado en esta pantalla. Navegar a la misma URL con un query
+        // único fuerza un documento fresco que ya referencia los chunks del
+        // build nuevo.
+        const url = new URL(window.location.href);
+        url.searchParams.set('_v', String(ahora));
+        window.location.replace(url.toString());
       }
     }
   }, [error, chunkError]);
