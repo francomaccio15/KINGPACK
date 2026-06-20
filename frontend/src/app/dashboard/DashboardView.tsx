@@ -688,7 +688,7 @@ export default function DashboardView({
       {/* ── Quick Actions ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <QuickAction href="/ventas"               label="Nueva Venta"   sub="Registrar operación"   iconBg="bg-emerald-500/10" iconColor="text-emerald-400" icon={<IcoCart />} />
-        <QuickAction href="/gastos/nuevo"          label="Nuevo Egreso"  sub="Gastos y compras"      iconBg="bg-amber-500/10"   iconColor="text-amber-400"   icon={<IcoReceipt />} />
+        <QuickAction href="/gastos/nuevo"          label="Nuevo Egreso"  sub="Egresos y compras"     iconBg="bg-amber-500/10"   iconColor="text-amber-400"   icon={<IcoReceipt />} />
         <QuickAction href="/articulos"             label="Artículos"     sub="Gestionar catálogo"    iconBg="bg-sky-500/10"     iconColor="text-sky-400"     icon={<IcoBox />} />
         <QuickAction href="/pedidos-proveedores"   label="Pedidos"       sub="Órdenes a proveedores" iconBg="bg-violet-500/10"  iconColor="text-violet-400"  icon={<IcoOrder />} />
       </div>

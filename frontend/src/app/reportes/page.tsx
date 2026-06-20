@@ -201,7 +201,7 @@ export default async function ReportesPage({
       <div className="flex gap-1 border-b border-kp-border">
         {[
           { label: 'Ventas',             value: 'ventas' },
-          { label: 'Gastos',             value: 'gastos' },
+          { label: 'Egresos',           value: 'gastos' },
           { label: 'Estado de Resultados', value: 'er'   },
         ].map(t => (
           <Link

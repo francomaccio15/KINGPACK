@@ -99,7 +99,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
     return (
       <section className="flex flex-col items-center justify-center py-24 gap-4">
         <p className="text-kp-gray text-lg">Egreso no encontrado.</p>
-        <Link href="/gastos" className="text-kp-red hover:underline text-sm">← Volver a Gastos</Link>
+        <Link href="/gastos" className="text-kp-red hover:underline text-sm">← Volver a Egresos</Link>
       </section>
     );
   }
@@ -154,7 +154,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-kp-gray">
-        <Link href="/gastos" className="hover:text-kp-white transition-colors">Gastos</Link>
+        <Link href="/gastos" className="hover:text-kp-white transition-colors">Egresos</Link>
         <span>/</span>
         <span className="text-kp-white truncate max-w-xs">{egreso.descripcion}</span>
       </div>

@@ -149,7 +149,7 @@ export default function RubrosClient() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Rubros de Gastos</h2>
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Rubros de Egresos</h2>
           <span className="ml-2 text-xs font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded-full px-2 py-0.5">
             {rubros.length} rubros · {totalSub} subrubros
           </span>
@@ -170,7 +170,7 @@ export default function RubrosClient() {
         <div className="flex justify-center py-20 text-kp-gray"><Spinner /></div>
       ) : rubros.length === 0 ? (
         <div className="rounded-xl border border-kp-border bg-kp-surface p-12 text-center text-kp-gray text-sm">
-          No hay rubros de gastos cargados todavía.
+          No hay rubros de egresos cargados todavía.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -351,7 +351,7 @@ export default function NuevoEgresoPage() {
           <h2 className="text-2xl font-bold uppercase tracking-wide">Comprobante — Compra</h2>
         </div>
         <Link href="/gastos" className="text-sm text-kp-gray hover:text-kp-white transition-colors">
-          ← Volver a Gastos
+          ← Volver a Egresos
         </Link>
       </div>
 

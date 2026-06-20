@@ -157,7 +157,7 @@ export default async function GastosPage({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Gastos</h2>
+            <h2 className="text-2xl font-bold uppercase tracking-wide">Egresos</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {count} {count === 1 ? 'registro' : 'registros'}

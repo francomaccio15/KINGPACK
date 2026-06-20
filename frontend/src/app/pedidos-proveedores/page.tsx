@@ -119,7 +119,7 @@ export default async function PedidosProveedoresPage({
       </div>
 
       <p className="text-xs text-kp-gray/60 pl-3 -mt-2">
-        Los pedidos se generan automáticamente al registrar una compra de mercadería en Gastos.
+        Los pedidos se generan automáticamente al registrar una compra de mercadería en Egresos.
       </p>
 
       {/* Filtros */}
@@ -216,7 +216,7 @@ export default async function PedidosProveedoresPage({
                     {!hayFiltros && (
                       <p className="text-kp-gray/50 text-xs">
                         Al registrar una compra de mercadería en{' '}
-                        <Link href="/gastos/nuevo" className="text-kp-red hover:underline">Gastos</Link>
+                        <Link href="/gastos/nuevo" className="text-kp-red hover:underline">Egresos</Link>
                         , el pedido aparece aquí automáticamente.
                       </p>
                     )}

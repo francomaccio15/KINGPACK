@@ -160,7 +160,7 @@ export default function ReporteGastos({
 
       {/* Cards de resumen */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <StatCard label="Total gastos"    value={fmt(totalGastos)} />
+        <StatCard label="Total egresos"   value={fmt(totalGastos)} />
         <StatCard label="Cant. egresos"   value={fmtNum(resumen.cantidad_egresos)} />
         <StatCard label="Promedio"        value={fmt(resumen.promedio)} />
         <StatCard label="Pagado"          value={fmt(resumen.total_pagado)}
@@ -172,7 +172,7 @@ export default function ReporteGastos({
 
       {/* Gráfico por día */}
       <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
-        <SectionHeader title="Gastos por día" />
+        <SectionHeader title="Egresos por día" />
         <div className="mt-4 pb-6">
           <BarChart data={por_dia} />
         </div>

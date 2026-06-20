@@ -159,7 +159,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Ventas',                href: '/ventas',               icon: <IcoVentas /> },
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
-      { label: 'Gastos',                href: '/gastos',               icon: <IcoGastos /> },
+      { label: 'Egresos',               href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Proveedores',           href: '/proveedores',          icon: <IcoProveedores /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
@@ -183,7 +183,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Usuarios',   href: '/usuarios',   icon: <IcoUsuarios />   },
       { label: 'Empleados',  href: '/empleados',  icon: <IcoEmpleados />  },
       { label: 'Rep. Ventas',    href: '/reportes',                    icon: <IcoReportes />   },
-      { label: 'Rep. Gastos',    href: '/reportes?tab=gastos',        icon: <IcoGastos />     },
+      { label: 'Rep. Egresos',   href: '/reportes?tab=gastos',        icon: <IcoGastos />     },
       { label: 'Edo. Resultados',href: '/reportes?tab=er',            icon: <IcoImpuestos />  },
       { label: 'Impuestos',  href: '/impuestos',  icon: <IcoImpuestos />  },
     ],
@@ -191,7 +191,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Configuración',
     items: [
-      { label: 'Rubros de Gastos',   href: '/rubros-gastos',      icon: <IcoRubros /> },
+      { label: 'Rubros de Egresos',  href: '/rubros-gastos',      icon: <IcoRubros /> },
       { label: 'Cuentas Bancarias',  href: '/cuentas-bancarias',  icon: <IcoBanco /> },
     ],
   },
