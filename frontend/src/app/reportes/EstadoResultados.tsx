@@ -25,6 +25,11 @@ interface ERData {
     ventas_netas:    number;
     cantidad_ventas: number;
   };
+  costo_mercaderia: {
+    costo_vendido:    number;
+    utilidad_bruta:   number;
+    margen_bruto_pct: number;
+  };
   gastos: {
     rubros:       Rubro[];
     total_gastos: number;
@@ -125,7 +130,7 @@ export default function EstadoResultados({
 }: {
   data: ERData; fechaDesde: string; fechaHasta: string;
 }) {
-  const { ingresos, gastos, resultado } = data;
+  const { ingresos, costo_mercaderia, gastos, resultado } = data;
   const mismoPeriodo = fechaDesde.slice(0, 7) === fechaHasta.slice(0, 7);
   const tituloPeriodo = mismoPeriodo
     ? fmtMes(fechaDesde)
@@ -200,9 +205,26 @@ export default function EstadoResultados({
             <Separador />
 
             {/* ══════════════════════════════════════════════════
-                II. EGRESOS — rubro por rubro, todos los subrubros
+                II. COSTO DE MERCADERÍA VENDIDA → UTILIDAD BRUTA
             ══════════════════════════════════════════════════ */}
-            <SeccionHeader titulo="II. Gastos y Egresos Operativos" />
+            <SeccionHeader titulo="II. Costo de Mercadería Vendida" />
+
+            <Linea
+              label="(−) Costo de mercadería vendida"
+              valor={costo_mercaderia.costo_vendido}
+              nivel={1}
+              cero={costo_mercaderia.costo_vendido === 0}
+              negativo={costo_mercaderia.costo_vendido > 0}
+              italic
+            />
+
+            <Subtotal label="= Utilidad Bruta" valor={costo_mercaderia.utilidad_bruta} />
+            <Separador />
+
+            {/* ══════════════════════════════════════════════════
+                III. EGRESOS — rubro por rubro, todos los subrubros
+            ══════════════════════════════════════════════════ */}
+            <SeccionHeader titulo="III. Gastos y Egresos Operativos" />
 
             {gastos.rubros.map(rubro => {
               const todosCero = rubro.subrubros.every(s => s.es_cero);
@@ -244,14 +266,14 @@ export default function EstadoResultados({
             {/* ══════════════════════════════════════════════════
                 III. RESULTADO
             ══════════════════════════════════════════════════ */}
-            <SeccionHeader titulo="III. Resultado del Período" />
+            <SeccionHeader titulo="IV. Resultado del Período" />
 
             <tr className="border-b border-kp-border/30">
               <td className="px-5 py-1.5 text-sm text-kp-gray" style={{ paddingLeft: 28 }}>
-                Ventas Netas
+                Utilidad Bruta
               </td>
               <td className="px-5 py-1.5 text-sm text-right tabular-nums text-kp-white">
-                {fmt(ingresos.ventas_netas)}
+                {fmt(costo_mercaderia.utilidad_bruta)}
               </td>
             </tr>
             <tr className="border-b border-kp-border/30">
@@ -302,13 +324,19 @@ export default function EstadoResultados({
         </table>
       </div>
 
-      {/* Resumen de 3 cards */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Resumen de cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           {
             label: 'Ventas Netas',
             value: fmt(ingresos.ventas_netas),
             color: 'text-kp-white',
+          },
+          {
+            label: 'Utilidad Bruta',
+            value: fmt(costo_mercaderia.utilidad_bruta),
+            color: costo_mercaderia.utilidad_bruta >= 0 ? 'text-emerald-400' : 'text-red-400',
+            sub: `${costo_mercaderia.margen_bruto_pct > 0 ? '+' : ''}${costo_mercaderia.margen_bruto_pct}% margen bruto`,
           },
           {
             label: 'Total Egresos',

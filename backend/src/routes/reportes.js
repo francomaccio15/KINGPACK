@@ -295,7 +295,7 @@ router.get('/estado-resultados', async (req, res, next) => {
     const sucNC      = sucId ? 'AND nc.sucursal_id  = $3' : '';
     const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
 
-    const [ventasRes, ncRes, egresosRes] = await Promise.all([
+    const [ventasRes, ncRes, egresosRes, cogsRes] = await Promise.all([
 
       // ── Ventas del período ────────────────────────────────────────
       pool.query(`
@@ -336,9 +336,31 @@ router.get('/estado-resultados', async (req, res, next) => {
           ON  e.subrubro_gasto_id = sg.id
           AND e.deleted_at IS NULL
           AND e.fecha_emision::date BETWEEN $1 AND $2
+          AND e.tipo_operacion <> 'compra_mercaderia'
           ${sucEgreso}
+        -- La compra de mercadería no es gasto operativo: su costo entra como
+        -- "Costo de mercadería vendida" (COGS) en la utilidad bruta. Se oculta
+        -- ese subrubro acá para no mostrar una línea en cero ni duplicar costo.
+        WHERE sg.nombre <> 'Compra de mercadería'
         GROUP BY rg.id, rg.nombre, rg.orden, sg.id, sg.nombre
         ORDER BY rg.orden ASC, rg.nombre ASC, monto DESC, sg.nombre ASC
+      `, baseParams),
+
+      // ── Costo de mercadería vendida (COGS) del período ────────────
+      // Costo de los artículos efectivamente vendidos = Σ cantidad × costo
+      // actual del artículo (costo_base + costo_flete). No hay snapshot de
+      // costo histórico en venta_items, así que se usa el costo vigente.
+      // Sin ajuste por devoluciones: las notas de crédito no tienen detalle
+      // de artículos, y ya reducen los ingresos (ventas netas).
+      pool.query(`
+        SELECT COALESCE(SUM(vi.cantidad * (a.costo_base + a.costo_flete)), 0)::float AS cogs
+        FROM venta_items vi
+        JOIN ventas v    ON v.id = vi.venta_id
+        JOIN articulos a ON a.id = vi.articulo_id
+        WHERE v.deleted_at IS NULL
+          AND v.estado NOT IN ('anulada','preventa')
+          AND v.fecha::date BETWEEN $1 AND $2
+          ${sucVenta}
       `, baseParams),
     ]);
 
@@ -372,7 +394,11 @@ router.get('/estado-resultados', async (req, res, next) => {
 
     const rubros       = Object.values(rubroMap).sort((a, b) => a.rubro_orden - b.rubro_orden);
     const total_gastos = rubros.reduce((s, r) => s + r.total, 0);
-    const resultado    = ventas_netas - total_gastos;
+
+    // Costo de mercadería vendida → Utilidad Bruta → Resultado del período
+    const costo_vendido  = parseFloat(cogsRes.rows[0].cogs) || 0;
+    const utilidad_bruta = ventas_netas - costo_vendido;
+    const resultado      = utilidad_bruta - total_gastos;
 
     res.json({
       periodo: { desde, hasta },
@@ -382,6 +408,13 @@ router.get('/estado-resultados', async (req, res, next) => {
         notas_credito,
         ventas_netas,
         cantidad_ventas: ventasRes.rows[0].cantidad_ventas,
+      },
+      costo_mercaderia: {
+        costo_vendido,
+        utilidad_bruta,
+        margen_bruto_pct: ventas_netas > 0
+          ? parseFloat(((utilidad_bruta / ventas_netas) * 100).toFixed(1))
+          : 0,
       },
       gastos: {
         rubros,
