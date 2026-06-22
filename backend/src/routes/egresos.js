@@ -203,6 +203,7 @@ router.post('/', async (req, res, next) => {
       anticipo_id,
       items = [],
       pago,
+      costo_flete = 0,
     } = req.body;
 
     // --- Validaciones básicas ---
@@ -418,11 +419,37 @@ router.post('/', async (req, res, next) => {
       );
     }
 
+    // --- Costo de flete: egreso aparte en el subrubro "Transporte de carga" ---
+    // No se suma al total del comprobante; queda como gasto independiente.
+    let fleteEgreso = null;
+    const fleteNum = parseFloat(costo_flete) || 0;
+    if (fleteNum > 0) {
+      const { rows: subRows } = await client.query(
+        `SELECT id FROM subrubro_gastos WHERE nombre = 'Transporte de carga' LIMIT 1`
+      );
+      const subId = subRows[0]?.id || null;
+      const { rows: fRows } = await client.query(`
+        INSERT INTO egresos (
+          tipo_operacion, fecha_emision, sucursal_id, subrubro_gasto_id, descripcion,
+          total, estado_pago
+        ) VALUES ('gasto_manual', $1, $2, $3, $4, $5, $6)
+        RETURNING id, total
+      `, [
+        fecha_emision || new Date().toISOString().split('T')[0],
+        sucursal_id, subId,
+        `Flete${descripcion ? ' — ' + descripcion.trim() : ''}`.substring(0, 200),
+        // Queda pendiente: el pago del formulario aplica al comprobante, no al flete.
+        fleteNum.toFixed(2), 'pendiente',
+      ]);
+      fleteEgreso = fRows[0];
+    }
+
     await client.query('COMMIT');
     res.status(201).json({
       egreso: { ...egreso, estado_pago: estadoFinal },
       anticipo_creado: anticipoNuevo,
       pedido_creado: pedidoCreado,
+      flete_egreso: fleteEgreso,
     });
   } catch (err) {
     await client.query('ROLLBACK');

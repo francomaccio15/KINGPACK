@@ -106,6 +106,9 @@ export default function NuevoEgresoPage() {
   const [otrosImpuestos, setOtrosImpuestos] = useState('');
   const [totalComprobante, setTotalComprobante] = useState('');
 
+  // Costo de flete (se registra como egreso aparte, subrubro "Transporte de carga")
+  const [costoFlete, setCostoFlete] = useState('');
+
   // Pago
   const [estadoPago, setEstadoPago] = useState<'pendiente' | 'pagado'>('pendiente');
   const [fechaVenc, setFechaVenc] = useState('');
@@ -291,6 +294,7 @@ export default function NuevoEgresoPage() {
       percepciones_ib: parseFloat(percepcionesIb) || 0,
       otros_impuestos: parseFloat(otrosImpuestos) || 0,
       total: parseFloat(totalComprobante),
+      costo_flete: parseFloat(costoFlete) || 0,
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
       anticipo_id: vincularAnticipo && anticipoId ? anticipoId : null,
@@ -824,6 +828,31 @@ export default function NuevoEgresoPage() {
               }
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Costo de flete (egreso aparte, subrubro "Transporte de carga") ── */}
+      <div className={sectionCls}>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Costo de flete</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Costo de flete (en pesos)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
+              <NumericInput
+                placeholder="0.00"
+                value={costoFlete}
+                onChange={e => setCostoFlete(e.target.value)}
+                className={`${inputCls} pl-7`}
+              />
+            </div>
+          </div>
+          <div className="flex items-end pb-1">
+            <p className="text-xs text-kp-gray/70">
+              Si cargás un monto, se registra como un egreso aparte en el subrubro
+              <span className="text-kp-gray"> «Transporte de carga»</span>. No se suma al total del comprobante.
+            </p>
+          </div>
         </div>
       </div>
 
