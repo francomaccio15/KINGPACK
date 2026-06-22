@@ -75,6 +75,7 @@ export default async function PedidosProveedoresPage({
 }) {
   const user = requireAuth('/pedidos-proveedores');
   const esCajero = user.rol === 'cajero';
+  const esAdmin = user.rol === 'administrador';
   const sucursalFilter = esCajero ? (user.sucursal_default_id ?? null) : null;
 
   const { pedidos, count, proveedores, sucursales, articulos } = await fetchData(searchParams, sucursalFilter);
@@ -136,7 +137,9 @@ export default async function PedidosProveedoresPage({
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Proveedor</th>
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Sucursal</th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Items</th>
-              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Total</th>
+              {esAdmin && (
+                <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Total</th>
+              )}
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Stock</th>
               <th className="px-3 py-3" />
@@ -166,9 +169,11 @@ export default async function PedidosProveedoresPage({
                   <td className="px-4 py-3 text-center text-xs text-kp-gray tabular-nums">
                     {p.items_count}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
-                    {fmt(p.monto_total)}
-                  </td>
+                  {esAdmin && (
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
+                      {fmt(p.monto_total)}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[p.estado] ?? ''}`}>
                       {ESTADO_LABEL[p.estado] ?? p.estado}
@@ -203,7 +208,7 @@ export default async function PedidosProveedoresPage({
             })}
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-16 text-center">
+                <td colSpan={esAdmin ? 8 : 7} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <svg className="w-10 h-10 text-kp-border" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />

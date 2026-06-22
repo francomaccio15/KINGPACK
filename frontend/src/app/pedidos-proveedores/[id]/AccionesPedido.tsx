@@ -28,10 +28,11 @@ type Pedido = {
   monto_total: string | null;
 };
 
-export default function AccionesPedido({ pedido, items, esCajero }: {
+export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos = false }: {
   pedido: Pedido;
   items: ItemPedido[];
   esCajero?: boolean;
+  mostrarMontos?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading]               = useState(false);
@@ -256,8 +257,8 @@ export default function AccionesPedido({ pedido, items, esCajero }: {
 
             {/* Footer con total y botones */}
             <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
-              {/* Total a pagar */}
-              {totalAPagar > 0 && (
+              {/* Total a pagar — solo administrador */}
+              {mostrarMontos && totalAPagar > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2.5">
                   <span className="text-sm text-kp-gray font-medium">Total a pagar por esta entrega</span>
                   <span className="text-lg font-bold text-kp-white tabular-nums">{ars.format(totalAPagar)}</span>

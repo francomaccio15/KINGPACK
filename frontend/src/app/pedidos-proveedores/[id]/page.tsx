@@ -31,6 +31,7 @@ export const dynamic = 'force-dynamic';
 export default async function DetallePedidoPage({ params }: { params: { id: string } }) {
   const user = requireAuth('/pedidos-proveedores');
   const esCajero = user.rol === 'cajero';
+  const esAdmin = user.rol === 'administrador';
   let pedido: any = null;
   let items: any[] = [];
 
@@ -96,7 +97,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
             {fechaRecepcion && <> · Recibido: {fechaRecepcion}</>}
           </p>
         </div>
-        <AccionesPedido pedido={pedido} items={items} esCajero={esCajero} />
+        <AccionesPedido pedido={pedido} items={items} esCajero={esCajero} mostrarMontos={esAdmin} />
       </div>
 
       {/* Banner: generado desde egreso */}
@@ -145,8 +146,12 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Código</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Pedido</th>
               <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Recibido</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">P. Compra</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Subtotal</th>
+              {esAdmin && (
+                <>
+                  <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">P. Compra</th>
+                  <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Subtotal</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="bg-kp-surface divide-y divide-kp-border">
@@ -175,8 +180,12 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
                       <span className="text-kp-border text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(item.precio_compra)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">{fmt(sub)}</td>
+                  {esAdmin && (
+                    <>
+                      <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(item.precio_compra)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">{fmt(sub)}</td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -184,25 +193,27 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
         </table>
       </div>
 
-      {/* Totales */}
-      <div className="flex justify-end">
-        <div className="w-60 space-y-2 bg-kp-surface2 border border-kp-border rounded-xl p-4">
-          <div className="flex justify-between text-sm">
-            <span className="text-kp-gray">Mercadería</span>
-            <span className="tabular-nums text-kp-white">{fmt(totalMerc)}</span>
-          </div>
-          {parseFloat(pedido.costo_flete_total || '0') > 0 && (
+      {/* Totales — solo administrador */}
+      {esAdmin && (
+        <div className="flex justify-end">
+          <div className="w-60 space-y-2 bg-kp-surface2 border border-kp-border rounded-xl p-4">
             <div className="flex justify-between text-sm">
-              <span className="text-kp-gray">Flete</span>
-              <span className="tabular-nums text-kp-gray-lt">{fmt(pedido.costo_flete_total)}</span>
+              <span className="text-kp-gray">Mercadería</span>
+              <span className="tabular-nums text-kp-white">{fmt(totalMerc)}</span>
             </div>
-          )}
-          <div className="border-t border-kp-border pt-2 flex justify-between">
-            <span className="font-bold text-kp-white text-sm uppercase tracking-wide">Total</span>
-            <span className="font-bold text-kp-white tabular-nums">{fmt(pedido.monto_total)}</span>
+            {parseFloat(pedido.costo_flete_total || '0') > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-kp-gray">Flete</span>
+                <span className="tabular-nums text-kp-gray-lt">{fmt(pedido.costo_flete_total)}</span>
+              </div>
+            )}
+            <div className="border-t border-kp-border pt-2 flex justify-between">
+              <span className="font-bold text-kp-white text-sm uppercase tracking-wide">Total</span>
+              <span className="font-bold text-kp-white tabular-nums">{fmt(pedido.monto_total)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
     </section>
   );
