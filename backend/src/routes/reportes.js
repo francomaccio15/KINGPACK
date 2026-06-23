@@ -5,6 +5,33 @@ const router = express.Router();
 
 router.use(requireRol('administrador', 'supervisor'));
 
+// Primer día hábil del mes (saltea sábado y domingo). No contempla feriados.
+function primerDiaHabil(anio, mes) {
+  const d = new Date(Date.UTC(anio, mes - 1, 1));
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// Último día del mes (YYYY-MM-DD).
+function ultimoDiaMes(anio, mes) {
+  return new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
+}
+
+// Categorías (gasto operativo + retiros) sin confirmar para el mes.
+async function categoriasFaltantes(anio, mes) {
+  const { rows } = await pool.query(`
+    SELECT cr.nombre
+    FROM categorias_resultado cr
+    LEFT JOIN cierre_categoria cc
+      ON  cc.categoria_resultado_id = cr.id
+      AND cc.periodo_anio = $1 AND cc.periodo_mes = $2
+    WHERE cr.seccion IN ('gasto_operativo', 'retiro')
+      AND COALESCE(cc.confirmado, FALSE) = FALSE
+    ORDER BY cr.orden ASC
+  `, [anio, mes]);
+  return rows.map((r) => r.nombre);
+}
+
 // GET /api/reportes/ventas
 // ?fecha_desde=  ISO date (default: first day of current month)
 // ?fecha_hasta=  ISO date (default: today)
@@ -284,10 +311,35 @@ router.get('/gastos', async (req, res, next) => {
 // ?fecha_hasta=  ISO date  (default: hoy)
 router.get('/estado-resultados', async (req, res, next) => {
   try {
-    const { fecha_desde, fecha_hasta } = req.query;
-    const hoy   = new Date().toISOString().slice(0, 10);
-    const desde = fecha_desde || hoy.slice(0, 8) + '01';
-    const hasta = fecha_hasta || hoy;
+    const hoy = new Date().toISOString().slice(0, 10);
+
+    // El estado de resultados se calcula por mes. Acepta ?anio=&mes= (modo
+    // mensual, default) o ?fecha_desde=&fecha_hasta= (rango custom histórico).
+    let anio, mes, desde, hasta;
+    if (req.query.fecha_desde || req.query.fecha_hasta) {
+      desde = req.query.fecha_desde || hoy.slice(0, 8) + '01';
+      hasta = req.query.fecha_hasta || hoy;
+      anio  = parseInt(desde.slice(0, 4), 10);
+      mes   = parseInt(desde.slice(5, 7), 10);
+    } else {
+      anio = parseInt(req.query.anio, 10) || parseInt(hoy.slice(0, 4), 10);
+      mes  = parseInt(req.query.mes, 10)  || parseInt(hoy.slice(5, 7), 10);
+      desde = primerDiaHabil(anio, mes);
+      const esMesActual = anio === parseInt(hoy.slice(0, 4), 10) && mes === parseInt(hoy.slice(5, 7), 10);
+      hasta = esMesActual ? hoy : ultimoDiaMes(anio, mes);
+    }
+
+    // ── Gate de cierre: el estado no se calcula hasta que todas las categorías
+    //    operativas + retiros estén confirmadas para el mes ──────────────────
+    const faltantes = await categoriasFaltantes(anio, mes);
+    if (faltantes.length > 0) {
+      return res.json({
+        cierre_pendiente: true,
+        anio, mes,
+        periodo: { desde, hasta },
+        faltantes,
+      });
+    }
 
     const sucId = sucursalEfectiva(req);
     const sucVenta   = sucId ? 'AND v.sucursal_id   = $3' : '';
@@ -295,7 +347,7 @@ router.get('/estado-resultados', async (req, res, next) => {
     const sucNC      = sucId ? 'AND nc.sucursal_id  = $3' : '';
     const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
 
-    const [ventasRes, ncRes, egresosRes, cogsRes] = await Promise.all([
+    const [ventasRes, ncRes, egresosRes, cogsRes, cogsDevRes, acumRes] = await Promise.all([
 
       // ── Ventas del período ────────────────────────────────────────
       pool.query(`
@@ -319,18 +371,25 @@ router.get('/estado-resultados', async (req, res, next) => {
           ${sucNC}
       `, baseParams).catch(() => ({ rows: [{ total_nc: 0 }] })),
 
-      // ── TODOS los subrubros (catálogo completo) LEFT JOIN egresos ──
-      // Esto garantiza que aparezcan aunque tengan $0 en el período
+      // ── Egresos agrupados por categoría de resultado ──────────────
+      // Se traen TODAS las categorías/rubros/subrubros (LEFT JOIN) para que
+      // aparezcan aunque tengan $0. La categoría 'excluido' (Compras) no entra:
+      // su costo va como COGS en la utilidad bruta.
       pool.query(`
         SELECT
-          rg.id        AS rubro_id,
-          rg.nombre    AS rubro,
-          rg.orden     AS rubro_orden,
-          sg.id        AS subrubro_id,
-          sg.nombre    AS subrubro,
+          cr.id      AS cat_id,
+          cr.nombre  AS categoria,
+          cr.orden   AS cat_orden,
+          cr.seccion AS seccion,
+          rg.id      AS rubro_id,
+          rg.nombre  AS rubro,
+          rg.orden   AS rubro_orden,
+          sg.id      AS subrubro_id,
+          sg.nombre  AS subrubro,
           COALESCE(SUM(e.total), 0)::float AS monto,
           COUNT(e.id)::int                 AS cantidad
-        FROM rubros_gastos rg
+        FROM categorias_resultado cr
+        JOIN rubros_gastos rg   ON rg.categoria_resultado_id = cr.id
         JOIN subrubro_gastos sg ON sg.rubro_id = rg.id
         LEFT JOIN egresos e
           ON  e.subrubro_gasto_id = sg.id
@@ -338,20 +397,14 @@ router.get('/estado-resultados', async (req, res, next) => {
           AND e.fecha_emision::date BETWEEN $1 AND $2
           AND e.tipo_operacion <> 'compra_mercaderia'
           ${sucEgreso}
-        -- La compra de mercadería no es gasto operativo: su costo entra como
-        -- "Costo de mercadería vendida" (COGS) en la utilidad bruta. Se oculta
-        -- ese subrubro acá para no mostrar una línea en cero ni duplicar costo.
-        WHERE sg.nombre <> 'Compra de mercadería'
-        GROUP BY rg.id, rg.nombre, rg.orden, sg.id, sg.nombre
-        ORDER BY rg.orden ASC, rg.nombre ASC, monto DESC, sg.nombre ASC
+        WHERE cr.seccion <> 'excluido'
+          AND sg.nombre <> 'Compra de mercadería'
+        GROUP BY cr.id, cr.nombre, cr.orden, cr.seccion, rg.id, rg.nombre, rg.orden, sg.id, sg.nombre
+        ORDER BY cr.orden ASC, rg.orden ASC, monto DESC, sg.nombre ASC
       `, baseParams),
 
       // ── Costo de mercadería vendida (COGS) del período ────────────
-      // Costo de los artículos efectivamente vendidos = Σ cantidad × costo
-      // actual del artículo (costo_base + costo_flete). No hay snapshot de
-      // costo histórico en venta_items, así que se usa el costo vigente.
-      // Sin ajuste por devoluciones: las notas de crédito no tienen detalle
-      // de artículos, y ya reducen los ingresos (ventas netas).
+      // Σ cantidad × costo vigente del artículo (costo_base + costo_flete).
       pool.query(`
         SELECT COALESCE(SUM(vi.cantidad * (a.costo_base + a.costo_flete)), 0)::float AS cogs
         FROM venta_items vi
@@ -362,6 +415,27 @@ router.get('/estado-resultados', async (req, res, next) => {
           AND v.fecha::date BETWEEN $1 AND $2
           ${sucVenta}
       `, baseParams),
+
+      // ── Costo de los artículos DEVUELTOS (notas de crédito) ───────
+      // Se resta del COGS: "costo de vendidos menos devueltos". Las NC guardan
+      // los ítems en jsonb con articulo_id + cantidad.
+      pool.query(`
+        SELECT COALESCE(SUM((it->>'cantidad')::numeric * (a.costo_base + a.costo_flete)), 0)::float AS cogs_dev
+        FROM notas_credito nc
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(nc.items, '[]'::jsonb)) it
+        JOIN articulos a ON a.id = (it->>'articulo_id')::uuid
+        WHERE nc.deleted_at IS NULL
+          AND nc.fecha::date BETWEEN $1 AND $2
+          AND (it->>'articulo_id') IS NOT NULL
+          ${sucNC}
+      `, baseParams).catch(() => ({ rows: [{ cogs_dev: 0 }] })),
+
+      // ── Resultado acumulado del mes anterior (arrastre) ───────────
+      pool.query(`
+        SELECT COALESCE(resultado_acumulado, 0)::float AS acum_anterior
+        FROM cierre_mensual
+        WHERE (periodo_anio, periodo_mes) = ($1, $2)
+      `, mes === 1 ? [anio - 1, 12] : [anio, mes - 1]),
     ]);
 
     const ventas_brutas  = parseFloat(ventasRes.rows[0].ventas_brutas)  || 0;
@@ -369,12 +443,24 @@ router.get('/estado-resultados', async (req, res, next) => {
     const notas_credito  = parseFloat(ncRes.rows[0].total_nc)           || 0;
     const ventas_netas   = ventas_brutas - descuentos - notas_credito;
 
-    // Agrupar subrubros bajo su rubro
-    const rubroMap = {};
+    // Agrupar subrubros → rubros → categorías
+    const catMap = {};
     for (const row of egresosRes.rows) {
-      const k = row.rubro_id;
-      if (!rubroMap[k]) {
-        rubroMap[k] = {
+      const ck = row.cat_id;
+      if (!catMap[ck]) {
+        catMap[ck] = {
+          categoria_id: row.cat_id,
+          categoria:    row.categoria,
+          orden:        row.cat_orden,
+          seccion:      row.seccion,
+          total:        0,
+          rubros:       {},
+        };
+      }
+      const cat = catMap[ck];
+      cat.total += row.monto;
+      if (!cat.rubros[row.rubro_id]) {
+        cat.rubros[row.rubro_id] = {
           rubro_id:    row.rubro_id,
           rubro:       row.rubro,
           rubro_orden: row.rubro_orden,
@@ -382,8 +468,8 @@ router.get('/estado-resultados', async (req, res, next) => {
           subrubros:   [],
         };
       }
-      rubroMap[k].total += row.monto;
-      rubroMap[k].subrubros.push({
+      cat.rubros[row.rubro_id].total += row.monto;
+      cat.rubros[row.rubro_id].subrubros.push({
         subrubro_id: row.subrubro_id,
         subrubro:    row.subrubro,
         monto:       row.monto,
@@ -392,15 +478,37 @@ router.get('/estado-resultados', async (req, res, next) => {
       });
     }
 
-    const rubros       = Object.values(rubroMap).sort((a, b) => a.rubro_orden - b.rubro_orden);
-    const total_gastos = rubros.reduce((s, r) => s + r.total, 0);
+    const categorias = Object.values(catMap)
+      .map((c) => ({ ...c, rubros: Object.values(c.rubros).sort((a, b) => a.rubro_orden - b.rubro_orden) }))
+      .sort((a, b) => a.orden - b.orden);
 
-    // Costo de mercadería vendida → Utilidad Bruta → Resultado del período
-    const costo_vendido  = parseFloat(cogsRes.rows[0].cogs) || 0;
+    const operativas = categorias.filter((c) => c.seccion === 'gasto_operativo');
+    const retiros    = categorias.filter((c) => c.seccion === 'retiro');
+    const gastos_operativos = operativas.reduce((s, c) => s + c.total, 0);
+    const retiros_periodo   = retiros.reduce((s, c) => s + c.total, 0);
+
+    // Costo de mercadería vendida (neto de devoluciones) → Utilidad bruta
+    const costo_bruto    = parseFloat(cogsRes.rows[0].cogs)        || 0;
+    const costo_devuelto = parseFloat(cogsDevRes.rows[0].cogs_dev) || 0;
+    const costo_vendido  = costo_bruto - costo_devuelto;
     const utilidad_bruta = ventas_netas - costo_vendido;
-    const resultado      = utilidad_bruta - total_gastos;
+
+    const utilidad_neta_producto = utilidad_bruta - gastos_operativos;
+
+    const acum_anterior = parseFloat(acumRes.rows[0]?.acum_anterior) || 0;
+    const resultado_acumulado = acum_anterior + utilidad_neta_producto - retiros_periodo;
+
+    // Persistir el resultado acumulado del mes para el arrastre del mes siguiente.
+    await pool.query(`
+      INSERT INTO cierre_mensual (periodo_anio, periodo_mes, resultado_acumulado)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (periodo_anio, periodo_mes)
+      DO UPDATE SET resultado_acumulado = EXCLUDED.resultado_acumulado
+    `, [anio, mes, resultado_acumulado]);
 
     res.json({
+      cierre_pendiente: false,
+      anio, mes,
       periodo: { desde, hasta },
       ingresos: {
         ventas_brutas,
@@ -410,6 +518,8 @@ router.get('/estado-resultados', async (req, res, next) => {
         cantidad_ventas: ventasRes.rows[0].cantidad_ventas,
       },
       costo_mercaderia: {
+        costo_bruto,
+        costo_devuelto,
         costo_vendido,
         utilidad_bruta,
         margen_bruto_pct: ventas_netas > 0
@@ -417,16 +527,122 @@ router.get('/estado-resultados', async (req, res, next) => {
           : 0,
       },
       gastos: {
-        rubros,
-        total_gastos,
+        categorias: operativas,
+        total: gastos_operativos,
       },
-      resultado: {
-        resultado_periodo: resultado,
-        margen_pct: ventas_netas > 0
-          ? parseFloat(((resultado / ventas_netas) * 100).toFixed(1))
-          : 0,
+      utilidad_neta_producto,
+      retiros: {
+        categorias: retiros,
+        total: retiros_periodo,
+      },
+      resultado_acumulado: {
+        acumulado_anterior: acum_anterior,
+        total: resultado_acumulado,
       },
     });
+  } catch (err) { next(err); }
+});
+
+// ─── Cierre mensual del estado de resultados ─────────────────────────────────
+// GET /api/reportes/estado-resultados/cierre?anio=&mes=
+// Devuelve el estado de confirmación de cada categoría del mes.
+router.get('/estado-resultados/cierre', async (req, res, next) => {
+  try {
+    const hoy  = new Date().toISOString().slice(0, 10);
+    const anio = parseInt(req.query.anio, 10) || parseInt(hoy.slice(0, 4), 10);
+    const mes  = parseInt(req.query.mes, 10)  || parseInt(hoy.slice(5, 7), 10);
+    const desde = primerDiaHabil(anio, mes);
+    const esMesActual = anio === parseInt(hoy.slice(0, 4), 10) && mes === parseInt(hoy.slice(5, 7), 10);
+    const hasta = esMesActual ? hoy : ultimoDiaMes(anio, mes);
+
+    // Monto actual de cada categoría (Σ egresos del mes) + estado de confirmación
+    const { rows } = await pool.query(`
+      SELECT
+        cr.id      AS categoria_id,
+        cr.nombre  AS categoria,
+        cr.orden,
+        cr.seccion,
+        COALESCE(SUM(e.total), 0)::float AS monto_actual,
+        bool_or(cc.confirmado) AS confirmado
+      FROM categorias_resultado cr
+      LEFT JOIN rubros_gastos rg   ON rg.categoria_resultado_id = cr.id
+      LEFT JOIN subrubro_gastos sg ON sg.rubro_id = rg.id
+      LEFT JOIN egresos e
+        ON  e.subrubro_gasto_id = sg.id
+        AND e.deleted_at IS NULL
+        AND e.fecha_emision::date BETWEEN $1 AND $2
+        AND e.tipo_operacion <> 'compra_mercaderia'
+      LEFT JOIN cierre_categoria cc
+        ON  cc.categoria_resultado_id = cr.id
+        AND cc.periodo_anio = $3 AND cc.periodo_mes = $4
+      WHERE cr.seccion <> 'excluido'
+      GROUP BY cr.id, cr.nombre, cr.orden, cr.seccion
+      ORDER BY cr.orden ASC
+    `, [desde, hasta, anio, mes]);
+
+    const categorias = rows.map((r) => ({
+      categoria_id: r.categoria_id,
+      categoria:    r.categoria,
+      orden:        r.orden,
+      seccion:      r.seccion,
+      monto_actual: r.monto_actual,
+      confirmado:   r.confirmado === true,
+    }));
+    const faltantes = categorias.filter((c) => !c.confirmado);
+
+    const cierre = await pool.query(
+      `SELECT cerrado, resultado_acumulado FROM cierre_mensual WHERE periodo_anio = $1 AND periodo_mes = $2`,
+      [anio, mes]
+    );
+
+    res.json({
+      anio, mes,
+      periodo: { desde, hasta },
+      categorias,
+      listo: faltantes.length === 0,
+      faltantes: faltantes.map((c) => c.categoria),
+      cerrado: cierre.rows[0]?.cerrado === true,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/reportes/estado-resultados/cierre/confirmar { anio, mes, categoria_resultado_id }
+// Confirma una categoría del mes (sirve también para confirmar $0).
+router.post('/estado-resultados/cierre/confirmar', async (req, res, next) => {
+  try {
+    const { anio, mes, categoria_resultado_id } = req.body;
+    if (!anio || !mes || !categoria_resultado_id) {
+      return res.status(400).json({ error: 'anio, mes y categoria_resultado_id son obligatorios' });
+    }
+    const usuario_id = req.usuario?.id ?? null;
+    await pool.query(`
+      INSERT INTO cierre_categoria (periodo_anio, periodo_mes, categoria_resultado_id, confirmado, confirmado_por, confirmado_en)
+      VALUES ($1, $2, $3, TRUE, $4, NOW())
+      ON CONFLICT (periodo_anio, periodo_mes, categoria_resultado_id)
+      DO UPDATE SET confirmado = TRUE, confirmado_por = $4, confirmado_en = NOW()
+    `, [anio, mes, categoria_resultado_id, usuario_id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// POST /api/reportes/estado-resultados/cierre/reabrir { anio, mes, categoria_resultado_id }
+// Revierte la confirmación de una categoría (corrección).
+router.post('/estado-resultados/cierre/reabrir', async (req, res, next) => {
+  try {
+    const { anio, mes, categoria_resultado_id } = req.body;
+    if (!anio || !mes || !categoria_resultado_id) {
+      return res.status(400).json({ error: 'anio, mes y categoria_resultado_id son obligatorios' });
+    }
+    await pool.query(`
+      UPDATE cierre_categoria SET confirmado = FALSE, confirmado_en = NULL
+      WHERE periodo_anio = $1 AND periodo_mes = $2 AND categoria_resultado_id = $3
+    `, [anio, mes, categoria_resultado_id]);
+    // Si el mes estaba cerrado, se reabre.
+    await pool.query(
+      `UPDATE cierre_mensual SET cerrado = FALSE WHERE periodo_anio = $1 AND periodo_mes = $2`,
+      [anio, mes]
+    );
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 

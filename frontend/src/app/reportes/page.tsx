@@ -4,6 +4,7 @@ import { serverFetch } from '@/lib/serverFetch';
 import FiltrosReportes from './FiltrosReportes';
 import ReporteGastos from './ReporteGastos';
 import EstadoResultados from './EstadoResultados';
+import CierreMensual from './CierreMensual';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,7 +164,18 @@ export default async function ReportesPage({
     const res = await serverFetch(`/api/reportes/gastos?${qs}`, { cache: 'no-store' });
     gastosData = res.ok ? await res.json() : null;
   } else if (tab === 'er') {
-    const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    // Modo mensual por defecto (primer día hábil → hoy). Si el usuario eligió un
+    // rango custom (fecha_desde/fecha_hasta en la URL), se pasa ese rango.
+    const customRange = !!(searchParams.fecha_desde || searchParams.fecha_hasta);
+    const qs = new URLSearchParams();
+    if (customRange) {
+      qs.set('fecha_desde', fechaDesde);
+      qs.set('fecha_hasta', fechaHasta);
+    } else {
+      const hoy = new Date();
+      qs.set('anio', String(hoy.getFullYear()));
+      qs.set('mes', String(hoy.getMonth() + 1));
+    }
     const res = await serverFetch(`/api/reportes/estado-resultados?${qs}`, { cache: 'no-store' });
     erData = res.ok ? await res.json() : null;
   } else {
@@ -230,11 +242,13 @@ export default async function ReportesPage({
 
       {/* ── TAB ESTADO DE RESULTADOS ────────────────────────────────── */}
       {tab === 'er' && (
-        erData
-          ? <EstadoResultados data={erData} fechaDesde={fechaDesde} fechaHasta={fechaHasta} />
-          : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
+        !erData
+          ? <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
               <p className="text-kp-gray text-sm">No se pudo cargar el estado de resultados.</p>
             </div>
+          : erData.cierre_pendiente
+            ? <CierreMensual anio={erData.anio} mes={erData.mes} />
+            : <EstadoResultados data={erData} fechaDesde={erData.periodo.desde} fechaHasta={erData.periodo.hasta} />
       )}
 
       {/* ── TAB VENTAS ─────────────────────────────────────────────── */}
