@@ -404,9 +404,11 @@ router.get('/estado-resultados', async (req, res, next) => {
       `, baseParams),
 
       // ── Costo de mercadería vendida (COGS) del período ────────────
-      // Σ cantidad × costo vigente del artículo (costo_base + costo_flete).
+      // Σ cantidad × costo_base del artículo (neto, sin IVA ni flete). El flete
+      // NO se incluye acá: se imputa aparte como gasto operativo en el subrubro
+      // "Transporte de carga", así que sumarlo al COGS lo duplicaría.
       pool.query(`
-        SELECT COALESCE(SUM(vi.cantidad * (a.costo_base + a.costo_flete)), 0)::float AS cogs
+        SELECT COALESCE(SUM(vi.cantidad * a.costo_base), 0)::float AS cogs
         FROM venta_items vi
         JOIN ventas v    ON v.id = vi.venta_id
         JOIN articulos a ON a.id = vi.articulo_id
@@ -420,7 +422,7 @@ router.get('/estado-resultados', async (req, res, next) => {
       // Se resta del COGS: "costo de vendidos menos devueltos". Las NC guardan
       // los ítems en jsonb con articulo_id + cantidad.
       pool.query(`
-        SELECT COALESCE(SUM((it->>'cantidad')::numeric * (a.costo_base + a.costo_flete)), 0)::float AS cogs_dev
+        SELECT COALESCE(SUM((it->>'cantidad')::numeric * a.costo_base), 0)::float AS cogs_dev
         FROM notas_credito nc
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(nc.items, '[]'::jsonb)) it
         JOIN articulos a ON a.id = (it->>'articulo_id')::uuid
