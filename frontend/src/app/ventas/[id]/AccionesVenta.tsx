@@ -19,7 +19,11 @@ type Facturacion = {
 } | null;
 
 interface MedioPago { id: string; nombre: string; }
-interface PagoConfirm { medio_pago_id: string; monto: string; }
+interface CuentaBancaria { id: string; nombre: string; banco: string | null; alias: string | null; }
+interface PagoConfirm { medio_pago_id: string; monto: string; cuenta_destino_id: string; }
+
+const esMedioTransferencia = (nombre?: string) =>
+  !!nombre && ['transferencia', 'mercado pago', 'qr'].some(k => nombre.toLowerCase().includes(k));
 
 export default function AccionesVenta({
   ventaId, estado, total, facturacion, observaciones,
@@ -47,6 +51,7 @@ export default function AccionesVenta({
   const [confirmarLoading, setConfirmarLoading] = useState(false);
   const [confirmarError,   setConfirmarError]   = useState('');
   const [mediosPago,       setMediosPago]       = useState<MedioPago[]>([]);
+  const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [pagos,            setPagos]            = useState<PagoConfirm[]>([]);
 
   useEffect(() => {
@@ -57,15 +62,23 @@ export default function AccionesVenta({
         const lista: MedioPago[] = d.medios_pago ?? [];
         setMediosPago(lista);
         if (pagos.length === 0 && lista.length > 0) {
-          setPagos([{ medio_pago_id: lista[0].id, monto: String(parseFloat(total) || '') }]);
+          setPagos([{ medio_pago_id: lista[0].id, monto: String(parseFloat(total) || ''), cuenta_destino_id: '' }]);
         }
       })
       .catch(() => {});
   }, [confirmarOpen]);
 
+  useEffect(() => {
+    if (!confirmarOpen || cuentasBancarias.length > 0) return;
+    apiFetch('/api/cuentas-bancarias')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setCuentasBancarias(d.cuentas ?? []))
+      .catch(() => {});
+  }, [confirmarOpen]);
+
   const agregarPagoConfirmar = () => {
     const primero = mediosPago[0]?.id ?? '';
-    setPagos(prev => [...prev, { medio_pago_id: primero, monto: '' }]);
+    setPagos(prev => [...prev, { medio_pago_id: primero, monto: '', cuenta_destino_id: '' }]);
   };
 
   const totalPagos = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
@@ -80,7 +93,13 @@ export default function AccionesVenta({
     try {
       const res = await apiFetch(`/api/ventas/${ventaId}/confirmar-preventa`, {
         method: 'PATCH',
-        body: JSON.stringify({ pagos: pagos.map(p => ({ medio_pago_id: p.medio_pago_id, monto: parseFloat(p.monto) })) }),
+        body: JSON.stringify({ pagos: pagos.map(p => ({
+          medio_pago_id: p.medio_pago_id,
+          monto: parseFloat(p.monto),
+          cuenta_destino: esMedioTransferencia(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre)
+            ? (cuentasBancarias.find(c => c.id === p.cuenta_destino_id)?.nombre ?? null)
+            : null,
+        })) }),
       });
       const data = await res.json();
       if (!res.ok) { setConfirmarError(data.error ?? 'Error al confirmar'); return; }
@@ -433,36 +452,66 @@ export default function AccionesVenta({
                 <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
               ) : (
                 <>
-                  {pagos.map((pago, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <select
-                        value={pago.medio_pago_id}
-                        onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, medio_pago_id: e.target.value } : p))}
-                        className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
-                      >
-                        {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
-                      </select>
-                      <div className="relative w-32">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={pago.monto}
-                          onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, monto: e.target.value } : p))}
-                          placeholder="0.00"
-                          className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-2 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
-                        />
+                  {pagos.map((pago, idx) => {
+                    const medio = mediosPago.find(mp => mp.id === pago.medio_pago_id);
+                    const esTransferencia = esMedioTransferencia(medio?.nombre);
+                    const cuentaSel = cuentasBancarias.find(c => c.id === pago.cuenta_destino_id);
+                    return (
+                    <div key={idx} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={pago.medio_pago_id}
+                          onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, medio_pago_id: e.target.value, cuenta_destino_id: '' } : p))}
+                          className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                        >
+                          {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
+                        </select>
+                        <div className="relative w-32">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={pago.monto}
+                            onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, monto: e.target.value } : p))}
+                            placeholder="0.00"
+                            className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-2 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPagos(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-kp-gray hover:text-rose-400 transition-colors p-1 flex-shrink-0"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setPagos(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-kp-gray hover:text-rose-400 transition-colors p-1 flex-shrink-0"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
+                      {esTransferencia && cuentasBancarias.length > 0 && (
+                        <div className="pl-1">
+                          <select
+                            value={pago.cuenta_destino_id}
+                            onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, cuenta_destino_id: e.target.value } : p))}
+                            className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                          >
+                            <option value="">Seleccioná cuenta de destino…</option>
+                            {cuentasBancarias.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          {cuentaSel && (cuentaSel.banco || cuentaSel.alias) && (
+                            <p className="mt-1 text-[11px] text-kp-gray px-1">
+                              {cuentaSel.banco && <span>{cuentaSel.banco}</span>}
+                              {cuentaSel.banco && cuentaSel.alias && <span> · </span>}
+                              {cuentaSel.alias && <span>Alias: {cuentaSel.alias}</span>}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                   <button
                     type="button"
                     onClick={agregarPagoConfirmar}
