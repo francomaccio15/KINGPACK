@@ -660,7 +660,8 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
 });
 
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
-router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'), async (req, res, next) => {
+// Cajero puede anular/cambiar estado completando el motivo correspondiente.
+router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor', 'cajero'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
@@ -1052,7 +1053,8 @@ router.patch('/:id/observaciones', async (req, res, next) => {
 });
 
 // ─── PUT /api/ventas/:id/items — editar items y pagos de una venta existente ───
-router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor'), async (req, res, next) => {
+// Cajero puede editar la venta completando los campos correspondientes (carrito/pagos).
+router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', 'cajero'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
