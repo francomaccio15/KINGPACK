@@ -183,16 +183,12 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
             <div className="w-72">
               <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
                 <div className="flex justify-between px-4 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-600 font-medium">Subtotal (neto)</span>
+                  <span className="text-sm text-gray-600 font-medium">Subtotal</span>
                   <span className="text-sm tabular-nums font-semibold">{ars(nota.subtotal)}</span>
-                </div>
-                <div className="flex justify-between px-4 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-600 font-medium">IVA {nota.iva_pct}%</span>
-                  <span className="text-sm tabular-nums font-semibold">{ars(nota.iva_monto)}</span>
                 </div>
                 <div className="flex justify-between px-4 py-3 bg-gray-900 rounded-b-lg">
                   <span className="text-base font-black text-white uppercase tracking-wide">Total a favor</span>
-                  <span className="text-base font-black text-white tabular-nums">{ars(nota.total)}</span>
+                  <span className="text-base font-black text-white tabular-nums">{ars(nota.subtotal)}</span>
                 </div>
               </div>
             </div>

@@ -142,13 +142,6 @@ const MOTIVOS_PRESET = [
   'Diferencia de precios',
 ];
 
-const IVA_OPCIONES = [
-  { label: '0% (Exento)', value: 0 },
-  { label: '10,5%', value: 10.5 },
-  { label: '21%', value: 21 },
-  { label: '27%', value: 27 },
-];
-
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
 interface Props {
@@ -170,7 +163,6 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [fecha,           setFecha]            = useState(today);
   const [numRef,          setNumRef]           = useState('');
   const [motivo,          setMotivo]           = useState('');
-  const [ivaPct,          setIvaPct]           = useState(21);
   const [items,           setItems]            = useState<NcItem[]>([emptyItem()]);
   const [saving,          setSaving]           = useState(false);
   const [error,           setError]            = useState('');
@@ -187,14 +179,6 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     if (venta.sucursal_id) setSucursalId(String(venta.sucursal_id));
     setNumRef(`Venta #${venta.numero}`);
     setMotivo('Devolución de mercadería');
-
-    // Calcular IVA efectivo ponderado
-    const netTotal = ventaItems.reduce((s, it) => s + parseFloat(String(it.precio_unitario_final)) * parseFloat(String(it.cantidad)), 0);
-    const ivaTotal = ventaItems.reduce((s, it) => s + parseFloat(String(it.iva_monto)) * parseFloat(String(it.cantidad)), 0);
-    const pctEfectivo = netTotal > 0 ? (ivaTotal / netTotal) * 100 : 21;
-    const opciones = [0, 10.5, 21, 27];
-    const ivaMasCercano = opciones.reduce((a, b) => Math.abs(b - pctEfectivo) < Math.abs(a - pctEfectivo) ? b : a);
-    setIvaPct(ivaMasCercano);
 
     setItems(ventaItems.map(it => ({
       descripcion:     it.nombre,
@@ -230,10 +214,9 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     }
   };
 
-  // Calcular totales
+  // Calcular totales — la nota de crédito NO lleva IVA: el total es el subtotal
   const subtotal = items.reduce((s, it) => s + it.cantidad * it.precio_unitario, 0);
-  const ivaMonto = Math.round(subtotal * (ivaPct / 100) * 100) / 100;
-  const total    = Math.round((subtotal + ivaMonto) * 100) / 100;
+  const total    = Math.round(subtotal * 100) / 100;
 
   const updateItem = (i: number, field: keyof NcItem, val: string | number) => {
     setItems(prev => prev.map((it, idx) => {
@@ -276,8 +259,8 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           motivo,
           items,
           subtotal,
-          iva_pct:             ivaPct,
-          iva_monto:           ivaMonto,
+          iva_pct:             0,
+          iva_monto:           0,
           total,
           fecha,
         }),
@@ -519,28 +502,12 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
             </div>
           </div>
 
-          {/* IVA + Totales */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-            <div>
-              <label className={labelCls}>Alícuota IVA</label>
-              <select
-                value={ivaPct}
-                onChange={e => setIvaPct(parseFloat(e.target.value))}
-                className={selectCls}
-              >
-                {IVA_OPCIONES.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
+          {/* Totales — la nota de crédito no lleva IVA */}
+          <div className="flex justify-end">
+            <div className="w-full sm:w-72 bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm text-kp-gray">
-                <span>Subtotal (neto)</span>
+                <span>Subtotal</span>
                 <span className="tabular-nums text-kp-white">{ars.format(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-kp-gray">
-                <span>IVA {ivaPct}%</span>
-                <span className="tabular-nums text-kp-white">{ars.format(ivaMonto)}</span>
               </div>
               <div className="flex justify-between font-bold text-base border-t border-kp-border pt-2">
                 <span className="text-kp-white">TOTAL a favor</span>
