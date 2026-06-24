@@ -18,6 +18,12 @@ echo "[2/6] Backend: npm install + migraciones..."
 
 echo "[3/6] Frontend: npm install + build..."
 (cd frontend && npm install --no-audit --no-fund)
+# Parar el 'next start' viejo ANTES de construir: si sigue corriendo, compite con
+# collect-build-traces (lee .next mientras next build lo regenera) y produce un
+# ENOENT sobre *.nft.json que aborta el build. Pararlo lo evita.
+if pm2 describe kingpack-frontend >/dev/null 2>&1; then
+  pm2 stop kingpack-frontend || true
+fi
 # Build limpio: un .next de un build previo provoca ENOENT en collect-build-traces
 # (busca .nft.json que no se regeneran) y deja artefactos viejos que el server
 # sirve como "Could not find a production build". Borrarlo garantiza build sano.
