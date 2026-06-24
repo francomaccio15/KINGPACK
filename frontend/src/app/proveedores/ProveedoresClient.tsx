@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { getStoredUser } from '@/lib/auth';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -24,6 +25,32 @@ interface MovimientoCC {
   origen_tipo: string | null;
   descripcion: string | null;
 }
+
+interface PedidoHist {
+  id: string;
+  fecha_pedido: string;
+  estado: 'pendiente' | 'recibido_parcial' | 'recibido' | 'cancelado';
+  monto_total: string;
+  numero_factura_prov: string | null;
+  sucursal_nombre: string | null;
+  items_count: number;
+  egreso_id: string | null;
+  stock_acreditado: boolean;
+}
+
+const ESTADO_STYLE: Record<string, string> = {
+  pendiente:        'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  recibido_parcial: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+  recibido:         'bg-green-500/10 text-green-400 border-green-500/30',
+  cancelado:        'bg-kp-border/30 text-kp-gray border-kp-border/50',
+};
+
+const ESTADO_LABEL: Record<string, string> = {
+  pendiente:        'Pendiente',
+  recibido_parcial: 'Parcial',
+  recibido:         'Recibido',
+  cancelado:        'Cancelado',
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -249,6 +276,95 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
   );
 }
 
+// ─── Modal historial de pedidos ───────────────────────────────────────────────
+function ModalHistorialPedidos({ proveedor, esAdmin, onCerrar }: { proveedor: Proveedor; esAdmin: boolean; onCerrar: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [pedidos, setPedidos] = useState<PedidoHist[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res  = await apiFetch(`/api/pedidos-compra?proveedor_id=${proveedor.id}&limit=200`);
+        const data = await res.json();
+        setPedidos(data.pedidos ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [proveedor.id]);
+
+  const totalComprado = pedidos
+    .filter(p => p.estado !== 'cancelado')
+    .reduce((acc, p) => acc + (parseFloat(p.monto_total) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Resumen */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
+          <span className="block text-xs uppercase tracking-widest text-kp-gray">Pedidos</span>
+          <span className="text-lg font-bold tabular-nums text-kp-white">{pedidos.length}</span>
+        </div>
+        {esAdmin && (
+          <div className="bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
+            <span className="block text-xs uppercase tracking-widest text-kp-gray">Total comprado</span>
+            <span className="text-lg font-bold tabular-nums text-kp-white">{fmt(totalComprado)}</span>
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10 text-kp-gray"><Spinner /></div>
+      ) : pedidos.length === 0 ? (
+        <p className="text-center py-10 text-sm text-kp-gray">Este proveedor todavía no tiene pedidos registrados.</p>
+      ) : (
+        <div className="rounded-xl border border-kp-border overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-kp-surface2 border-b border-kp-border">
+                <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Fecha</th>
+                <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Factura</th>
+                <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Sucursal</th>
+                <th className="text-center px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Items</th>
+                <th className="text-center px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Estado</th>
+                {esAdmin && <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Total</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-kp-border">
+              {pedidos.map(p => (
+                <tr key={p.id} className={`bg-kp-surface hover:bg-kp-surface2 transition-colors ${p.estado === 'cancelado' ? 'opacity-50' : ''}`}>
+                  <td className="px-3 py-2 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(p.fecha_pedido)}</td>
+                  <td className="px-3 py-2 text-xs text-kp-gray-lt whitespace-nowrap">
+                    {p.egreso_id
+                      ? <a href={`/gastos/${p.egreso_id}`} className="text-blue-400/80 hover:text-blue-400 hover:underline">{p.numero_factura_prov || 'ver egreso'}</a>
+                      : (p.numero_factura_prov || '—')}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-kp-gray-lt">{p.sucursal_nombre ?? '—'}</td>
+                  <td className="px-3 py-2 text-center text-xs text-kp-gray tabular-nums">{p.items_count}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[p.estado] ?? ''}`}>
+                      {ESTADO_LABEL[p.estado] ?? p.estado}
+                    </span>
+                  </td>
+                  {esAdmin && <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{fmt(p.monto_total)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex justify-end pt-1">
+        <button onClick={onCerrar}
+          className="py-2 px-5 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white transition-colors">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ProveedoresClient() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -259,7 +375,10 @@ export default function ProveedoresClient() {
   const [modalCrear,  setModalCrear]  = useState(false);
   const [modalEditar, setModalEditar] = useState<Proveedor | null>(null);
   const [modalCC,     setModalCC]     = useState<Proveedor | null>(null);
+  const [modalHist,   setModalHist]   = useState<Proveedor | null>(null);
   const [togglingId,  setTogglingId]  = useState<string | null>(null);
+
+  const esAdmin = getStoredUser()?.rol === 'administrador';
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -382,6 +501,13 @@ export default function ProveedoresClient() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {/* Historial de pedidos */}
+                      <button onClick={() => setModalHist(p)} title="Historial de pedidos"
+                        className="p-1.5 rounded-lg text-kp-gray hover:text-amber-400 hover:bg-amber-500/10 transition-colors">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                          <path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l4 2" />
+                        </svg>
+                      </button>
                       {/* Cuenta corriente */}
                       <button onClick={() => setModalCC(p)} title="Cuenta corriente"
                         className="p-1.5 rounded-lg text-kp-gray hover:text-blue-400 hover:bg-blue-500/10 transition-colors">
@@ -431,6 +557,13 @@ export default function ProveedoresClient() {
       {modalCC && (
         <Modal title={`Cuenta corriente — ${modalCC.razon_social}`} onClose={() => setModalCC(null)} wide>
           <ModalCuentaCorriente proveedor={modalCC} onCerrar={() => setModalCC(null)} />
+        </Modal>
+      )}
+
+      {/* Modal Historial de pedidos */}
+      {modalHist && (
+        <Modal title={`Historial de pedidos — ${modalHist.razon_social}`} onClose={() => setModalHist(null)} wide>
+          <ModalHistorialPedidos proveedor={modalHist} esAdmin={esAdmin} onCerrar={() => setModalHist(null)} />
         </Modal>
       )}
 

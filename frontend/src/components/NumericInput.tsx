@@ -58,21 +58,33 @@ export default function NumericInput({
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
 
-    // Solo permitir dígitos, comas (decimal) y puntos (miles, se ignoran en el valor)
+    // Solo permitir dígitos, comas (decimal) y puntos (miles, se ignoran como valor)
     const filtered = raw.replace(/[^\d.,]/g, '');
 
-    // Garantizar una sola coma (decimal)
-    const parts = filtered.split(',');
-    const display = parts.length > 2
-      ? parts[0] + ',' + parts.slice(1).join('')
-      : filtered;
+    // Quitar puntos (separadores de miles) y normalizar a una sola coma decimal
+    const noMiles  = filtered.replace(/\./g, '');
+    const parts    = noMiles.split(',');
+    const hasComma = parts.length > 1;
+
+    // Parte entera sin ceros a la izquierda (pero conservando un solo "0")
+    let intRaw = parts[0].replace(/^0+(?=\d)/, '');
+    // Parte decimal limitada a la cantidad de decimales permitidos
+    let decRaw = hasComma ? parts.slice(1).join('') : '';
+    if (decimals >= 0 && decRaw.length > decimals) decRaw = decRaw.slice(0, decimals);
+
+    // Colocar puntos de miles en la parte entera mientras se escribe
+    const intFmt = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    let display: string;
+    if (hasComma) display = (intFmt || '0') + ',' + decRaw;
+    else          display = intFmt;
 
     setEditDisplay(display);
 
-    // Valor float: quitar puntos (separadores de miles), reemplazar coma por punto
-    const floatStr = display.replace(/\./g, '').replace(',', '.');
-    const isEmpty  = floatStr === '' || floatStr === '.';
-    onChange({ target: { value: isEmpty ? '' : floatStr } });
+    // Valor float estándar para el onChange ("1234567.89" o "")
+    const isEmpty  = intRaw === '' && decRaw === '';
+    const floatStr = isEmpty ? '' : `${intRaw || '0'}${hasComma ? '.' + decRaw : ''}`;
+    onChange({ target: { value: floatStr } });
   }
 
   return (
