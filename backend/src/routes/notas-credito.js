@@ -20,6 +20,7 @@ const SELECT_NC = `
     nc.iva_pct::float,
     nc.iva_monto::float,
     nc.total::float,
+    nc.forma_devolucion,
     nc.items,
     nc.cae,
     nc.created_at,
@@ -154,11 +155,15 @@ router.post('/', async (req, res, next) => {
       iva_monto,
       total,
       fecha,
+      forma_devolucion = 'cuenta_corriente',
     } = req.body;
 
     if (!motivo?.trim())           return res.status(400).json({ error: 'El motivo es obligatorio' });
     if (!tipo_comprobante_id)      return res.status(400).json({ error: 'El tipo de comprobante es obligatorio' });
     if (total === undefined || total === null) return res.status(400).json({ error: 'El total es obligatorio' });
+
+    const FORMAS_VALIDAS = ['cuenta_corriente', 'efectivo', 'transferencia'];
+    const formaDev = FORMAS_VALIDAS.includes(forma_devolucion) ? forma_devolucion : 'cuenta_corriente';
 
     await client.query('BEGIN');
 
@@ -176,8 +181,8 @@ router.post('/', async (req, res, next) => {
       `INSERT INTO notas_credito
          (factura_id, cliente_id, sucursal_id, tipo_comprobante_id,
           numero, numero_referencia, motivo, items,
-          subtotal, iva_pct, iva_monto, total, estado, emitida_por, fecha)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14)
+          subtotal, iva_pct, iva_monto, total, estado, emitida_por, fecha, forma_devolucion)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14,$15)
        RETURNING id`,
       [
         factura_id || null,
@@ -194,6 +199,7 @@ router.post('/', async (req, res, next) => {
         parseFloat(total) || 0,
         req.usuario.id,
         fecha || new Date().toISOString(),
+        formaDev,
       ]
     );
     const ncId = rows[0].id;
@@ -216,7 +222,9 @@ router.post('/', async (req, res, next) => {
     }
 
     // ── 2. Acreditar cuenta corriente del cliente ─────────────────────────────
-    if (cliente_id && totalNum > 0) {
+    // Solo si la devolución es por cuenta corriente. Efectivo/transferencia es
+    // una devolución física y no debe mover el saldo del cliente.
+    if (cliente_id && totalNum > 0 && formaDev === 'cuenta_corriente') {
       const saldoActual = await getSaldoActual(client, cliente_id);
       // haber = total NC → reduce deuda / genera saldo a favor (saldo negativo)
       const saldoDespues = parseFloat((saldoActual - totalNum).toFixed(2));
@@ -260,7 +268,7 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
       `UPDATE notas_credito
           SET estado = 'anulada', updated_at = NOW()
         WHERE id = $1 AND deleted_at IS NULL AND estado != 'anulada'
-        RETURNING id, cliente_id, sucursal_id, total, items`,
+        RETURNING id, cliente_id, sucursal_id, total, items, forma_devolucion`,
       [req.params.id]
     );
     if (!rows[0]) {
@@ -288,7 +296,8 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
     }
 
     // ── 2. Revertir CC: insertar debe para cancelar el haber de la NC ─────────
-    if (nc.cliente_id && totalNum > 0) {
+    // Solo si la NC había acreditado por cuenta corriente.
+    if (nc.cliente_id && totalNum > 0 && nc.forma_devolucion === 'cuenta_corriente') {
       const saldoActual = await getSaldoActual(client, nc.cliente_id);
       // debe = total NC → revierte el haber; saldo sube (cliente vuelve a deber o pierde el crédito)
       const saldoDespues = parseFloat((saldoActual + totalNum).toFixed(2));

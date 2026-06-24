@@ -15,6 +15,7 @@ export type NotaCredito = {
   iva_pct: number;
   iva_monto: number;
   total: number;
+  forma_devolucion: 'cuenta_corriente' | 'efectivo' | 'transferencia';
   items: NcItem[] | null;
   cae: string | null;
   created_at: string;

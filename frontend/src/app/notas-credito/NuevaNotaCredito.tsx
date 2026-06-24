@@ -163,9 +163,14 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [fecha,           setFecha]            = useState(today);
   const [numRef,          setNumRef]           = useState('');
   const [motivo,          setMotivo]           = useState('');
+  const [formaDevolucion, setFormaDevolucion]  = useState<'cuenta_corriente' | 'efectivo' | 'transferencia'>('cuenta_corriente');
   const [items,           setItems]            = useState<NcItem[]>([emptyItem()]);
   const [saving,          setSaving]           = useState(false);
   const [error,           setError]            = useState('');
+
+  // — Historial de notas de crédito del cliente seleccionado —
+  const [historial,        setHistorial]        = useState<NotaCredito[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   // — Devolución de venta completa —
   const [modoDevolucion,  setModoDevolucion]   = useState(false);
@@ -213,6 +218,19 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
       setBuscandoVenta(false);
     }
   };
+
+  // Traer historial de notas de crédito del cliente seleccionado
+  useEffect(() => {
+    if (!clienteId) { setHistorial([]); return; }
+    let cancelado = false;
+    setLoadingHistorial(true);
+    apiFetch(`/api/notas-credito?cliente_id=${clienteId}&limit=20`)
+      .then(r => r.ok ? r.json() : { notas: [] })
+      .then(data => { if (!cancelado) setHistorial(data.notas ?? []); })
+      .catch(() => { if (!cancelado) setHistorial([]); })
+      .finally(() => { if (!cancelado) setLoadingHistorial(false); });
+    return () => { cancelado = true; };
+  }, [clienteId]);
 
   // Calcular totales — la nota de crédito NO lleva IVA: el total es el subtotal
   const subtotal = items.reduce((s, it) => s + it.cantidad * it.precio_unitario, 0);
@@ -263,6 +281,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           iva_monto:           0,
           total,
           fecha,
+          forma_devolucion:    formaDevolucion,
         }),
       });
       if (!r.ok) {
@@ -417,6 +436,47 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
             </div>
           </div>
 
+          {/* Historial de notas de crédito del cliente */}
+          {clienteId && (
+            <div className="rounded-xl border border-kp-border bg-kp-surface2 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border/60">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-kp-gray">
+                  Historial de notas de crédito del cliente
+                </span>
+                {!loadingHistorial && (
+                  <span className="text-[10px] font-semibold text-kp-gray-lt">
+                    {historial.length} {historial.length === 1 ? 'nota' : 'notas'}
+                  </span>
+                )}
+              </div>
+              {loadingHistorial ? (
+                <p className="px-4 py-3 text-xs text-kp-gray">Cargando historial…</p>
+              ) : historial.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-kp-gray">Este cliente no tiene notas de crédito previas.</p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto divide-y divide-kp-border/40">
+                  {historial.map(nc => (
+                    <div key={nc.id} className="flex items-center gap-3 px-4 py-2 text-xs">
+                      <span className="font-semibold text-kp-white tabular-nums w-20 shrink-0">
+                        {nc.tipo_letra ?? '?'} N° {nc.numero ? String(nc.numero).padStart(8, '0') : '—'}
+                      </span>
+                      <span className="text-kp-gray w-24 shrink-0 tabular-nums">
+                        {new Date(nc.fecha).toLocaleDateString('es-AR')}
+                      </span>
+                      <span className="text-kp-gray-lt flex-1 min-w-0 truncate">{nc.motivo}</span>
+                      {nc.estado === 'anulada' && (
+                        <span className="text-rose-400 font-bold uppercase text-[9px] shrink-0">Anulada</span>
+                      )}
+                      <span className="text-kp-white font-semibold tabular-nums shrink-0">
+                        {ars.format(nc.total)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Motivo */}
           <div>
             <label className={labelCls}>Motivo de la nota de crédito *</label>
@@ -502,9 +562,28 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
             </div>
           </div>
 
-          {/* Totales — la nota de crédito no lleva IVA */}
-          <div className="flex justify-end">
-            <div className="w-full sm:w-72 bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
+          {/* Forma de devolución + Totales — la nota de crédito no lleva IVA */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <div>
+              <label className={labelCls}>Forma de devolución</label>
+              <select
+                value={formaDevolucion}
+                onChange={e => setFormaDevolucion(e.target.value as typeof formaDevolucion)}
+                className={selectCls}
+              >
+                <option value="cuenta_corriente">Cuenta corriente (suma al saldo del cliente)</option>
+                <option value="efectivo">Efectivo (devolución física)</option>
+                <option value="transferencia">Transferencia (devolución física)</option>
+              </select>
+              <p className="text-[11px] text-kp-gray mt-1.5 leading-snug">
+                {formaDevolucion === 'cuenta_corriente'
+                  ? clienteId
+                    ? 'Se acreditará el total al saldo a favor del cliente.'
+                    : 'Seleccioná un cliente para acreditar el saldo.'
+                  : 'No modifica el saldo de cuenta corriente del cliente.'}
+              </p>
+            </div>
+            <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm text-kp-gray">
                 <span>Subtotal</span>
                 <span className="tabular-nums text-kp-white">{ars.format(subtotal)}</span>
