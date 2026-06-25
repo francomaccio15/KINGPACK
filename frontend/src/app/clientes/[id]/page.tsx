@@ -172,7 +172,10 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             { label: 'Teléfono', value: cliente.telefono },
             { label: 'Sucursal', value: cliente.sucursal_nombre },
             { label: 'Dirección', value: cliente.direccion },
-            { label: 'Saldo Inicial', value: fmt(saldo_inicial) },
+            // Saldo al alta solo si es distinto de 0 (migración de deuda/crédito inicial)
+            ...(saldo_inicial !== 0
+              ? [{ label: 'Saldo al alta', value: fmt(saldo_inicial) }]
+              : []),
             { label: 'Cliente desde', value: new Date(cliente.created_at).toLocaleDateString('es-AR') },
           ].map(row => (
             <div key={row.label}>
