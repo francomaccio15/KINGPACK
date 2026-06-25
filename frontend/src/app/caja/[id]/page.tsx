@@ -93,9 +93,14 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     ventasPorMedio[k] = (ventasPorMedio[k] ?? 0) + parseFloat(m.monto ?? 0);
   }
   const ventasMedios = Object.entries(ventasPorMedio).sort((a, b) => b[1] - a[1]);
-  const diffColor = diff == null || Math.abs(diff) < 0.01
+  // diferencia = saldo sistema − saldo real ⇒ positivo = FALTA, negativo = SOBRA
+  const diffCuadrada = diff == null || Math.abs(diff) < 0.01;
+  const diffColor = diffCuadrada
     ? 'text-kp-gray'
-    : diff < 0 ? 'text-kp-red' : 'text-green-400';
+    : diff! > 0 ? 'text-kp-red' : 'text-amber-400';
+  const diffLabel = diffCuadrada
+    ? 'Diferencia'
+    : diff! > 0 ? '▼ Falta dinero' : '▲ Sobra dinero';
 
   const fecha = new Date(caja.fecha_apertura).toLocaleDateString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -191,9 +196,9 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
             <p className="text-xl font-bold tabular-nums text-kp-white">{fmt(caja.saldo_final_real)}</p>
           </div>
           <div>
-            <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">Diferencia</p>
+            <p className={`text-xs uppercase tracking-widest font-semibold mb-1 ${diffCuadrada ? 'text-kp-gray' : diffColor}`}>{diffLabel}</p>
             <p className={`text-xl font-bold tabular-nums ${diffColor}`}>
-              {diff != null ? fmt(diff) : '—'}
+              {diff == null ? '—' : `${!diffCuadrada ? (diff > 0 ? '−' : '+') : ''}${fmt(Math.abs(diff))}`}
             </p>
           </div>
           {caja.fecha_cierre && (
@@ -333,7 +338,10 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
                 ['Total egresos',          '−' + fmt(caja.total_egresos)],
                 ['Saldo sistema',          fmt(caja.saldo_final_sistema)],
                 ['Saldo real (contado)',   fmt(caja.saldo_final_real)],
-                ['Diferencia',             fmt(caja.diferencia)],
+                [
+                  diffCuadrada ? 'Diferencia' : diff! > 0 ? 'Diferencia (FALTA)' : 'Diferencia (SOBRA)',
+                  diff == null ? '—' : `${!diffCuadrada ? (diff > 0 ? '−' : '+') : ''}${fmt(Math.abs(diff))}`,
+                ],
               ] as [string, string][]).map(([label, val]) => (
                 <tr key={label} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td style={{ padding: '6px 8px', color: '#6b7280' }}>{label}</td>

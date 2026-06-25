@@ -154,13 +154,23 @@ export default function CerrarCaja({
                     <p className="text-xs text-kp-gray mb-0.5">Saldo real</p>
                     <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreReal)}</p>
                   </div>
-                  <div className={`border rounded-lg p-3 ${diffOk ? 'bg-green-500/10 border-green-500/30' : cierreDiff > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-kp-red/10 border-kp-red/30'}`}>
-                    <p className="text-xs text-kp-gray mb-0.5">Diferencia</p>
-                    <p className={`text-sm font-bold tabular-nums ${diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-amber-400' : 'text-kp-red'}`}>
-                      {ars.format(cierreDiff)}
+                  <div className={`border rounded-lg p-3 ${diffOk ? 'bg-green-500/10 border-green-500/30' : cierreDiff > 0 ? 'bg-kp-red/10 border-kp-red/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                    <p className={`text-xs mb-0.5 ${diffOk ? 'text-kp-gray' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
+                      {diffOk ? 'Diferencia' : cierreDiff > 0 ? '▼ Falta dinero' : '▲ Sobra dinero'}
+                    </p>
+                    <p className={`text-sm font-bold tabular-nums ${diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
+                      {!diffOk && (cierreDiff > 0 ? '−' : '+')}{ars.format(Math.abs(cierreDiff))}
                     </p>
                   </div>
                 </div>
+
+                {!diffOk && (
+                  <p className={`text-xs text-center ${cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
+                    {cierreDiff > 0
+                      ? `Faltan ${ars.format(Math.abs(cierreDiff))} en la caja respecto del sistema.`
+                      : `Sobran ${ars.format(Math.abs(cierreDiff))} en la caja respecto del sistema.`}
+                  </p>
+                )}
 
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
@@ -213,25 +223,41 @@ export default function CerrarCaja({
                   </p>
                 </div>
 
-                {/* Diferencia en tiempo real */}
+                {/* Diferencia en tiempo real — falta (sistema > real) o sobra (real > sistema) */}
                 {saldoReal !== '' && (
                   <div className={[
-                    'rounded-xl border p-3 flex justify-between items-center',
+                    'rounded-xl border p-3',
                     !hayDiferencia
                       ? 'border-green-500/30 bg-green-500/5'
                       : diferencia > 0
-                        ? 'border-amber-500/30 bg-amber-500/5'
-                        : 'border-kp-red/30 bg-kp-red/5',
+                        ? 'border-kp-red/30 bg-kp-red/5'
+                        : 'border-amber-500/30 bg-amber-500/5',
                   ].join(' ')}>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Diferencia</p>
-                    <p className={[
-                      'text-lg font-bold tabular-nums',
-                      !hayDiferencia ? 'text-green-400'
-                        : diferencia > 0 ? 'text-amber-400'
-                        : 'text-kp-red',
-                    ].join(' ')}>
-                      {hayDiferencia && (diferencia > 0 ? '+' : '')}{ars.format(diferencia)}
-                    </p>
+                    <div className="flex justify-between items-center">
+                      <p className={[
+                        'text-xs font-semibold uppercase tracking-widest',
+                        !hayDiferencia ? 'text-kp-gray'
+                          : diferencia > 0 ? 'text-kp-red'
+                          : 'text-amber-400',
+                      ].join(' ')}>
+                        {!hayDiferencia ? 'Diferencia' : diferencia > 0 ? '▼ Falta dinero' : '▲ Sobra dinero'}
+                      </p>
+                      <p className={[
+                        'text-lg font-bold tabular-nums',
+                        !hayDiferencia ? 'text-green-400'
+                          : diferencia > 0 ? 'text-kp-red'
+                          : 'text-amber-400',
+                      ].join(' ')}>
+                        {hayDiferencia && (diferencia > 0 ? '−' : '+')}{ars.format(Math.abs(diferencia))}
+                      </p>
+                    </div>
+                    {hayDiferencia && (
+                      <p className={`text-xs mt-1.5 ${diferencia > 0 ? 'text-kp-red/90' : 'text-amber-400/90'}`}>
+                        {diferencia > 0
+                          ? `Hay ${ars.format(Math.abs(diferencia))} MENOS que lo que indica el sistema.`
+                          : `Hay ${ars.format(Math.abs(diferencia))} MÁS que lo que indica el sistema.`}
+                      </p>
+                    )}
                   </div>
                 )}
 

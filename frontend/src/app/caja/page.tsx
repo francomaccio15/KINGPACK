@@ -240,11 +240,13 @@ export default async function CajaPage() {
                     <tbody className="bg-kp-surface divide-y divide-kp-border">
                       {cajas.map((c) => {
                         const diff = parseFloat(c.diferencia ?? '0');
-                        const diffColor = Math.abs(diff) < 0.01
+                        // diferencia = sistema − real ⇒ positivo = FALTA, negativo = SOBRA
+                        const diffCuadrada = Math.abs(diff) < 0.01;
+                        const diffColor = diffCuadrada
                           ? 'text-kp-gray'
-                          : diff < 0
+                          : diff > 0
                             ? 'text-kp-red font-semibold'
-                            : 'text-green-400 font-semibold';
+                            : 'text-amber-400 font-semibold';
 
                         const fecha = new Date(c.fecha_apertura).toLocaleDateString('es-AR', {
                           day: '2-digit', month: '2-digit', year: 'numeric',
@@ -257,7 +259,12 @@ export default async function CajaPage() {
                             <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_sistema)}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_real)}</td>
                             <td className={`px-4 py-3 text-right tabular-nums ${diffColor}`}>
-                              {c.diferencia != null ? fmt(diff) : '—'}
+                              {c.diferencia == null ? '—' : (
+                                <span title={diffCuadrada ? 'Caja cuadrada' : diff > 0 ? 'Falta dinero' : 'Sobra dinero'}>
+                                  {!diffCuadrada && (diff > 0 ? '−' : '+')}{fmt(Math.abs(diff))}
+                                  {!diffCuadrada && <span className="ml-1 text-[10px] uppercase">{diff > 0 ? 'falta' : 'sobra'}</span>}
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-center">
                               {c.estado === 'abierta' ? (
