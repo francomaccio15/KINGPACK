@@ -156,7 +156,7 @@ export default function CerrarCaja({
                   </div>
                   <div className={`border rounded-lg p-3 ${diffOk ? 'bg-green-500/10 border-green-500/30' : cierreDiff > 0 ? 'bg-kp-red/10 border-kp-red/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
                     <p className={`text-xs mb-0.5 ${diffOk ? 'text-kp-gray' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
-                      {diffOk ? 'Diferencia' : cierreDiff > 0 ? '▼ Falta dinero' : '▲ Sobra dinero'}
+                      {diffOk ? 'Caja cuadrada' : cierreDiff > 0 ? '▼ FALTA' : '▲ SOBRA'}
                     </p>
                     <p className={`text-sm font-bold tabular-nums ${diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
                       {!diffOk && (cierreDiff > 0 ? '−' : '+')}{ars.format(Math.abs(cierreDiff))}
@@ -240,7 +240,7 @@ export default function CerrarCaja({
                           : diferencia > 0 ? 'text-kp-red'
                           : 'text-amber-400',
                       ].join(' ')}>
-                        {!hayDiferencia ? 'Diferencia' : diferencia > 0 ? '▼ Falta dinero' : '▲ Sobra dinero'}
+                        {!hayDiferencia ? 'Caja cuadrada' : diferencia > 0 ? '▼ FALTA' : '▲ SOBRA'}
                       </p>
                       <p className={[
                         'text-lg font-bold tabular-nums',

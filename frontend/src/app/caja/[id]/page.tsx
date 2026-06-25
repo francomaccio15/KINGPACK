@@ -99,8 +99,8 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     ? 'text-kp-gray'
     : diff! > 0 ? 'text-kp-red' : 'text-amber-400';
   const diffLabel = diffCuadrada
-    ? 'Diferencia'
-    : diff! > 0 ? '▼ Falta dinero' : '▲ Sobra dinero';
+    ? 'Caja cuadrada'
+    : diff! > 0 ? '▼ FALTA' : '▲ SOBRA';
 
   const fecha = new Date(caja.fecha_apertura).toLocaleDateString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -339,7 +339,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
                 ['Saldo sistema',          fmt(caja.saldo_final_sistema)],
                 ['Saldo real (contado)',   fmt(caja.saldo_final_real)],
                 [
-                  diffCuadrada ? 'Diferencia' : diff! > 0 ? 'Diferencia (FALTA)' : 'Diferencia (SOBRA)',
+                  diffCuadrada ? 'Diferencia' : diff! > 0 ? 'FALTA' : 'SOBRA',
                   diff == null ? '—' : `${!diffCuadrada ? (diff > 0 ? '−' : '+') : ''}${fmt(Math.abs(diff))}`,
                 ],
               ] as [string, string][]).map(([label, val]) => (
