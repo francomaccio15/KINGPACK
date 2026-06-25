@@ -677,7 +677,7 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     await client.query('BEGIN');
 
     const { rows: ventaRows } = await client.query(
-      `SELECT id, estado, sucursal_id, observaciones, cliente_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT id, numero, estado, sucursal_id, observaciones, cliente_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [id]
     );
     if (!ventaRows[0]) {
@@ -735,6 +735,38 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
                (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
              VALUES ($1, $2, $3, $4, 'anulacion', $5)`,
             [venta.cliente_id, neto < 0 ? -neto : 0, neto > 0 ? neto : 0, saldoDespues, id]
+          );
+        }
+      }
+
+      // Revertir el ingreso de caja que generó la venta. Al confirmarse, cada
+      // pago que NO fue cuenta corriente ni saldo a favor (efectivo, tarjeta,
+      // transferencia, cheque, etc.) se registró como ingreso en la caja. Al
+      // anular se descuenta ese total con un egreso compensatorio en la caja
+      // abierta de la sucursal (best-effort: si no hay caja abierta, se omite).
+      const { rows: [pagoCaja] } = await client.query(
+        `SELECT COALESCE(SUM(vp.monto), 0) AS total_caja
+           FROM venta_pagos vp
+           JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+          WHERE vp.venta_id = $1
+            AND mp.nombre <> 'Saldo a favor'
+            AND lower(mp.nombre) NOT LIKE '%cuenta corriente%'
+            AND lower(mp.nombre) NOT LIKE '%cta. cte%'
+            AND lower(mp.nombre) NOT LIKE '%cta cte%'`,
+        [id]
+      );
+      const totalCaja = parseFloat(pagoCaja.total_caja) || 0;
+      if (totalCaja > 0 && venta.sucursal_id) {
+        const { rows: cajaRows } = await client.query(
+          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+          [venta.sucursal_id]
+        );
+        if (cajaRows[0]) {
+          await client.query(
+            `INSERT INTO movimientos_caja
+               (caja_id, tipo, concepto, monto, origen_tipo, origen_id, usuario_id)
+             VALUES ($1, 'egreso', $2, $3, 'anulacion_venta', $4, $5)`,
+            [cajaRows[0].id, `Anulación venta #${venta.numero}`, totalCaja, id, req.usuario?.id ?? null]
           );
         }
       }
