@@ -113,6 +113,11 @@ const IcoNC = () => (
     <line x1="12" y1="12" x2="12" y2="18"/>
   </svg>
 );
+const IcoDevolucion = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+  </svg>
+);
 const IcoTraspasos = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -167,6 +172,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Cheques',               href: '/cheques',              icon: <IcoCheques /> },
       { label: 'Notas de equipo',       href: '/notas',                icon: <IcoNotas /> },
       { label: 'Notas de Crédito',      href: '/notas-credito',        icon: <IcoNC /> },
+      { label: 'Devolución de Mercadería', href: '/devoluciones',      icon: <IcoDevolucion /> },
     ],
   },
   {
