@@ -443,7 +443,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   <td style={{ padding: '8px 10px', fontWeight: '600' }}>{item.nombre}</td>
                   <td style={{ padding: '8px 6px', fontFamily: 'monospace', color: '#6b7280', fontSize: '11px' }}>{item.codigo}</td>
                   <td style={{ padding: '8px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                  <td style={{ padding: '8px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#9ca3af' : '#111', textDecoration: tieneDesc ? 'line-through' : 'none' }}>
+                  <td style={{ padding: '8px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
                     {fmt(item.precio_lista)}
                   </td>
                   <td style={{ padding: '8px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '600' : 'normal', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
@@ -691,7 +691,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                     <td style={{ padding: '6px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                       {parseFloat(item.cantidad).toFixed(0)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#9ca3af' : '#111', textDecoration: tieneDesc ? 'line-through' : 'none' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
                       {fmt(item.precio_lista)}
                     </td>
                     <td style={{ padding: '6px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
