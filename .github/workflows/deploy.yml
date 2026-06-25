@@ -1,11 +1,24 @@
-name: Build & Deploy
+name: CI — Build check
+
+# El DEPLOY ya NO se hace desde acá. Los runners de GitHub Actions no siempre
+# alcanzan el puerto 22 del VPS (la red del proveedor bloquea de forma
+# intermitente las IPs de los runners → "dial tcp ...:22: i/o timeout"), así que
+# el push por SSH era poco confiable.
+#
+# El deploy real lo hace el propio VPS por PULL: un timer de systemd
+# (kingpack-deploy.timer) chequea GitHub cada minuto y, si master avanzó, hace
+# pull + build + restart. Ver deploy/auto-deploy.sh y deploy/README.md.
+#
+# Este workflow queda solo como verificación: compila el frontend (incluye el
+# chequeo de TypeScript) en cada push a master para avisar rápido si algo no
+# compila ANTES de que el VPS lo despliegue.
 
 on:
   push:
     branches: [master]
 
 jobs:
-  deploy:
+  build-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,32 +38,3 @@ jobs:
           API_URL_INTERNAL: http://127.0.0.1:3001
           NEXT_PUBLIC_API_URL: http://76.13.112.206
         run: npm run build
-
-      - name: Deploy to VPS
-        if: success()
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 76.13.112.206
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            cd /var/www/KINGPACK
-            git pull --ff-only
-            cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js && cd ..
-            cd frontend && rm -rf .next && npm install --no-audit --no-fund && npm run build && cd ..
-            pm2 restart ecosystem.config.js --update-env
-            pm2 save
-            # Healthcheck con reintentos: el backend tarda unos segundos en
-            # quedar listo tras el restart. Reintenta hasta ~30s antes de fallar.
-            ok=0
-            for i in $(seq 1 15); do
-              if curl -fsS http://127.0.0.1:3001/api/health > /dev/null; then
-                ok=1; echo "Backend healthy (intento $i)"; break
-              fi
-              echo "Backend aún no responde (intento $i/15)..."; sleep 2
-            done
-            if [ "$ok" -ne 1 ]; then
-              echo "ERROR: el backend no respondió al healthcheck tras 30s"; exit 1
-            fi
-            curl -fsS http://127.0.0.1:3001/api/health

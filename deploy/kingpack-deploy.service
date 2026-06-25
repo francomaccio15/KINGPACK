@@ -1,0 +1,13 @@
+[Unit]
+Description=KING Pack auto-deploy (pull-based desde el VPS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# flock -n: si ya hay un deploy corriendo, se saltea esta corrida (no encola).
+ExecStart=/usr/bin/flock -n /run/kingpack-deploy.lock /usr/local/bin/kingpack-auto-deploy.sh
+Environment=HOME=/root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# El build de Next + npm install puede tardar; damos margen.
+TimeoutStartSec=600

@@ -1,0 +1,11 @@
+[Unit]
+Description=KING Pack auto-deploy — chequea GitHub cada minuto
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=kingpack-deploy.service
+
+[Install]
+WantedBy=timers.target
