@@ -677,7 +677,7 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     await client.query('BEGIN');
 
     const { rows: ventaRows } = await client.query(
-      `SELECT id, estado, sucursal_id, observaciones FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT id, estado, sucursal_id, observaciones, cliente_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [id]
     );
     if (!ventaRows[0]) {
@@ -700,6 +700,43 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
            DO UPDATE SET cantidad = stock.cantidad + $3::numeric, ultima_actualizacion = NOW()`,
           [item.articulo_id, venta.sucursal_id, parseFloat(item.cantidad)]
         );
+      }
+
+      // Revertir el impacto en la cuenta corriente del cliente (deuda por venta y/o
+      // consumo de saldo a favor). Se registra una contrapartida en lugar de borrar,
+      // para mantener la trazabilidad del estado de cuenta.
+      if (venta.cliente_id) {
+        const { rows: [cc] } = await client.query(
+          `SELECT COALESCE(SUM(debe), 0) AS total_debe, COALESCE(SUM(haber), 0) AS total_haber
+             FROM cuentas_corrientes_cliente
+            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc')`,
+          [id]
+        );
+        const neto = (parseFloat(cc.total_debe) || 0) - (parseFloat(cc.total_haber) || 0);
+        if (Math.abs(neto) > 0.001) {
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (
+                SELECT cliente_id, SUM(monto) AS total_correcciones
+                  FROM correcciones_saldo_cliente GROUP BY cliente_id
+              ) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [venta.cliente_id]);
+          const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const saldoDespues = parseFloat((saldoActual - neto).toFixed(2));
+          // neto > 0 ⇒ la venta había cargado deuda (debe) ⇒ la revertimos con un haber.
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente
+               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+             VALUES ($1, $2, $3, $4, 'anulacion', $5)`,
+            [venta.cliente_id, neto < 0 ? -neto : 0, neto > 0 ? neto : 0, saldoDespues, id]
+          );
+        }
       }
     }
 

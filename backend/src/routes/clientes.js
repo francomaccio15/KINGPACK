@@ -356,7 +356,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
       day: '2-digit', month: '2-digit', year: 'numeric',
     });
 
-    const TIPO_LABEL = { venta: 'Venta', facturacion: 'Facturación', pago: 'Pago', correccion: 'Corrección' };
+    const TIPO_LABEL = { venta: 'Venta', facturacion: 'Facturación', pago: 'Pago', correccion: 'Corrección', consumo_nc: 'Saldo a favor', anulacion: 'Anulación' };
 
     // ── HEADER ────────────────────────────────────────────────────────────────
     const HEADER_H = 88;
@@ -416,7 +416,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     const COL_FECHA = ML;
     const COL_TIPO  = ML + 68;
     const COL_DEBE  = PW - MR - 210;
-    const COL_HABER = PW - MR - 110;
+    const COL_HABER = PW - MR - 140;
     const COL_SALDO = PW - MR;
 
     doc.rect(0, curY, PW, 20).fill('#f2f2f2');
@@ -425,8 +425,8 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
     doc.text('FECHA',  COL_FECHA, curY + 7, { width: 60 });
     doc.text('TIPO',   COL_TIPO,  curY + 7, { width: 90 });
-    doc.text('DEBE',   0, curY + 7, { align: 'right', width: PW - MR - 110 });
-    doc.text('HABER',  0, curY + 7, { align: 'right', width: PW - MR - 10  });
+    doc.text('DEBE',   0, curY + 7, { align: 'right', width: PW - MR - 140 });
+    doc.text('HABER',  0, curY + 7, { align: 'right', width: PW - MR - 70 });
     doc.text('SALDO',  0, curY + 7, { align: 'right', width: PW - MR });
     curY += 22;
 
@@ -441,8 +441,8 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
         doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
         doc.text('FECHA', COL_FECHA, 7, { width: 60 });
         doc.text('TIPO',  COL_TIPO,  7, { width: 90 });
-        doc.text('DEBE',  0, 7, { align: 'right', width: PW - MR - 110 });
-        doc.text('HABER', 0, 7, { align: 'right', width: PW - MR - 10  });
+        doc.text('DEBE',  0, 7, { align: 'right', width: PW - MR - 140 });
+        doc.text('HABER', 0, 7, { align: 'right', width: PW - MR - 70 });
         doc.text('SALDO', 0, 7, { align: 'right', width: PW - MR });
         curY = 22;
         rowIndex = 0;
@@ -481,19 +481,19 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
       // Debe
       if (debe > 0) {
         doc.fillColor('#333333').fontSize(8).font('Helvetica-Bold')
-           .text(ars(debe), 0, curY + 5, { align: 'right', width: PW - MR - 110 });
+           .text(ars(debe), 0, curY + 5, { align: 'right', width: PW - MR - 140 });
       } else {
         doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
-           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 110 });
+           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 140 });
       }
 
       // Haber
       if (haber > 0) {
         doc.fillColor('#666666').fontSize(8).font('Helvetica-Bold')
-           .text(ars(haber), 0, curY + 5, { align: 'right', width: PW - MR - 10 });
+           .text(ars(haber), 0, curY + 5, { align: 'right', width: PW - MR - 70});
       } else {
         doc.fillColor('#cccccc').fontSize(8).font('Helvetica')
-           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 10 });
+           .text('—', 0, curY + 5, { align: 'right', width: PW - MR - 70});
       }
 
       // Saldo

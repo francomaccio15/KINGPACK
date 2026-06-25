@@ -48,6 +48,8 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
     facturacion:'Facturación',
     pago:       'Pago',
     correccion: 'Corrección',
+    consumo_nc: 'Saldo a favor',
+    anulacion:  'Anulación',
   };
 
   const VENTA_ESTADO_STYLE: Record<string, string> = {
