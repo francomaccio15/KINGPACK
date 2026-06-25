@@ -47,5 +47,3 @@ systemctl list-timers kingpack-deploy.timer # próxima corrida
 systemctl start kingpack-deploy.service     # forzar un deploy ahora
 journalctl -u kingpack-deploy.service -n 50 # ver el log del último deploy
 ```
-
-<!-- deploy test 2026-06-25T17:59:43Z -->
