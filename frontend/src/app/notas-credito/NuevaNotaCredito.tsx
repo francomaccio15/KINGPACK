@@ -580,7 +580,9 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                   ? clienteId
                     ? 'Se acreditará el total al saldo a favor del cliente.'
                     : 'Seleccioná un cliente para acreditar el saldo.'
-                  : 'No modifica el saldo de cuenta corriente del cliente.'}
+                  : formaDevolucion === 'efectivo'
+                    ? 'Se registrará un egreso por el total en la caja abierta de la sucursal.'
+                    : 'Devolución por transferencia. No afecta la caja ni la cuenta corriente.'}
               </p>
             </div>
             <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">

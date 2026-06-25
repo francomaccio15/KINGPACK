@@ -164,8 +164,27 @@ router.post('/', async (req, res, next) => {
 
     const FORMAS_VALIDAS = ['cuenta_corriente', 'efectivo', 'transferencia'];
     const formaDev = FORMAS_VALIDAS.includes(forma_devolucion) ? forma_devolucion : 'cuenta_corriente';
+    const totalNum = parseFloat(total) || 0;
 
     await client.query('BEGIN');
+
+    // Para efectivo: descontar de la caja abierta de la sucursal (egreso).
+    let cajaId = null;
+    if (formaDev === 'efectivo' && totalNum > 0) {
+      if (!sucursal_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Se requiere la sucursal para devolver en efectivo' });
+      }
+      const { rows: cajaRows } = await client.query(
+        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+        [sucursal_id]
+      );
+      if (!cajaRows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja para devolver en efectivo.' });
+      }
+      cajaId = cajaRows[0].id;
+    }
 
     // Número correlativo para el tipo de comprobante
     const { rows: lastNum } = await client.query(
@@ -203,7 +222,6 @@ router.post('/', async (req, res, next) => {
       ]
     );
     const ncId = rows[0].id;
-    const totalNum = parseFloat(total) || 0;
 
     // ── 1. Restaurar stock para ítems con articulo_id ─────────────────────────
     const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
@@ -234,6 +252,18 @@ router.post('/', async (req, res, next) => {
            (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
          VALUES ($1, 0, $2, $3, 'nota_credito', $4)`,
         [cliente_id, totalNum, saldoDespues, ncId]
+      );
+    }
+
+    // ── 3. Egreso de caja (efectivo): descontar la plata devuelta ─────────────
+    if (formaDev === 'efectivo' && cajaId && totalNum > 0) {
+      const concepto = `Nota de crédito #${numero}` +
+        (numero_referencia ? ` — ${numero_referencia}` : '');
+      await client.query(
+        `INSERT INTO movimientos_caja
+           (caja_id, tipo, concepto, monto, origen_tipo, origen_id, usuario_id)
+         VALUES ($1, 'egreso', $2, $3, 'nota_credito', $4, $5)`,
+        [cajaId, concepto, totalNum, ncId, req.usuario.id]
       );
     }
 
@@ -268,7 +298,7 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
       `UPDATE notas_credito
           SET estado = 'anulada', updated_at = NOW()
         WHERE id = $1 AND deleted_at IS NULL AND estado != 'anulada'
-        RETURNING id, cliente_id, sucursal_id, total, items, forma_devolucion`,
+        RETURNING id, numero, numero_referencia, cliente_id, sucursal_id, total, items, forma_devolucion`,
       [req.params.id]
     );
     if (!rows[0]) {
@@ -308,6 +338,25 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
          VALUES ($1, $2, 0, $3, 'anulacion_nc', $4)`,
         [nc.cliente_id, totalNum, saldoDespues, nc.id]
       );
+    }
+
+    // ── 3. Revertir egreso de caja (efectivo) → ingreso compensatorio ─────────
+    // Best-effort: si hay caja abierta en la sucursal, devuelve el efectivo.
+    if (nc.forma_devolucion === 'efectivo' && nc.sucursal_id && totalNum > 0) {
+      const { rows: cajaRows } = await client.query(
+        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+        [nc.sucursal_id]
+      );
+      if (cajaRows[0]) {
+        const concepto = `Anulación nota de crédito #${nc.numero}` +
+          (nc.numero_referencia ? ` — ${nc.numero_referencia}` : '');
+        await client.query(
+          `INSERT INTO movimientos_caja
+             (caja_id, tipo, concepto, monto, origen_tipo, origen_id, usuario_id)
+           VALUES ($1, 'ingreso', $2, $3, 'anulacion_nc', $4, $5)`,
+          [cajaRows[0].id, concepto, totalNum, nc.id, req.usuario.id]
+        );
+      }
     }
 
     await client.query('COMMIT');
