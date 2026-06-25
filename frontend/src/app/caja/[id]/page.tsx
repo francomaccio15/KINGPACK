@@ -48,7 +48,9 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
   const movimientosFiltrados = esAdmin
     ? movimientos
     : movimientos.filter((m: any) =>
-        m.tipo !== 'venta' || (m.medio_pago ?? '').toLowerCase().includes('efectivo')
+        // egresos y retiros siempre (reducen el físico sin importar el medio)
+        ['egreso', 'retiro'].includes(m.tipo) ||
+        (m.medio_pago ?? '').toLowerCase().includes('efectivo')
       );
 
   // Recalcular KPIs a partir de los movimientos filtrados
