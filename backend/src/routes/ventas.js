@@ -1135,13 +1135,14 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
     // Verificar que la venta existe y no está anulada
     const { rows: ventaRows } = await client.query(
-      `SELECT id, numero, estado, sucursal_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT id, numero, estado, sucursal_id, cliente_id FROM ventas WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [id]
     );
     if (!ventaRows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Venta no encontrada' }); }
     if (ventaRows[0].estado === 'anulada') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede editar una venta anulada' }); }
     const sucursal_id  = ventaRows[0].sucursal_id;
     const ventaNumero  = ventaRows[0].numero;
+    const cliente_id   = ventaRows[0].cliente_id;
 
     // Guardar items anteriores para el audit log
     const { rows: itemsAnteriores } = await client.query(
@@ -1225,7 +1226,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
     // Actualizar pagos si se enviaron
     if (Array.isArray(pagos) && pagos.length > 0) {
-      // Resolver medios de pago para filtrar movimientos de caja
+      // Resolver medios de pago para filtrar movimientos de caja y CC
       const medioIds = [...new Set(pagos.map(p => p.medio_pago_id).filter(Boolean))];
       let mediosMap = {};
       if (medioIds.length > 0) {
@@ -1233,6 +1234,38 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
           `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
         );
         mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
+      }
+
+      // Revertir impacto previo en CC del cliente (saldo a favor + cuenta corriente)
+      if (cliente_id) {
+        const { rows: [ccAnterior] } = await client.query(
+          `SELECT COALESCE(SUM(debe), 0)::float AS total_debe,
+                  COALESCE(SUM(haber), 0)::float AS total_haber
+             FROM cuentas_corrientes_cliente
+            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc')`,
+          [id]
+        );
+        const neto = parseFloat(ccAnterior.total_debe) - parseFloat(ccAnterior.total_haber);
+        if (Math.abs(neto) > 0.001) {
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [cliente_id]);
+          const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const saldoDespues = parseFloat((saldoActual - neto).toFixed(2));
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente
+               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+             VALUES ($1, $2, $3, $4, 'edicion_venta', $5)`,
+            [cliente_id, neto < 0 ? -neto : 0, neto > 0 ? neto : 0, saldoDespues, id]
+          );
+        }
       }
 
       // Eliminar pagos anteriores
@@ -1267,6 +1300,60 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
             INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
             VALUES ($1, 'venta', $2, $3, $4)
           `, [cajaId, `Venta #${ventaNumero}`, parseFloat(pago.monto), pago.medio_pago_id || null]);
+        }
+      }
+
+      // Registrar nuevo impacto en CC del cliente según los pagos nuevos
+      if (cliente_id) {
+        // Consumir saldo a favor si aplica
+        const pagosSaldoFavor = pagos.filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor');
+        if (pagosSaldoFavor.length > 0) {
+          const totalSF = pagosSaldoFavor.reduce((s, p) => s + parseFloat(p.monto), 0);
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [cliente_id]);
+          const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const saldoDespues = parseFloat((saldoActual + totalSF).toFixed(2));
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente
+               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+             VALUES ($1, $2, 0, $3, 'consumo_nc', $4)`,
+            [cliente_id, totalSF, saldoDespues, id]
+          );
+        }
+
+        // Registrar deuda en CC si algún pago fue en cuenta corriente
+        const pagosCuentaCorr = pagos.filter(p => {
+          const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
+          return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
+        });
+        if (pagosCuentaCorr.length > 0) {
+          const totalCC = pagosCuentaCorr.reduce((s, p) => s + parseFloat(p.monto), 0);
+          const { rows: [saldoRow] } = await client.query(`
+            SELECT COALESCE(c.saldo_inicial, 0)
+                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+              FROM clientes c
+              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
+             WHERE c.id = $1
+             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+          `, [cliente_id]);
+          const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+          const nuevoSaldo  = parseFloat((saldoActual + totalCC).toFixed(2));
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente
+               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+             VALUES ($1, $2, 0, $3, 'venta', $4)`,
+            [cliente_id, totalCC, nuevoSaldo, id]
+          );
         }
       }
     }
