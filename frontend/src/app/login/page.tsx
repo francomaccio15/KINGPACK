@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { landingPath } from '@/lib/permissions';
 import { KingPackLogoFull } from '@/components/KingPackLogo';
 
 export default function LoginPage() {
@@ -19,8 +20,8 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      router.replace('/dashboard');
+      const usuario = await login(email, password);
+      router.replace(landingPath(usuario.rol));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {

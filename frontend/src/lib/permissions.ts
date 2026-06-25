@@ -29,3 +29,11 @@ export function puedeAcceder(rol: Rol, href: string): boolean {
 export function modulosPermitidos(rol: Rol): string[] | '*' {
   return PERMISOS[rol];
 }
+
+/**
+ * Pantalla inicial según el rol. El cajero opera en ventas y no tiene acceso
+ * al dashboard, así que su landing es /ventas. El resto va al dashboard.
+ */
+export function landingPath(rol: Rol): string {
+  return rol === 'cajero' ? '/ventas' : '/dashboard';
+}

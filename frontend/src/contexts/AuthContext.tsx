@@ -15,7 +15,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 interface AuthContextValue {
   user:    AuthUser | null;
   loading: boolean;
-  login:   (email: string, password: string) => Promise<void>;
+  login:   (email: string, password: string) => Promise<AuthUser>;
   logout:  () => void;
 }
 
@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.cookie = `kp_sucursal_id=${usuario.sucursal_default_id}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
     }
     setUser(usuario);
+    return usuario;
   }, []);
 
   const logout = useCallback(() => {
