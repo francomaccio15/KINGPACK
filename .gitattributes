@@ -1,0 +1,5 @@
+# Scripts y unidades que corren en el VPS (Linux) deben tener saltos de línea LF.
+# Un .sh con CRLF rompe bash ("\r": command not found).
+*.sh              text eol=lf
+deploy/*.service  text eol=lf
+deploy/*.timer    text eol=lf
