@@ -5,7 +5,17 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
+const apiFetch = (p: string, o: RequestInit = {}) => {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
+  return fetch(`${API}${p}`, {
+    ...o,
+    headers: {
+      'Content-Type': 'application/json',
+      ...((o.headers as Record<string, string>) || {}),
+      ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    },
+  });
+};
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
@@ -40,31 +50,33 @@ export default function CerrarCaja({
   fechaApertura?: string;
 }) {
   const router = useRouter();
-  const [open, setOpen]         = useState(false);
-  const [saldoReal, setSaldo]   = useState('');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [cierre, setCierre]     = useState<CierreData | null>(null);
+  const [open, setOpen]       = useState(false);
+  const [retiro, setRetiro]   = useState('');
+  const [fondo, setFondo]     = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+  const [cierre, setCierre]   = useState<CierreData | null>(null);
 
-  const saldoRealNum  = parseFloat(saldoReal) || 0;
-  const diferencia    = saldoSistema - saldoRealNum;
-  const hayDiferencia = Math.abs(diferencia) > 0.01;
+  const retiroNum      = parseFloat(retiro) || 0;
+  const fondoNum       = parseFloat(fondo)  || 0;
+  const saldoRealNum   = retiroNum + fondoNum;
+  const diferencia     = saldoSistema - saldoRealNum;
+  const hayDiferencia  = Math.abs(diferencia) > 0.01;
+  const hayAlgunValor  = retiro !== '' || fondo !== '';
 
   const handleCerrar = async () => {
-    if (saldoReal === '') { setError('Ingresá el saldo real contado'); return; }
+    if (!hayAlgunValor) { setError('Ingresá el retiro y/o el fondo de caja'); return; }
 
     setSaving(true);
     setError(null);
     try {
       const res = await apiFetch(`/api/caja/${cajaId}/cerrar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ saldo_final_real: saldoRealNum }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Error al cerrar'); return; }
       setCierre(data.caja);
-      setOpen(true);
     } catch {
       setError('Error de conexión');
     } finally {
@@ -73,7 +85,8 @@ export default function CerrarCaja({
   };
 
   const handleOpenModal = () => {
-    setSaldo('');
+    setRetiro('');
+    setFondo('');
     setError(null);
     setCierre(null);
     setOpen(true);
@@ -84,6 +97,85 @@ export default function CerrarCaja({
     if (cierre) {
       setCierre(null);
       router.refresh();
+    }
+  };
+
+  const handleImprimir = () => {
+    if (!cierre) return;
+
+    const sistema = parseFloat(String(cierre.saldo_final_sistema));
+    const diff    = parseFloat(String(cierre.diferencia));
+    const diffOk  = Math.abs(diff) < 0.01;
+
+    const aperturaStr = fechaApertura
+      ? new Date(fechaApertura).toLocaleString('es-AR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        })
+      : '—';
+    const cierreStr = new Date().toLocaleString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    const diffLabel = diffOk ? 'CUADRADA' : diff > 0 ? '▼ FALTA' : '▲ SOBRA';
+    const diffValue = diffOk
+      ? '—'
+      : `${diff > 0 ? '−' : '+'}${ars.format(Math.abs(diff))}`;
+    const diffColor = diffOk ? '#6b7280' : diff > 0 ? '#ef4444' : '#f59e0b';
+
+    const row = (label: string, value: string, bold = false, color = '#111') =>
+      `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:7px 10px;color:#6b7280;font-size:13px">${label}</td>
+        <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:${bold ? '700' : '500'};color:${color};font-variant-numeric:tabular-nums">${value}</td>
+      </tr>`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>Cierre de Caja — ${sucursalNombre ?? ''}</title>
+      <style>body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111}
+        @media print{@page{margin:12mm}body{padding:0}}</style>
+    </head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:18px">
+        <div>
+          <p style="font-size:17px;font-weight:800;letter-spacing:1px;margin:0">KING PACK DESCARTABLES</p>
+          <p style="font-size:11px;color:#6b7280;margin:4px 0 0">CIERRE DE CAJA</p>
+        </div>
+        <div style="text-align:right;font-size:12px;line-height:1.7">
+          <p style="margin:0"><strong>Sucursal:</strong> ${sucursalNombre ?? '—'}</p>
+          <p style="margin:0"><strong>Apertura:</strong> ${aperturaStr}</p>
+          <p style="margin:0"><strong>Cierre:</strong> ${cierreStr}</p>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+        <tbody>
+          ${row('Saldo inicial', ars.format(saldoInicial ?? 0))}
+          ${row('Saldo sistema', ars.format(sistema))}
+          <tr><td colspan="2" style="padding:6px 0 2px 10px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px">Arqueo de efectivo</td></tr>
+          ${row('Retiro (me llevo)', ars.format(retiroNum))}
+          ${row('Fondo (dejo en caja)', ars.format(fondoNum))}
+          ${row('Total contado', ars.format(saldoRealNum), true)}
+          ${row(diffLabel, diffValue, true, diffColor)}
+        </tbody>
+      </table>
+
+      ${!diffOk ? `<p style="font-size:12px;color:${diffColor};text-align:center;margin-bottom:16px">
+        ${diff > 0
+          ? `Faltan ${ars.format(Math.abs(diff))} respecto del sistema.`
+          : `Sobran ${ars.format(Math.abs(diff))} respecto del sistema.`}
+      </p>` : `<p style="font-size:12px;color:#22c55e;text-align:center;margin-bottom:16px">✓ Caja cuadrada</p>`}
+
+      <p style="font-size:10px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:8px;margin:0">
+        KingPack · Generado el ${cierreStr}
+      </p>
+    </body></html>`;
+
+    const win = window.open('', '_blank', 'width=620,height=540');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      win.print();
     }
   };
 
@@ -129,10 +221,9 @@ export default function CerrarCaja({
             </div>
 
             {cierre ? (
-              /* ── Summary / success view ── */
+              /* ── Success view ── */
               <div className="p-5 space-y-4">
 
-                {/* Green success banner */}
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-semibold">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
                     <polyline points="20 6 9 17 4 12" />
@@ -140,42 +231,52 @@ export default function CerrarCaja({
                   Caja cerrada correctamente
                 </div>
 
-                {/* Metrics grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
-                    <p className="text-xs text-kp-gray mb-0.5">Saldo inicial</p>
-                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(saldoInicial ?? 0)}</p>
+                {/* Saldo sistema */}
+                <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3 flex justify-between items-center">
+                  <p className="text-xs text-kp-gray">Saldo sistema</p>
+                  <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreSistema)}</p>
+                </div>
+
+                {/* Desglose retiro + fondo */}
+                <div className="bg-kp-surface2 border border-kp-border rounded-xl overflow-hidden divide-y divide-kp-border">
+                  <div className="flex justify-between items-center px-3 py-2.5">
+                    <p className="text-xs text-kp-gray">Retiro (me llevo)</p>
+                    <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(retiroNum)}</p>
                   </div>
-                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
-                    <p className="text-xs text-kp-gray mb-0.5">Saldo sistema</p>
-                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreSistema)}</p>
+                  <div className="flex justify-between items-center px-3 py-2.5">
+                    <p className="text-xs text-kp-gray">Fondo (dejo en caja)</p>
+                    <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(fondoNum)}</p>
                   </div>
-                  <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3">
-                    <p className="text-xs text-kp-gray mb-0.5">Saldo real</p>
+                  <div className="flex justify-between items-center px-3 py-2.5 bg-kp-border/10">
+                    <p className="text-xs font-bold text-kp-gray uppercase tracking-widest">Total contado</p>
                     <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreReal)}</p>
-                  </div>
-                  <div className={`border rounded-lg p-3 ${diffOk ? 'bg-green-500/10 border-green-500/30' : cierreDiff > 0 ? 'bg-kp-red/10 border-kp-red/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
-                    <p className={`text-xs mb-0.5 ${diffOk ? 'text-kp-gray' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
-                      {diffOk ? 'Caja cuadrada' : cierreDiff > 0 ? '▼ FALTA' : '▲ SOBRA'}
-                    </p>
-                    <p className={`text-sm font-bold tabular-nums ${diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
-                      {!diffOk && (cierreDiff > 0 ? '−' : '+')}{ars.format(Math.abs(cierreDiff))}
-                    </p>
                   </div>
                 </div>
 
-                {!diffOk && (
-                  <p className={`text-xs text-center ${cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'}`}>
-                    {cierreDiff > 0
-                      ? `Faltan ${ars.format(Math.abs(cierreDiff))} en la caja respecto del sistema.`
-                      : `Sobran ${ars.format(Math.abs(cierreDiff))} en la caja respecto del sistema.`}
+                {/* Diferencia */}
+                <div className={`border rounded-lg p-3 flex justify-between items-center ${
+                  diffOk
+                    ? 'bg-green-500/10 border-green-500/30'
+                    : cierreDiff > 0
+                      ? 'bg-kp-red/10 border-kp-red/30'
+                      : 'bg-amber-500/10 border-amber-500/30'
+                }`}>
+                  <p className={`text-xs font-bold uppercase tracking-widest ${
+                    diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
+                  }`}>
+                    {diffOk ? '✓ Cuadrada' : cierreDiff > 0 ? '▼ FALTA' : '▲ SOBRA'}
                   </p>
-                )}
+                  <p className={`text-sm font-bold tabular-nums ${
+                    diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
+                  }`}>
+                    {diffOk ? '—' : `${cierreDiff > 0 ? '−' : '+'}${ars.format(Math.abs(cierreDiff))}`}
+                  </p>
+                </div>
 
-                {/* Action buttons */}
+                {/* Botones */}
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => window.print()}
+                    onClick={handleImprimir}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-white text-sm font-semibold hover:border-kp-gray transition-colors"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -194,7 +295,7 @@ export default function CerrarCaja({
                 </div>
               </div>
             ) : (
-              /* ── Original form ── */
+              /* ── Form ── */
               <div className="p-5 space-y-4">
 
                 {/* Saldo sistema (read-only) */}
@@ -208,23 +309,39 @@ export default function CerrarCaja({
                   </p>
                 </div>
 
-                {/* Saldo real */}
+                {/* Retiro */}
                 <div>
-                  <label className={labelCls}>Saldo real contado *</label>
+                  <label className={labelCls}>Retiro — lo que te llevás *</label>
                   <NumericInput
                     placeholder="0.00"
-                    value={saldoReal}
-                    onChange={e => setSaldo(e.target.value)}
+                    value={retiro}
+                    onChange={e => setRetiro(e.target.value)}
                     autoFocus
                     className={inputCls}
                   />
-                  <p className="text-xs text-kp-gray/60 mt-1">
-                    Contá el efectivo físico en la caja e ingresá el total.
-                  </p>
                 </div>
 
-                {/* Diferencia en tiempo real — falta (sistema > real) o sobra (real > sistema) */}
-                {saldoReal !== '' && (
+                {/* Fondo */}
+                <div>
+                  <label className={labelCls}>Fondo de caja — lo que dejás *</label>
+                  <NumericInput
+                    placeholder="0.00"
+                    value={fondo}
+                    onChange={e => setFondo(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+
+                {/* Total en tiempo real */}
+                {hayAlgunValor && (
+                  <div className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5 flex justify-between items-center">
+                    <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold">Total contado</p>
+                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(saldoRealNum)}</p>
+                  </div>
+                )}
+
+                {/* Diferencia en tiempo real */}
+                {hayAlgunValor && (
                   <div className={[
                     'rounded-xl border p-3',
                     !hayDiferencia
@@ -261,10 +378,6 @@ export default function CerrarCaja({
                   </div>
                 )}
 
-                {!hayDiferencia && saldoReal !== '' && (
-                  <p className="text-xs text-green-400 text-center">✓ Caja cuadrada perfectamente</p>
-                )}
-
                 {error && (
                   <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
                 )}
@@ -272,7 +385,7 @@ export default function CerrarCaja({
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={handleCerrar}
-                    disabled={saving || saldoReal === ''}
+                    disabled={saving || !hayAlgunValor}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
                   >
                     {saving ? <><Spinner /> Cerrando…</> : 'Confirmar Cierre'}
