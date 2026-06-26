@@ -709,7 +709,7 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
         const { rows: [cc] } = await client.query(
           `SELECT COALESCE(SUM(debe), 0) AS total_debe, COALESCE(SUM(haber), 0) AS total_haber
              FROM cuentas_corrientes_cliente
-            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc')`,
+            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc', 'edicion_venta')`,
           [id]
         );
         const neto = (parseFloat(cc.total_debe) || 0) - (parseFloat(cc.total_haber) || 0);
@@ -1236,17 +1236,36 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
       }
 
-      // Revertir impacto previo en CC del cliente (saldo a favor + cuenta corriente)
+      // Ajustar el impacto en CC del cliente con UN solo movimiento por la DIFERENCIA
+      // (delta) entre lo que la venta tenía cargado y lo que implica la edición. Así el
+      // estado de cuenta muestra una única línea "Modificación" en lugar de revertir la
+      // venta completa y recargarla, que generaba 3 renglones confusos por edición.
       if (cliente_id) {
+        // Neto que la venta tiene HOY en la CC (incluye ediciones previas)
         const { rows: [ccAnterior] } = await client.query(
           `SELECT COALESCE(SUM(debe), 0)::float AS total_debe,
                   COALESCE(SUM(haber), 0)::float AS total_haber
              FROM cuentas_corrientes_cliente
-            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc')`,
+            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc', 'edicion_venta')`,
           [id]
         );
-        const neto = parseFloat(ccAnterior.total_debe) - parseFloat(ccAnterior.total_haber);
-        if (Math.abs(neto) > 0.001) {
+        const netoAnterior = parseFloat(ccAnterior.total_debe) - parseFloat(ccAnterior.total_haber);
+
+        // Neto que la venta DEBERÍA tener según los pagos nuevos:
+        // saldo a favor consumido + lo cargado a cuenta corriente (lo demás no impacta la CC).
+        const totalSF = pagos
+          .filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor')
+          .reduce((s, p) => s + parseFloat(p.monto), 0);
+        const totalCC = pagos
+          .filter(p => {
+            const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
+            return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
+          })
+          .reduce((s, p) => s + parseFloat(p.monto), 0);
+        const netoNuevo = parseFloat((totalSF + totalCC).toFixed(2));
+
+        const delta = parseFloat((netoNuevo - netoAnterior).toFixed(2));
+        if (Math.abs(delta) > 0.001) {
           const { rows: [saldoRow] } = await client.query(`
             SELECT COALESCE(c.saldo_inicial, 0)
                    + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
@@ -1258,12 +1277,13 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
              GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
           `, [cliente_id]);
           const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
-          const saldoDespues = parseFloat((saldoActual - neto).toFixed(2));
+          const saldoDespues = parseFloat((saldoActual + delta).toFixed(2));
+          // delta > 0 ⇒ la edición agrega deuda (debe); delta < 0 ⇒ la reduce (haber).
           await client.query(
             `INSERT INTO cuentas_corrientes_cliente
                (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
              VALUES ($1, $2, $3, $4, 'edicion_venta', $5)`,
-            [cliente_id, neto < 0 ? -neto : 0, neto > 0 ? neto : 0, saldoDespues, id]
+            [cliente_id, delta > 0 ? delta : 0, delta < 0 ? -delta : 0, saldoDespues, id]
           );
         }
       }
@@ -1303,59 +1323,9 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         }
       }
 
-      // Registrar nuevo impacto en CC del cliente según los pagos nuevos
-      if (cliente_id) {
-        // Consumir saldo a favor si aplica
-        const pagosSaldoFavor = pagos.filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor');
-        if (pagosSaldoFavor.length > 0) {
-          const totalSF = pagosSaldoFavor.reduce((s, p) => s + parseFloat(p.monto), 0);
-          const { rows: [saldoRow] } = await client.query(`
-            SELECT COALESCE(c.saldo_inicial, 0)
-                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
-              FROM clientes c
-              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
-              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
-             WHERE c.id = $1
-             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
-          `, [cliente_id]);
-          const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
-          const saldoDespues = parseFloat((saldoActual + totalSF).toFixed(2));
-          await client.query(
-            `INSERT INTO cuentas_corrientes_cliente
-               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
-             VALUES ($1, $2, 0, $3, 'consumo_nc', $4)`,
-            [cliente_id, totalSF, saldoDespues, id]
-          );
-        }
-
-        // Registrar deuda en CC si algún pago fue en cuenta corriente
-        const pagosCuentaCorr = pagos.filter(p => {
-          const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
-          return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
-        });
-        if (pagosCuentaCorr.length > 0) {
-          const totalCC = pagosCuentaCorr.reduce((s, p) => s + parseFloat(p.monto), 0);
-          const { rows: [saldoRow] } = await client.query(`
-            SELECT COALESCE(c.saldo_inicial, 0)
-                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
-              FROM clientes c
-              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
-              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
-             WHERE c.id = $1
-             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
-          `, [cliente_id]);
-          const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
-          const nuevoSaldo  = parseFloat((saldoActual + totalCC).toFixed(2));
-          await client.query(
-            `INSERT INTO cuentas_corrientes_cliente
-               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
-             VALUES ($1, $2, 0, $3, 'venta', $4)`,
-            [cliente_id, totalCC, nuevoSaldo, id]
-          );
-        }
-      }
+      // El impacto en la CC del cliente ya quedó registrado arriba como un único
+      // movimiento de ajuste ('edicion_venta') por la diferencia, así que acá no se
+      // vuelve a cargar la venta completa.
     }
 
     // Registrar en audit log

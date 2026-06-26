@@ -50,6 +50,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
     correccion: 'Corrección',
     consumo_nc: 'Saldo a favor',
     anulacion:  'Anulación',
+    edicion_venta: 'Modificación',
   };
 
   const VENTA_ESTADO_STYLE: Record<string, string> = {
@@ -228,12 +229,15 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                 <tr key={m.id} className="hover:bg-kp-surface2 transition-colors">
                   <td className="px-4 py-2.5 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(m.fecha)}</td>
                   <td className="px-4 py-2.5">
-                    {m.origen_tipo === 'venta' && m.origen_id ? (
+                    {(m.origen_tipo === 'venta' || m.origen_tipo === 'edicion_venta') && m.origen_id ? (
                       <Link
                         href={`/ventas/${m.origen_id}`}
-                        className="text-xs font-medium px-2 py-0.5 rounded border text-amber-400 bg-amber-400/10 border-amber-400/30 hover:bg-amber-400/20 transition-colors"
+                        className={`text-xs font-medium px-2 py-0.5 rounded border transition-colors ${
+                          m.origen_tipo === 'edicion_venta'
+                            ? 'text-sky-400 bg-sky-400/10 border-sky-400/30 hover:bg-sky-400/20'
+                            : 'text-amber-400 bg-amber-400/10 border-amber-400/30 hover:bg-amber-400/20'}`}
                       >
-                        Venta →
+                        {m.origen_tipo === 'edicion_venta' ? 'Modificación →' : 'Venta →'}
                       </Link>
                     ) : (
                       <span className={`text-xs font-medium px-2 py-0.5 rounded border

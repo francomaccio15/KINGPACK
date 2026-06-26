@@ -356,7 +356,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
       day: '2-digit', month: '2-digit', year: 'numeric',
     });
 
-    const TIPO_LABEL = { venta: 'Venta', facturacion: 'Facturación', pago: 'Pago', correccion: 'Corrección', consumo_nc: 'Saldo a favor', anulacion: 'Anulación' };
+    const TIPO_LABEL = { venta: 'Venta', facturacion: 'Facturación', pago: 'Pago', correccion: 'Corrección', consumo_nc: 'Saldo a favor', anulacion: 'Anulación', edicion_venta: 'Modificación' };
 
     // ── HEADER ────────────────────────────────────────────────────────────────
     const HEADER_H = 88;
