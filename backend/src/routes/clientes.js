@@ -325,7 +325,7 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
          GROUP BY c.id, ci.nombre, lp.nombre, cs_agg.total_correcciones
       `, [req.params.id]),
       pool.query(`
-        SELECT debe, haber, saldo, fecha, origen_tipo
+        SELECT debe, haber, saldo, fecha, origen_tipo, origen_id
           FROM cuentas_corrientes_cliente
          WHERE cliente_id = $1
          ORDER BY fecha ASC
@@ -463,8 +463,47 @@ router.get('/:id/pdf-estado-cuenta', async (req, res, next) => {
     curY += ROW_H;
     rowIndex++;
 
+    // Consolidar ediciones para el documento del cliente: cada venta aparece UNA sola
+    // vez con su monto final (venta original + sus 'edicion_venta' del mismo origen_id
+    // se suman en un único renglón "Venta"). Así no se imprimen los ajustes internos,
+    // que se prestan a confusión. El saldo corrido se recalcula para que el documento
+    // cierre. (Las correcciones manuales de saldo no se itemizan en este documento.)
+    const movsConsolidados = (() => {
+      const ventaAgg = new Map();   // origen_id -> entrada acumulada
+      const out = [];
+      for (const m of movs) {
+        const neto = (parseFloat(m.debe) || 0) - (parseFloat(m.haber) || 0);
+        if ((m.origen_tipo === 'venta' || m.origen_tipo === 'edicion_venta') && m.origen_id) {
+          const existente = ventaAgg.get(m.origen_id);
+          if (existente) {
+            existente.neto += neto;           // acumula en la venta ya listada (no agrega renglón)
+          } else {
+            const entrada = { origen_tipo: 'venta', fecha: m.fecha, neto };
+            ventaAgg.set(m.origen_id, entrada);
+            out.push(entrada);                // conserva la posición de la venta original
+          }
+        } else {
+          out.push({ origen_tipo: m.origen_tipo, fecha: m.fecha, neto });
+        }
+      }
+      let saldo = parseFloat(cliente.saldo_inicial) || 0;
+      return out
+        // descarta ventas que quedaron en cero tras la edición (no aportan ni saldo)
+        .filter(e => !(e.origen_tipo === 'venta' && Math.abs(e.neto) < 0.005))
+        .map(e => {
+          saldo = parseFloat((saldo + e.neto).toFixed(2));
+          return {
+            origen_tipo: e.origen_tipo,
+            fecha: e.fecha,
+            debe:  e.neto > 0 ? e.neto : 0,
+            haber: e.neto < 0 ? -e.neto : 0,
+            saldo,
+          };
+        });
+    })();
+
     // Movimientos
-    for (const m of movs) {
+    for (const m of movsConsolidados) {
       ensureSpace();
       if (rowIndex % 2 === 1) doc.rect(0, curY, PW, ROW_H).fill('#f9f9f9');
 
