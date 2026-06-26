@@ -5,6 +5,36 @@ const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Recalcula la columna `saldo` (saldo acumulado por renglón) de toda la cuenta
+// corriente de un cliente en orden cronológico. Se usa después de editar una
+// venta, donde el renglón "Venta" se reemplaza por el total real y los saldos
+// posteriores quedan desfasados. La base arranca en el saldo inicial del cliente
+// más sus correcciones, igual que el cálculo del saldo actual.
+async function recomputarSaldosCliente(client, cliente_id) {
+  const { rows: [base] } = await client.query(
+    `SELECT COALESCE(c.saldo_inicial, 0) + COALESCE(cs.total_correcciones, 0) AS base
+       FROM clientes c
+       LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones
+                    FROM correcciones_saldo_cliente GROUP BY cliente_id) cs
+         ON cs.cliente_id = c.id
+      WHERE c.id = $1`,
+    [cliente_id]
+  );
+  let saldo = parseFloat(base?.base ?? '0');
+  const { rows: movs } = await client.query(
+    `SELECT id, debe, haber FROM cuentas_corrientes_cliente
+      WHERE cliente_id = $1 ORDER BY fecha ASC, id ASC`,
+    [cliente_id]
+  );
+  for (const m of movs) {
+    saldo = parseFloat((saldo + parseFloat(m.debe) - parseFloat(m.haber)).toFixed(2));
+    await client.query(
+      `UPDATE cuentas_corrientes_cliente SET saldo = $1 WHERE id = $2`,
+      [saldo, m.id]
+    );
+  }
+}
+
 // ─── GET /api/ventas/medios-pago ─────────────────────────────────────────────
 router.get('/medios-pago', async (req, res, next) => {
   try {
@@ -1262,56 +1292,58 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         mediosMap = Object.fromEntries(mediosRows.map(m => [m.id, m]));
       }
 
-      // Ajustar el impacto en CC del cliente con UN solo movimiento por la DIFERENCIA
-      // (delta) entre lo que la venta tenía cargado y lo que implica la edición. Así el
-      // estado de cuenta muestra una única línea "Modificación" en lugar de revertir la
-      // venta completa y recargarla, que generaba 3 renglones confusos por edición.
+      // Recargar el impacto de la venta en la CC con el TOTAL REAL de la edición.
+      // En lugar de dejar la venta original y sumarle una línea "Modificación" por
+      // la diferencia, se borra el renglón anterior de la venta y se vuelve a cargar
+      // con el monto correcto, conservando su fecha original para no reordenar la
+      // cuenta. Los saldos de toda la cuenta se recalculan al final.
       if (cliente_id) {
-        // Neto que la venta tiene HOY en la CC (incluye ediciones previas)
-        const { rows: [ccAnterior] } = await client.query(
-          `SELECT COALESCE(SUM(debe), 0)::float AS total_debe,
-                  COALESCE(SUM(haber), 0)::float AS total_haber
-             FROM cuentas_corrientes_cliente
+        // Fecha original del renglón de la venta (para no moverlo al editar).
+        const { rows: [orig] } = await client.query(
+          `SELECT MIN(fecha) AS fecha FROM cuentas_corrientes_cliente
+            WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc')`,
+          [id]
+        );
+        const fechaVenta = orig?.fecha ?? new Date();
+
+        // Borrar el impacto anterior de esta venta (renglón original + ajustes previos).
+        await client.query(
+          `DELETE FROM cuentas_corrientes_cliente
             WHERE origen_id = $1 AND origen_tipo IN ('venta', 'consumo_nc', 'edicion_venta')`,
           [id]
         );
-        const netoAnterior = parseFloat(ccAnterior.total_debe) - parseFloat(ccAnterior.total_haber);
 
-        // Neto que la venta DEBERÍA tener según los pagos nuevos:
-        // saldo a favor consumido + lo cargado a cuenta corriente (lo demás no impacta la CC).
-        const totalSF = pagos
+        // Volver a cargar según los pagos nuevos: saldo a favor consumido (consumo_nc)
+        // y lo cargado a cuenta corriente (venta). El resto de los medios no impacta la CC.
+        const totalSF = parseFloat(pagos
           .filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor')
-          .reduce((s, p) => s + parseFloat(p.monto), 0);
-        const totalCC = pagos
+          .reduce((s, p) => s + parseFloat(p.monto), 0).toFixed(2));
+        const totalCC = parseFloat(pagos
           .filter(p => {
             const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
             return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
           })
-          .reduce((s, p) => s + parseFloat(p.monto), 0);
-        const netoNuevo = parseFloat((totalSF + totalCC).toFixed(2));
+          .reduce((s, p) => s + parseFloat(p.monto), 0).toFixed(2));
 
-        const delta = parseFloat((netoNuevo - netoAnterior).toFixed(2));
-        if (Math.abs(delta) > 0.001) {
-          const { rows: [saldoRow] } = await client.query(`
-            SELECT COALESCE(c.saldo_inicial, 0)
-                   + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-                   + COALESCE(cs.total_correcciones, 0) AS saldo_actual
-              FROM clientes c
-              LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
-              LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones FROM correcciones_saldo_cliente GROUP BY cliente_id) cs ON cs.cliente_id = c.id
-             WHERE c.id = $1
-             GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
-          `, [cliente_id]);
-          const saldoActual  = parseFloat(saldoRow?.saldo_actual ?? '0');
-          const saldoDespues = parseFloat((saldoActual + delta).toFixed(2));
-          // delta > 0 ⇒ la edición agrega deuda (debe); delta < 0 ⇒ la reduce (haber).
+        if (totalSF > 0.001) {
           await client.query(
             `INSERT INTO cuentas_corrientes_cliente
-               (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
-             VALUES ($1, $2, $3, $4, 'edicion_venta', $5)`,
-            [cliente_id, delta > 0 ? delta : 0, delta < 0 ? -delta : 0, saldoDespues, id]
+               (cliente_id, debe, haber, saldo, fecha, origen_tipo, origen_id)
+             VALUES ($1, $2, 0, 0, $3, 'consumo_nc', $4)`,
+            [cliente_id, totalSF, fechaVenta, id]
           );
         }
+        if (totalCC > 0.001) {
+          await client.query(
+            `INSERT INTO cuentas_corrientes_cliente
+               (cliente_id, debe, haber, saldo, fecha, origen_tipo, origen_id)
+             VALUES ($1, $2, 0, 0, $3, 'venta', $4)`,
+            [cliente_id, totalCC, fechaVenta, id]
+          );
+        }
+
+        // Recalcular la columna saldo de toda la cuenta corriente del cliente.
+        await recomputarSaldosCliente(client, cliente_id);
       }
 
       // Eliminar pagos anteriores
