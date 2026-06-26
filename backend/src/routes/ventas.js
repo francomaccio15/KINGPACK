@@ -686,8 +686,9 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     }
     const venta = ventaRows[0];
 
-    // Al anular: devolver stock a la sucursal
-    if (estado === 'anulada' && venta.estado !== 'anulada') {
+    // Al anular: devolver stock a la sucursal SOLO si la venta ya lo había descontado.
+    // Las preventas nunca descuentan stock, así que anularlas no debe devolver nada.
+    if (estado === 'anulada' && ['confirmada', 'facturada'].includes(venta.estado)) {
       const { rows: itemRows } = await client.query(
         `SELECT articulo_id, cantidad FROM venta_items WHERE venta_id = $1`,
         [id]
@@ -1143,6 +1144,8 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     const sucursal_id  = ventaRows[0].sucursal_id;
     const ventaNumero  = ventaRows[0].numero;
     const cliente_id   = ventaRows[0].cliente_id;
+    // Las preventas no descuentan stock; solo confirmada/facturada lo afectan.
+    const afectaStock  = ['confirmada', 'facturada'].includes(ventaRows[0].estado);
 
     // Guardar items anteriores para el audit log
     const { rows: itemsAnteriores } = await client.query(
@@ -1155,13 +1158,16 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       [id]
     );
 
-    // Devolver stock de items anteriores a la sucursal
-    for (const item of itemsAnteriores) {
-      await client.query(
-        `UPDATE stock SET cantidad = cantidad + $1::numeric, ultima_actualizacion = NOW()
-         WHERE articulo_id = $2 AND sucursal_id = $3`,
-        [item.cantidad, item.articulo_id, sucursal_id]
-      );
+    // Devolver stock de items anteriores SOLO si la venta ya había descontado stock.
+    // En una preventa el stock nunca se tocó, así que no hay nada que devolver.
+    if (afectaStock) {
+      for (const item of itemsAnteriores) {
+        await client.query(
+          `UPDATE stock SET cantidad = cantidad + $1::numeric, ultima_actualizacion = NOW()
+           WHERE articulo_id = $2 AND sucursal_id = $3`,
+          [item.cantidad, item.articulo_id, sucursal_id]
+        );
+      }
     }
 
     // Verificar y calcular nuevos items (igual que al crear)
@@ -1198,13 +1204,33 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       );
     }
 
-    // Descontar stock nuevo
-    for (const item of itemsCalculados) {
-      await client.query(
-        `UPDATE stock SET cantidad = cantidad - $1::numeric, ultima_actualizacion = NOW()
-         WHERE articulo_id = $2 AND sucursal_id = $3`,
-        [item.cantidad, item.articulo_id, sucursal_id]
-      );
+    // Validar y descontar stock de los items nuevos SOLO si la venta afecta stock.
+    // El stock anterior ya fue devuelto arriba, así que se valida contra el real.
+    if (afectaStock) {
+      for (const item of itemsCalculados) {
+        const { rows: stockRows } = await client.query(
+          `SELECT cantidad FROM stock WHERE articulo_id = $1 AND sucursal_id = $2 FOR UPDATE`,
+          [item.articulo_id, sucursal_id]
+        );
+        const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
+        if (stockActual < item.cantidad) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            error: `Stock insuficiente para "${item.art.nombre}"`,
+            detalle: {
+              articulo_id: item.articulo_id,
+              nombre: item.art.nombre,
+              disponible: stockActual,
+              solicitado: item.cantidad,
+            },
+          });
+        }
+        await client.query(
+          `UPDATE stock SET cantidad = cantidad - $1::numeric, ultima_actualizacion = NOW()
+           WHERE articulo_id = $2 AND sucursal_id = $3`,
+          [item.cantidad, item.articulo_id, sucursal_id]
+        );
+      }
     }
 
     // Recalcular totales de la venta
