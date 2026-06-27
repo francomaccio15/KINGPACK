@@ -8,6 +8,9 @@
 
 body {
   @apply bg-kp-bg text-kp-white;
+  font-weight: 500;
+  -webkit-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
 }
 
 /* Scrollbar personalizado */
