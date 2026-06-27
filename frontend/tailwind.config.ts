@@ -5,15 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'kp-bg':       '#3d3d3d',
-        'kp-surface':  '#4d4d4d',
-        'kp-surface2': '#5c5c5c',
-        'kp-border':   '#757575',
+        'kp-bg':       '#0d0d0d',
+        'kp-surface':  '#1a1a1a',
+        'kp-surface2': '#242424',
+        'kp-border':   '#3a3a3a',
         'kp-red':      '#ff2233',
-        'kp-red-dark': '#d40010',
+        'kp-red-dark': '#cc0000',
         'kp-white':    '#ffffff',
-        'kp-gray':     '#d4d4d4',
-        'kp-gray-lt':  '#efefef',
+        'kp-gray':     '#cfcfcf',
+        'kp-gray-lt':  '#ededed',
       },
       fontFamily: {
         sans: ['var(--font-montserrat)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
