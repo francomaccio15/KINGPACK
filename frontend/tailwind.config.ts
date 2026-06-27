@@ -12,8 +12,8 @@ const config: Config = {
         'kp-red':      '#ff2233',
         'kp-red-dark': '#cc0000',
         'kp-white':    '#ffffff',
-        'kp-gray':     '#cfcfcf',
-        'kp-gray-lt':  '#ededed',
+        'kp-gray':     '#eaeaea',
+        'kp-gray-lt':  '#fafafa',
       },
       fontFamily: {
         sans: ['var(--font-montserrat)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
