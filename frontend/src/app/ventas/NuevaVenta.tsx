@@ -63,7 +63,8 @@ interface CartItem {
   cantidad: number;
   precio_lista: number;        // from API (with lista applied)
   precio_madre: number;        // fallback base price
-  descuento_pct: number;       // combined discount %
+  descuento_manual: number | null; // % fijado a mano para ESTE ítem (null = hereda lista/cliente)
+  descuento_pct: number;       // descuento efectivo aplicado %
   precio_unitario_final: number;
   stock_disponible: number;    // stock al momento de agregar
 }
@@ -97,8 +98,12 @@ function recalcItem(
   descuentoCliente: number,
 ): CartItem {
   // Siempre recalcular sobre precio_madre (precio original sin descuentos)
-  // para evitar aplicar el descuento de lista dos veces
-  const descuento_pct = calcCombinedDiscount(descuentoLista, descuentoCliente);
+  // para evitar aplicar el descuento de lista dos veces.
+  // Si el ítem tiene un descuento manual propio, ese manda; si no, hereda el
+  // descuento combinado de lista + cliente.
+  const descuento_pct = item.descuento_manual != null
+    ? item.descuento_manual
+    : calcCombinedDiscount(descuentoLista, descuentoCliente);
   const precio_unitario_final = calcFinalPrice(item.precio_madre, descuento_pct);
   return { ...item, descuento_pct, precio_unitario_final };
 }
@@ -171,6 +176,8 @@ export default function NuevaVenta({
   // ── Descuentos
   const descuentoLista   = listas.find(l => l.id === listaId)?.descuento_lista ?? 0;
   const descuentoCliente = selectedClient?.descuento_adicional ?? 0;
+  // Descuento base que heredan los ítems sin descuento manual propio
+  const descuentoBase    = calcCombinedDiscount(descuentoLista, descuentoCliente);
 
   // ── Medios de pago
   const [mediosPago, setMediosPago]       = useState<MedioPago[]>([]);
@@ -389,12 +396,32 @@ export default function NuevaVenta({
           cantidad:              1,
           precio_lista:          precio_madre,
           precio_madre:          precio_madre,
+          descuento_manual:      null,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
         },
       ];
     });
+  }, [descuentoLista, descuentoCliente]);
+
+  // ─── Descuento manual por ítem ─────────────────────────────────────────────
+  // Vacío = el ítem vuelve a heredar el descuento de lista/cliente.
+  const setDescuentoItem = useCallback((articuloId: string, raw: string) => {
+    let manual: number | null;
+    if (raw.trim() === '') {
+      manual = null;
+    } else {
+      const v = parseFloat(raw.replace(',', '.'));
+      manual = isNaN(v) ? null : Math.min(100, Math.max(0, v));
+    }
+    setCart(prev =>
+      prev.map(item =>
+        item.articulo_id === articuloId
+          ? recalcItem({ ...item, descuento_manual: manual }, descuentoLista, descuentoCliente)
+          : item
+      )
+    );
   }, [descuentoLista, descuentoCliente]);
 
   // ─── Update quantity ───────────────────────────────────────────────────────
@@ -849,6 +876,25 @@ export default function NuevaVenta({
                                 Stock: {item.stock_disponible}
                               </span>
                             )}
+
+                            {/* Descuento por ítem */}
+                            <div className="flex items-center shrink-0" title="Descuento de este artículo (%)">
+                              <NumericInput
+                                decimals={1}
+                                placeholder={descuentoBase > 0 ? String(descuentoBase) : '0'}
+                                value={item.descuento_manual != null ? item.descuento_manual : ''}
+                                onChange={e => setDescuentoItem(item.articulo_id, e.target.value)}
+                                className={[
+                                  'w-12 text-center text-xs tabular-nums py-1 outline-none rounded-l',
+                                  'bg-kp-surface2 border border-kp-border focus:border-kp-red focus:bg-kp-surface transition-colors',
+                                  item.descuento_pct > 0 ? 'text-kp-red font-semibold' : 'text-kp-white',
+                                ].join(' ')}
+                                aria-label={`Descuento de ${item.nombre}`}
+                              />
+                              <span className="px-1.5 py-1 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">
+                                %
+                              </span>
+                            </div>
 
                             {/* Line subtotal */}
                             <div className="w-24 text-right shrink-0">
