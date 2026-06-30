@@ -44,6 +44,7 @@ async function fetchData(params: Record<string, string | undefined>) {
     listas:     rawListas.map((l: any) => ({
       id: l.id,
       nombre: l.nombre,
+      tipo: l.tipo,
       descuento_lista: parseFloat(l.descuento_base_pct) || 0,
     })),
   };

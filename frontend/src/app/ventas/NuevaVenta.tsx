@@ -13,7 +13,7 @@ import NumericInput from '@/components/NumericInput';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Sucursal = { id: string; nombre: string };
-type Lista    = { id: string; nombre: string; descuento_lista: number };
+type Lista    = { id: string; nombre: string; tipo: string; descuento_lista: number };
 
 interface ArticuloResult {
   id: string;
@@ -164,8 +164,9 @@ export default function NuevaVenta({
   const clientDebounceRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientDropRef                   = useRef<HTMLDivElement>(null);
 
-  // ── Lista de precios
-  const [listaId, setListaId] = useState<string>('');
+  // ── Lista de precios (default: Precio Base / lista madre)
+  const listaBaseId = listas.find(l => l.tipo === 'madre')?.id ?? '';
+  const [listaId, setListaId] = useState<string>(listaBaseId);
 
   // ── Descuentos
   const descuentoLista   = listas.find(l => l.id === listaId)?.descuento_lista ?? 0;
@@ -258,7 +259,7 @@ export default function NuevaVenta({
     setClientResults([]);
     setClientDropOpen(false);
     setSelectedClient(null);
-    setListaId('');
+    setListaId(listaBaseId);
     setSaveError('');
     setSaving(null);
     setSucursalId(sucursales[0]?.id ?? '');
@@ -1021,7 +1022,6 @@ export default function NuevaVenta({
                       className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
                         focus:outline-none focus:border-kp-red transition-colors"
                     >
-                      <option value="">— Precio madre (sin lista)</option>
                       {listas.map(l => (
                         <option key={l.id} value={l.id}>
                           {l.nombre}{l.descuento_lista > 0 ? ` (${l.descuento_lista}% dto.)` : ''}
