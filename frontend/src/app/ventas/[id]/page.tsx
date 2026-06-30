@@ -3,6 +3,7 @@ import AccionesVenta from './AccionesVenta';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import FacturaQR from './FacturaQR';
 import { KingPackLogoPrint } from '@/components/KingPackLogo';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
@@ -760,9 +761,10 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
           </div>
 
-          {/* ══ PIE FISCAL — CAE ══ */}
+          {/* ══ PIE FISCAL — CAE + QR ══ */}
           <div style={{ border: '2px solid #111', borderRadius: '4px', padding: '7px 12px', background: '#f9fafb' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: facturacion.qr_url ? 'auto 1fr auto' : '1fr auto', gap: '12px', alignItems: 'center' }}>
+              {facturacion.qr_url && <FacturaQR url={facturacion.qr_url} />}
               <div>
                 <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '3px' }}>
                   Código de Autorización Electrónica (CAE)
