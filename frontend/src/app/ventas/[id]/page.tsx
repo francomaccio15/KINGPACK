@@ -378,12 +378,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       <style>{`
         @media print {
           @page { size: A4; margin: 12mm; }
+          @page facturaPage { size: A5 landscape; margin: 7mm; }
           .print-layout-venta    { display: block !important; }
           .print-layout-factura  { display: none  !important; }
         }
         @media print {
           body.print-factura .print-layout-venta   { display: none  !important; }
-          body.print-factura .print-layout-factura { display: block !important; }
+          body.print-factura .print-layout-factura { display: block !important; page: facturaPage; }
         }
       `}</style>
 
@@ -558,10 +559,10 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
         <div className="print-layout-factura hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', color: '#111', background: 'white', width: '100%', boxSizing: 'border-box' }}>
 
           {/* ══ ENCABEZADO FISCAL — 3 columnas ══ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', border: '2px solid #111', marginBottom: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', border: '2px solid #111', marginBottom: '7px' }}>
 
             {/* Emisor */}
-            <div style={{ padding: '10px 12px', borderRight: '2px solid #111' }}>
+            <div style={{ padding: '7px 10px', borderRight: '2px solid #111' }}>
               <div style={{ marginBottom: '6px' }}>
                 <KingPackLogoPrint />
               </div>
@@ -599,7 +600,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
 
             {/* Datos del comprobante */}
-            <div style={{ padding: '10px 12px' }}>
+            <div style={{ padding: '7px 10px' }}>
               <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#6b7280', marginBottom: '6px' }}>
                 Datos del Comprobante
               </p>
@@ -631,8 +632,8 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ RECEPTOR ══ */}
-          <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '8px 12px', marginBottom: '10px', background: '#f9fafb' }}>
-            <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '6px' }}>
+          <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '6px 10px', marginBottom: '7px', background: '#f9fafb' }}>
+            <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '4px' }}>
               Datos del Receptor
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '11px' }}>
@@ -668,16 +669,16 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ TABLA DE ARTÍCULOS ══ */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '10px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginBottom: '8px' }}>
             <thead>
               <tr style={{ background: '#111', color: 'white' }}>
-                <th style={{ textAlign: 'left', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Código</th>
-                <th style={{ textAlign: 'left', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Descripción</th>
-                <th style={{ textAlign: 'center', padding: '7px 6px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '40px' }}>Cant.</th>
-                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>P. Unitario</th>
-                <th style={{ textAlign: 'right', padding: '7px 6px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>% Desc.</th>
-                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>P. Final</th>
-                <th style={{ textAlign: 'right', padding: '7px 8px', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>Subtotal</th>
+                <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Código</th>
+                <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Descripción</th>
+                <th style={{ textAlign: 'center', padding: '8px 6px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '45px' }}>Cant.</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>P. Unitario</th>
+                <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '55px' }}>% Desc.</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>P. Final</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>Subtotal</th>
               </tr>
             </thead>
             <tbody>
@@ -686,19 +687,19 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                 return (
                   <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
-                    <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: '10px', color: '#6b7280' }}>{item.codigo}</td>
-                    <td style={{ padding: '6px 8px', fontWeight: '600' }}>{item.nombre}</td>
-                    <td style={{ padding: '6px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ padding: '9px 8px', fontFamily: 'monospace', fontSize: '12px', color: '#6b7280' }}>{item.codigo}</td>
+                    <td style={{ padding: '9px 8px', fontWeight: '700' }}>{item.nombre}</td>
+                    <td style={{ padding: '9px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: '600' }}>
                       {parseFloat(item.cantidad).toFixed(0)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
+                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
                       {fmt(item.precio_lista)}
                     </td>
-                    <td style={{ padding: '6px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
+                    <td style={{ padding: '9px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
                       {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
+                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
                   </tr>
                 );
               })}
@@ -706,7 +707,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </table>
 
           {/* ══ FILA INFERIOR — Pagos | Totales ══ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '12px', marginBottom: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '10px', marginBottom: '7px' }}>
 
             {/* Formas de pago */}
             <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', overflow: 'hidden' }}>
@@ -760,13 +761,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ PIE FISCAL — CAE ══ */}
-          <div style={{ border: '2px solid #111', borderRadius: '4px', padding: '10px 14px', background: '#f9fafb' }}>
+          <div style={{ border: '2px solid #111', borderRadius: '4px', padding: '7px 12px', background: '#f9fafb' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center' }}>
               <div>
-                <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '4px' }}>
+                <p style={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '3px' }}>
                   Código de Autorización Electrónica (CAE)
                 </p>
-                <p style={{ fontSize: '18px', fontFamily: 'monospace', fontWeight: '900', letterSpacing: '2px', color: '#111', marginBottom: '4px' }}>
+                <p style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '900', letterSpacing: '1px', color: '#111', marginBottom: '3px' }}>
                   {facturacion.cae}
                 </p>
                 {facturacion.cae_vencimiento && (
