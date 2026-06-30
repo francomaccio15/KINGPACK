@@ -64,8 +64,8 @@ function _fechaAfip(date) {
 
 function _buildTRA() {
   const ahora  = new Date();
-  const desde  = _fechaAfip(new Date(ahora.getTime() - 10 * 60 * 1000)); // 10 min en el pasado (margen de reloj)
-  const hasta  = _fechaAfip(new Date(ahora.getTime() + 10 * 60 * 1000)); // 10 min en el futuro
+  const desde  = _fechaAfip(new Date(ahora.getTime() - 10 * 60 * 1000));      // 10 min en el pasado (margen de reloj)
+  const hasta  = _fechaAfip(new Date(ahora.getTime() + 12 * 3600 * 1000));    // 12 hs (máximo que da AFIP al TA)
   const unique = crypto.randomInt(1, 999999999);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
