@@ -669,16 +669,16 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ TABLA DE ARTÍCULOS ══ */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginBottom: '8px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '7px' }}>
             <thead>
               <tr style={{ background: '#111', color: 'white' }}>
-                <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Código</th>
-                <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Descripción</th>
-                <th style={{ textAlign: 'center', padding: '8px 6px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '45px' }}>Cant.</th>
-                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>P. Unitario</th>
-                <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '55px' }}>% Desc.</th>
-                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>P. Final</th>
-                <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px' }}>Subtotal</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Código</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Descripción</th>
+                <th style={{ textAlign: 'center', padding: '4px 5px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px', width: '40px' }}>Cant.</th>
+                <th style={{ textAlign: 'right', padding: '4px 6px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px', width: '85px' }}>P. Unitario</th>
+                <th style={{ textAlign: 'right', padding: '4px 5px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px', width: '50px' }}>% Desc.</th>
+                <th style={{ textAlign: 'right', padding: '4px 6px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px', width: '85px' }}>P. Final</th>
+                <th style={{ textAlign: 'right', padding: '4px 6px', fontSize: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px', width: '85px' }}>Subtotal</th>
               </tr>
             </thead>
             <tbody>
@@ -687,19 +687,19 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                 return (
                   <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
-                    <td style={{ padding: '9px 8px', fontFamily: 'monospace', fontSize: '12px', color: '#6b7280' }}>{item.codigo}</td>
-                    <td style={{ padding: '9px 8px', fontWeight: '700' }}>{item.nombre}</td>
-                    <td style={{ padding: '9px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: '600' }}>
+                    <td style={{ padding: '3px 6px', fontFamily: 'monospace', fontSize: '9px', color: '#6b7280' }}>{item.codigo}</td>
+                    <td style={{ padding: '3px 6px', fontWeight: '600' }}>{item.nombre}</td>
+                    <td style={{ padding: '3px 5px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: '600' }}>
                       {parseFloat(item.cantidad).toFixed(0)}
                     </td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
                       {fmt(item.precio_lista)}
                     </td>
-                    <td style={{ padding: '9px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
+                    <td style={{ padding: '3px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: tieneDesc ? '700' : '400', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
                       {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
                     </td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
                   </tr>
                 );
               })}
