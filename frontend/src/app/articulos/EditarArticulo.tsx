@@ -53,23 +53,72 @@ export default function EditarArticulo({
 
   const [stockMin, setStockMin] = useState(String(articulo.stock_minimo ?? 0));
 
+  // Precio de venta editable. Al cambiarlo se recalcula el margen (costo y flete
+  // quedan fijos). Arranca con el precio base actual del artículo (entero).
+  const [precioInput, setPrecioInput] = useState<string>(
+    String(Math.round(parseFloat(articulo.precio_madre) || 0))
+  );
+
   const catActiva  = categorias.find(c => c.id === form.categoria_id);
   const margenReal = form.margen_aplicado !== '' && form.margen_aplicado !== null
     ? parseFloat(String(form.margen_aplicado))
     : parseFloat(catActiva?.margen_default ?? '0');
   const costo      = parseFloat(form.costo_base)  || 0;
   const flete      = parseFloat(form.costo_flete) || 0;
-
-  // Precio estimado — recalculado en tiempo real igual que el trigger del backend:
-  // precio_madre = costo × (1 + flete%) × (1 + margen%) × (1 + iva%)
   const ivaPct     = parseFloat(articulo.alicuota_porcentaje ?? '21');
-  const precioRef  = costo > 0
-    ? costo * (1 + flete / 100) * (1 + margenReal / 100) * (1 + ivaPct / 100)
-    : parseFloat(articulo.precio_madre) || 0;
+
+  // Costo con flete (neto, sin IVA) y ganancia por unidad según el precio cargado.
+  const costoConFlete = costo * (1 + flete / 100);
+  const precioNum     = parseFloat(precioInput) || 0;
+  const gananciaUnit  = precioNum > 0 ? precioNum / (1 + ivaPct / 100) - costoConFlete : 0;
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  // precio = costo × (1+flete%) × (1+margen%) × (1+iva%), redondeado a entero (igual que el backend)
+  const precioDesde = (c: number, fl: number, m: number) => {
+    const b = c * (1 + fl / 100) * (1 + ivaPct / 100);
+    return b > 0 ? Math.round(b * (1 + m / 100)) : 0;
+  };
+  // margen implícito en un precio de venta dado (costo y flete fijos)
+  const margenDesde = (c: number, fl: number, p: number) => {
+    const b = c * (1 + fl / 100) * (1 + ivaPct / 100);
+    return b > 0 ? round2((p / b - 1) * 100) : 0;
+  };
 
   const set = (k: keyof typeof form) =>
     (e: { target: { value: string } }) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // ── Vínculo bidireccional precio ↔ margen (costo y flete no se tocan) ──
+  const onCosto = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    setForm(f => ({ ...f, costo_base: v }));
+    setPrecioInput(String(precioDesde(parseFloat(v) || 0, flete, margenReal)));
+  };
+  const onFlete = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    setForm(f => ({ ...f, costo_flete: v }));
+    setPrecioInput(String(precioDesde(costo, parseFloat(v) || 0, margenReal)));
+  };
+  const onMargen = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    setForm(f => ({ ...f, margen_aplicado: v }));
+    const m = v !== '' ? (parseFloat(v) || 0) : (parseFloat(catActiva?.margen_default ?? '0') || 0);
+    setPrecioInput(String(precioDesde(costo, flete, m)));
+  };
+  const onPrecio = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    setPrecioInput(v);
+    const m = margenDesde(costo, flete, parseFloat(v) || 0);
+    setForm(f => ({ ...f, margen_aplicado: String(m) }));
+  };
+  const onCategoria = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    setForm(f => ({ ...f, categoria_id: v }));
+    if (form.margen_aplicado === '' || form.margen_aplicado === null) {
+      const cat = categorias.find(c => c.id === v);
+      setPrecioInput(String(precioDesde(costo, flete, parseFloat(cat?.margen_default ?? '0') || 0)));
+    }
+  };
 
   const cerrar = () => { setOpen(false); setError(''); };
 
@@ -183,7 +232,7 @@ export default function EditarArticulo({
               <div>
                 <label className={labelCls}>Categoría</label>
                 <select
-                  value={form.categoria_id} onChange={set('categoria_id')}
+                  value={form.categoria_id} onChange={onCategoria}
                   className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
                     focus:outline-none focus:border-kp-red transition-colors"
                 >
@@ -200,7 +249,7 @@ export default function EditarArticulo({
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
                     <NumericInput
-                      value={form.costo_base} onChange={set('costo_base')}
+                      value={form.costo_base} onChange={onCosto}
                       placeholder="0.00"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
                         placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
@@ -211,7 +260,7 @@ export default function EditarArticulo({
                   <label className={labelCls}>Flete %</label>
                   <div className="relative">
                     <NumericInput
-                      value={form.costo_flete} onChange={set('costo_flete')}
+                      value={form.costo_flete} onChange={onFlete}
                       placeholder="0.0"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
                         placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
@@ -230,7 +279,7 @@ export default function EditarArticulo({
                   </label>
                   <div className="relative">
                     <NumericInput
-                      value={form.margen_aplicado ?? ''} onChange={set('margen_aplicado')}
+                      value={form.margen_aplicado ?? ''} onChange={onMargen}
                       placeholder={catActiva?.margen_default ?? '—'}
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
                         placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
@@ -240,19 +289,43 @@ export default function EditarArticulo({
                 </div>
               </div>
 
-              {/* Precio estimado — se actualiza en tiempo real */}
-              <div className="flex items-center justify-between rounded-xl bg-kp-surface2 border border-kp-border px-5 py-3">
-                <div>
-                  <span className="text-xs text-kp-gray uppercase tracking-widest">Precio estimado</span>
-                  {costo > 0 && (
+              {/* Precio de venta — editable. Al cambiarlo se ajusta el margen
+                  (el costo y el flete no se modifican). */}
+              <div className="rounded-xl bg-kp-surface2 border border-kp-border px-5 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta</span>
                     <span className="block text-[10px] text-kp-gray mt-0.5">
-                      IVA {ivaPct.toFixed(0)}% incluido
+                      IVA {ivaPct.toFixed(0)}% incluido · editable
                     </span>
-                  )}
+                  </div>
+                  <div className="relative w-40">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
+                    <NumericInput
+                      value={precioInput} onChange={onPrecio}
+                      placeholder="0"
+                      className="w-full bg-kp-surface border border-kp-border rounded-lg pl-7 pr-3 py-2
+                        text-right text-xl font-bold tabular-nums text-kp-white
+                        focus:outline-none focus:border-kp-red transition-colors"
+                    />
+                  </div>
                 </div>
-                <span className="text-xl font-bold tabular-nums text-kp-white">
-                  {ars.format(precioRef)}
-                </span>
+                {costo > 0 && (
+                  <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
+                    <span>
+                      Margen:{' '}
+                      <span className="font-semibold text-kp-white tabular-nums">
+                        {isNaN(margenReal) ? '—' : `${round2(margenReal)}%`}
+                      </span>
+                    </span>
+                    <span>
+                      Ganancia x u.:{' '}
+                      <span className={`font-semibold tabular-nums ${gananciaUnit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {ars.format(gananciaUnit)}
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Stock mínimo de alerta */}
