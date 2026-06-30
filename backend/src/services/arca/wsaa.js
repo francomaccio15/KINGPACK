@@ -110,12 +110,14 @@ function _parsearTA(xml) {
   // TA ya emitido, certificado no autorizado para el servicio, etc.).
   const faultMatch = xml.match(/<faultstring>([\s\S]+?)<\/faultstring>/i);
   if (faultMatch) {
-    throw new Error(`WSAA rechazó la autenticación: ${faultMatch[1].trim()}`);
+    throw new Error(`WSAA rechazó la autenticación: ${_unescape(faultMatch[1]).trim()}`);
   }
 
-  const tokenMatch = xml.match(/<token>([\s\S]+?)<\/token>/);
-  const signMatch  = xml.match(/<sign>([\s\S]+?)<\/sign>/);
-  const expiMatch  = xml.match(/<expirationTime>([\s\S]+?)<\/expirationTime>/);
+  // El TA viene como XML escapado dentro de <loginCmsReturn> → desescapar.
+  const ta = _unescape(xml);
+  const tokenMatch = ta.match(/<token>([\s\S]+?)<\/token>/);
+  const signMatch  = ta.match(/<sign>([\s\S]+?)<\/sign>/);
+  const expiMatch  = ta.match(/<expirationTime>([\s\S]+?)<\/expirationTime>/);
 
   if (!tokenMatch || !signMatch) {
     throw new Error(`WSAA: no se pudo extraer token del XML de respuesta.\n${xml.slice(0, 500)}`);
@@ -126,6 +128,18 @@ function _parsearTA(xml) {
     sign:   signMatch[1].trim(),
     expira: expiMatch ? new Date(expiMatch[1].trim()).getTime() : Date.now() + 11 * 3600 * 1000,
   };
+}
+
+// Desescapa entidades XML (&amp; al final para no doble-decodificar).
+function _unescape(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, '&');
 }
 
 function _soapPost(url, body, action) {
