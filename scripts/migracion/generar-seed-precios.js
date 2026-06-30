@@ -1,26 +1,23 @@
 /**
- * Genera el seed SQL de actualización de precios a partir del Excel corregido
- * por el cliente (KingPack-Articulos-Correccion.xlsx).
+ * Genera el seed SQL de actualización de precios a partir del Excel corregido.
  *
- * Salida: backend/db/seeds/020_actualizar_precios.sql
+ * Salida: backend/db/seeds/021_actualizar_precios_fix.sql
  *
- * El cliente cargó, por artículo: Costo (CON IVA), flete %, y Precio Venta
- * (CON IVA). El sistema guarda el costo NETO y reconstruye el precio con el
- * trigger. Por eso:
- *   costo_base      = round(costo_excel / 1.21, 2)        (neto)
+ * Mapea por CÓDIGO (KP#####) — NO por nombre — para evitar problemas de
+ * normalización (el SQL upper(trim()) no colapsa espacios dobles internos,
+ * cosa que sí hace la normalización de JS). Para eso lee un dump de la DB
+ * (codigo|nombre) y resuelve cada fila del Excel a su(s) código(s).
+ *
+ * Reglas (ver plan):
+ *   costo_base      = round(costo_excel / 1.21, 2)   (neto; el cliente cargó con IVA)
  *   costo_flete     = flete %
- *   margen_aplicado = round( F / (costo_base*(1+flete/100)*1.21) - 1, 2) * 100
- * El trigger fn_trg_actualizar_precio_madre recalcula precio_madre (= F) y
- * cascada a lista_precio_items.
+ *   margen_aplicado = round( F / (costo_base*(1+flete/100)*1.21) - 1, 2)*100
+ *   - Margen > 999.99 → NO se actualiza (queda como está; lo revisa el cliente).
+ *   - Artículos del Excel → quedan activos.
+ *   - Artículos de la DB que NO están en el Excel → se desactivan.
  *
- * Reglas:
- *  - Mapeo por NOMBRE (la columna de código quedó vacía).
- *  - Filas sin costo/precio o basura → se saltan.
- *  - Margen > 999.99 (no entra en numeric(5,2)) → NO se actualiza, se reporta
- *    (queda con su valor actual para revisión del cliente).
- *  - Los artículos activos que el cliente sacó del Excel → se desactivan.
- *
- * Uso:  node scripts/migracion/generar-seed-precios.js
+ * Uso:  node scripts/migracion/generar-seed-precios.js <ruta_dump_db>
+ *   donde el dump es: codigo|nombre por línea (artículos no borrados).
  */
 
 const path = require('path');
@@ -28,12 +25,13 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 
 const ORIGEN = path.join(__dirname, '..', '..', 'KingPack-Articulos-Correccion.xlsx');
-const SALIDA = path.join(__dirname, '..', '..', 'backend', 'db', 'seeds', '020_actualizar_precios.sql');
+const SALIDA = path.join(__dirname, '..', '..', 'backend', 'db', 'seeds', '021_actualizar_precios_fix.sql');
+const DUMP = process.argv[2];
 
 const IVA = 21;
-const MARGEN_MAX = 999.99; // tope de numeric(5,2)
-
+const MARGEN_MAX = 999.99;
 const r2 = (x) => Math.round(x * 100) / 100;
+const norm = (s) => String(s ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
 
 function celda(row, col) {
   const v = row.getCell(col).value;
@@ -44,95 +42,106 @@ function celda(row, col) {
     if (v.text) return String(v.text).trim();
     return null;
   }
-  if (typeof v === 'string') {
-    const s = v.trim();
-    return s === '' ? null : s;
-  }
+  if (typeof v === 'string') { const s = v.trim(); return s === '' ? null : s; }
   return v;
 }
-
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(String(v).replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 };
 
-const norm = (s) => String(s ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
-const sql = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
-
 async function main() {
+  if (!DUMP || !fs.existsSync(DUMP)) throw new Error('Falta el dump de la DB (codigo|nombre). Uso: node generar-seed-precios.js <dump>');
+
+  // Mapa nombre normalizado -> [codigos]
+  const porNombre = new Map();
+  for (const line of fs.readFileSync(DUMP, 'utf8').trim().split(/\r?\n/)) {
+    const [codigo, nombre] = line.split('|');
+    if (!codigo) continue;
+    const k = norm(nombre);
+    if (!porNombre.has(k)) porNombre.set(k, []);
+    porNombre.get(k).push(codigo);
+  }
+
   console.log(`Leyendo ${ORIGEN} ...`);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(ORIGEN);
   const ws = wb.getWorksheet('Articulos');
-  if (!ws) throw new Error('No se encontró la hoja Articulos');
 
-  const updates = [];      // { nombre, costoBase, flete, margen }
-  const keepNames = [];    // nombres normalizados que el cliente conservó (no desactivar)
-  const salteadosMargen = []; // { nombre, costo, precio, margen }
+  const updates = [];                 // { codigo, costoBase, flete, margen, nombre }
+  const matchedCodigos = new Set();   // todos los códigos presentes en el Excel (quedan activos)
+  const salteados = [];               // margen > 999.99
+  const sinMatch = [];                // filas del Excel sin código en la DB
   let sinDatos = 0;
 
   ws.eachRow((row, n) => {
     if (n === 1) return;
     const nombre = celda(row, 2);
-    if (!nombre) return;                       // fila vacía
+    if (!nombre) return;
     const costo = num(celda(row, 4));
     const flete = num(celda(row, 5)) ?? 0;
     const precio = num(celda(row, 6));
-    if (!costo || !precio) { sinDatos++; return; } // basura / sin precio
+    if (!costo || !precio) { sinDatos++; return; }
 
-    keepNames.push(norm(nombre));
+    const codigos = porNombre.get(norm(nombre));
+    if (!codigos) { sinMatch.push(String(nombre)); return; }
 
     const costoBase = r2(costo / (1 + IVA / 100));
     const base = costoBase * (1 + flete / 100) * (1 + IVA / 100);
     const margen = r2((precio / base - 1) * 100);
 
-    if (margen > MARGEN_MAX) {
-      salteadosMargen.push({ nombre: String(nombre), costo, precio, margen });
-      return; // no actualizar; el cliente lo revisa en el sistema
+    for (const codigo of codigos) {
+      matchedCodigos.add(codigo);     // queda activo aunque saltemos su precio
+      if (margen > MARGEN_MAX) {
+        salteados.push({ codigo, nombre: String(nombre), costo, precio, margen });
+        continue;
+      }
+      updates.push({ codigo, costoBase, flete, margen, nombre: String(nombre) });
     }
-    updates.push({ nombre: String(nombre), costoBase, flete, margen });
   });
 
-  console.log(`Updates: ${updates.length} | salteados por margen>999.99: ${salteadosMargen.length} | filas sin costo/precio: ${sinDatos}`);
+  // Códigos de la DB que NO están en el Excel → desactivar
+  const todosCodigos = [...new Set([...porNombre.values()].flat())];
+  const desactivar = todosCodigos.filter((c) => !matchedCodigos.has(c));
 
-  // --- Construir SQL ---
+  console.log(`Updates: ${updates.length} | salteados (margen>999.99): ${salteados.length} | activos: ${matchedCodigos.size} | a desactivar: ${desactivar.length} | sin match en DB: ${sinMatch.length} | sin costo/precio: ${sinDatos}`);
+
   const L = [];
-  L.push('-- 020_actualizar_precios.sql');
-  L.push('-- Generado por scripts/migracion/generar-seed-precios.js');
-  L.push('-- NO editar a mano: regenerar desde el Excel corregido.');
+  L.push('-- 021_actualizar_precios_fix.sql');
+  L.push('-- Generado por scripts/migracion/generar-seed-precios.js (mapeo por código)');
+  L.push('-- Corrige y completa la actualización de precios desde el Excel del cliente.');
+  L.push('-- Reemplaza al 020 (que mapeaba por nombre y fallaba con espacios dobles).');
   L.push('--');
-  L.push(`-- Actualiza costo_base (neto = costo/1.21), costo_flete y margen_aplicado de ${updates.length} artículos.`);
-  L.push('-- El trigger recalcula precio_madre (= precio del Excel) y las listas de precios.');
-  L.push(`-- Desactiva los artículos activos que el cliente sacó del Excel.`);
-  if (salteadosMargen.length) {
-    L.push('-- NO actualizados (margen > 999.99, quedan como están para revisión del cliente):');
-    salteadosMargen.forEach((s) => L.push(`--   ${s.nombre}  (costo ${s.costo} / precio ${s.precio} -> margen ${s.margen}%)`));
+  L.push(`-- Actualiza ${updates.length} artículos | reactiva los del Excel | desactiva ${desactivar.length} que el cliente sacó.`);
+  if (salteados.length) {
+    L.push('-- NO actualizados (margen > 999.99, los revisa el cliente):');
+    salteados.forEach((s) => L.push(`--   ${s.codigo}  ${s.nombre}  (costo ${s.costo}/precio ${s.precio} -> ${s.margen}%)`));
+  }
+  if (sinMatch.length) {
+    L.push('-- Filas del Excel SIN artículo en la DB (ignoradas):');
+    sinMatch.forEach((x) => L.push(`--   ${x}`));
   }
   L.push('');
-
-  L.push('-- 1. Actualización de precios (por nombre)');
+  L.push('-- 1. Precios (costo neto = costo/1.21; el trigger recalcula precio_madre y listas)');
   for (const u of updates) {
-    L.push(
-      `UPDATE articulos SET costo_base = ${u.costoBase}, costo_flete = ${u.flete}, margen_aplicado = ${u.margen} ` +
-      `WHERE upper(trim(nombre)) = ${sql(norm(u.nombre))} AND deleted_at IS NULL;`
-    );
+    L.push(`UPDATE articulos SET costo_base = ${u.costoBase}, costo_flete = ${u.flete}, margen_aplicado = ${u.margen} WHERE codigo = '${u.codigo}';`);
   }
   L.push('');
-  L.push('-- 2. Desactivar los artículos que el cliente sacó del Excel');
-  const keepList = [...new Set(keepNames)].map((k) => sql(k)).join(',\n  ');
-  L.push('UPDATE articulos SET activo = false');
-  L.push(' WHERE deleted_at IS NULL AND activo = true');
-  L.push('   AND upper(trim(nombre)) NOT IN (');
-  L.push('  ' + keepList);
-  L.push(');');
+  L.push('-- 2. Reactivar los artículos presentes en el Excel');
+  L.push(`UPDATE articulos SET activo = true WHERE codigo IN (${[...matchedCodigos].map((c) => `'${c}'`).join(', ')});`);
+  L.push('');
+  L.push('-- 3. Desactivar los que el cliente sacó del Excel');
+  if (desactivar.length) {
+    L.push(`UPDATE articulos SET activo = false WHERE codigo IN (${desactivar.map((c) => `'${c}'`).join(', ')});`);
+  } else {
+    L.push('-- (ninguno)');
+  }
   L.push('');
 
   fs.writeFileSync(SALIDA, L.join('\n'), 'utf8');
   console.log(`\nSeed generado: ${SALIDA}`);
+  if (desactivar.length) { console.log('A desactivar:'); desactivar.forEach((c) => console.log('   ', c)); }
 }
 
-main().catch((err) => {
-  console.error('ERROR:', err.message);
-  process.exit(1);
-});
+main().catch((err) => { console.error('ERROR:', err.message); process.exit(1); });
