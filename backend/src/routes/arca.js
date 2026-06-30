@@ -24,11 +24,12 @@ router.get('/tipos-comprobante', async (req, res, next) => {
 
 // GET /api/arca/status
 router.get('/status', (req, res) => {
-  const certPath = path.resolve(__dirname, '../../../certs/kingpack_afip.crt');
+  const certPath = arca.certPath;
   res.json({
     modo:           arca.modoActivo,
     esDemo:         arca.esDemo,
-    cuitConfigurado: arca.esDemo ? '20409378472 (demo)' : '30717926966',
+    cuitConfigurado: arca.esDemo ? '20409378472 (demo)' : String(arca.cuit),
+    certPath,
     certificado:    fs.existsSync(certPath) ? 'presente' : 'pendiente — ver docs/ARCA_CERTIFICADO.md',
     mensaje: arca.esDemo
       ? 'Módulo en modo DEMO. Los CAE son reales del servidor de homologación de ARCA.'

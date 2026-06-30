@@ -280,4 +280,6 @@ module.exports = {
   // Config legible para health checks y logs
   get modoActivo() { return config.modo; },
   get esDemo()     { return config.esDemo; },
+  get certPath()   { return config.certPath; },
+  get cuit()       { return config.cuit; },
 };

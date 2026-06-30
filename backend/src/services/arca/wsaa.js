@@ -6,9 +6,10 @@
  * En modo demo, AfipSDK maneja la autenticación internamente.
  */
 
-const fs    = require('fs');
-const https = require('https');
-const forge = require('node-forge');
+const fs     = require('fs');
+const crypto = require('crypto');
+const https  = require('https');
+const forge  = require('node-forge');
 const config = require('./config');
 const store  = require('./token-store');
 
