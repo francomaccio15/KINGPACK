@@ -40,6 +40,16 @@ const fmt = (v: string | number | null | undefined) => {
   return isNaN(n) ? '—' : ars.format(n);
 };
 
+// Margen efectivo: el del artículo si está cargado, si no el de la categoría
+// (igual que el detalle del artículo). Expresado en %.
+function margenEfectivo(a: ArticuloRow, categorias: Categoria[]): string {
+  const propio = a.margen_aplicado !== null && a.margen_aplicado !== ''
+    ? a.margen_aplicado
+    : categorias.find(c => c.id === a.categoria_id)?.margen_default;
+  const n = parseFloat(String(propio ?? ''));
+  return isNaN(n) ? '—' : `${n}%`;
+}
+
 interface Props {
   articulos: ArticuloRow[];
   categorias: Categoria[];
@@ -49,6 +59,7 @@ interface Props {
   modeTodas: boolean;
   hasFilters: boolean;
   esCajero?: boolean;
+  esAdmin?: boolean;
 }
 
 export default function ArticulosTabla({
@@ -60,6 +71,7 @@ export default function ArticulosTabla({
   modeTodas,
   hasFilters,
   esCajero = false,
+  esAdmin = false,
 }: Props) {
   const [articulos, setArticulos] = useState<ArticuloRow[]>(serverArticulos);
   // IDs editados recientemente — el useEffect no los sobreescribe
@@ -163,6 +175,13 @@ export default function ArticulosTabla({
               </td>
             )}
 
+            {/* Margen de ganancia — solo en lista base y solo para administrador */}
+            {esBase && esAdmin && (
+              <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt text-xs whitespace-nowrap">
+                {margenEfectivo(a, categorias)}
+              </td>
+            )}
+
             {/* Stock */}
             <td className="px-4 py-3 text-center whitespace-nowrap">
               {modeTodas && a.stock_detalle && a.stock_detalle.length > 0 ? (
@@ -226,7 +245,7 @@ export default function ArticulosTabla({
 
       {articulos.length === 0 && (
         <tr>
-          <td colSpan={esCajero || esBase ? 7 : 8} className="px-4 py-12 text-center text-kp-gray">
+          <td colSpan={esBase ? (esAdmin ? 8 : 7) : (esCajero ? 7 : 8)} className="px-4 py-12 text-center text-kp-gray">
             {hasFilters
               ? 'No se encontraron artículos con esos filtros.'
               : 'No hay artículos cargados todavía.'}

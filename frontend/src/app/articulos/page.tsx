@@ -142,6 +142,7 @@ export default async function ArticulosPage({
 }) {
   const user = requireAuth('/articulos');
   const esCajero = user.rol === 'cajero';
+  const esAdmin  = user.rol === 'administrador';
   const sucursalActivaId = getSucursalActivaId();
 
   const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
@@ -321,6 +322,11 @@ export default async function ArticulosPage({
                   Precio Base
                 </th>
               )}
+              {esBase && esAdmin && (
+                <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                  Margen
+                </th>
+              )}
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                 {modeTodas ? 'Stock' : `Stock · ${sucursalActiva?.nombre ?? ''}`}
               </th>
@@ -338,6 +344,7 @@ export default async function ArticulosPage({
             modeTodas={modeTodas}
             hasFilters={!!(searchParams.q || searchParams.categoria_id)}
             esCajero={esCajero}
+            esAdmin={esAdmin}
           />
         </table>
       </div>
