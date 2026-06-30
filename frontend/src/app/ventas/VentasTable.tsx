@@ -19,6 +19,8 @@ type Venta = {
   facturada_ok: boolean | null;
   items_count: number;
   fue_editada: boolean;
+  vendedor_nombre: string | null;
+  vendedor_rol: string | null;
 };
 
 type VentaItem = {
@@ -162,6 +164,19 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                         )}
                         {ESTADO_LABEL[v.estado] ?? v.estado}
                       </span>
+                      {v.estado === 'preventa' && v.vendedor_rol === 'vendedor' && (
+                        <span
+                          title={v.vendedor_nombre ? `Preventa creada por el preventista ${v.vendedor_nombre}` : 'Preventa creada por un preventista'}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30 whitespace-nowrap max-w-[140px]"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5 flex-shrink-0">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                          </svg>
+                          <span className="truncate">
+                            Preventista{v.vendedor_nombre ? ` · ${v.vendedor_nombre}` : ''}
+                          </span>
+                        </span>
+                      )}
                       {v.fue_editada && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5">

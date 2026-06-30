@@ -120,6 +120,7 @@ router.get('/', async (req, res, next) => {
           lp.nombre        AS lista_precio,
           v.vendedor_id    AS vendedor_id,
           u.nombre         AS vendedor_nombre,
+          u.rol            AS vendedor_rol,
           f.cae            AS cae,
           f.ok             AS facturada_ok,
           (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
