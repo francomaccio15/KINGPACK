@@ -25,7 +25,7 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 
 const ORIGEN = path.join(__dirname, '..', '..', 'KingPack-Articulos-Correccion.xlsx');
-const SALIDA = path.join(__dirname, '..', '..', 'backend', 'db', 'seeds', '021_actualizar_precios_fix.sql');
+const SALIDA = path.join(__dirname, '..', '..', 'backend', 'db', 'seeds', '022_precios_exactos.sql');
 const DUMP = process.argv[2];
 
 const IVA = 21;
@@ -87,9 +87,21 @@ async function main() {
     const codigos = porNombre.get(norm(nombre));
     if (!codigos) { sinMatch.push(String(nombre)); return; }
 
-    const costoBase = r2(costo / (1 + IVA / 100));
-    const base = costoBase * (1 + flete / 100) * (1 + IVA / 100);
-    const margen = r2((precio / base - 1) * 100);
+    // Margen desde el costo neto "honesto" (costo con IVA / 1.21).
+    const costoBase0 = r2(costo / (1 + IVA / 100));
+    const margen = r2((precio / (costoBase0 * (1 + flete / 100) * (1 + IVA / 100)) - 1) * 100);
+
+    // Ajustar el costo neto unos centavos para que el precio base (redondeado a
+    // entero por fn_calcular_precio_madre) caiga EXACTO en el precio del Excel.
+    const K = (1 + flete / 100) * (1 + margen / 100) * (1 + IVA / 100);
+    let costoBase = r2(precio / K);
+    if (Math.round(costoBase * K) !== precio) {
+      // Buscar el costo (±centavos) que da el entero exacto
+      for (let d = 1; d <= 5; d++) {
+        if (Math.round(r2(costoBase + d / 100) * K) === precio) { costoBase = r2(costoBase + d / 100); break; }
+        if (Math.round(r2(costoBase - d / 100) * K) === precio) { costoBase = r2(costoBase - d / 100); break; }
+      }
+    }
 
     for (const codigo of codigos) {
       matchedCodigos.add(codigo);     // queda activo aunque saltemos su precio
@@ -108,10 +120,11 @@ async function main() {
   console.log(`Updates: ${updates.length} | salteados (margen>999.99): ${salteados.length} | activos: ${matchedCodigos.size} | a desactivar: ${desactivar.length} | sin match en DB: ${sinMatch.length} | sin costo/precio: ${sinDatos}`);
 
   const L = [];
-  L.push('-- 021_actualizar_precios_fix.sql');
+  L.push('-- 022_precios_exactos.sql');
   L.push('-- Generado por scripts/migracion/generar-seed-precios.js (mapeo por código)');
-  L.push('-- Corrige y completa la actualización de precios desde el Excel del cliente.');
-  L.push('-- Reemplaza al 020 (que mapeaba por nombre y fallaba con espacios dobles).');
+  L.push('-- Deja el precio base EXACTO al del Excel: ajusta el costo neto unos centavos para');
+  L.push('-- que fn_calcular_precio_madre (redondeo a entero, migración 025) dé justo el precio.');
+  L.push('-- El trigger AFTER (migración 025) recalcula las listas de precios.');
   L.push('--');
   L.push(`-- Actualiza ${updates.length} artículos | reactiva los del Excel | desactiva ${desactivar.length} que el cliente sacó.`);
   if (salteados.length) {
