@@ -825,8 +825,10 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
   }
 });
 
-// ─── POST /api/ventas/:id/factura-test ───────────────────────────────────────
-router.post('/:id/factura-test', async (req, res, next) => {
+// ─── POST /api/ventas/:id/facturar ───────────────────────────────────────────
+// Emite la factura electrónica de la venta (CAE de ARCA). En modo homo el CAE es
+// de homologación (sin validez fiscal); en produccion es real.
+router.post('/:id/facturar', async (req, res, next) => {
   try {
     const { id } = req.params;
 

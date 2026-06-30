@@ -35,8 +35,13 @@ export default function AccionesVenta({
   observaciones: string | null;
 }) {
   const router = useRouter();
+  const [facturarOpen,   setFacturarOpen]   = useState(false);
+  const [arcaModo,       setArcaModo]       = useState<string>('');
   const [loadingFactura, setLoadingFactura] = useState(false);
-  const [resultFactura,  setResultFactura]  = useState<{ CAE?: string; _mock?: boolean; error?: string } | null>(null);
+  const [resultFactura,  setResultFactura]  = useState<{
+    CAE?: string; CAEFchVto?: string; _mock?: boolean; error?: string;
+    modo?: string; letra?: string; puntoVenta?: number; nroComprobante?: number;
+  } | null>(null);
   const [anularOpen,    setAnularOpen]    = useState(false);
   const [anularMotivo,  setAnularMotivo]  = useState('');
   const [anularLoading, setAnularLoading] = useState(false);
@@ -109,17 +114,29 @@ export default function AccionesVenta({
     finally { setConfirmarLoading(false); }
   };
 
-  const generarFacturaTest = async () => {
+  // Al abrir el modal, consultar el ambiente ARCA (homo/produccion) para avisar
+  // claramente si la factura va a ser real o de prueba.
+  useEffect(() => {
+    if (!facturarOpen) return;
+    apiFetch('/api/arca/status')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setArcaModo(d.modo ?? ''))
+      .catch(() => setArcaModo(''));
+  }, [facturarOpen]);
+
+  const emitirFactura = async () => {
     setLoadingFactura(true);
     setResultFactura(null);
     try {
-      const res  = await apiFetch(`/api/ventas/${ventaId}/factura-test`, { method: 'POST' });
+      const res  = await apiFetch(`/api/ventas/${ventaId}/facturar`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al facturar');
       setResultFactura(data);
+      setFacturarOpen(false);
       router.refresh();
     } catch (err: any) {
       setResultFactura({ error: err.message });
+      setFacturarOpen(false);
     } finally {
       setLoadingFactura(false);
     }
@@ -268,48 +285,25 @@ export default function AccionesVenta({
           </button>
         )}
 
-        {/* Factura oficial — deshabilitada */}
-        <div className="relative group">
+        {/* Emitir factura electrónica (ARCA) */}
+        {!yaFacturada && estado !== 'preventa' && estado !== 'anulada' && (
           <button
-            disabled
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
-              border border-kp-border/40 text-kp-gray/30 cursor-not-allowed"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-            Factura Oficial
-          </button>
-          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 z-10
-            bg-kp-surface2 border border-kp-border rounded text-xs text-kp-gray whitespace-nowrap
-            opacity-0 group-hover:opacity-100 transition-opacity">
-            Próximamente — requiere clave fiscal ARCA
-          </span>
-        </div>
-
-        {/* Factura test ARCA */}
-        {!yaFacturada && (
-          <button
-            onClick={generarFacturaTest}
+            onClick={() => { setResultFactura(null); setFacturarOpen(true); }}
             disabled={loadingFactura}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
               bg-kp-red hover:bg-kp-red-dark text-white transition-colors shadow shadow-kp-red/30
               disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loadingFactura ? (
-              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : (
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-            )}
-            Factura Test ARCA
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Emitir factura
           </button>
         )}
 
       </div>
 
-      {/* Resultado factura test */}
+      {/* Resultado de la emisión */}
       {resultFactura && (
         <div className={`text-xs px-3 py-2 rounded-lg border max-w-sm ${
           resultFactura.error
@@ -319,10 +313,21 @@ export default function AccionesVenta({
           {resultFactura.error ? (
             <>Error: {resultFactura.error}</>
           ) : (
-            <>
-              CAE: <span className="font-mono font-bold">{resultFactura.CAE}</span>
-              {resultFactura._mock && <span className="ml-2 opacity-60">(simulado)</span>}
-            </>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">
+                  Factura {resultFactura.letra} N° {String(resultFactura.puntoVenta ?? 0).padStart(4, '0')}-{String(resultFactura.nroComprobante ?? 0).padStart(8, '0')}
+                </span>
+                {resultFactura.modo === 'homo' && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wide">Prueba</span>
+                )}
+              </div>
+              <div>
+                CAE: <span className="font-mono font-bold">{resultFactura.CAE}</span>
+                {resultFactura.CAEFchVto && <span className="opacity-70"> · vence {resultFactura.CAEFchVto}</span>}
+              </div>
+              {resultFactura._mock && <div className="opacity-60">(simulado, sin conexión a AFIP)</div>}
+            </div>
           )}
         </div>
       )}
@@ -416,6 +421,62 @@ export default function AccionesVenta({
               </button>
               <button
                 onClick={() => setEditObsOpen(false)}
+                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Modal: Emitir factura ── */}
+    {facturarOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-5 bg-kp-red rounded-full block" />
+              <h3 className="text-sm font-bold uppercase tracking-wide">Emitir factura electrónica</h3>
+            </div>
+            <button onClick={() => setFacturarOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
+          </div>
+          <div className="p-6 space-y-4">
+
+            {/* Ambiente ARCA */}
+            {arcaModo === 'produccion' ? (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-300">
+                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span><strong>Producción.</strong> Esta factura es <strong>real y con validez fiscal</strong>. Una vez emitida no se puede borrar; solo se corrige con una nota de crédito.</span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span><strong>Homologación (prueba).</strong> El CAE es de prueba, <strong>sin validez fiscal</strong>. Sirve para validar la conexión con ARCA.</span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
+              <span className="text-xs text-kp-gray uppercase tracking-widest">Total a facturar</span>
+              <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
+            </div>
+            <p className="text-[11px] text-kp-gray px-1">
+              El tipo de comprobante (Factura A o B) se determina automáticamente según la condición de IVA del cliente.
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={emitirFactura}
+                disabled={loadingFactura}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-kp-red hover:bg-kp-red-dark text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {loadingFactura
+                  ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Emitiendo…</>
+                  : <>Emitir factura</>}
+              </button>
+              <button
+                onClick={() => setFacturarOpen(false)}
                 className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
               >
                 Cancelar
