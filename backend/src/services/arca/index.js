@@ -71,6 +71,25 @@ async function generarFactura(params) {
 }
 
 /**
+ * Diagnóstico: prueba solo la autenticación WSAA (firma CMS + login).
+ * Sirve para validar el certificado/clave contra AFIP sin emitir comprobantes.
+ */
+async function probarAuth() {
+  if (config.esDemo) {
+    return { modo: 'demo', ok: true, mensaje: 'Modo demo: no usa WSAA.' };
+  }
+  const wsaa = require('./wsaa');
+  const { token, sign } = await wsaa.getToken();
+  return {
+    modo: config.modo,
+    ok:   true,
+    cuit: config.cuit,
+    tokenPreview: token.slice(0, 24) + '…',
+    signPreview:  sign.slice(0, 24) + '…',
+  };
+}
+
+/**
  * Consulta el último número de comprobante autorizado.
  */
 async function ultimoComprobante(puntoVenta, tipoComprobante) {
@@ -249,6 +268,7 @@ function _alicuotaAfipId(pct) {
 module.exports = {
   generarFactura,
   ultimoComprobante,
+  probarAuth,
 
   // Constantes re-exportadas para que los consumidores no importen tipos.js
   TIPO_COMPROBANTE:       tipos.TIPO_COMPROBANTE,

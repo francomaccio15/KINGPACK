@@ -6,10 +6,9 @@
  * En modo demo, AfipSDK maneja la autenticación internamente.
  */
 
-const fs   = require('fs');
-const path = require('path');
+const fs    = require('fs');
 const https = require('https');
-const crypto = require('crypto');
+const forge = require('node-forge');
 const config = require('./config');
 const store  = require('./token-store');
 
@@ -71,25 +70,40 @@ function _buildTRA() {
 </loginTicketRequest>`;
 }
 
-function _firmarTRA(tra, cert, key) {
-  // Firma el TRA como CMS (PKCS#7) en base64
-  const sign = crypto.createSign('SHA256');
-  sign.update(tra);
-  const firma = sign.sign({ key, format: 'pem' }, 'base64');
+function _firmarTRA(tra, certPem, keyPem) {
+  // Firma el TRA como un CMS (PKCS#7 SignedData) en base64, que es lo que
+  // espera AFIP WSAA en <loginCms>. Se usa node-forge para armar el envelope
+  // completo (contenido + certificado + firma SHA-256 con la clave privada).
+  const cert = forge.pki.certificateFromPem(certPem);
+  const key  = forge.pki.privateKeyFromPem(keyPem);
 
-  // Construir el CMS firmado básico (detached, solo la firma + cert)
-  // ARCA acepta el CMS como base64 del DER del SignedData
-  // Para simplificar usamos la firma raw + cert en base64 concatenados
-  // En producción real se usa node-forge o pkcs7 para el envelope completo
-  const certB64 = cert
-    .replace(/-----BEGIN CERTIFICATE-----/g, '')
-    .replace(/-----END CERTIFICATE-----/g, '')
-    .replace(/\s/g, '');
+  const p7 = forge.pkcs7.createSignedData();
+  p7.content = forge.util.createBuffer(tra, 'utf8');
+  p7.addCertificate(cert);
+  p7.addSigner({
+    key,
+    certificate:    cert,
+    digestAlgorithm: forge.pki.oids.sha256,
+    authenticatedAttributes: [
+      { type: forge.pki.oids.contentType,   value: forge.pki.oids.data },
+      { type: forge.pki.oids.messageDigest },          // calculado por forge
+      { type: forge.pki.oids.signingTime,   value: new Date() },
+    ],
+  });
+  p7.sign();
 
-  return Buffer.from(JSON.stringify({ tra: Buffer.from(tra).toString('base64'), firma, cert: certB64 })).toString('base64');
+  const der = forge.asn1.toDer(p7.toAsn1()).getBytes();
+  return forge.util.encode64(der);
 }
 
 function _parsearTA(xml) {
+  // Si AFIP devolvió un fault SOAP, surfacearlo (ej. CMS inválido, cert vencido,
+  // TA ya emitido, certificado no autorizado para el servicio, etc.).
+  const faultMatch = xml.match(/<faultstring>([\s\S]+?)<\/faultstring>/i);
+  if (faultMatch) {
+    throw new Error(`WSAA rechazó la autenticación: ${faultMatch[1].trim()}`);
+  }
+
   const tokenMatch = xml.match(/<token>([\s\S]+?)<\/token>/);
   const signMatch  = xml.match(/<sign>([\s\S]+?)<\/sign>/);
   const expiMatch  = xml.match(/<expirationTime>([\s\S]+?)<\/expirationTime>/);

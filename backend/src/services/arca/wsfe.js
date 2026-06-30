@@ -28,9 +28,19 @@ async function ultimoNroComprobante(puntoVenta, tipoComprobante) {
   const xml = _buildFECompUltimoAutorizado(puntoVenta, tipoComprobante, token, sign);
   const respXml = await _soapPost('FECompUltimoAutorizado', xml);
 
+  _assertSinFaultNiError(respXml);
   const match = respXml.match(/<CbteNro>(\d+)<\/CbteNro>/);
   if (!match) throw new Error(`WSFE: no se pudo leer último comprobante.\n${respXml.slice(0, 400)}`);
   return parseInt(match[1], 10);
+}
+
+// Detecta faults SOAP y errores de AFIP (Errors > Err > Code/Msg) y lanza.
+function _assertSinFaultNiError(xml) {
+  const fault = xml.match(/<faultstring>([\s\S]+?)<\/faultstring>/i);
+  if (fault) throw new Error(`WSFE error: ${fault[1].trim()}`);
+  const errs = [...xml.matchAll(/<Err>[\s\S]*?(?:<Code>(\d+)<\/Code>)?[\s\S]*?<Msg>([\s\S]+?)<\/Msg>[\s\S]*?<\/Err>/g)]
+    .map(m => `${m[1] ? '[' + m[1] + '] ' : ''}${m[2].trim()}`);
+  if (errs.length) throw new Error(`ARCA rechazó la solicitud: ${errs.join(' | ')}`);
 }
 
 // ─── Builders SOAP ───────────────────────────────────────────────────────────
@@ -102,21 +112,33 @@ function _buildFECompUltimoAutorizado(pv, tipo, token, sign) {
 }
 
 function _parsearRespuestaCAE(xml) {
-  const err = xml.match(/<Err>[\s\S]*?<Msg>([\s\S]+?)<\/Msg>[\s\S]*?<\/Err>/);
-  if (err) throw new Error(`ARCA rechazó el comprobante: ${err[1].trim()}`);
+  // Faults SOAP + errores a nivel solicitud (Errors > Err)
+  _assertSinFaultNiError(xml);
 
-  const cae    = xml.match(/<CAE>(\d+)<\/CAE>/);
-  const vto    = xml.match(/<CAEFchVto>(\d{8})<\/CAEFchVto>/);
-  const nro    = xml.match(/<CbteDesde>(\d+)<\/CbteDesde>/);
-  const result = xml.match(/<Resultado>([AB])<\/Resultado>/);
+  const result = (xml.match(/<Resultado>([ARP])<\/Resultado>/) || [])[1];
 
-  if (!cae) throw new Error(`ARCA no devolvió CAE. Respuesta:\n${xml.slice(0, 600)}`);
+  // Observaciones: motivos cuando AFIP rechaza (Resultado='R') o avisos (Resultado='A')
+  const obs = [...xml.matchAll(/<Obs>[\s\S]*?(?:<Code>(\d+)<\/Code>)?[\s\S]*?<Msg>([\s\S]+?)<\/Msg>[\s\S]*?<\/Obs>/g)]
+    .map(m => `${m[1] ? '[' + m[1] + '] ' : ''}${m[2].trim()}`);
+
+  if (result === 'R') {
+    throw new Error(`ARCA rechazó el comprobante: ${obs.join(' | ') || 'sin detalle'}`);
+  }
+
+  const cae = xml.match(/<CAE>(\d+)<\/CAE>/);
+  const vto = xml.match(/<CAEFchVto>(\d{8})<\/CAEFchVto>/);
+  const nro = xml.match(/<CbteDesde>(\d+)<\/CbteDesde>/);
+
+  if (!cae || !cae[1]) {
+    throw new Error(`ARCA no devolvió CAE${obs.length ? ': ' + obs.join(' | ') : ''}.\n${xml.slice(0, 600)}`);
+  }
 
   return {
     CAE:            cae[1],
     CAEFchVto:      vto ? `${vto[1].slice(0,4)}-${vto[1].slice(4,6)}-${vto[1].slice(6,8)}` : null,
     nroComprobante: nro ? parseInt(nro[1], 10) : null,
-    resultado:      result ? result[1] : 'A',
+    resultado:      result || 'A',
+    observaciones:  obs.length ? obs : undefined,
   };
 }
 

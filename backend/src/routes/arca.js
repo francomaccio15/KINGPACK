@@ -36,6 +36,17 @@ router.get('/status', (req, res) => {
   });
 });
 
+// GET /api/arca/test-auth — diagnóstico: prueba solo el login WSAA (firma CMS).
+// No emite comprobantes. Sirve para validar el certificado contra AFIP.
+router.get('/test-auth', async (req, res) => {
+  try {
+    const r = await arca.probarAuth();
+    res.json(r);
+  } catch (err) {
+    res.status(502).json({ ok: false, modo: arca.modoActivo, error: err.message });
+  }
+});
+
 // POST /api/arca/test-factura
 // Body (opcional): { total, cliente_razon_social }
 router.post('/test-factura', async (req, res, next) => {
