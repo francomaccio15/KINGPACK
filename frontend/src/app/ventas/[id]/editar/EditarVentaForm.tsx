@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import NumericInput from '@/components/NumericInput';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -37,6 +38,7 @@ interface CartItem {
   codigo: string;
   cantidad: number;
   precio_lista: number;
+  descuento_manual: number | null; // % fijado a mano para ESTE ítem (null = hereda el de la venta)
   descuento_pct: number;
   precio_unitario_final: number;
 }
@@ -63,15 +65,19 @@ export default function EditarVentaForm({
 
   // Cart inicializado con los items actuales
   const [cart, setCart] = useState<CartItem[]>(
-    itemsIniciales.map(i => ({
-      articulo_id: i.articulo_id,
-      nombre: i.nombre,
-      codigo: i.codigo,
-      cantidad: parseFloat(String(i.cantidad)),
-      precio_lista: parseFloat(String(i.precio_lista)),
-      descuento_pct: parseFloat(String(i.descuento_pct)) || 0,
-      precio_unitario_final: parseFloat(String(i.precio_unitario_final)),
-    }))
+    itemsIniciales.map(i => {
+      const saved = parseFloat(String(i.descuento_pct)) || 0;
+      return {
+        articulo_id: i.articulo_id,
+        nombre: i.nombre,
+        codigo: i.codigo,
+        cantidad: parseFloat(String(i.cantidad)),
+        precio_lista: parseFloat(String(i.precio_lista)),
+        descuento_manual: saved, // los ítems existentes muestran su descuento explícito
+        descuento_pct: saved,
+        precio_unitario_final: parseFloat(String(i.precio_unitario_final)),
+      };
+    })
   );
 
   // Descuento por defecto para artículos nuevos = primer ítem con descuento > 0
@@ -157,12 +163,13 @@ export default function EditarVentaForm({
           : i
         );
       }
-      // Aplicar el mismo descuento que tienen los ítems existentes de la venta
+      // Ítem nuevo: hereda el descuento de la venta (descuento_manual = null)
       const precioLista = art.precio_madre || art.precio_lista;
       const precioFinal = +(precioLista * (1 - descuentoVenta / 100)).toFixed(4);
       return [...prev, {
         articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
-        cantidad: 1, precio_lista: precioLista, descuento_pct: descuentoVenta,
+        cantidad: 1, precio_lista: precioLista,
+        descuento_manual: null, descuento_pct: descuentoVenta,
         precio_unitario_final: precioFinal,
       }];
     });
@@ -176,12 +183,25 @@ export default function EditarVentaForm({
     setCart(prev => prev.map(i => i.articulo_id === articulo_id ? { ...i, cantidad: n } : i));
   };
 
-  const actualizarDescuento = (articulo_id: string, val: string) => {
-    const pct = Math.max(0, Math.min(100, parseFloat(val) || 0));
-    setCart(prev => prev.map(i => i.articulo_id === articulo_id
-      ? { ...i, descuento_pct: pct, precio_unitario_final: +(i.precio_lista * (1 - pct / 100)).toFixed(4) }
-      : i
-    ));
+  // Vacío = el ítem vuelve a heredar el descuento de la venta.
+  const actualizarDescuento = (articulo_id: string, raw: string) => {
+    let manual: number | null;
+    if (raw.trim() === '') {
+      manual = null;
+    } else {
+      const v = parseFloat(raw.replace(',', '.'));
+      manual = isNaN(v) ? null : Math.min(100, Math.max(0, v));
+    }
+    setCart(prev => prev.map(i => {
+      if (i.articulo_id !== articulo_id) return i;
+      const eff = manual != null ? manual : descuentoVenta;
+      return {
+        ...i,
+        descuento_manual: manual,
+        descuento_pct: eff,
+        precio_unitario_final: +(i.precio_lista * (1 - eff / 100)).toFixed(4),
+      };
+    }));
   };
 
   const eliminarItem = (articulo_id: string) => {
@@ -309,21 +329,23 @@ export default function EditarVentaForm({
                 </div>
 
                 {/* Descuento */}
-                <div className="flex flex-col items-center gap-0.5">
-                  <label className="text-[10px] text-kp-gray uppercase tracking-widest">Desc. %</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={item.descuento_pct}
-                    onChange={e => actualizarDescuento(item.articulo_id, e.target.value)}
-                    className={`w-16 text-center bg-kp-surface2 border rounded px-2 py-1 text-sm focus:outline-none transition-colors ${
-                      item.descuento_pct > 0
-                        ? 'border-kp-red text-kp-red font-semibold focus:border-kp-red'
-                        : 'border-kp-border text-kp-white focus:border-kp-red'
-                    }`}
-                  />
+                <div className="flex flex-col items-center gap-0.5" title="Descuento de este artículo (%). Vacío = hereda el de la venta.">
+                  <label className="text-[10px] text-kp-gray uppercase tracking-widest">Desc.</label>
+                  <div className="flex items-center">
+                    <NumericInput
+                      decimals={1}
+                      placeholder={descuentoVenta > 0 ? String(descuentoVenta) : '0'}
+                      value={item.descuento_manual != null ? item.descuento_manual : ''}
+                      onChange={e => actualizarDescuento(item.articulo_id, e.target.value)}
+                      className={`w-12 text-center bg-kp-surface2 border rounded-l px-2 py-1 text-sm tabular-nums focus:outline-none transition-colors ${
+                        item.descuento_pct > 0
+                          ? 'border-kp-red text-kp-red font-semibold focus:border-kp-red'
+                          : 'border-kp-border text-kp-white focus:border-kp-red'
+                      }`}
+                      aria-label={`Descuento de ${item.nombre}`}
+                    />
+                    <span className="px-1.5 py-1 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">%</span>
+                  </div>
                 </div>
 
                 {/* Precio final */}
