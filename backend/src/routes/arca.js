@@ -48,43 +48,39 @@ router.get('/test-auth', async (req, res) => {
   }
 });
 
-// POST /api/arca/test-factura
-// Body (opcional): { total, cliente_razon_social }
+// POST /api/arca/test-factura — diagnóstico de emisión.
+// Body (opcional): { total, cliente_razon_social, cond_iva_afip, cuit }
+//   cond_iva_afip + cuit permiten probar Factura A (RI/Monotributo con CUIT).
+//   Sin esos datos → Factura B a Consumidor Final.
 router.post('/test-factura', async (req, res, next) => {
   try {
     const total  = parseFloat(req.body?.total) || 1210;
     const nombre = req.body?.cliente_razon_social || 'Consumidor Final (Test)';
+    const condIvaAfip = req.body?.cond_iva_afip != null ? parseInt(req.body.cond_iva_afip, 10) : 5;
+    const cuit        = req.body?.cuit || null;
 
-    // Factura B — Consumidor Final — Producto $1000 + 21% IVA = $1210
-    const neto    = +(total / 1.21).toFixed(2);
-    const ivaImp  = +(total - neto).toFixed(2);
+    const neto = +(total / 1.21).toFixed(2);
+    const comp = arca.comprobanteParaCliente(condIvaAfip, cuit);
 
     const resultado = await arca.generarFactura({
-      puntoVenta:      1,
-      tipoComprobante: arca.TIPO_COMPROBANTE.FACTURA_B,
+      // puntoVenta omitido → usa AFIP_PUNTO_VENTA
+      tipoComprobante: comp.tipoComprobante,
       concepto:        arca.CONCEPTO.PRODUCTOS,
-      cliente: {
-        tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR,
-        nroDoc:  0,
-      },
+      cliente: { tipoDoc: comp.docTipo, nroDoc: comp.docNro },
       items: [
-        {
-          descripcion:    `Venta de prueba — ${nombre}`,
-          cantidad:       1,
-          precioUnitario: neto,
-          alicuotaIva:    21,
-        },
+        { descripcion: `Venta de prueba — ${nombre}`, cantidad: 1, precioUnitario: neto, alicuotaIva: 21 },
       ],
     });
 
     res.json({
       ok:             true,
       modo:           resultado.modo,
+      letra:          comp.letra,
+      puntoVenta:     resultado.puntoVenta,
       CAE:            resultado.CAE,
       CAEFchVto:      resultado.CAEFchVto,
       nroComprobante: resultado.nroComprobante,
       total:          resultado.total,
-      qrData:         resultado.qrData,
       qrUrl:          `https://www.afip.gob.ar/fe/qr/?p=${resultado.qrData}`,
       _mock:          resultado._mock || false,
       cliente:        nombre,

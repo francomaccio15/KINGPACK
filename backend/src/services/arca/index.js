@@ -62,10 +62,12 @@ async function generarFactura(params) {
 
   return {
     ...resultado,
-    total: comprobante.total,
-    neto:  comprobante.neto,
-    iva:   comprobante.iva,
-    modo:  config.modo,
+    total:           comprobante.total,
+    neto:            comprobante.neto,
+    iva:             comprobante.iva,
+    modo:            config.modo,
+    puntoVenta:      comprobante.puntoVenta,
+    tipoComprobante: comprobante.tipoCbte,
     qrData: _buildQRData(resultado.CAE, resultado.CAEFchVto, comprobante),
   };
 }
@@ -187,6 +189,33 @@ function _generarMock(comprobante) {
   };
 }
 
+/**
+ * Decide el tipo de comprobante y los datos del receptor según la condición de
+ * IVA del cliente. EMISOR = Responsable Inscripto (King Pack):
+ *   - Cliente RI (afip 1) o Monotributo (afip 6) con CUIT → Factura A (discrimina IVA).
+ *   - Resto (Consumidor Final, Exento, sin CUIT) → Factura B.
+ * @param {number} condIvaAfipCliente  codigo_afip del cond_iva del cliente (1,4,5,6,13)
+ * @param {string} cuitCliente         CUIT del cliente (puede venir con guiones)
+ */
+function comprobanteParaCliente(condIvaAfipCliente, cuitCliente) {
+  const cuit = cuitCliente ? String(cuitCliente).replace(/\D/g, '') : '';
+  const aplicaA = (condIvaAfipCliente === 1 || condIvaAfipCliente === 6) && cuit.length === 11;
+  if (aplicaA) {
+    return {
+      tipoComprobante: tipos.TIPO_COMPROBANTE.FACTURA_A,
+      docTipo:         tipos.TIPO_DOC.CUIT,
+      docNro:          cuit,
+      letra:           'A',
+    };
+  }
+  return {
+    tipoComprobante: tipos.TIPO_COMPROBANTE.FACTURA_B,
+    docTipo:         tipos.TIPO_DOC.SIN_IDENTIFICAR,
+    docNro:          0,
+    letra:           'B',
+  };
+}
+
 // ─── Helpers de construcción ─────────────────────────────────────────────────
 
 function _buildComprobante(params) {
@@ -269,6 +298,7 @@ module.exports = {
   generarFactura,
   ultimoComprobante,
   probarAuth,
+  comprobanteParaCliente,
 
   // Constantes re-exportadas para que los consumidores no importen tipos.js
   TIPO_COMPROBANTE:       tipos.TIPO_COMPROBANTE,

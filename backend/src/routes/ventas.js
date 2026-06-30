@@ -832,7 +832,7 @@ router.post('/:id/factura-test', async (req, res, next) => {
 
     const { rows: ventaRows } = await pool.query(`
       SELECT v.total, c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit,
-             ci.nombre AS cond_iva
+             ci.nombre AS cond_iva, ci.codigo_afip AS cond_iva_afip
       FROM ventas v
       LEFT JOIN clientes c ON c.id = v.cliente_id
       LEFT JOIN cond_iva ci ON ci.id = c.cond_iva_id
@@ -844,15 +844,17 @@ router.post('/:id/factura-test', async (req, res, next) => {
 
     const total = parseFloat(v.total);
     const neto  = +(total / 1.21).toFixed(2);
-    const ivaImp = +(total - neto).toFixed(2);
+
+    // Tipo de comprobante según la condición de IVA del cliente (emisor = RI).
+    const comp = arca.comprobanteParaCliente(v.cond_iva_afip, v.cliente_cuit);
 
     const resultado = await arca.generarFactura({
-      puntoVenta:      1,
-      tipoComprobante: arca.TIPO_COMPROBANTE.FACTURA_B,
+      // puntoVenta omitido → usa AFIP_PUNTO_VENTA (config.puntoVentaDefault)
+      tipoComprobante: comp.tipoComprobante,
       concepto:        arca.CONCEPTO.PRODUCTOS,
       cliente: {
-        tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR,
-        nroDoc:  0,
+        tipoDoc: comp.docTipo,
+        nroDoc:  comp.docNro,
       },
       items: [
         {
@@ -873,20 +875,21 @@ router.post('/:id/factura-test', async (req, res, next) => {
             (venta_id, sucursal_id, tipo_comprobante_id, punto_venta, numero,
              cae, cae_vencimiento, total, qr_url, respuesta_afip, ok, mensaje_afip)
           SELECT $1, v.sucursal_id,
-                 COALESCE(
-                   (SELECT id FROM tipos_comprobante WHERE codigo_afip = 6 LIMIT 1),
-                   (SELECT id FROM tipos_comprobante LIMIT 1)
-                 ),
-                 $2, $3, $4, $5::date, $6, $7, $8::jsonb, true, 'Factura test ARCA'
+                 (SELECT id FROM tipos_comprobante WHERE codigo_afip = $2 LIMIT 1),
+                 $3, $4, $5, $6::date, $7, $8, $9::jsonb, true, $10
           FROM ventas v WHERE v.id = $1
           ON CONFLICT DO NOTHING
         `, [
-          id, nroComp, nroComp,
+          id,
+          comp.tipoComprobante,
+          resultado.puntoVenta,
+          nroComp,
           resultado.CAE,
           resultado.CAEFchVto,
           total.toFixed(2),
           resultado.qrData ? `https://www.afip.gob.ar/fe/qr/?p=${resultado.qrData}` : null,
           JSON.stringify(resultado),
+          `Factura ${comp.letra} ARCA (${resultado.modo})`,
         ]);
 
         await pool.query(
@@ -901,6 +904,8 @@ router.post('/:id/factura-test', async (req, res, next) => {
     res.json({
       ok:             true,
       modo:           resultado.modo,
+      letra:          comp.letra,
+      puntoVenta:     resultado.puntoVenta,
       CAE:            resultado.CAE,
       CAEFchVto:      resultado.CAEFchVto,
       nroComprobante: resultado.nroComprobante,
