@@ -62,9 +62,19 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
 
   const abierta = caja.estado === 'abierta';
-  const saldoSistema = esAdmin
-    ? parseFloat(caja.saldo_inicial) + parseFloat(caja.total_ingresos) - parseFloat(caja.total_egresos)
-    : parseFloat(caja.saldo_inicial) + totalIngresosVista - totalEgresosVista;
+
+  // Saldo del sistema = EFECTIVO físico esperado en el cajón. Cheques,
+  // transferencias, tarjetas, MP y QR se reciben pero no son efectivo, así que
+  // no cuentan para el arqueo (esto evita una "FALTA" falsa cuando hay un cheque).
+  const esEfectivo = (m: any) =>
+    (m.medio_pago ?? '').toLowerCase().includes('efectivo') || !m.medio_pago;
+  const ingresosEfectivo = movimientos
+    .filter((m: any) => ['ingreso', 'venta'].includes(m.tipo) && esEfectivo(m))
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+  const egresosFisicos = movimientos
+    .filter((m: any) => ['egreso', 'retiro'].includes(m.tipo))
+    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
+  const saldoSistema = parseFloat(caja.saldo_inicial) + ingresosEfectivo - egresosFisicos;
 
   const diff = caja.diferencia != null ? parseFloat(caja.diferencia) : null;
 
@@ -335,11 +345,11 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '16px' }}>
             <tbody>
               {([
-                ['Saldo inicial',          fmt(caja.saldo_inicial)],
-                ['Total ingresos',         '+' + fmt(caja.total_ingresos)],
-                ['Total egresos',          '−' + fmt(caja.total_egresos)],
-                ['Saldo sistema',          fmt(caja.saldo_final_sistema)],
-                ['Saldo real (contado)',   fmt(caja.saldo_final_real)],
+                ['Saldo inicial',            fmt(caja.saldo_inicial)],
+                ['Ingresos en efectivo',     '+' + fmt(ingresosEfectivo)],
+                ['Egresos / retiros',        '−' + fmt(egresosFisicos)],
+                ['Saldo sistema (efectivo)', fmt(caja.saldo_final_sistema)],
+                ['Saldo real (contado)',     fmt(caja.saldo_final_real)],
                 [
                   diffCuadrada ? 'Diferencia' : diff! > 0 ? 'FALTA' : 'SOBRA',
                   diff == null ? '—' : `${!diffCuadrada ? (diff > 0 ? '−' : '+') : ''}${fmt(Math.abs(diff))}`,

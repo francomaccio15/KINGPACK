@@ -256,14 +256,22 @@ router.post('/:id/cerrar', async (req, res, next) => {
 
     await client.query('BEGIN');
 
-    // Verificar que la caja esté abierta y calcular saldo sistema
+    // Verificar que la caja esté abierta y calcular el saldo del sistema.
+    // El arqueo cuenta EFECTIVO físico del cajón: cheques, transferencias,
+    // tarjetas, MP y QR se reciben pero no engrosan el efectivo, así que no
+    // entran en el saldo esperado. Los ingresos/ventas solo cuentan si el medio
+    // es efectivo (o no se especificó, p. ej. un depósito manual de gerencia).
     const { rows: cajaRows } = await client.query(`
       SELECT
         c.id, c.saldo_inicial,
-        COALESCE(SUM(CASE WHEN m.tipo IN ('ingreso','venta') THEN m.monto ELSE 0 END), 0) AS total_ingresos,
+        COALESCE(SUM(CASE
+          WHEN m.tipo IN ('ingreso','venta')
+           AND (LOWER(mp.nombre) LIKE '%efectivo%' OR m.medio_pago_id IS NULL)
+          THEN m.monto ELSE 0 END), 0) AS total_ingresos_efectivo,
         COALESCE(SUM(CASE WHEN m.tipo IN ('egreso','retiro') THEN m.monto ELSE 0 END), 0) AS total_egresos
       FROM cajas c
       LEFT JOIN movimientos_caja m ON m.caja_id = c.id
+      LEFT JOIN medios_pago mp ON mp.id = m.medio_pago_id
       WHERE c.id = $1 AND c.estado = 'abierta'
       GROUP BY c.id, c.saldo_inicial
     `, [id]);
@@ -275,7 +283,7 @@ router.post('/:id/cerrar', async (req, res, next) => {
 
     const caja = cajaRows[0];
     const saldoSistema = parseFloat(caja.saldo_inicial)
-      + parseFloat(caja.total_ingresos)
+      + parseFloat(caja.total_ingresos_efectivo)
       - parseFloat(caja.total_egresos);
     const saldoReal = parseFloat(saldo_final_real);
     const diferencia = saldoSistema - saldoReal;
