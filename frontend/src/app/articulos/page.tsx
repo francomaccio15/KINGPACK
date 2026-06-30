@@ -141,7 +141,9 @@ export default async function ArticulosPage({
   searchParams: Record<string, string>;
 }) {
   const user = requireAuth('/articulos');
-  const esCajero = user.rol === 'cajero';
+  // Cajero y repartidor (vendedor) ven artículos en modo solo-lectura:
+  // sin alta, sin columna de precio base, sin acciones de edición.
+  const esCajero = user.rol === 'cajero' || user.rol === 'vendedor';
   const esAdmin  = user.rol === 'administrador';
   const sucursalActivaId = getSucursalActivaId();
 

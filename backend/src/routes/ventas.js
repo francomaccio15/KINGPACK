@@ -58,6 +58,7 @@ router.get('/', async (req, res, next) => {
   try {
     const {
       q, estado, cliente_id, fecha_desde, fecha_hasta,
+      mias, vendedor_id,
       limit = 100, offset = 0,
     } = req.query;
 
@@ -72,6 +73,15 @@ router.get('/', async (req, res, next) => {
     if (cliente_id) {
       conditions.push(`v.cliente_id = $${idx++}`);
       params.push(cliente_id);
+    }
+    // mias=1 → solo las preventas/ventas del usuario autenticado (vista del repartidor).
+    // vendedor_id → filtro explícito por repartidor (para staff).
+    if (mias === '1' && req.usuario?.id) {
+      conditions.push(`v.vendedor_id = $${idx++}`);
+      params.push(req.usuario.id);
+    } else if (vendedor_id) {
+      conditions.push(`v.vendedor_id = $${idx++}`);
+      params.push(vendedor_id);
     }
     const sucId = sucursalEfectiva(req);
     if (sucId) {
@@ -108,6 +118,8 @@ router.get('/', async (req, res, next) => {
           c.razon_social   AS cliente_nombre,
           s.nombre         AS sucursal_nombre,
           lp.nombre        AS lista_precio,
+          v.vendedor_id    AS vendedor_id,
+          u.nombre         AS vendedor_nombre,
           f.cae            AS cae,
           f.ok             AS facturada_ok,
           (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
@@ -116,6 +128,7 @@ router.get('/', async (req, res, next) => {
         LEFT JOIN clientes c ON c.id = v.cliente_id
         LEFT JOIN sucursales s ON s.id = v.sucursal_id
         LEFT JOIN listas_precios lp ON lp.id = v.lista_precio_id
+        LEFT JOIN usuarios u ON u.id = v.vendedor_id
         LEFT JOIN LATERAL (
           SELECT cae, ok FROM facturaciones
           WHERE venta_id = v.id AND deleted_at IS NULL
@@ -146,7 +159,7 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const {
+    let {
       sucursal_id, cliente_id, lista_precio_id,
       estado = 'confirmada', observaciones,
       items = [], pagos = [],
@@ -154,6 +167,13 @@ router.post('/', async (req, res, next) => {
 
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
+
+    // El repartidor (vendedor) solo puede generar presupuestos (preventas);
+    // nunca confirmar una venta, que mueve stock y caja.
+    if (req.usuario?.rol === 'vendedor') {
+      estado = 'preventa';
+      pagos = [];
+    }
 
     // El cajero solo puede registrar ventas en su propia sucursal
     if (req.usuario?.rol === 'cajero') {
@@ -237,14 +257,15 @@ router.post('/', async (req, res, next) => {
     // Insertar venta
     const { rows: ventaRows } = await client.query(`
       INSERT INTO ventas
-        (numero, sucursal_id, cliente_id, lista_precio_id, estado, observaciones,
+        (numero, sucursal_id, cliente_id, vendedor_id, lista_precio_id, estado, observaciones,
          subtotal, descuento_total, total)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING id, numero, fecha, estado, total
     `, [
       numero,
       sucursal_id,
       cliente_id || null,
+      req.usuario?.id || null,
       lista_precio_id || null,
       estado,
       observaciones || null,

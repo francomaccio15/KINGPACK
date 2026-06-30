@@ -12,9 +12,10 @@ type Rol = AuthUser['rol'];
  */
 const PERMISOS: Record<Rol, string[] | '*'> = {
   administrador: '*',
-  supervisor:    ['/empleados', '/clientes', '/ventas', '/articulos', '/categorias', '/dashboard', '/pedidos-proveedores', '/traspasos', '/reportes', '/cheques'],
-  cajero:        ['/caja', '/ventas', '/clientes', '/notas', '/notas-credito', '/devoluciones', '/pedidos-proveedores', '/traspasos', '/articulos'],
-  vendedor:      [],   // definir más adelante
+  supervisor:    ['/empleados', '/clientes', '/ventas', '/presupuestos', '/articulos', '/categorias', '/dashboard', '/pedidos-proveedores', '/traspasos', '/reportes', '/cheques'],
+  cajero:        ['/caja', '/ventas', '/presupuestos', '/clientes', '/notas', '/notas-credito', '/devoluciones', '/pedidos-proveedores', '/traspasos', '/articulos'],
+  // Repartidor: arma presupuestos (preventas) y consulta productos. No opera caja ni cobra.
+  vendedor:      ['/presupuestos', '/articulos'],
 };
 
 /** Devuelve true si el rol puede acceder al módulo dado su href. */
@@ -31,9 +32,12 @@ export function modulosPermitidos(rol: Rol): string[] | '*' {
 }
 
 /**
- * Pantalla inicial según el rol. El cajero opera en ventas y no tiene acceso
- * al dashboard, así que su landing es /ventas. El resto va al dashboard.
+ * Pantalla inicial según el rol. El cajero opera en ventas y el repartidor
+ * (vendedor) en presupuestos; ninguno tiene acceso al dashboard. El resto va
+ * al dashboard.
  */
 export function landingPath(rol: Rol): string {
-  return rol === 'cajero' ? '/ventas' : '/dashboard';
+  if (rol === 'cajero')   return '/ventas';
+  if (rol === 'vendedor') return '/presupuestos';
+  return '/dashboard';
 }
