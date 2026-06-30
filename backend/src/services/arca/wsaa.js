@@ -54,10 +54,18 @@ async function _autenticar() {
   return _parsearTA(xml);
 }
 
+// Formatea un instante en horario Argentina (-03:00). El servidor corre en UTC;
+// restamos 3h para obtener los componentes locales y les anexamos el offset -03:00,
+// de modo que el instante representado sea correcto (no en el futuro).
+function _fechaAfip(date) {
+  const ar = new Date(date.getTime() - 3 * 3600 * 1000);
+  return ar.toISOString().replace(/\.\d+Z$/, '-03:00');
+}
+
 function _buildTRA() {
   const ahora  = new Date();
-  const desde  = new Date(ahora.getTime() - 60 * 1000).toISOString().replace(/\.\d+Z$/, '-03:00');
-  const hasta  = new Date(ahora.getTime() + 12 * 3600 * 1000).toISOString().replace(/\.\d+Z$/, '-03:00');
+  const desde  = _fechaAfip(new Date(ahora.getTime() - 10 * 60 * 1000)); // 10 min en el pasado (margen de reloj)
+  const hasta  = _fechaAfip(new Date(ahora.getTime() + 10 * 60 * 1000)); // 10 min en el futuro
   const unique = crypto.randomInt(1, 999999999);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
