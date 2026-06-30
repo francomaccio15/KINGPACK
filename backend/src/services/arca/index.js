@@ -299,6 +299,7 @@ module.exports = {
   ultimoComprobante,
   probarAuth,
   comprobanteParaCliente,
+  puntoVentaPara: (nombre) => config.puntoVentaPara(nombre),
 
   // Constantes re-exportadas para que los consumidores no importen tipos.js
   TIPO_COMPROBANTE:       tipos.TIPO_COMPROBANTE,

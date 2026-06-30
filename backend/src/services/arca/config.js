@@ -49,11 +49,24 @@ const config = {
 
   endpoints: MODO === 'produccion' ? ENDPOINTS.produccion : ENDPOINTS.homo,
 
-  // Punto de venta por defecto (configurar por sucursal en producción)
+  // Punto de venta por defecto (fallback si la sucursal no está en el mapa)
   puntoVentaDefault: parseInt(process.env.AFIP_PUNTO_VENTA || '1', 10),
+
+  // Mapa punto de venta por sucursal. Env AFIP_PV_MAP = JSON con nombre→PV.
+  // Ej. producción: AFIP_PV_MAP={"Laprida":4,"Huaico":6}
+  pvPorSucursal: (() => {
+    try { return JSON.parse(process.env.AFIP_PV_MAP || '{}'); } catch { return {}; }
+  })(),
 
   // Duración máxima del token de autenticación (ARCA emite tokens de 12hs)
   tokenTtlMs: 11 * 60 * 60 * 1000,
+};
+
+// Devuelve el punto de venta correspondiente a una sucursal (por nombre),
+// o el default si no está mapeada.
+config.puntoVentaPara = function (sucursalNombre) {
+  const pv = sucursalNombre != null ? config.pvPorSucursal[sucursalNombre] : undefined;
+  return pv != null ? parseInt(pv, 10) : config.puntoVentaDefault;
 };
 
 module.exports = config;

@@ -834,10 +834,12 @@ router.post('/:id/facturar', async (req, res, next) => {
 
     const { rows: ventaRows } = await pool.query(`
       SELECT v.total, c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit,
-             ci.nombre AS cond_iva, ci.codigo_afip AS cond_iva_afip
+             ci.nombre AS cond_iva, ci.codigo_afip AS cond_iva_afip,
+             su.nombre AS sucursal_nombre
       FROM ventas v
       LEFT JOIN clientes c ON c.id = v.cliente_id
       LEFT JOIN cond_iva ci ON ci.id = c.cond_iva_id
+      LEFT JOIN sucursales su ON su.id = v.sucursal_id
       WHERE v.id = $1 AND v.deleted_at IS NULL
     `, [id]);
 
@@ -851,7 +853,7 @@ router.post('/:id/facturar', async (req, res, next) => {
     const comp = arca.comprobanteParaCliente(v.cond_iva_afip, v.cliente_cuit);
 
     const resultado = await arca.generarFactura({
-      // puntoVenta omitido → usa AFIP_PUNTO_VENTA (config.puntoVentaDefault)
+      puntoVenta:      arca.puntoVentaPara(v.sucursal_nombre), // PV por sucursal (Laprida→4, Huaico→6 en prod)
       tipoComprobante: comp.tipoComprobante,
       concepto:        arca.CONCEPTO.PRODUCTOS,
       cliente: {
