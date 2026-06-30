@@ -47,7 +47,7 @@ function _assertSinFaultNiError(xml) {
 
 function _buildFECAESolicitar(c, token, sign) {
   const iva = (c.iva || [])
-    .map(i => `<AlicIva><Id>${i.id}</Id><BaseImp>${i.baseImp.toFixed(2)}</BaseImp><Importe>${i.importe.toFixed(2)}</Importe></AlicIva>`)
+    .map(i => `<ar:AlicIva><ar:Id>${i.id}</ar:Id><ar:BaseImp>${i.baseImp.toFixed(2)}</ar:BaseImp><ar:Importe>${i.importe.toFixed(2)}</ar:Importe></ar:AlicIva>`)
     .join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
