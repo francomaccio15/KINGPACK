@@ -88,7 +88,7 @@ export default function PresupuestosTable({
             <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Fecha</th>
             <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Cliente</th>
             {!esRepartidor && (
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Repartidor</th>
+              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Preventista</th>
             )}
             <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Ítems</th>
             <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Total</th>

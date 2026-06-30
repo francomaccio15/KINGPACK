@@ -37,7 +37,7 @@ const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
   supervisor:    'Supervisor',
   cajero:        'Cajero',
-  vendedor:      'Vendedor',
+  vendedor:      'Preventista',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
@@ -164,7 +164,7 @@ function FormUsuario({
             <option value="administrador">Administrador</option>
             <option value="supervisor">Supervisor</option>
             <option value="cajero">Cajero</option>
-            <option value="vendedor">Vendedor</option>
+            <option value="vendedor">Preventista</option>
           </select>
         </div>
         <div>
