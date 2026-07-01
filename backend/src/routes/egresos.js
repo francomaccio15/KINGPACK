@@ -216,7 +216,7 @@ router.post('/', async (req, res, next) => {
     }
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (!descripcion?.trim()) return res.status(400).json({ error: 'descripcion es requerida' });
-    const TIPOS_CON_COMPROBANTE = ['compra_mercaderia','compra_gasto','inversion_bien_uso'];
+    const TIPOS_CON_COMPROBANTE = ['compra_mercaderia','inversion_bien_uso'];
     let totalNum;
     if (TIPOS_CON_COMPROBANTE.includes(tipo_operacion)) {
       totalNum = parseFloat(
@@ -230,12 +230,12 @@ router.post('/', async (req, res, next) => {
       if (!totalNum || totalNum <= 0) return res.status(400).json({ error: 'total debe ser mayor a 0' });
     }
 
-    const TIPOS_CON_PROVEEDOR = ['compra_mercaderia','compra_gasto','inversion_bien_uso','anticipo_proveedor'];
+    const TIPOS_CON_PROVEEDOR = ['compra_mercaderia','inversion_bien_uso','anticipo_proveedor'];
     if (TIPOS_CON_PROVEEDOR.includes(tipo_operacion) && !proveedor_id) {
       return res.status(400).json({ error: 'proveedor_id es requerido para este tipo de operación' });
     }
 
-    if (['compra_mercaderia','compra_gasto'].includes(tipo_operacion) && items.length === 0) {
+    if (tipo_operacion === 'compra_mercaderia' && items.length === 0) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem' });
     }
 
