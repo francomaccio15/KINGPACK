@@ -121,22 +121,30 @@ export default function PresupuestosTable({
                   <td className="px-4 py-3 text-center text-kp-gray-lt tabular-nums">{p.items_count}</td>
                   <td className="px-4 py-3 text-right font-bold text-kp-white tabular-nums">{ars.format(parseFloat(p.total) || 0)}</td>
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                    {!esRepartidor ? (
+                    <div className="flex items-center justify-end gap-2">
                       <Link
                         href={`/ventas/${p.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                          bg-green-600 hover:bg-green-500 text-white transition-colors"
+                          bg-kp-surface2 hover:bg-kp-border text-kp-gray-lt border border-kp-border transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
-                        Confirmar
+                        Ver
                       </Link>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-amber-500/10 text-amber-400 border-amber-500/30">
-                        Pendiente
-                      </span>
-                    )}
+                      {!esRepartidor && (
+                        <Link
+                          href={`/ventas/${p.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                            bg-green-600 hover:bg-green-500 text-white transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                          Confirmar
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
 
