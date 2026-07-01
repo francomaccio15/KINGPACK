@@ -47,7 +47,7 @@ body {
 
 /* ── Print styles ────────────────────────────────────────────────────────── */
 @media print {
-  @page { margin: 0; size: A3 portrait; }
+  @page { margin: 0; size: A4 portrait; }
 
   body { background: white !important; color: #111 !important; }
 

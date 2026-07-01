@@ -378,50 +378,64 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       {/* ── Estilos de control de modo de impresión ──────────────────────── */}
       <style>{`
         @media print {
-          @page { size: A5 landscape; margin: 0; }
-          @page facturaPage { size: A5 landscape; margin: 0; }
-          .print-layout-venta    { display: block !important; padding: 5mm; box-sizing: border-box; }
+          @page { size: A4 portrait; margin: 0; }
+          @page facturaPage { size: A4 portrait; margin: 0; }
+          .print-layout-venta    { display: block !important; padding: 8mm; box-sizing: border-box; }
           .print-layout-factura  { display: none  !important; }
         }
         @media print {
           body.print-factura .print-layout-venta   { display: none  !important; }
-          body.print-factura .print-layout-factura { display: block !important; padding: 5mm; box-sizing: border-box; page: facturaPage; }
+          body.print-factura .print-layout-factura { display: block !important; padding: 8mm; box-sizing: border-box; page: facturaPage; }
         }
       `}</style>
 
-      {/* ── Layout de impresión REMITO (media hoja A4 landscape) ─────────── */}
-      <div className="print-layout-venta hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#111', background: 'white' }}>
+      {/* ── Layout de impresión REMITO (mitad hoja A4) ─────────────────────── */}
+      <div className="print-layout-venta hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: '8px', color: '#111', background: 'white' }}>
 
-        {/* Encabezado */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #111', paddingBottom: '4px', marginBottom: '4px' }}>
-          <KingPackLogoPrint height={28} />
-          <div style={{ background: '#111', color: 'white', padding: '2px 8px', borderRadius: '3px', fontSize: '7px', fontWeight: '800', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+        {/* Encabezado: número + badge + fecha */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #111', paddingBottom: '4px', marginBottom: '4px' }}>
+          <div style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '0.3px' }}>
+            REMITO <span style={{ fontSize: '13px' }}>N° {venta.numero}</span>
+          </div>
+          <div style={{ background: '#111', color: 'white', padding: '2px 8px', fontSize: '7px', fontWeight: '800', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
             No válido como comprobante fiscal
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', fontWeight: '800', letterSpacing: '0.5px' }}>REMITO #{venta.numero}</p>
-            <p style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>{fechaFmt(venta.fecha)}</p>
+          <div style={{ textAlign: 'right', fontSize: '8px' }}>
+            <div>{fechaFmt(venta.fecha)}</div>
+            <div style={{ color: '#555' }}>{venta.sucursal_nombre}</div>
           </div>
         </div>
 
-        {/* Datos cliente */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 14px', fontSize: '8px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '3px', padding: '3px 6px', marginBottom: '4px' }}>
-          <span><strong>Cliente:</strong> {venta.cliente_nombre ?? 'Consumidor Final'}</span>
-          {venta.cliente_cuit && <span><strong>CUIT:</strong> {venta.cliente_cuit}</span>}
-          {venta.cliente_direccion && <span><strong>Dirección:</strong> {venta.cliente_direccion}</span>}
-          <span style={{ marginLeft: 'auto' }}><strong>Sucursal:</strong> {venta.sucursal_nombre}</span>
+        {/* 2 columnas: Emisor | Cliente */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '2px solid #111', marginBottom: '5px' }}>
+          <div style={{ borderRight: '2px solid #111', padding: '4px 6px' }}>
+            <div style={{ marginBottom: '2px' }}><KingPackLogoPrint height={18} /></div>
+            <p style={{ fontSize: '8px', fontWeight: '800', marginBottom: '1px' }}>DISTRIBUIDORA KING PACK S.A.S.</p>
+            <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>CUIT:</strong> 30-71792696-6</p>
+            <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>IIBB:</strong> 30-71792696-6</p>
+            <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Inicio Act.:</strong> 06/01/2010</p>
+            <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Cond. IVA:</strong> Responsable Inscripto</p>
+            {venta.sucursal_direccion && <p style={{ fontSize: '7.5px' }}><strong>Dom.:</strong> {venta.sucursal_direccion}</p>}
+          </div>
+          <div style={{ padding: '4px 6px' }}>
+            <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#555', marginBottom: '3px' }}>Cliente</p>
+            <p style={{ fontSize: '8.5px', fontWeight: '800', marginBottom: '1px' }}>{venta.cliente_nombre ?? 'Consumidor Final'}</p>
+            {venta.cliente_cuit && <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>CUIT:</strong> {venta.cliente_cuit}</p>}
+            {venta.cliente_cond_iva && <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Cond. IVA:</strong> {venta.cliente_cond_iva}</p>}
+            {venta.cliente_direccion && <p style={{ fontSize: '7.5px' }}><strong>Dom.:</strong> {venta.cliente_direccion}</p>}
+          </div>
         </div>
 
         {/* Tabla de artículos */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '4px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '5px', border: '1.5px solid #111' }}>
           <thead>
             <tr style={{ background: '#111', color: 'white' }}>
-              <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase' }}>Artículo</th>
-              <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '34px' }}>Cant.</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>P. Lista</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '42px' }}>Desc.</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>P. Final</th>
-              <th style={{ textAlign: 'right', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>Subtotal</th>
+              <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', borderRight: '1px solid #555' }}>Artículo</th>
+              <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '32px', borderRight: '1px solid #555' }}>Cant.</th>
+              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Lista</th>
+              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '38px', borderRight: '1px solid #555' }}>Desc.</th>
+              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Final</th>
+              <th style={{ textAlign: 'right', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px' }}>Subtotal</th>
             </tr>
           </thead>
           <tbody>
@@ -429,14 +443,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
               const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
               return (
-                <tr key={item.articulo_id} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
-                  <td style={{ padding: '2px 5px', fontWeight: '600' }}>{item.nombre}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_lista)}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
+                <tr key={item.articulo_id} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
+                  <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
+                  <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_lista)}</td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
                     {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
                   </td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_unitario_final)}</td>
                   <td style={{ padding: '2px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
                 </tr>
               );
@@ -449,7 +463,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           <div style={{ fontSize: '8px' }}>
             {pagos.length > 0 && (
               <>
-                <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#6b7280', marginBottom: '2px' }}>Formas de Pago</p>
+                <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#555', marginBottom: '2px' }}>Formas de Pago</p>
                 {pagos.map((p: any, i: number) => (
                   <div key={i}>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '1px' }}>
@@ -457,7 +471,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                       <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(p.monto)}</strong>
                     </div>
                     {Array.isArray(p.cheques) && p.cheques.map((ch: any) => (
-                      <div key={ch.id} style={{ fontSize: '7px', color: '#6b7280', paddingLeft: '6px' }}>
+                      <div key={ch.id} style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>
                         {ch.banco} · N° {ch.numero_cheque} · Vence {new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')} · <strong>{fmt(ch.importe)}</strong>
                       </div>
                     ))}
@@ -466,13 +480,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               </>
             )}
             {venta.observaciones && (
-              <p style={{ marginTop: '3px', color: '#555' }}><strong>Obs:</strong> {venta.observaciones}</p>
+              <p style={{ marginTop: '3px', color: '#444' }}><strong>Obs:</strong> {venta.observaciones}</p>
             )}
           </div>
-          <div style={{ border: '2px solid #111', borderRadius: '3px', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
+          <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
             {descuento > 0 && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#6b7280', marginBottom: '1px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
                   <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.subtotal)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
@@ -480,7 +494,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 </div>
               </>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '1.5px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '2px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
               <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
             </div>
           </div>
@@ -488,25 +502,28 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
       </div>
 
-      {/* ── Layout de impresión FACTURA FISCAL (media hoja A4 landscape) ─── */}
+      {/* ── Layout de impresión FACTURA FISCAL (mitad hoja A4) ─────────────── */}
       {facturacion && (
         <div className="print-layout-factura hidden" style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '8px', color: '#111', background: 'white', width: '100%', boxSizing: 'border-box' }}>
 
           {/* ══ ENCABEZADO FISCAL — 3 columnas ══ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 68px 1fr', border: '1.5px solid #111', marginBottom: '4px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 68px 1fr', border: '2px solid #111', marginBottom: '4px' }}>
 
             {/* Emisor */}
-            <div style={{ padding: '5px 8px', borderRight: '1.5px solid #111' }}>
-              <div style={{ marginBottom: '4px' }}><KingPackLogoPrint height={24} /></div>
-              <p style={{ fontSize: '8px', marginBottom: '1px', marginLeft: '6px' }}><strong>CUIT:</strong> 30-71792696-6</p>
-              <p style={{ fontSize: '8px', marginBottom: '1px', marginLeft: '6px' }}><strong>Cond. IVA:</strong> Resp. Inscripto</p>
-              {venta.sucursal_direccion && <p style={{ fontSize: '8px', marginBottom: '1px', marginLeft: '6px' }}><strong>Dom.:</strong> {venta.sucursal_direccion}</p>}
-              {venta.sucursal_telefono && <p style={{ fontSize: '8px', marginLeft: '6px' }}><strong>Tel:</strong> {venta.sucursal_telefono}</p>}
+            <div style={{ padding: '4px 6px', borderRight: '2px solid #111' }}>
+              <div style={{ marginBottom: '2px' }}><KingPackLogoPrint height={18} /></div>
+              <p style={{ fontSize: '8px', fontWeight: '800', marginBottom: '1px' }}>DISTRIBUIDORA KING PACK S.A.S.</p>
+              <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>CUIT:</strong> 30-71792696-6</p>
+              <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>IIBB:</strong> 30-71792696-6</p>
+              <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Inicio Act.:</strong> 06/01/2010</p>
+              <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Cond. IVA:</strong> Responsable Inscripto</p>
+              {venta.sucursal_direccion && <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Dom.:</strong> {venta.sucursal_direccion}</p>}
+              {venta.sucursal_telefono && <p style={{ fontSize: '7.5px' }}><strong>Tel:</strong> {venta.sucursal_telefono}</p>}
             </div>
 
             {/* Letra */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '1.5px solid #111', padding: '5px 3px', gap: '3px' }}>
-              <div style={{ width: '44px', height: '44px', border: '2px solid #111', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '3px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '2px solid #111', padding: '5px 3px', gap: '3px' }}>
+              <div style={{ width: '44px', height: '44px', border: '2px solid #111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '36px', fontWeight: '900', lineHeight: 1 }}>
                   {facturacion.tipo_comprobante?.split(' ').pop() ?? ''}
                 </span>
@@ -517,26 +534,26 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
 
             {/* Datos comprobante */}
-            <div style={{ padding: '5px 8px' }}>
-              <p style={{ fontSize: '7px', fontWeight: '800', textTransform: 'uppercase', color: '#6b7280', marginBottom: '4px' }}>Datos del Comprobante</p>
+            <div style={{ padding: '4px 6px' }}>
+              <p style={{ fontSize: '7px', fontWeight: '800', textTransform: 'uppercase', color: '#555', marginBottom: '3px' }}>Datos del Comprobante</p>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px' }}>
                 <tbody>
                   <tr>
-                    <td style={{ color: '#6b7280', paddingBottom: '2px', width: '40%' }}>N°</td>
+                    <td style={{ color: '#555', paddingBottom: '2px', width: '40%' }}>N°</td>
                     <td style={{ fontWeight: '700', fontFamily: 'monospace', fontSize: '9px', paddingBottom: '2px' }}>
                       {String(facturacion.punto_venta).padStart(4, '0')}-{String(facturacion.factura_numero).padStart(8, '0')}
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ color: '#6b7280', paddingBottom: '2px' }}>Fecha</td>
+                    <td style={{ color: '#555', paddingBottom: '2px' }}>Fecha</td>
                     <td style={{ fontWeight: '600', paddingBottom: '2px' }}>{fechaCorta(facturacion.fecha_emision ?? facturacion.cae_vencimiento ?? venta.fecha)}</td>
                   </tr>
                   <tr>
-                    <td style={{ color: '#6b7280', paddingBottom: '2px' }}>Tipo</td>
+                    <td style={{ color: '#555', paddingBottom: '2px' }}>Tipo</td>
                     <td style={{ fontWeight: '600', paddingBottom: '2px' }}>{facturacion.tipo_comprobante}</td>
                   </tr>
                   <tr>
-                    <td style={{ color: '#6b7280' }}>P. Venta</td>
+                    <td style={{ color: '#555' }}>P. Venta</td>
                     <td style={{ fontFamily: 'monospace' }}>{String(facturacion.punto_venta).padStart(4, '0')}</td>
                   </tr>
                 </tbody>
@@ -545,7 +562,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ RECEPTOR ══ */}
-          <div style={{ border: '1px solid #d1d5db', borderRadius: '3px', padding: '3px 8px', marginBottom: '4px', background: '#f9fafb' }}>
+          <div style={{ border: '1.5px solid #111', padding: '3px 8px', marginBottom: '4px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 14px', fontSize: '8px' }}>
               <span><strong>Razón Social:</strong> {venta.cliente_nombre ?? 'Consumidor Final'}</span>
               {venta.cliente_cuit && <span><strong>CUIT:</strong> {venta.cliente_cuit}</span>}
@@ -555,15 +572,15 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
 
           {/* ══ TABLA ══ */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '4px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '4px', border: '1.5px solid #111' }}>
             <thead>
               <tr style={{ background: '#111', color: 'white' }}>
-                <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase' }}>Descripción</th>
-                <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '34px' }}>Cant.</th>
-                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>P. Unitario</th>
-                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '42px' }}>% Desc.</th>
-                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>P. Final</th>
-                <th style={{ textAlign: 'right', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '78px' }}>Subtotal</th>
+                <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', borderRight: '1px solid #555' }}>Descripción</th>
+                <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '32px', borderRight: '1px solid #555' }}>Cant.</th>
+                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Unitario</th>
+                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '38px', borderRight: '1px solid #555' }}>Desc.</th>
+                <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Final</th>
+                <th style={{ textAlign: 'right', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px' }}>Subtotal</th>
               </tr>
             </thead>
             <tbody>
@@ -571,14 +588,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
                 const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                 return (
-                  <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
-                    <td style={{ padding: '2px 5px', fontWeight: '600' }}>{item.nombre}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_lista)}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#9ca3af' }}>
+                  <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
+                    <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_lista)}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
                       {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
                     </td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.precio_unitario_final)}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_unitario_final)}</td>
                     <td style={{ padding: '2px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
                   </tr>
                 );
@@ -591,7 +608,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
             {/* Pagos */}
             <div style={{ fontSize: '8px' }}>
-              <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#6b7280', marginBottom: '2px' }}>Formas de Pago</p>
+              <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#555', marginBottom: '2px' }}>Formas de Pago</p>
               {pagos.length > 0 ? pagos.map((p: any, i: number) => (
                 <div key={i} style={{ marginBottom: '1px' }}>
                   <div style={{ display: 'flex', gap: '10px' }}>
@@ -599,30 +616,30 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                     <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(p.monto)}</strong>
                   </div>
                   {Array.isArray(p.cheques) && p.cheques.map((ch: any) => (
-                    <div key={ch.id} style={{ fontSize: '7px', color: '#6b7280', paddingLeft: '6px' }}>
+                    <div key={ch.id} style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>
                       {ch.banco} · N° {ch.numero_cheque} · Vence {new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')} · <strong>{fmt(ch.importe)}</strong>
                     </div>
                   ))}
                 </div>
-              )) : <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Sin registrar</span>}
+              )) : <span style={{ color: '#999', fontStyle: 'italic' }}>Sin registrar</span>}
             </div>
 
             {/* CAE + QR */}
-            <div style={{ border: '1px solid #d1d5db', borderRadius: '3px', padding: '4px 6px', fontSize: '7.5px', background: '#f9fafb', display: 'flex', gap: '5px', alignItems: 'center' }}>
+            <div style={{ border: '1.5px solid #111', padding: '4px 6px', fontSize: '7.5px', display: 'flex', gap: '5px', alignItems: 'center' }}>
               {facturacion.qr_url && <FacturaQR url={facturacion.qr_url} size={46} />}
               <div>
-                <p style={{ fontSize: '6.5px', fontWeight: '700', textTransform: 'uppercase', color: '#6b7280', marginBottom: '1px' }}>CAE</p>
+                <p style={{ fontSize: '6.5px', fontWeight: '700', textTransform: 'uppercase', color: '#555', marginBottom: '1px' }}>CAE</p>
                 <p style={{ fontFamily: 'monospace', fontSize: '8px', fontWeight: '800', letterSpacing: '0.3px' }}>{facturacion.cae}</p>
                 {facturacion.cae_vencimiento && <p style={{ fontSize: '7px', color: '#374151', marginTop: '1px' }}>Vto: {fechaCorta(facturacion.cae_vencimiento)}</p>}
-                <p style={{ fontSize: '6px', color: '#9ca3af', marginTop: '2px' }}>Válido ante ARCA (ex-AFIP)</p>
+                <p style={{ fontSize: '6px', color: '#777', marginTop: '2px' }}>Válido ante ARCA (ex-AFIP)</p>
               </div>
             </div>
 
             {/* Total */}
-            <div style={{ border: '2px solid #111', borderRadius: '3px', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
+            <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
               {descuento > 0 && (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#6b7280', marginBottom: '1px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
                     <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.subtotal)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
@@ -630,7 +647,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   </div>
                 </>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '1.5px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '2px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
                 <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
               </div>
             </div>
