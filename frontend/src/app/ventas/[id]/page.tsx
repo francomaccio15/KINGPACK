@@ -378,14 +378,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       {/* ── Estilos de control de modo de impresión ──────────────────────── */}
       <style>{`
         @media print {
-          @page { size: A4; margin: 12mm; }
-          @page facturaPage { size: A3; margin: 15mm; }
-          .print-layout-venta    { display: block !important; }
+          @page { size: A3 portrait; margin: 0; }
+          @page facturaPage { size: A3 portrait; margin: 0; }
+          .print-layout-venta    { display: block !important; padding: 15mm; }
           .print-layout-factura  { display: none  !important; }
         }
         @media print {
           body.print-factura .print-layout-venta   { display: none  !important; }
-          body.print-factura .print-layout-factura { display: block !important; page: facturaPage; }
+          body.print-factura .print-layout-factura { display: block !important; padding: 15mm; page: facturaPage; }
         }
       `}</style>
 
@@ -537,11 +537,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           )}
         </div>
 
-        {/* Pie del documento */}
-        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
-          <span>KING PACK DESCARTABLES · Sistema de Gestión</span>
-          <span>Documento generado el {new Date().toLocaleDateString('es-AR')}</span>
-        </div>
+        {/* Observaciones */}
+        {venta.observaciones && (
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px' }}>
+            <p style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#6b7280', marginBottom: '4px' }}>Observaciones</p>
+            <p style={{ color: '#374151' }}>{venta.observaciones}</p>
+          </div>
+        )}
 
       </div>
 
