@@ -14,6 +14,8 @@ interface Proveedor {
   cond_pago: string | null;
   activo: boolean;
   created_at: string;
+  saldo_inicial?: string | null;
+  saldo_actual?: string | null;
 }
 
 interface MovimientoCC {
@@ -114,6 +116,10 @@ function FormProveedor({
   const [email,       setEmail]       = useState(inicial?.email        ?? '');
   const [direccion,   setDireccion]   = useState(inicial?.direccion    ?? '');
   const [condPago,    setCondPago]    = useState(inicial?.cond_pago    ?? '');
+  const [saldoInicial, setSaldoInicial] = useState(
+    inicial?.saldo_inicial != null && parseFloat(inicial.saldo_inicial) !== 0
+      ? String(parseFloat(inicial.saldo_inicial)) : ''
+  );
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
 
@@ -133,6 +139,7 @@ function FormProveedor({
         email:        email.trim() || null,
         direccion:    direccion.trim() || null,
         cond_pago:    condPago.trim() || null,
+        saldo_inicial: parseFloat(saldoInicial) || 0,
       };
 
       const res = await apiFetch(
@@ -182,10 +189,18 @@ function FormProveedor({
           placeholder="Calle 123, Salta" className={inputCls} />
       </div>
 
-      <div>
-        <label className={labelCls}>Condición de Pago</label>
-        <input type="text" value={condPago} onChange={e => setCondPago(e.target.value)}
-          placeholder="Ej: Contado, 30 días, etc." className={inputCls} />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Condición de Pago</label>
+          <input type="text" value={condPago} onChange={e => setCondPago(e.target.value)}
+            placeholder="Ej: Contado, 30 días, etc." className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Saldo inicial</label>
+          <input type="number" step="0.01" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)}
+            placeholder="0.00" className={inputCls} />
+          <p className="mt-1 text-[11px] text-kp-gray/70">Deuda previa con el proveedor al empezar.</p>
+        </div>
       </div>
 
       {error && (
@@ -211,6 +226,7 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
   const [loading, setLoading]   = useState(true);
   const [movs, setMovs]         = useState<MovimientoCC[]>([]);
   const [saldo, setSaldo]       = useState<string>('0');
+  const [saldoInicial, setSaldoInicial] = useState<string>('0');
 
   useEffect(() => {
     (async () => {
@@ -220,6 +236,7 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
         const data = await res.json();
         setMovs(data.movimientos ?? []);
         setSaldo(data.totales?.saldo_actual ?? '0');
+        setSaldoInicial(data.totales?.saldo_inicial ?? '0');
       } finally {
         setLoading(false);
       }
@@ -229,7 +246,12 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
-        <span className="text-xs uppercase tracking-widest text-kp-gray">Saldo actual</span>
+        <div>
+          <span className="block text-xs uppercase tracking-widest text-kp-gray">Saldo actual</span>
+          {parseFloat(saldoInicial) !== 0 && (
+            <span className="text-[11px] text-kp-gray/70">Incluye saldo inicial {fmt(saldoInicial)}</span>
+          )}
+        </div>
         <span className={`text-lg font-bold tabular-nums ${parseFloat(saldo) > 0 ? 'text-kp-red' : parseFloat(saldo) < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
           {fmt(saldo)}
         </span>
@@ -474,6 +496,7 @@ export default function ProveedoresClient() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">CUIT</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Contacto</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Cond. Pago</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activo</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -489,6 +512,22 @@ export default function ProveedoresClient() {
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-xs text-kp-gray-lt">{p.cond_pago || '—'}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {(() => {
+                      const s = parseFloat(String(p.saldo_actual ?? ''));
+                      if (isNaN(s)) return <span className="text-kp-gray">—</span>;
+                      const cls = s > 0.005 ? 'text-kp-red' : s < -0.005 ? 'text-green-400' : 'text-kp-gray';
+                      return (
+                        <button
+                          onClick={() => setModalCC(p)}
+                          title="Ver cuenta corriente"
+                          className={`tabular-nums font-semibold hover:underline ${cls}`}
+                        >
+                          {fmt(p.saldo_actual ?? null)}
+                        </button>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => toggleActivo(p)}

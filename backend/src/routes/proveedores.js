@@ -33,8 +33,17 @@ router.get('/', async (req, res, next) => {
 
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query(`
-        SELECT id, razon_social, cuit, telefono, email, direccion, cond_pago, activo, created_at
+        SELECT
+          proveedores.id, razon_social, cuit, telefono, email, direccion, cond_pago,
+          activo, created_at, saldo_inicial,
+          -- Saldo en tiempo real = saldo_inicial + Σ debe (egresos) − Σ haber (pagos)
+          saldo_inicial + COALESCE(cc.mov, 0) AS saldo_actual
         FROM proveedores
+        LEFT JOIN (
+          SELECT proveedor_id, COALESCE(SUM(debe), 0) - COALESCE(SUM(haber), 0) AS mov
+          FROM cuentas_corrientes_proveedor
+          GROUP BY proveedor_id
+        ) cc ON cc.proveedor_id = proveedores.id
         WHERE ${where}
         ORDER BY razon_social
         LIMIT $${idx} OFFSET $${idx + 1}
@@ -49,12 +58,12 @@ router.get('/', async (req, res, next) => {
 // ─── POST /api/proveedores ────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
-    const { razon_social, cuit, telefono, email, direccion, cond_pago } = req.body;
+    const { razon_social, cuit, telefono, email, direccion, cond_pago, saldo_inicial } = req.body;
     if (!razon_social) return res.status(400).json({ error: 'razon_social es requerido' });
 
     const { rows } = await pool.query(`
-      INSERT INTO proveedores (razon_social, cuit, telefono, email, direccion, cond_pago)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO proveedores (razon_social, cuit, telefono, email, direccion, cond_pago, saldo_inicial)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id, razon_social, cuit, activo, created_at
     `, [
       razon_social.trim(),
@@ -63,6 +72,7 @@ router.post('/', async (req, res, next) => {
       email?.trim() || null,
       direccion?.trim() || null,
       cond_pago?.trim() || null,
+      parseFloat(saldo_inicial) || 0,
     ]);
 
     res.status(201).json({ proveedor: rows[0] });
@@ -87,7 +97,7 @@ router.get('/:id', async (req, res, next) => {
 // ─── PUT /api/proveedores/:id ─────────────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
   try {
-    const fields = ['razon_social', 'cuit', 'telefono', 'email', 'direccion', 'cond_pago', 'activo', 'cond_iva_id'];
+    const fields = ['razon_social', 'cuit', 'telefono', 'email', 'direccion', 'cond_pago', 'activo', 'cond_iva_id', 'saldo_inicial'];
     const updates = [];
     const params = [];
     let idx = 1;
@@ -125,7 +135,7 @@ router.get('/:id/cuenta-corriente', async (req, res, next) => {
     const { limit = 50, offset = 0 } = req.query;
 
     const [{ rows: prov }, { rows: movs }, { rows: totales }] = await Promise.all([
-      pool.query(`SELECT id, razon_social, cuit FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [id]),
+      pool.query(`SELECT id, razon_social, cuit, saldo_inicial FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [id]),
       pool.query(`
         SELECT id, debe, haber, saldo, fecha, origen_tipo, origen_id, descripcion
         FROM cuentas_corrientes_proveedor
@@ -137,7 +147,7 @@ router.get('/:id/cuenta-corriente', async (req, res, next) => {
         SELECT
           COALESCE(SUM(debe), 0)           AS total_debe,
           COALESCE(SUM(haber), 0)          AS total_haber,
-          COALESCE(SUM(debe) - SUM(haber), 0) AS saldo_actual
+          COALESCE(SUM(debe) - SUM(haber), 0) AS movimientos_neto
         FROM cuentas_corrientes_proveedor
         WHERE proveedor_id = $1
       `, [id]),
@@ -145,10 +155,20 @@ router.get('/:id/cuenta-corriente', async (req, res, next) => {
 
     if (!prov[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
 
+    // Saldo real = saldo inicial + (Σ debe − Σ haber). Positivo = le debemos.
+    const saldoInicial = parseFloat(prov[0].saldo_inicial) || 0;
+    const movimientosNeto = parseFloat(totales[0].movimientos_neto) || 0;
+    const saldoActual = +(saldoInicial + movimientosNeto).toFixed(2);
+
     res.json({
       proveedor: prov[0],
       movimientos: movs,
-      totales: totales[0],
+      totales: {
+        total_debe: totales[0].total_debe,
+        total_haber: totales[0].total_haber,
+        saldo_inicial: saldoInicial.toFixed(2),
+        saldo_actual: saldoActual.toFixed(2),
+      },
     });
   } catch (err) { next(err); }
 });
