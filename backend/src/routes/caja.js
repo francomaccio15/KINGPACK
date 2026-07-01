@@ -168,11 +168,13 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ─── POST /api/caja/:id/movimiento ───────────────────────────────────────────
-// Body: tipo ('ingreso'|'egreso'|'retiro'), concepto, monto, medio_pago_id (opt)
+// Body: tipo ('ingreso'|'egreso'|'retiro'), concepto, monto, medio_pago_id (opt),
+//       subrubro_gasto_id (opt) — si se envía con tipo='egreso', crea registro en egresos
 router.post('/:id/movimiento', async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id } = req.body;
+    const { tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id, subrubro_gasto_id } = req.body;
 
     if (!['ingreso', 'egreso', 'retiro'].includes(tipo)) {
       return res.status(400).json({ error: 'tipo debe ser ingreso, egreso o retiro' });
@@ -180,24 +182,45 @@ router.post('/:id/movimiento', async (req, res, next) => {
     if (!concepto?.trim()) return res.status(400).json({ error: 'concepto es requerido' });
     if (!monto || parseFloat(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
-    // Verificar que la caja esté abierta
-    const { rows: cajaRows } = await pool.query(
-      `SELECT id FROM cajas WHERE id = $1 AND estado = 'abierta'`,
-      [id]
+    await client.query('BEGIN');
+
+    // Verificar que la caja esté abierta y obtener su sucursal
+    const { rows: cajaRows } = await client.query(
+      `SELECT id, sucursal_id FROM cajas WHERE id = $1 AND estado = 'abierta'`, [id]
     );
-    if (cajaRows.length === 0) return res.status(409).json({ error: 'La caja no está abierta' });
+    if (cajaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'La caja no está abierta' });
+    }
 
     const usuario_id = req.usuario?.id ?? null;
+    const montoNum   = parseFloat(monto);
+    let   egreso_id  = null;
 
-    const { rows } = await pool.query(`
-      INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    // Si es egreso, crear registro formal en la tabla egresos
+    if (tipo === 'egreso') {
+      const { rows: egrRows } = await client.query(`
+        INSERT INTO egresos
+          (tipo_operacion, tipo_comprobante, sucursal_id, subrubro_gasto_id,
+           descripcion, neto_no_gravado, total, estado_pago, usuario_id)
+        VALUES ('gasto_manual', 'informal', $1, $2, $3, $4, $4, 'pagado', $5)
+        RETURNING id
+      `, [cajaRows[0].sucursal_id, subrubro_gasto_id || null, concepto.trim(), montoNum, usuario_id]);
+      egreso_id = egrRows[0].id;
+    }
+
+    const { rows } = await client.query(`
+      INSERT INTO movimientos_caja
+        (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id, egreso_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, tipo, concepto, monto, fecha
-    `, [id, tipo, concepto.trim(), parseFloat(monto), medio_pago_id || null, usuario_id,
-        origen_tipo || null, origen_id || null]);
+    `, [id, tipo, concepto.trim(), montoNum, medio_pago_id || null, usuario_id,
+        origen_tipo || null, origen_id || null, egreso_id]);
 
+    await client.query('COMMIT');
     res.status(201).json({ movimiento: rows[0] });
-  } catch (err) { next(err); }
+  } catch (err) { await client.query('ROLLBACK'); next(err); }
+  finally { client.release(); }
 });
 
 // ─── PATCH /api/caja/movimiento/:movId ───────────────────────────────────────

@@ -3,6 +3,32 @@ const { pool } = require('../config/db');
 
 const router = express.Router();
 
+// ─── GET /api/egresos/rubros ──────────────────────────────────────────────────
+// Devuelve rubros con sus subrubros para el selector en caja
+router.get('/rubros', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT rg.id   AS rubro_id,   rg.nombre AS rubro_nombre, rg.orden,
+             sg.id   AS subrubro_id, sg.nombre AS subrubro_nombre
+        FROM rubros_gastos rg
+        LEFT JOIN subrubro_gastos sg ON sg.rubro_id = rg.id
+       ORDER BY rg.orden, rg.nombre, sg.nombre
+    `);
+    const map = {};
+    const rubros = [];
+    for (const row of rows) {
+      if (!map[row.rubro_id]) {
+        map[row.rubro_id] = { id: row.rubro_id, nombre: row.rubro_nombre, subrubros: [] };
+        rubros.push(map[row.rubro_id]);
+      }
+      if (row.subrubro_id) {
+        map[row.rubro_id].subrubros.push({ id: row.subrubro_id, nombre: row.subrubro_nombre });
+      }
+    }
+    res.json(rubros);
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/egresos/alertas ─────────────────────────────────────────────────
 // Vencimientos próximos (7 días) + obligaciones mensuales pendientes del mes actual
 // IMPORTANTE: debe ir antes de /:id

@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 
+type Subrubro = { id: string; nombre: string };
+type Rubro    = { id: string; nombre: string; subrubros: Subrubro[] };
+
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
   const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
@@ -30,16 +33,18 @@ type Empleado = { id: string; nombre: string; cargo: string | null };
 
 export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
   const router = useRouter();
-  const [open, setOpen]             = useState(false);
-  const [concepto, setConcepto]     = useState('');
-  const [monto, setMonto]           = useState('');
-  const [empleadoId, setEmpleadoId] = useState('');
-  const [empleados, setEmpleados]   = useState<Empleado[]>([]);
+  const [open, setOpen]               = useState(false);
+  const [concepto, setConcepto]       = useState('');
+  const [monto, setMonto]             = useState('');
+  const [empleadoId, setEmpleadoId]   = useState('');
+  const [subrubroId, setSubrubroId]   = useState('');
+  const [empleados, setEmpleados]     = useState<Empleado[]>([]);
+  const [rubros, setRubros]           = useState<Rubro[]>([]);
   const [loadingEmps, setLoadingEmps] = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
-  // Cargar empleados al abrir el modal
+  // Cargar empleados y rubros al abrir el modal
   useEffect(() => {
     if (!open) return;
     setLoadingEmps(true);
@@ -48,12 +53,14 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
       .then(d => setEmpleados(d.empleados ?? []))
       .catch(() => setEmpleados([]))
       .finally(() => setLoadingEmps(false));
+    apiFetch('/api/egresos/rubros').then(r => r.json()).then(setRubros).catch(() => {});
   }, [open]);
 
   const reset = () => {
     setConcepto('');
     setMonto('');
     setEmpleadoId('');
+    setSubrubroId('');
     setError(null);
   };
 
@@ -73,6 +80,7 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
         body.origen_tipo = 'empleado';
         body.origen_id   = empleadoId;
       }
+      if (subrubroId) body.subrubro_gasto_id = subrubroId;
 
       const res = await apiFetch(`/api/caja/${cajaId}/movimiento`, {
         method: 'POST',
@@ -144,6 +152,30 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
                   autoFocus
                 />
               </div>
+
+              {/* Rubro */}
+              {rubros.length > 0 && (
+                <div>
+                  <label className={labelCls}>
+                    Rubro
+                    <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
+                  </label>
+                  <select
+                    value={subrubroId}
+                    onChange={e => setSubrubroId(e.target.value)}
+                    className={`${inputCls} appearance-none`}
+                  >
+                    <option value="">— Sin categoría —</option>
+                    {rubros.map(r => (
+                      <optgroup key={r.id} label={r.nombre}>
+                        {r.subrubros.map(s => (
+                          <option key={s.id} value={s.id}>{s.nombre}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Monto */}
               <div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 
@@ -8,6 +8,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 type MedioPago = { id: string; nombre: string };
+type Subrubro  = { id: string; nombre: string };
+type Rubro     = { id: string; nombre: string; subrubros: Subrubro[] };
 
 const TIPOS = [
   { value: 'ingreso', label: 'Ingreso',  color: 'border-green-500/40 text-green-400 bg-green-500/5 hover:bg-green-500/15' },
@@ -32,19 +34,27 @@ export default function RegistrarMovimiento({
   mediosPago: MedioPago[];
 }) {
   const router = useRouter();
-  const [open, setOpen]         = useState(false);
-  const [tipo, setTipo]         = useState<'ingreso' | 'egreso' | 'retiro'>('ingreso');
-  const [concepto, setConcepto] = useState('');
-  const [monto, setMonto]       = useState('');
-  const [medioId, setMedioId]   = useState('');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [open, setOpen]               = useState(false);
+  const [tipo, setTipo]               = useState<'ingreso' | 'egreso' | 'retiro'>('ingreso');
+  const [concepto, setConcepto]       = useState('');
+  const [monto, setMonto]             = useState('');
+  const [medioId, setMedioId]         = useState('');
+  const [subrubroId, setSubrubroId]   = useState('');
+  const [rubros, setRubros]           = useState<Rubro[]>([]);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    apiFetch('/api/egresos/rubros').then(r => r.json()).then(setRubros).catch(() => {});
+  }, [open]);
 
   const reset = () => {
     setTipo('ingreso');
     setConcepto('');
     setMonto('');
     setMedioId('');
+    setSubrubroId('');
     setError(null);
   };
 
@@ -63,6 +73,7 @@ export default function RegistrarMovimiento({
           concepto: concepto.trim(),
           monto: parseFloat(monto),
           medio_pago_id: medioId || null,
+          ...(tipo === 'egreso' && subrubroId ? { subrubro_gasto_id: subrubroId } : {}),
         }),
       });
       const data = await res.json();
@@ -142,6 +153,30 @@ export default function RegistrarMovimiento({
                   autoFocus
                 />
               </div>
+
+              {/* Rubro / Subrubro — solo para egresos */}
+              {tipo === 'egreso' && rubros.length > 0 && (
+                <div>
+                  <label className={labelCls}>
+                    Rubro
+                    <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
+                  </label>
+                  <select
+                    value={subrubroId}
+                    onChange={e => setSubrubroId(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— Sin categoría —</option>
+                    {rubros.map(r => (
+                      <optgroup key={r.id} label={r.nombre}>
+                        {r.subrubros.map(s => (
+                          <option key={s.id} value={s.id}>{s.nombre}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Monto */}
               <div>
