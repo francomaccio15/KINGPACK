@@ -393,12 +393,12 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       <div className="print-layout-venta hidden print:block" style={{ fontFamily: 'Arial, sans-serif', color: '#111', background: 'white' }}>
 
         {/* Encabezado del documento */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111', paddingBottom: '12px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111', paddingBottom: '8px', marginBottom: '10px' }}>
           <div>
-            <KingPackLogoPrint />
+            <KingPackLogoPrint height={48} />
           </div>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '1px' }}>VENTA #{venta.numero}</p>
+            <p style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '1px' }}>VENTA #{venta.numero}</p>
             <div style={{ display: 'inline-block', marginTop: '4px', padding: '2px 10px', border: '1px solid #d1d5db', borderRadius: '20px', fontSize: '11px', fontWeight: '600', color: '#374151' }}>
               {ESTADO_LABEL[venta.estado] ?? venta.estado}
             </div>
@@ -417,9 +417,8 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             {venta.cliente_cuit && <p style={{ color: '#6b7280', fontFamily: 'monospace', fontSize: '11px' }}>{venta.cliente_cuit}</p>}
           </div>
           <div>
-            <p style={{ color: '#6b7280', marginBottom: '2px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sucursal / Lista</p>
+            <p style={{ color: '#6b7280', marginBottom: '2px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sucursal</p>
             <p style={{ fontWeight: '600' }}>{venta.sucursal_nombre ?? '—'}</p>
-            {venta.lista_precio && <p style={{ color: '#6b7280', fontSize: '11px' }}>{venta.lista_precio}</p>}
           </div>
         </div>
 
@@ -428,7 +427,6 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           <thead>
             <tr style={{ background: '#111', color: 'white' }}>
               <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: '700', letterSpacing: '0.5px', fontSize: '10px', textTransform: 'uppercase' }}>Artículo</th>
-              <th style={{ textAlign: 'left', padding: '8px 6px', fontWeight: '700', letterSpacing: '0.5px', fontSize: '10px', textTransform: 'uppercase' }}>Código</th>
               <th style={{ textAlign: 'center', padding: '8px 6px', fontWeight: '700', letterSpacing: '0.5px', fontSize: '10px', textTransform: 'uppercase' }}>Cant.</th>
               <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: '700', letterSpacing: '0.5px', fontSize: '10px', textTransform: 'uppercase' }}>P. Lista</th>
               <th style={{ textAlign: 'right', padding: '8px 6px', fontWeight: '700', letterSpacing: '0.5px', fontSize: '10px', textTransform: 'uppercase' }}>Desc.</th>
@@ -443,8 +441,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               return (
                 <tr key={item.articulo_id} style={{ borderBottom: '1px solid #e5e7eb', background: i % 2 === 0 ? 'white' : '#f9fafb' }}>
                   <td style={{ padding: '8px 10px', fontWeight: '600' }}>{item.nombre}</td>
-                  <td style={{ padding: '8px 6px', fontFamily: 'monospace', color: '#6b7280', fontSize: '11px' }}>{item.codigo}</td>
-                  <td style={{ padding: '8px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
+                  <td style={{ padding: '8px 6px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
                   <td style={{ padding: '8px 6px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#111' }}>
                     {fmt(item.precio_lista)}
                   </td>

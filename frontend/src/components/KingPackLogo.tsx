@@ -84,13 +84,13 @@ export function KingPackLogoWithSubtitle({
 }
 
 /** Print: colores originales sobre fondo blanco */
-export function KingPackLogoPrint() {
+export function KingPackLogoPrint({ height = 64 }: { height?: number } = {}) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src="/logo.png"
       alt="King Pack Descartables"
-      style={{ height: '64px', objectFit: 'contain' }}
+      style={{ height: `${height}px`, objectFit: 'contain' }}
     />
   );
 }
