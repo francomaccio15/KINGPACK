@@ -67,8 +67,8 @@ router.post('/', async (req, res, next) => {
 
     await client.query(`
       INSERT INTO cuentas_corrientes_proveedor
-        (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-      VALUES ($1, 0, $2, $3, 'anticipo', $4, $5)
+        (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+      VALUES ($1, 0, $2, $3, 'anticipo', $4, $5, false)
     `, [proveedor_id, montoNum, +(saldoPrev - montoNum).toFixed(2),
         anticipo.id, `Anticipo — ${descripcion || ''}`.substring(0, 200)]);
 
@@ -141,8 +141,8 @@ router.post('/:id/anular', async (req, res, next) => {
 
     await client.query(`
       INSERT INTO cuentas_corrientes_proveedor
-        (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-      VALUES ($1, $2, 0, $3, 'correccion', $4, 'Anulación de anticipo')
+        (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+      VALUES ($1, $2, 0, $3, 'correccion', $4, 'Anulación de anticipo', false)
     `, [anticipo.proveedor_id, anticipo.monto, +(saldoPrev + anticipo.monto).toFixed(2), id]);
 
     await client.query('COMMIT');

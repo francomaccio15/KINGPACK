@@ -213,9 +213,9 @@ router.post('/', async (req, res, next) => {
       // ── 6. Registrar deuda en cuenta corriente del proveedor ────────────────
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
-          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-        VALUES ($1, $2, 0, $2, 'egreso', $3, $4)
-      `, [proveedor_id, monto_total.toFixed(2), egreso.id, descripcionEgreso]);
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, 0, $2, 'egreso', $3, $4, $5)
+      `, [proveedor_id, monto_total.toFixed(2), egreso.id, descripcionEgreso, !!numero_factura_prov?.trim()]);
 
       await client.query('COMMIT');
       res.status(201).json({ pedido: { ...pedido, egreso_id: egreso.id } });

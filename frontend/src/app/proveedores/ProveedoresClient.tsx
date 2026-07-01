@@ -14,8 +14,10 @@ interface Proveedor {
   cond_pago: string | null;
   activo: boolean;
   created_at: string;
-  saldo_inicial?: string | null;
-  saldo_actual?: string | null;
+  saldo_inicial_facturado?: string | null;
+  saldo_inicial_no_facturado?: string | null;
+  saldo_facturado?: string | null;
+  saldo_no_facturado?: string | null;
 }
 
 interface MovimientoCC {
@@ -26,6 +28,7 @@ interface MovimientoCC {
   fecha: string;
   origen_tipo: string | null;
   descripcion: string | null;
+  facturado: boolean;
 }
 
 interface PedidoHist {
@@ -72,6 +75,19 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 const fmtFecha = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-AR'); };
 
+// Celda de saldo con color: rojo = le debemos, verde = a favor, gris = cero
+function SaldoCell({ valor, onClick }: { valor?: string | null; onClick: () => void }) {
+  const s = parseFloat(String(valor ?? ''));
+  if (isNaN(s)) return <span className="text-kp-gray">—</span>;
+  const cls = s > 0.005 ? 'text-kp-red' : s < -0.005 ? 'text-green-400' : 'text-kp-gray';
+  return (
+    <button onClick={onClick} title="Ver cuenta corriente"
+      className={`tabular-nums font-semibold hover:underline ${cls}`}>
+      {fmt(valor ?? null)}
+    </button>
+  );
+}
+
 function Spinner() {
   return (
     <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -116,10 +132,9 @@ function FormProveedor({
   const [email,       setEmail]       = useState(inicial?.email        ?? '');
   const [direccion,   setDireccion]   = useState(inicial?.direccion    ?? '');
   const [condPago,    setCondPago]    = useState(inicial?.cond_pago    ?? '');
-  const [saldoInicial, setSaldoInicial] = useState(
-    inicial?.saldo_inicial != null && parseFloat(inicial.saldo_inicial) !== 0
-      ? String(parseFloat(inicial.saldo_inicial)) : ''
-  );
+  const initNum = (v?: string | null) => (v != null && parseFloat(v) !== 0 ? String(parseFloat(v)) : '');
+  const [saldoIniFact,   setSaldoIniFact]   = useState(initNum(inicial?.saldo_inicial_facturado));
+  const [saldoIniNoFact, setSaldoIniNoFact] = useState(initNum(inicial?.saldo_inicial_no_facturado));
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
 
@@ -139,7 +154,8 @@ function FormProveedor({
         email:        email.trim() || null,
         direccion:    direccion.trim() || null,
         cond_pago:    condPago.trim() || null,
-        saldo_inicial: parseFloat(saldoInicial) || 0,
+        saldo_inicial_facturado:    parseFloat(saldoIniFact) || 0,
+        saldo_inicial_no_facturado: parseFloat(saldoIniNoFact) || 0,
       };
 
       const res = await apiFetch(
@@ -189,17 +205,25 @@ function FormProveedor({
           placeholder="Calle 123, Salta" className={inputCls} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>Condición de Pago</label>
-          <input type="text" value={condPago} onChange={e => setCondPago(e.target.value)}
-            placeholder="Ej: Contado, 30 días, etc." className={inputCls} />
-        </div>
-        <div>
-          <label className={labelCls}>Saldo inicial</label>
-          <input type="number" step="0.01" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)}
-            placeholder="0.00" className={inputCls} />
-          <p className="mt-1 text-[11px] text-kp-gray/70">Deuda previa con el proveedor al empezar.</p>
+      <div>
+        <label className={labelCls}>Condición de Pago</label>
+        <input type="text" value={condPago} onChange={e => setCondPago(e.target.value)}
+          placeholder="Ej: Contado, 30 días, etc." className={inputCls} />
+      </div>
+
+      <div>
+        <label className={labelCls}>Saldo inicial (deuda previa al sistema)</label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <input type="number" step="0.01" value={saldoIniFact} onChange={e => setSaldoIniFact(e.target.value)}
+              placeholder="0.00" className={inputCls} />
+            <p className="mt-1 text-[11px] text-kp-gray/70">Facturado (con factura)</p>
+          </div>
+          <div>
+            <input type="number" step="0.01" value={saldoIniNoFact} onChange={e => setSaldoIniNoFact(e.target.value)}
+              placeholder="0.00" className={inputCls} />
+            <p className="mt-1 text-[11px] text-kp-gray/70">No facturado (sin factura)</p>
+          </div>
         </div>
       </div>
 
@@ -225,8 +249,7 @@ function FormProveedor({
 function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; onCerrar: () => void }) {
   const [loading, setLoading]   = useState(true);
   const [movs, setMovs]         = useState<MovimientoCC[]>([]);
-  const [saldo, setSaldo]       = useState<string>('0');
-  const [saldoInicial, setSaldoInicial] = useState<string>('0');
+  const [tot, setTot]           = useState<{ saldo_facturado: string; saldo_no_facturado: string; saldo_actual: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -235,26 +258,33 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
         const res  = await apiFetch(`/api/proveedores/${proveedor.id}/cuenta-corriente?limit=100`);
         const data = await res.json();
         setMovs(data.movimientos ?? []);
-        setSaldo(data.totales?.saldo_actual ?? '0');
-        setSaldoInicial(data.totales?.saldo_inicial ?? '0');
+        setTot(data.totales ?? null);
       } finally {
         setLoading(false);
       }
     })();
   }, [proveedor.id]);
 
+  const saldoCls = (v?: string) => {
+    const n = parseFloat(v ?? '0');
+    return n > 0.005 ? 'text-kp-red' : n < -0.005 ? 'text-green-400' : 'text-kp-gray';
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
-        <div>
-          <span className="block text-xs uppercase tracking-widest text-kp-gray">Saldo actual</span>
-          {parseFloat(saldoInicial) !== 0 && (
-            <span className="text-[11px] text-kp-gray/70">Incluye saldo inicial {fmt(saldoInicial)}</span>
-          )}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
+          <span className="block text-xs uppercase tracking-widest text-kp-gray">Facturado</span>
+          <span className={`text-base font-bold tabular-nums ${saldoCls(tot?.saldo_facturado)}`}>{fmt(tot?.saldo_facturado ?? '0')}</span>
         </div>
-        <span className={`text-lg font-bold tabular-nums ${parseFloat(saldo) > 0 ? 'text-kp-red' : parseFloat(saldo) < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
-          {fmt(saldo)}
-        </span>
+        <div className="bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
+          <span className="block text-xs uppercase tracking-widest text-kp-gray">No facturado</span>
+          <span className={`text-base font-bold tabular-nums ${saldoCls(tot?.saldo_no_facturado)}`}>{fmt(tot?.saldo_no_facturado ?? '0')}</span>
+        </div>
+        <div className="bg-kp-surface2 border border-kp-border rounded-lg px-4 py-3">
+          <span className="block text-xs uppercase tracking-widest text-kp-gray">Total</span>
+          <span className={`text-base font-bold tabular-nums ${saldoCls(tot?.saldo_actual)}`}>{fmt(tot?.saldo_actual ?? '0')}</span>
+        </div>
       </div>
 
       {loading ? (
@@ -268,6 +298,7 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
               <tr className="bg-kp-surface2 border-b border-kp-border">
                 <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Fecha</th>
                 <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Concepto</th>
+                <th className="text-center px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Tipo</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Debe</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Haber</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Saldo</th>
@@ -278,6 +309,11 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
                 <tr key={m.id} className="bg-kp-surface hover:bg-kp-surface2 transition-colors">
                   <td className="px-3 py-2 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(m.fecha)}</td>
                   <td className="px-3 py-2 text-xs text-kp-gray-lt">{m.descripcion ?? m.origen_tipo ?? '—'}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded border ${m.facturado ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                      {m.facturado ? 'Facturado' : 'No fact.'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums text-xs">{parseFloat(m.debe) ? fmt(m.debe) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-xs">{parseFloat(m.haber) ? fmt(m.haber) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">{fmt(m.saldo)}</td>
@@ -496,7 +532,8 @@ export default function ProveedoresClient() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">CUIT</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Contacto</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Cond. Pago</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo facturado</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo no facturado</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activo</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -513,20 +550,10 @@ export default function ProveedoresClient() {
                   </td>
                   <td className="px-4 py-3 text-xs text-kp-gray-lt">{p.cond_pago || '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {(() => {
-                      const s = parseFloat(String(p.saldo_actual ?? ''));
-                      if (isNaN(s)) return <span className="text-kp-gray">—</span>;
-                      const cls = s > 0.005 ? 'text-kp-red' : s < -0.005 ? 'text-green-400' : 'text-kp-gray';
-                      return (
-                        <button
-                          onClick={() => setModalCC(p)}
-                          title="Ver cuenta corriente"
-                          className={`tabular-nums font-semibold hover:underline ${cls}`}
-                        >
-                          {fmt(p.saldo_actual ?? null)}
-                        </button>
-                      );
-                    })()}
+                    <SaldoCell valor={p.saldo_facturado} onClick={() => setModalCC(p)} />
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <SaldoCell valor={p.saldo_no_facturado} onClick={() => setModalCC(p)} />
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button

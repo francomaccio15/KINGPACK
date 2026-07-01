@@ -350,15 +350,18 @@ router.post('/', async (req, res, next) => {
       }
     }
 
+    // ¿El egreso tiene factura real? (comprobante fiscal, no informal ni vacío)
+    const esFacturado = !!(tipo_comprobante && tipo_comprobante !== 'informal');
+
     // --- Cuenta corriente del proveedor (deuda generada) ---
     if (proveedor_id && tipo_operacion !== 'anticipo_proveedor') {
       const saldo = await calcularSaldoProveedor(client, proveedor_id);
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
-          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-        VALUES ($1, $2, 0, $3, 'egreso', $4, $5)
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, 0, $3, 'egreso', $4, $5, $6)
       `, [proveedor_id, totalNum, +(saldo + totalNum).toFixed(2),
-          egreso.id, descripcion.trim().substring(0, 200)]);
+          egreso.id, descripcion.trim().substring(0, 200), esFacturado]);
     }
 
     // --- Anticipo proveedor: crear registro en anticipos_proveedor ---
@@ -375,8 +378,8 @@ router.post('/', async (req, res, next) => {
       const saldo = await calcularSaldoProveedor(client, proveedor_id);
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
-          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-        VALUES ($1, 0, $2, $3, 'anticipo', $4, $5)
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, 0, $2, $3, 'anticipo', $4, $5, false)
       `, [proveedor_id, totalNum, +(saldo - totalNum).toFixed(2),
           egreso.id, `Anticipo — ${descripcion}`.substring(0, 200)]);
     }
@@ -407,9 +410,9 @@ router.post('/', async (req, res, next) => {
         const saldo = await calcularSaldoProveedor(client, proveedor_id);
         await client.query(`
           INSERT INTO cuentas_corrientes_proveedor
-            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-          VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago')
-        `, [proveedor_id, montoPago, +(saldo - montoPago).toFixed(2), egreso.id]);
+            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+          VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago', $5)
+        `, [proveedor_id, montoPago, +(saldo - montoPago).toFixed(2), egreso.id, esFacturado]);
       }
 
       estadoFinal = Math.abs(montoPago - totalNum) <= 0.01 ? 'pagado' : 'parcial';
@@ -550,7 +553,7 @@ router.post('/:id/pago', async (req, res, next) => {
     if (!montoPago || montoPago <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
     const { rows: egresoRows } = await pool.query(
-      `SELECT id, total, proveedor_id, estado_pago FROM egresos WHERE id = $1`, [id]
+      `SELECT id, total, proveedor_id, estado_pago, tipo_comprobante FROM egresos WHERE id = $1`, [id]
     );
     if (!egresoRows[0]) return res.status(404).json({ error: 'Egreso no encontrado' });
     if (egresoRows[0].estado_pago === 'pagado') {
@@ -591,12 +594,14 @@ router.post('/:id/pago', async (req, res, next) => {
     // Cuenta corriente del proveedor
     const proveedorId = egresoRows[0].proveedor_id;
     if (proveedorId) {
+      const tc = egresoRows[0].tipo_comprobante;
+      const esFacturado = !!(tc && tc !== 'informal');
       const saldo = await calcularSaldoProveedor(client, proveedorId);
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
-          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion)
-        VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago')
-      `, [proveedorId, montoPago, +(saldo - montoPago).toFixed(2), id]);
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago', $5)
+      `, [proveedorId, montoPago, +(saldo - montoPago).toFixed(2), id, esFacturado]);
     }
 
     await client.query('COMMIT');
