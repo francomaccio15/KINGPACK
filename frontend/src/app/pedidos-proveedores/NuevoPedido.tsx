@@ -12,6 +12,7 @@ interface Articulo {
   nombre: string;
   codigo: string;
   precio_madre: number;
+  costo_base: number;
 }
 
 interface LineItem {
@@ -105,7 +106,7 @@ export default function NuevoPedido({
         nombre: art.nombre,
         codigo: art.codigo,
         cantidad: 1,
-        precio_compra: art.precio_madre ?? 0,
+        precio_compra: art.costo_base ?? 0,
       }];
     });
     setArtQ('');
@@ -295,7 +296,7 @@ export default function NuevoPedido({
                                     <span className="text-xs text-kp-gray font-mono">{a.codigo}</span>
                                   </div>
                                   <span className="text-xs text-kp-gray-lt tabular-nums whitespace-nowrap flex-shrink-0">
-                                    {ars.format(a.precio_madre ?? 0)}
+                                    {ars.format(a.costo_base ?? 0)}
                                   </span>
                                 </button>
                               </li>
