@@ -7,6 +7,10 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+pool.on('connect', (client) => {
+  client.query("SET timezone = 'America/Argentina/Buenos_Aires'");
+});
+
 pool.on('error', (err) => {
   console.error('[DB] Error inesperado en cliente idle:', err.message);
 });

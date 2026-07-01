@@ -11,6 +11,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3001,
+        TZ: 'America/Argentina/Buenos_Aires',
       },
     },
     {
@@ -25,6 +26,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
+        TZ: 'America/Argentina/Buenos_Aires',
       },
     },
   ],
