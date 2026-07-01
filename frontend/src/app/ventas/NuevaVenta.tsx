@@ -185,6 +185,7 @@ export default function NuevaVenta({
   const [cheques, setCheques]             = useState<Cheque[]>([{ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }]);
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [cuentaDestinoId, setCuentaDestinoId]   = useState<string>('');
+  const [cuentaDestinoId2, setCuentaDestinoId2] = useState<string>('');
 
   // ── Pago dividido (2 medios)
   const [usarSegundoMedio, setUsarSegundoMedio] = useState(false);
@@ -197,6 +198,9 @@ export default function NuevaVenta({
   const esCheque2      = selectedMedio2?.nombre.toLowerCase().includes('cheque') ?? false;
   const esTransferencia = selectedMedio
     ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio.nombre.toLowerCase().includes(k))
+    : false;
+  const esTransferencia2 = selectedMedio2
+    ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio2.nombre.toLowerCase().includes(k))
     : false;
   const esEfectivo = selectedMedio?.nombre.toLowerCase().includes('efectivo') ?? false;
 
@@ -523,6 +527,7 @@ export default function NuevaVenta({
         pagos.push({
           medio_pago_id: medioPagoId,
           monto: monto1Num,
+          cuenta_destino: esTransferencia ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null) : null,
           cheques: esCheque ? chequesValidos : undefined,
         });
       }
@@ -530,6 +535,7 @@ export default function NuevaVenta({
         pagos.push({
           medio_pago_id: medioPagoId2,
           monto: monto2Num,
+          cuenta_destino: esTransferencia2 ? (cuentasBancarias.find(c => c.id === cuentaDestinoId2)?.nombre ?? null) : null,
           cheques: esCheque2 ? chequesValidos : undefined,
         });
       }
@@ -1173,7 +1179,7 @@ export default function NuevaVenta({
                         {mediosPago.length >= 1 && (
                           <button
                             type="button"
-                            onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); }}
+                            onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); setCuentaDestinoId2(''); }}
                             className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
                               usarSegundoMedio
                                 ? 'bg-kp-red/10 border-kp-red/40 text-kp-red'
@@ -1299,7 +1305,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
-                  {esTransferencia && !usarSegundoMedio && cuentasBancarias.length > 0 && saldoAFavorAplicado < subtotalFinal - 0.001 && (
+                  {esTransferencia && cuentasBancarias.length > 0 && saldoAFavorAplicado < subtotalFinal - 0.001 && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
@@ -1319,6 +1325,38 @@ export default function NuevaVenta({
                       {/* Info de la cuenta seleccionada */}
                       {(() => {
                         const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId);
+                        return cc ? (
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                            {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
+                            {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
+                            {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}
+                            {cc.alias   && <p><span className="text-kp-gray-lt font-medium">Alias:</span> {cc.alias}</p>}
+                          </div>
+                        ) : null;
+                      })()}
+                    </section>
+                  )}
+
+                  {/* ── Cuenta destino medio 2 (Transferencia / MP / QR) ── */}
+                  {usarSegundoMedio && esTransferencia2 && cuentasBancarias.length > 0 && monto2Num > 0.001 && (
+                    <section>
+                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                        Cuenta destino (Medio 2)
+                      </p>
+                      <select
+                        value={cuentaDestinoId2}
+                        onChange={e => setCuentaDestinoId2(e.target.value)}
+                        className="w-full bg-kp-surface border border-kp-red/60 rounded-lg px-3 py-2 text-sm text-kp-white
+                          focus:outline-none focus:border-kp-red transition-colors"
+                      >
+                        {cuentasBancarias.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {(() => {
+                        const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId2);
                         return cc ? (
                           <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
