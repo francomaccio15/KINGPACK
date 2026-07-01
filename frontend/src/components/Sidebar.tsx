@@ -137,6 +137,12 @@ const IcoCheques = () => (
     <line x1="14" y1="15" x2="18" y2="15" />
   </svg>
 );
+const IcoPagoClientes = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <rect x="2" y="5" width="20" height="14" rx="2" /><circle cx="12" cy="12" r="3" />
+    <path d="M6 12h.01M18 12h.01" />
+  </svg>
+);
 const IcoProveedores = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
     <path d="M1 3h15v13H1z" /><path d="M16 8h4l3 3v5h-7V8z" />
@@ -171,6 +177,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Ventas',                href: '/ventas',               icon: <IcoVentas /> },
       { label: 'Presupuestos',          href: '/presupuestos',         icon: <IcoPresupuestos /> },
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
+      { label: 'Pago de Clientes',      href: '/pago-clientes',        icon: <IcoPagoClientes /> },
       { label: 'Egresos',               href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Proveedores',           href: '/proveedores',          icon: <IcoProveedores /> },
