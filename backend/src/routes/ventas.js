@@ -1311,10 +1311,36 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       obsParams
     );
 
-    // Actualizar pagos si se enviaron
-    if (Array.isArray(pagos) && pagos.length > 0) {
+    // ── Reconciliar pagos / caja / cuenta corriente con el nuevo total ──────────
+    // Si el cajero reenvió pagos, se usan tal cual (editó los medios a mano).
+    // Si NO los reenvió (editó solo ítems o descuentos), se conservan los medios
+    // de pago originales de la venta pero se reescalan sus montos al nuevo total.
+    // Sin esto, al bajar el total por un descuento la cuenta corriente y la caja
+    // quedaban con el importe viejo (sin descuento) y desincronizados del total.
+    let pagosEfectivos = Array.isArray(pagos) && pagos.length > 0 ? pagos : null;
+    if (!pagosEfectivos) {
+      const { rows: pagosPrevios } = await client.query(
+        `SELECT medio_pago_id, monto::float AS monto, cuenta_destino
+           FROM venta_pagos WHERE venta_id = $1`,
+        [id]
+      );
+      const totalPrevio = pagosPrevios.reduce((s, p) => s + p.monto, 0);
+      if (pagosPrevios.length > 0 && totalPrevio > 0) {
+        let acumulado = 0;
+        pagosEfectivos = pagosPrevios.map((p, idx) => {
+          // El último pago absorbe el redondeo para que la suma sea exacta.
+          const monto = idx === pagosPrevios.length - 1
+            ? parseFloat((total - acumulado).toFixed(2))
+            : parseFloat((p.monto / totalPrevio * total).toFixed(2));
+          if (idx < pagosPrevios.length - 1) acumulado += monto;
+          return { medio_pago_id: p.medio_pago_id, monto, cuenta_destino: p.cuenta_destino };
+        });
+      }
+    }
+
+    if (pagosEfectivos && pagosEfectivos.length > 0) {
       // Resolver medios de pago para filtrar movimientos de caja y CC
-      const medioIds = [...new Set(pagos.map(p => p.medio_pago_id).filter(Boolean))];
+      const medioIds = [...new Set(pagosEfectivos.map(p => p.medio_pago_id).filter(Boolean))];
       let mediosMap = {};
       if (medioIds.length > 0) {
         const { rows: mediosRows } = await client.query(
@@ -1346,10 +1372,10 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
         // Volver a cargar según los pagos nuevos: saldo a favor consumido (consumo_nc)
         // y lo cargado a cuenta corriente (venta). El resto de los medios no impacta la CC.
-        const totalSF = parseFloat(pagos
+        const totalSF = parseFloat(pagosEfectivos
           .filter(p => mediosMap[p.medio_pago_id]?.nombre === 'Saldo a favor')
           .reduce((s, p) => s + parseFloat(p.monto), 0).toFixed(2));
-        const totalCC = parseFloat(pagos
+        const totalCC = parseFloat(pagosEfectivos
           .filter(p => {
             const nombre = (mediosMap[p.medio_pago_id]?.nombre ?? '').toLowerCase();
             return nombre.includes('cuenta corriente') || nombre.includes('cta. cte') || nombre.includes('cta cte');
@@ -1395,7 +1421,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         );
       }
 
-      for (const pago of pagos) {
+      for (const pago of pagosEfectivos) {
         await client.query(`
           INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
           VALUES ($1,$2,$3,$4)
