@@ -17,8 +17,8 @@ router.get('/', async (req, res, next) => {
          CASE lp.tipo
            WHEN 'madre'            THEN 1
            WHEN 'publica'          THEN 2
-           WHEN 'revendedor'       THEN 3
-           WHEN 'cuenta_corriente' THEN 4
+           WHEN 'cuenta_corriente' THEN 3
+           WHEN 'revendedor'       THEN 4
            ELSE 5
          END
     `);
