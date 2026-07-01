@@ -415,6 +415,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             <p style={{ color: '#6b7280', marginBottom: '2px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cliente</p>
             <p style={{ fontWeight: '600' }}>{venta.cliente_nombre ?? 'Consumidor Final'}</p>
             {venta.cliente_cuit && <p style={{ color: '#6b7280', fontFamily: 'monospace', fontSize: '11px' }}>{venta.cliente_cuit}</p>}
+            {venta.cliente_direccion && <p style={{ color: '#6b7280', fontSize: '11px' }}>{venta.cliente_direccion}</p>}
           </div>
           <div>
             <p style={{ color: '#6b7280', marginBottom: '2px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sucursal</p>
