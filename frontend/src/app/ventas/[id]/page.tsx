@@ -539,14 +539,6 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           )}
         </div>
 
-        {/* Observaciones */}
-        {venta.observaciones && (
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px' }}>
-            <p style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#6b7280', marginBottom: '4px' }}>Observaciones</p>
-            <p style={{ color: '#374151' }}>{venta.observaciones}</p>
-          </div>
-        )}
-
         {/* Pie del documento */}
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af' }}>
           <span>KING PACK DESCARTABLES · Sistema de Gestión</span>
