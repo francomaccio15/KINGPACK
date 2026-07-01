@@ -392,17 +392,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
       {/* ── Layout de impresión REMITO (mitad hoja A4) ─────────────────────── */}
       <div className="print-layout-venta hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: '8px', color: '#111', background: 'white' }}>
 
-        {/* Encabezado: número + badge + fecha */}
+        {/* Encabezado: número + badge */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #111', paddingBottom: '4px', marginBottom: '4px' }}>
-          <div style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '0.3px' }}>
-            REMITO <span style={{ fontSize: '13px' }}>N° {venta.numero}</span>
+          <div style={{ fontSize: '10px', fontWeight: '900', letterSpacing: '0.3px' }}>
+            REMITO <span style={{ fontSize: '9px' }}>N° {venta.numero}</span>
           </div>
           <div style={{ background: '#111', color: 'white', padding: '2px 8px', fontSize: '7px', fontWeight: '800', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
             No válido como comprobante fiscal
-          </div>
-          <div style={{ textAlign: 'right', fontSize: '8px' }}>
-            <div>{fechaFmt(venta.fecha)}</div>
-            <div style={{ color: '#555' }}>{venta.sucursal_nombre}</div>
           </div>
         </div>
 
@@ -415,7 +411,9 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>IIBB:</strong> 30-71792696-6</p>
             <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Inicio Act.:</strong> 06/01/2010</p>
             <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Cond. IVA:</strong> Responsable Inscripto</p>
-            {venta.sucursal_direccion && <p style={{ fontSize: '7.5px' }}><strong>Dom.:</strong> {venta.sucursal_direccion}</p>}
+            {venta.sucursal_nombre && <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Sucursal:</strong> {venta.sucursal_nombre}</p>}
+            {venta.sucursal_direccion && <p style={{ fontSize: '7.5px', marginBottom: '1px' }}><strong>Dom.:</strong> {venta.sucursal_direccion}</p>}
+            <p style={{ fontSize: '7.5px' }}><strong>Fecha:</strong> {fechaFmt(venta.fecha)}</p>
           </div>
           <div style={{ padding: '4px 6px' }}>
             <p style={{ fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', color: '#555', marginBottom: '3px' }}>Cliente</p>
