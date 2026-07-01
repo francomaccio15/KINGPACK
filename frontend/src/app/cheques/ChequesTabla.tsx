@@ -42,7 +42,12 @@ function fmt(n: string | number) {
 
 function fmtFecha(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR');
+  // La fecha puede venir como 'YYYY-MM-DD' o como ISO completo
+  // ('2026-07-09T00:00:00.000Z'). Tomamos solo la parte de fecha para
+  // evitar 'Invalid Date' y desfases de zona horaria.
+  const [y, m, d] = String(iso).slice(0, 10).split('-');
+  if (!y || !m || !d) return '—';
+  return `${d}/${m}/${y}`;
 }
 
 interface Props {

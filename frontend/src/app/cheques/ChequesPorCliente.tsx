@@ -53,7 +53,10 @@ function fmt(n: string | number) {
 
 function fmtFecha(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR');
+  // Puede venir como 'YYYY-MM-DD' o ISO completo; tomamos solo la fecha.
+  const [y, m, d] = String(iso).slice(0, 10).split('-');
+  if (!y || !m || !d) return '—';
+  return `${d}/${m}/${y}`;
 }
 
 function FilaCliente({ c }: { c: ClienteCheques }) {
