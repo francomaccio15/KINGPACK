@@ -243,13 +243,25 @@ router.post('/', async (req, res, next) => {
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
     if (!descripcion?.trim()) return res.status(400).json({ error: 'descripcion es requerida' });
     const TIPOS_CON_COMPROBANTE = ['compra_mercaderia','inversion_bien_uso'];
+    // Comprobante informal (compra "en negro") o sin comprobante: no hay desglose fiscal.
+    const esInformal = !tipo_comprobante || tipo_comprobante === 'informal';
     let totalNum;
+    // Monto no gravado que se persiste (para informal, absorbe el total ingresado).
+    let netoNoGravadoFinal = parseFloat(neto_no_gravado) || 0;
     if (TIPOS_CON_COMPROBANTE.includes(tipo_operacion)) {
-      totalNum = parseFloat(
+      const sumaFiscal = parseFloat(
         [neto_gravado, neto_no_gravado, iva_21, iva_105, percepciones_ib, otros_impuestos]
           .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
           .toFixed(2)
       );
+      if (esInformal && sumaFiscal === 0) {
+        // En negro: no se cargan netos/IVA, se usa el "Total del comprobante" ingresado
+        // y se guarda como neto no gravado para que el registro quede consistente.
+        totalNum = parseFloat(total) || 0;
+        netoNoGravadoFinal = totalNum;
+      } else {
+        totalNum = sumaFiscal;
+      }
       if (totalNum <= 0) return res.status(400).json({ error: 'La suma de importes debe ser mayor a 0' });
     } else {
       totalNum = parseFloat(total);
@@ -302,7 +314,7 @@ router.post('/', async (req, res, next) => {
       subrubro_gasto_id || null,
       descripcion.trim(),
       parseFloat(neto_gravado) || 0,
-      parseFloat(neto_no_gravado) || 0,
+      netoNoGravadoFinal,
       parseFloat(iva_21) || 0,
       parseFloat(iva_105) || 0,
       parseFloat(percepciones_ib) || 0,
