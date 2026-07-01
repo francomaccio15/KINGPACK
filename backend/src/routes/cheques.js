@@ -168,6 +168,59 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/cheques ────────────────────────────────────────────────────────
+// Alta manual de un cheque (no atado a una venta ni a un egreso).
+// Pensado para la carga inicial de cheques de clientes / cheques propios.
+// Body: { tipo, banco, numero_cheque, fecha_emision?, fecha_vencimiento,
+//         importe, estado?, sucursal_id, cliente_id?, proveedor_id?, observaciones? }
+router.post('/', async (req, res, next) => {
+  try {
+    const {
+      tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
+      importe, estado, sucursal_id, cliente_id, proveedor_id, observaciones,
+    } = req.body;
+
+    if (!['recibido', 'emitido'].includes(tipo)) {
+      return res.status(400).json({ error: 'tipo debe ser recibido o emitido' });
+    }
+    if (!banco?.trim())         return res.status(400).json({ error: 'banco es requerido' });
+    if (!numero_cheque?.trim()) return res.status(400).json({ error: 'numero_cheque es requerido' });
+    if (!fecha_vencimiento)     return res.status(400).json({ error: 'fecha_vencimiento es requerida' });
+    if (!sucursal_id)           return res.status(400).json({ error: 'sucursal_id es requerido' });
+    const importeNum = parseFloat(importe);
+    if (!importeNum || importeNum <= 0) return res.status(400).json({ error: 'importe debe ser mayor a 0' });
+
+    const estadosValidos = tipo === 'recibido' ? ESTADOS_RECIBIDO : ESTADOS_EMITIDO;
+    const estadoInicial = estado || (tipo === 'recibido' ? 'en_cartera' : 'emitido');
+    if (!estadosValidos.includes(estadoInicial)) {
+      return res.status(400).json({ error: `Estado inválido para cheque ${tipo}: ${estadoInicial}` });
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO cheques_manuales
+        (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
+         importe, estado, fecha_estado, sucursal_id, cliente_id, proveedor_id, observaciones)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING id
+    `, [
+      tipo,
+      banco.trim(),
+      numero_cheque.trim(),
+      fecha_emision || null,
+      fecha_vencimiento,
+      importeNum,
+      estadoInicial,
+      estado ? new Date().toISOString().slice(0, 10) : null,
+      sucursal_id,
+      tipo === 'recibido' ? (cliente_id || null) : null,
+      tipo === 'emitido'  ? (proveedor_id || null) : null,
+      observaciones?.trim() || null,
+    ]);
+
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/cheques/:tipo/:id ───────────────────────────────────────────────
 router.get('/:tipo/:id', async (req, res, next) => {
   try {
@@ -219,8 +272,17 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
 
     await client.query('BEGIN');
 
+    // ¿Es un cheque cargado manualmente? (no atado a venta/egreso)
+    const { rows: manualRows } = await client.query(
+      `SELECT id FROM cheques_manuales WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    const esManual = manualRows.length > 0;
+
     // Obtener estado actual
-    const tabla = tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques';
+    const tabla = esManual
+      ? 'cheques_manuales'
+      : (tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques');
     const { rows: actual } = await client.query(
       `SELECT id, estado FROM ${tabla} WHERE id = $1`,
       [id]
