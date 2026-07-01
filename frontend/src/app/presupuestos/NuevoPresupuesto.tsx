@@ -244,9 +244,11 @@ export default function NuevoPresupuesto({
       if (existing !== -1) {
         return prev.map((item, idx) => idx === existing ? { ...item, cantidad: item.cantidad + 1 } : item);
       }
-      const precio_madre = art.precio_madre;
+      // La base del descuento es el PRECIO DE LA LISTA (precio_efectivo), igual
+      // que el backend. Usar precio_madre desincronizaba el pago del total real.
+      const base         = art.precio_lista ?? art.precio_madre;
       const descuento    = calcCombinedDiscount(descuentoLista, descuentoCliente);
-      const finalPrice   = calcFinalPrice(precio_madre, descuento);
+      const finalPrice   = calcFinalPrice(base, descuento);
       return [
         ...prev,
         {
@@ -254,8 +256,8 @@ export default function NuevoPresupuesto({
           nombre:                art.nombre,
           codigo:                art.codigo,
           cantidad:              1,
-          precio_lista:          precio_madre,
-          precio_madre:          precio_madre,
+          precio_lista:          base,
+          precio_madre:          base,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
