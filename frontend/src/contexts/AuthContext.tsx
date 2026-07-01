@@ -44,11 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json().catch(() => ({}));
       throw new Error((data as { error?: string }).error || 'Error al iniciar sesión');
     }
-    const { token, usuario } = await res.json() as { token: string; usuario: AuthUser };
+    const { token, usuario, sucursal_inicial_id } = await res.json() as {
+      token: string; usuario: AuthUser; sucursal_inicial_id?: string | null;
+    };
     saveSession(token, usuario);
-    // Cajero: fijar su sucursal automáticamente en la cookie
-    if (usuario.rol === 'cajero' && usuario.sucursal_default_id) {
-      document.cookie = `kp_sucursal_id=${usuario.sucursal_default_id}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+    // Sucursal inicial de la sesión (cajero → la suya; administrador → Laprida).
+    // El backend la resuelve; si viene, la fijamos en la cookie que lee serverFetch.
+    if (sucursal_inicial_id) {
+      document.cookie = `kp_sucursal_id=${sucursal_inicial_id}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
     }
     setUser(usuario);
     return usuario;

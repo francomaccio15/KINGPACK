@@ -53,8 +53,19 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       sucursal_default_id:  usuario.sucursal_default_id,
     };
 
+    // Sucursal con la que arranca la sesión (setea la cookie kp_sucursal_id):
+    //  - si el usuario tiene sucursal por defecto, esa
+    //  - si es administrador sin sucursal fija, Laprida como principal
+    let sucursal_inicial_id = usuario.sucursal_default_id || null;
+    if (!sucursal_inicial_id && usuario.rol === 'administrador') {
+      const { rows: suc } = await pool.query(
+        `SELECT id FROM sucursales WHERE nombre ILIKE 'laprida' LIMIT 1`
+      );
+      sucursal_inicial_id = suc[0]?.id || null;
+    }
+
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    res.json({ token, usuario: payload });
+    res.json({ token, usuario: payload, sucursal_inicial_id });
   } catch (err) {
     next(err);
   }
