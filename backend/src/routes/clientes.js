@@ -288,9 +288,9 @@ router.post('/:id/pagos', async (req, res, next) => {
               ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
               : `Pago cliente — ${saldoRow.razon_social}`;
             await dbClient.query(`
-              INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
-              VALUES ($1, 'ingreso', $2, $3, $4)
-            `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id]);
+              INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
+              VALUES ($1, 'ingreso', $2, $3, $4, $5)
+            `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null]);
           }
         }
       }

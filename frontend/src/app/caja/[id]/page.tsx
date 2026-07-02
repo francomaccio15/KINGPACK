@@ -44,22 +44,18 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
     );
   }
 
-  // Cajeros solo ven movimientos de efectivo
+  // Cajeros ven el efectivo (base del arqueo) + los movimientos que registraron
+  // ellos mismos aunque no sean efectivo (ej. una transferencia que cobraron),
+  // así ven en su caja lo que cargaron. El resto de medios sigue siendo solo admin.
   const movimientosFiltrados = esAdmin
     ? movimientos
     : movimientos.filter((m: any) =>
         // egresos y retiros siempre (reducen el físico sin importar el medio)
         ['egreso', 'retiro'].includes(m.tipo) ||
-        (m.medio_pago ?? '').toLowerCase().includes('efectivo')
+        (m.medio_pago ?? '').toLowerCase().includes('efectivo') ||
+        // no-efectivo que registró este mismo cajero
+        (m.usuario_id != null && m.usuario_id === user.id)
       );
-
-  // Recalcular KPIs a partir de los movimientos filtrados
-  const totalIngresosVista = movimientosFiltrados
-    .filter((m: any) => ['ingreso', 'venta'].includes(m.tipo))
-    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
-  const totalEgresosVista = movimientosFiltrados
-    .filter((m: any) => !['ingreso', 'venta'].includes(m.tipo))
-    .reduce((acc: number, m: any) => acc + parseFloat(m.monto ?? 0), 0);
 
   const abierta = caja.estado === 'abierta';
 
@@ -176,13 +172,13 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
             Ingresos{!esAdmin ? ' (efectivo)' : ''}
           </p>
           <p className="text-lg font-bold tabular-nums text-green-400">
-            +{fmt(esAdmin ? caja.total_ingresos : totalIngresosVista)}
+            +{fmt(esAdmin ? caja.total_ingresos : ingresosEfectivo)}
           </p>
         </div>
         <div className="bg-kp-surface2 border border-kp-red/20 rounded-xl p-4">
           <p className="text-xs text-kp-red/70 uppercase tracking-widest font-semibold mb-1">Egresos</p>
           <p className="text-lg font-bold tabular-nums text-kp-red">
-            -{fmt(esAdmin ? caja.total_egresos : totalEgresosVista)}
+            -{fmt(esAdmin ? caja.total_egresos : egresosFisicos)}
           </p>
         </div>
         <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4">

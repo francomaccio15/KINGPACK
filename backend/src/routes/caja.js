@@ -145,7 +145,7 @@ router.get('/:id', async (req, res, next) => {
       pool.query(`
         SELECT
           m.id, m.tipo, m.concepto, m.monto, m.fecha,
-          m.origen_tipo, m.origen_id,
+          m.origen_tipo, m.origen_id, m.usuario_id,
           mp.nombre AS medio_pago,
           u.nombre  AS usuario_nombre,
           CASE WHEN m.origen_tipo = 'empleado' THEN e.nombre ELSE NULL END AS empleado_nombre
