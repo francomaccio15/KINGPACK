@@ -142,7 +142,8 @@ function _parsearRespuestaCAE(xml) {
   };
 }
 
-function _soapPost(action, body) {
+// Una única llamada SOAP. Resuelve con { status, body } (sin interpretar el body).
+function _singlePost(action, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(config.endpoints.wsfe);
     const options = {
@@ -164,7 +165,7 @@ function _soapPost(action, body) {
     const req = https.request(options, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
-      res.on('end', () => resolve(data));
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
 
     req.on('error', reject);
@@ -172,6 +173,28 @@ function _soapPost(action, body) {
     req.write(body);
     req.end();
   });
+}
+
+const _sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Envuelve _singlePost con reintentos ante errores transitorios de ARCA.
+// AFIP producción devuelve 503 "Service Unavailable" de forma intermitente
+// (probado: ~2 de cada 3 requests). Un 5xx significa que el front-end de AFIP
+// rechazó el pedido SIN procesarlo, por lo que reintentar es seguro incluso para
+// FECAESolicitar (no genera comprobante duplicado). Los timeouts y errores de red
+// NO se reintentan (ambiguos: el comprobante podría haberse emitido).
+async function _soapPost(action, body, maxIntentos = 4) {
+  let ultimoStatus;
+  for (let intento = 1; intento <= maxIntentos; intento++) {
+    const { status, body: resp } = await _singlePost(action, body);
+    if (status < 500) return resp;              // 200 (o error SOAP a interpretar aguas arriba)
+    ultimoStatus = status;
+    if (intento < maxIntentos) await _sleep(800 * intento);  // backoff: 0.8s, 1.6s, 2.4s
+  }
+  throw new Error(
+    `ARCA no disponible (HTTP ${ultimoStatus}) en ${action} tras ${maxIntentos} intentos. ` +
+    `El servicio de AFIP está caído o saturado; reintentá en unos minutos.`
+  );
 }
 
 module.exports = { solicitarCAE, ultimoNroComprobante };
