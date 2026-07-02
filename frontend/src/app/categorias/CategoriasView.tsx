@@ -359,16 +359,6 @@ function CategoriaCard({
 
           {/* Stats */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Margen */}
-            <span className={[
-              'inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg',
-              cat.margen_default > 0
-                ? 'bg-green-500/15 text-green-400 border border-green-500/20'
-                : 'bg-kp-surface2 text-kp-gray border border-kp-border',
-            ].join(' ')}>
-              {cat.margen_default > 0 ? `+${cat.margen_default.toFixed(0)}% margen` : 'Sin margen'}
-            </span>
-
             {/* Artículos */}
             <span className={[
               'inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg',
