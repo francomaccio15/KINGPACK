@@ -99,7 +99,7 @@ function AppShell({
 
           {/* Controles derecha */}
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-            {user.rol === 'administrador' && <NotifBell />}
+            {(user.rol === 'administrador' || user.rol === 'cajero') && <NotifBell />}
             {user.rol === 'cajero' ? (
               <span className="hidden sm:inline-block px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide rounded-md bg-kp-surface2 border border-kp-border text-kp-gray-lt truncate max-w-[120px]">
                 {sucursales.find(s => s.id === user.sucursal_default_id)?.nombre ?? 'Sucursal'}
