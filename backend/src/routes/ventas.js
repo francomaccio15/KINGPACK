@@ -1093,7 +1093,13 @@ router.get('/:id/pdf', async (req, res, next) => {
     let rowIdx = 0;
     for (const item of itemRows) {
       const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
-      const tieneDesc = parseFloat(item.descuento_pct || 0) > 0;
+      // P. LISTA mostrado = precio madre (nuestro precio base); el descuento se
+      // calcula respecto al madre para que quede visible (el precio final ya lo trae).
+      const madreItem = parseFloat(item.precio_madre || item.precio_lista || 0) || 0;
+      const finalItem = parseFloat(item.precio_unitario_final) || 0;
+      const baseItem  = madreItem >= finalItem ? madreItem : (parseFloat(item.precio_lista) || madreItem);
+      const descItem  = baseItem > 0 ? (1 - finalItem / baseItem) * 100 : 0;
+      const tieneDesc = descItem > 0.05;
 
       if (rowIdx % 2 === 1) {
         doc.rect(ML, curY, CW, 18).fill('#f9f9f9');
@@ -1103,18 +1109,16 @@ router.get('/:id/pdf', async (req, res, next) => {
          .text(item.nombre, ML + 6, curY + 4, { width: 178, lineBreak: false });
       doc.text(parseFloat(item.cantidad).toFixed(0), ML + 186, curY + 4, { width: 40, align: 'right' });
 
+      doc.fillColor('#888888')
+         .text(ars(baseItem), ML + 236, curY + 4, { width: 70, align: 'right' });
       if (tieneDesc) {
-        doc.fillColor('#888888')
-           .text(ars(item.precio_lista), ML + 236, curY + 4, { width: 70, align: 'right' });
         doc.fillColor('#555555')
-           .text(pct(item.descuento_pct), ML + 316, curY + 4, { width: 40, align: 'right' });
-        doc.fillColor('#1a1a1a')
-           .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
+           .text(pct(descItem), ML + 316, curY + 4, { width: 40, align: 'right' });
       } else {
         doc.fillColor('#888888').text('—', ML + 316, curY + 4, { width: 40, align: 'right' });
-        doc.fillColor('#1a1a1a')
-           .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
       }
+      doc.fillColor('#1a1a1a')
+         .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
 
       doc.fillColor('#111111').font('Helvetica-Bold')
          .text(ars(subtotalItem), ML + 456, curY + 4, { width: CW - 456, align: 'right' });
@@ -1142,9 +1146,19 @@ router.get('/:id/pdf', async (req, res, next) => {
       curY += bold ? 22 : 18;
     };
 
-    drawTotalRow('Subtotal', venta.subtotal);
-    if (parseFloat(venta.descuento_total) > 0) {
-      drawTotalRow('Descuento', -parseFloat(venta.descuento_total), false, '#555555');
+    // Subtotal/descuento sobre el precio madre, para que coincida con las columnas
+    // de arriba (base madre → descuento → total). El total no cambia.
+    const subtotalBasePdf = itemRows.reduce((s, it) => {
+      const madreI = parseFloat(it.precio_madre || it.precio_lista || 0) || 0;
+      const finalI = parseFloat(it.precio_unitario_final) || 0;
+      const baseI  = madreI >= finalI ? madreI : (parseFloat(it.precio_lista) || madreI);
+      return s + baseI * parseFloat(it.cantidad || 0);
+    }, 0);
+    const descuentoBasePdf = Math.max(0, subtotalBasePdf - parseFloat(venta.total || 0));
+
+    drawTotalRow('Subtotal', subtotalBasePdf);
+    if (descuentoBasePdf > 0.01) {
+      drawTotalRow('Descuento', -descuentoBasePdf, false, '#555555');
     }
     drawTotalRow('TOTAL', venta.total, true, '#111111');
 

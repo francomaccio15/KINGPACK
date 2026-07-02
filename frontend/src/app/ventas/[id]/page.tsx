@@ -14,6 +14,18 @@ const fmt = (v: string | number | null) => {
 const fechaFmt = (d: string) => new Date(d).toLocaleString('es-AR', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
+
+// El "precio de lista" que se muestra es el precio MADRE (nuestro precio base).
+// Todas las listas son un % de descuento sobre el madre, y el precio final ya
+// viene con ese descuento aplicado; por eso el descuento se calcula respecto al
+// madre para que quede VISIBLE (base madre → desc% → precio final con descuento).
+function desglosePrecio(item: any) {
+  const madre = parseFloat(String(item.precio_madre ?? item.precio_lista ?? '0')) || 0;
+  const final = parseFloat(String(item.precio_unitario_final ?? '0')) || 0;
+  const base  = madre >= final ? madre : parseFloat(String(item.precio_lista ?? madre)) || madre;
+  const descPct = base > 0 ? (1 - final / base) * 100 : 0;
+  return { base, final, descPct, tieneDesc: descPct > 0.05 };
+}
 const fechaCorta = (d: string) => new Date(d).toLocaleDateString('es-AR', {
   day: '2-digit', month: '2-digit', year: 'numeric',
 });
@@ -55,7 +67,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
   }
 
   const { venta, items, pagos, facturacion } = data;
-  const descuento = parseFloat(venta.descuento_total || '0');
+  // Subtotal y descuento calculados sobre el precio madre (para que el descuento
+  // sea visible y coincida con las columnas P. Lista/Desc. de cada ítem). El total
+  // (lo efectivamente cobrado) no cambia: sigue siendo venta.total.
+  const totalVenta   = parseFloat(venta.total || '0');
+  const subtotalBase = items.reduce(
+    (acc: number, it: any) => acc + desglosePrecio(it).base * parseFloat(it.cantidad || '0'), 0);
+  const descuento    = Math.max(0, subtotalBase - totalVenta);
 
   // Historial de ediciones (solo para admin/supervisor)
   const esAdmin = user.rol === 'administrador' || user.rol === 'supervisor';
@@ -120,7 +138,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 </thead>
                 <tbody className="bg-kp-surface divide-y divide-kp-border">
                   {items.map((item: any) => {
-                    const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
+                    const { base, descPct, tieneDesc } = desglosePrecio(item);
                     const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                     return (
                       <tr key={item.articulo_id} className="hover:bg-kp-surface2 transition-colors">
@@ -133,12 +151,12 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-xs">
                           {tieneDesc
-                            ? <span className="line-through text-kp-gray">{fmt(item.precio_lista)}</span>
-                            : <span className="text-kp-gray">{fmt(item.precio_lista)}</span>}
+                            ? <span className="line-through text-kp-gray">{fmt(base)}</span>
+                            : <span className="text-kp-gray">{fmt(base)}</span>}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-xs">
                           {tieneDesc
-                            ? <span className="text-kp-red font-semibold">{parseFloat(item.descuento_pct).toFixed(1)}%</span>
+                            ? <span className="text-kp-red font-semibold">{descPct.toFixed(1)}%</span>
                             : <span className="text-kp-border">—</span>}
                         </td>
                         <td className="px-5 py-3 text-right tabular-nums text-kp-white">
@@ -172,7 +190,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               <div className="px-5 py-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-kp-gray">Subtotal</span>
-                  <span className="text-kp-white tabular-nums">{fmt(venta.subtotal)}</span>
+                  <span className="text-kp-white tabular-nums">{fmt(subtotalBase)}</span>
                 </div>
                 {descuento > 0 && (
                   <div className="flex justify-between text-sm">
@@ -438,15 +456,15 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </thead>
           <tbody>
             {items.map((item: any, i: number) => {
-              const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
+              const { base, descPct, tieneDesc } = desglosePrecio(item);
               const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
               return (
                 <tr key={item.articulo_id} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
                   <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
                   <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_lista)}</td>
+                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(base)}</td>
                   <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
-                    {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
+                    {tieneDesc ? `${descPct.toFixed(1)}%` : '—'}
                   </td>
                   <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_unitario_final)}</td>
                   <td style={{ padding: '2px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
@@ -485,7 +503,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             {descuento > 0 && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
-                  <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.subtotal)}</span>
+                  <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotalBase)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
                   <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
@@ -583,15 +601,15 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </thead>
             <tbody>
               {items.map((item: any, i: number) => {
-                const tieneDesc = parseFloat(item.descuento_pct || '0') > 0;
+                const { base, descPct, tieneDesc } = desglosePrecio(item);
                 const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                 return (
                   <tr key={item.articulo_id ?? i} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
                     <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
                     <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_lista)}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(base)}</td>
                     <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
-                      {tieneDesc ? `${parseFloat(item.descuento_pct).toFixed(1)}%` : '—'}
+                      {tieneDesc ? `${descPct.toFixed(1)}%` : '—'}
                     </td>
                     <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_unitario_final)}</td>
                     <td style={{ padding: '2px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
@@ -638,7 +656,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               {descuento > 0 && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
-                    <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.subtotal)}</span>
+                    <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotalBase)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
                     <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>

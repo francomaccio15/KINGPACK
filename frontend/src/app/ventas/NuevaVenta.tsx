@@ -389,10 +389,11 @@ export default function NuevaVenta({
             : item
         );
       }
-      // La base del descuento es el PRECIO DE LA LISTA (precio_efectivo), igual
-      // que lo recalcula el backend. Ese precio YA trae aplicado el descuento de
-      // la lista, así que acá sólo se aplica el descuento adicional del cliente.
-      // Sumar además el descuento de lista lo duplicaría (doble descuento).
+      // base = PRECIO DE LA LISTA (precio_efectivo): ya trae aplicado el descuento
+      // de la lista, y es lo que usa el backend. Sobre esa base sólo se aplica el
+      // descuento adicional del cliente (sumar el de lista lo duplicaría).
+      // precio_madre = nuestro precio base real, para MOSTRAR el descuento de lista
+      // (madre → precio final) en el carrito y en los totales.
       const base         = art.precio_lista ?? art.precio_madre;
       const descuento    = descuentoCliente;
       const finalPrice   = calcFinalPrice(base, descuento);
@@ -404,7 +405,7 @@ export default function NuevaVenta({
           codigo:                art.codigo,
           cantidad:              1,
           precio_lista:          base,
-          precio_madre:          base,
+          precio_madre:          art.precio_madre ?? base,
           descuento_manual:      null,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
@@ -807,7 +808,12 @@ export default function NuevaVenta({
                   ) : (
                     <div className="space-y-0.5">
                       {cart.map((item, idx) => {
-                        const hasDiscount = item.descuento_pct > 0;
+                        // Descuento efectivo respecto al precio madre (lista + adicional),
+                        // para que se vea el descuento de lista aunque no haya adicional.
+                        const descEfectivo = item.precio_madre > 0
+                          ? (1 - item.precio_unitario_final / item.precio_madre) * 100
+                          : 0;
+                        const hasDiscount = descEfectivo > 0.05;
                         const subtotalLine = item.precio_unitario_final * item.cantidad;
                         return (
                           <div
@@ -826,11 +832,11 @@ export default function NuevaVenta({
                                 {hasDiscount && (
                                   <>
                                     <span className="text-[10px] text-kp-gray line-through tabular-nums">
-                                      {ars.format(item.precio_lista)}
+                                      {ars.format(item.precio_madre)}
                                     </span>
                                     <span className="text-[10px] font-semibold text-kp-red bg-kp-red/10
                                       border border-kp-red/20 rounded px-1 py-0.5 leading-none">
-                                      -{item.descuento_pct.toFixed(1)}%
+                                      -{descEfectivo.toFixed(1)}%
                                     </span>
                                     <span className="text-[10px] text-kp-white tabular-nums">
                                       {ars.format(item.precio_unitario_final)}
