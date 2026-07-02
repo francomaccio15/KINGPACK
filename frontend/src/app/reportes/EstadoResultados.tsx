@@ -202,7 +202,7 @@ export default function EstadoResultados({
             {costo_mercaderia.costo_devuelto > 0 && (
               <Linea label="(+) Costo de artículos devueltos" valor={costo_mercaderia.costo_devuelto} nivel={1} italic />
             )}
-            <Subtotal label="= Costo de mercadería vendida (neto de devoluciones)" valor={-costo_mercaderia.costo_vendido} />
+            <Subtotal label="= Costo de mercadería vendida (neto de notas de crédito)" valor={-costo_mercaderia.costo_vendido} />
             <Subtotal label="= UTILIDAD BRUTA" valor={costo_mercaderia.utilidad_bruta} />
             <Separador />
 
