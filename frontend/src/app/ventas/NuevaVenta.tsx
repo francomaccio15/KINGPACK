@@ -94,17 +94,18 @@ function calcFinalPrice(precioLista: number, discountPct: number): number {
 
 function recalcItem(
   item: CartItem,
-  descuentoLista: number,
+  _descuentoLista: number,
   descuentoCliente: number,
 ): CartItem {
-  // Siempre recalcular sobre precio_madre (precio original sin descuentos)
-  // para evitar aplicar el descuento de lista dos veces.
-  // Si el ítem tiene un descuento manual propio, ese manda; si no, hereda el
-  // descuento combinado de lista + cliente.
+  // La base es precio_lista (precio_efectivo de la lista), que YA trae aplicado
+  // el descuento de la lista — igual que lo calcula el backend. Por eso el
+  // descuento de lista NO se vuelve a aplicar acá: hacerlo lo duplicaría.
+  // Sobre ese precio de lista sólo se aplica el descuento adicional del cliente
+  // (o el descuento manual propio del ítem, que tiene prioridad).
   const descuento_pct = item.descuento_manual != null
     ? item.descuento_manual
-    : calcCombinedDiscount(descuentoLista, descuentoCliente);
-  const precio_unitario_final = calcFinalPrice(item.precio_madre, descuento_pct);
+    : descuentoCliente;
+  const precio_unitario_final = calcFinalPrice(item.precio_lista, descuento_pct);
   return { ...item, descuento_pct, precio_unitario_final };
 }
 
@@ -176,8 +177,10 @@ export default function NuevaVenta({
   // ── Descuentos
   const descuentoLista   = listas.find(l => l.id === listaId)?.descuento_lista ?? 0;
   const descuentoCliente = selectedClient?.descuento_adicional ?? 0;
-  // Descuento base que heredan los ítems sin descuento manual propio
-  const descuentoBase    = calcCombinedDiscount(descuentoLista, descuentoCliente);
+  // Descuento base que heredan los ítems sin descuento manual propio.
+  // Es SÓLO el descuento adicional del cliente: el descuento de la lista ya viene
+  // aplicado en el precio de lista (precio_efectivo), no se suma de nuevo.
+  const descuentoBase    = descuentoCliente;
 
   // ── Medios de pago
   const [mediosPago, setMediosPago]       = useState<MedioPago[]>([]);
@@ -387,12 +390,11 @@ export default function NuevaVenta({
         );
       }
       // La base del descuento es el PRECIO DE LA LISTA (precio_efectivo), igual
-      // que lo recalcula el backend. Antes se usaba precio_madre: cuando la lista
-      // tenía precio propio distinto del madre, el subtotalFinal del front (que
-      // va como monto del pago) no coincidía con el total real del backend y la
-      // cuenta corriente quedaba sin el descuento aplicado.
+      // que lo recalcula el backend. Ese precio YA trae aplicado el descuento de
+      // la lista, así que acá sólo se aplica el descuento adicional del cliente.
+      // Sumar además el descuento de lista lo duplicaría (doble descuento).
       const base         = art.precio_lista ?? art.precio_madre;
-      const descuento    = calcCombinedDiscount(descuentoLista, descuentoCliente);
+      const descuento    = descuentoCliente;
       const finalPrice   = calcFinalPrice(base, descuento);
       return [
         ...prev,
@@ -410,7 +412,7 @@ export default function NuevaVenta({
         },
       ];
     });
-  }, [descuentoLista, descuentoCliente]);
+  }, [descuentoCliente]);
 
   // ─── Descuento manual por ítem ─────────────────────────────────────────────
   // Vacío = el ítem vuelve a heredar el descuento de lista/cliente.
