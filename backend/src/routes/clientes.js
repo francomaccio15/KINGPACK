@@ -269,9 +269,15 @@ router.post('/:id/pagos', async (req, res, next) => {
         `, [req.params.id, concepto.trim()]);
       }
 
-      // Registrar en caja si hay medio_pago_id y caja abierta
+      // Registrar en caja si hay medio_pago_id y caja abierta.
+      // El efectivo entra en la caja del OPERADOR que recibe el pago, NO en la
+      // sucursal por defecto del cliente. Un cajero sólo puede mover SU propia
+      // caja, así que para cajeros se usa siempre su sucursal del JWT (se ignora
+      // el sucursal_id del body, que trae la sucursal default del cliente).
       if (medio_pago_id) {
-        const sucId = sucursal_id || req.usuario?.sucursal_default_id || null;
+        const sucId = req.usuario?.rol === 'cajero'
+          ? (req.usuario.sucursal_default_id || null)
+          : (sucursal_id || req.usuario?.sucursal_default_id || null);
         if (sucId) {
           const { rows: cajaRows } = await dbClient.query(
             `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,

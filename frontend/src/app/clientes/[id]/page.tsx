@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import RegistrarPago from './RegistrarPago';
 import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
@@ -38,6 +39,10 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
   const listas     = listasRes.ok   ? (await listasRes.json()).listas       ?? [] : [];
   const sucursales = sucursalesRes.ok ? (await sucursalesRes.json()).sucursales ?? [] : [];
   const ventasCliente: any[] = ventasRes.ok ? ((await ventasRes.json()).ventas ?? []) : [];
+
+  // Sucursal donde entra el pago = la sucursal operativa (selector global), no la
+  // del cliente. Para cajeros el backend usa su propia sucursal del JWT igual.
+  const sucursalOperativa = cookies().get('kp_sucursal_id')?.value || cliente.sucursal_default_id;
 
   const saldoActual  = parseFloat(cliente.saldo_actual  || '0');
   const limiteCredito = parseFloat(cliente.limite_credito || '0');
@@ -89,7 +94,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
         <div className="flex items-center gap-2">
           <EstadoCuentaPDF clienteId={cliente.id} />
           <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
-          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={cliente.sucursal_default_id} />
+          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa} />
         </div>
       </div>
 
