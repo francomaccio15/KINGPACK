@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Montserrat } from 'next/font/google';
 import './globals.css';
 import { ClientLayout } from '@/components/ClientLayout';
@@ -14,6 +14,18 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title:       'KingPack',
   description: 'Sistema de gestión integral — King Pack',
+  manifest:    '/manifest.webmanifest',
+  appleWebApp: {
+    capable:        true,
+    statusBarStyle: 'black-translucent',
+    title:          'KingPack',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor:  '#0d0d0d',
+  width:       'device-width',
+  initialScale: 1,
 };
 
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
