@@ -154,6 +154,10 @@ function _soapPost(url, body, action) {
         'SOAPAction':     `"${action}"`,
         'Content-Length': Buffer.byteLength(body),
       },
+      // Ver nota en wsfe.js: los endpoints de producción de ARCA usan DH débil
+      // que OpenSSL 3 rechaza a SECLEVEL 2. WSAA hoy funciona, pero fijamos
+      // SECLEVEL 1 por consistencia y para blindar ante cambios del servidor.
+      ciphers: 'DEFAULT@SECLEVEL=1',
     };
 
     const req = https.request(options, res => {

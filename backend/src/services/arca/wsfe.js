@@ -154,6 +154,11 @@ function _soapPost(action, body) {
         'SOAPAction':     `"http://ar.gov.afip.dif.FEV1/${action}"`,
         'Content-Length': Buffer.byteLength(body),
       },
+      // El servidor de producción de ARCA (servicios1.afip.gov.ar) negocia con
+      // parámetros Diffie-Hellman débiles que OpenSSL 3 (Node 20+) rechaza por
+      // defecto (SECLEVEL 2) con "dh key too small", lo que se manifiesta como
+      // timeout. Bajar a SECLEVEL 1 permite el handshake sin afectar homologación.
+      ciphers: 'DEFAULT@SECLEVEL=1',
     };
 
     const req = https.request(options, res => {
