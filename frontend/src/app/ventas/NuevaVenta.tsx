@@ -94,19 +94,21 @@ function calcFinalPrice(precioLista: number, discountPct: number): number {
 
 function recalcItem(
   item: CartItem,
-  _descuentoLista: number,
+  descuentoLista: number,
   descuentoCliente: number,
 ): CartItem {
-  // La base es precio_lista (precio_efectivo de la lista), que YA trae aplicado
-  // el descuento de la lista — igual que lo calcula el backend. Por eso el
-  // descuento de lista NO se vuelve a aplicar acá: hacerlo lo duplicaría.
-  // Sobre ese precio de lista sólo se aplica el descuento adicional del cliente
-  // (o el descuento manual propio del ítem, que tiene prioridad).
+  // Precio de la lista ACTUAL = precio madre con el descuento de la lista aplicado
+  // (todas las listas son un % sobre el madre). Se recalcula acá para que al
+  // cambiar de lista o de cliente TODOS los ítems se re-precien de una.
+  const precio_lista = calcFinalPrice(item.precio_madre, descuentoLista);
+  // Descuento adicional (sobre el precio de lista): el manual del ítem, o el del
+  // cliente si no hay manual. Es lo que se manda al backend como descuento_pct,
+  // que lo aplica sobre el precio de lista (evita el doble descuento).
   const descuento_pct = item.descuento_manual != null
     ? item.descuento_manual
     : descuentoCliente;
-  const precio_unitario_final = calcFinalPrice(item.precio_lista, descuento_pct);
-  return { ...item, descuento_pct, precio_unitario_final };
+  const precio_unitario_final = calcFinalPrice(precio_lista, descuento_pct);
+  return { ...item, precio_lista, descuento_pct, precio_unitario_final };
 }
 
 // ─── Spinner ──────────────────────────────────────────────────────────────────
@@ -389,14 +391,14 @@ export default function NuevaVenta({
             : item
         );
       }
-      // base = PRECIO DE LA LISTA (precio_efectivo): ya trae aplicado el descuento
-      // de la lista, y es lo que usa el backend. Sobre esa base sólo se aplica el
-      // descuento adicional del cliente (sumar el de lista lo duplicaría).
-      // precio_madre = nuestro precio base real, para MOSTRAR el descuento de lista
-      // (madre → precio final) en el carrito y en los totales.
-      const base         = art.precio_lista ?? art.precio_madre;
+      // precio_madre = nuestro precio base real. El precio de lista se calcula como
+      // madre con el descuento de la lista (todas las listas son % sobre el madre),
+      // y sobre eso el descuento adicional del cliente. Así, si después se cambia la
+      // lista o el cliente, recalcItem re-precia el ítem con el descuento correcto.
+      const madre        = art.precio_madre ?? art.precio_lista ?? 0;
+      const precio_lista = calcFinalPrice(madre, descuentoLista);
       const descuento    = descuentoCliente;
-      const finalPrice   = calcFinalPrice(base, descuento);
+      const finalPrice   = calcFinalPrice(precio_lista, descuento);
       return [
         ...prev,
         {
@@ -404,8 +406,8 @@ export default function NuevaVenta({
           nombre:                art.nombre,
           codigo:                art.codigo,
           cantidad:              1,
-          precio_lista:          base,
-          precio_madre:          art.precio_madre ?? base,
+          precio_lista:          precio_lista,
+          precio_madre:          madre,
           descuento_manual:      null,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
@@ -413,7 +415,7 @@ export default function NuevaVenta({
         },
       ];
     });
-  }, [descuentoCliente]);
+  }, [descuentoCliente, descuentoLista]);
 
   // ─── Descuento manual por ítem ─────────────────────────────────────────────
   // Vacío = el ítem vuelve a heredar el descuento de lista/cliente.
