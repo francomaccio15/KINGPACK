@@ -59,8 +59,7 @@ export default function EditarCliente({
 
   const cerrar = () => { setOpen(false); setError(''); };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const enviar = async (forzarCuitDuplicado: boolean) => {
     setError('');
     setLoading(true);
     try {
@@ -78,9 +77,18 @@ export default function EditarCliente({
           limite_credito:      parseFloat(form.limite_credito) || 0,
           descuento_adicional: parseFloat(form.descuento_adicional) || 0,
           activo:              form.activo,
+          forzar_cuit_duplicado: forzarCuitDuplicado,
         }),
       });
       const data = await res.json();
+
+      // CUIT ya usado por otro cliente: aviso, no error. Confirmamos y reenviamos.
+      if (res.status === 409 && data.cuit_duplicado) {
+        setLoading(false);
+        if (window.confirm(data.mensaje)) await enviar(true);
+        return;
+      }
+
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
       cerrar();
       router.refresh();
@@ -89,6 +97,11 @@ export default function EditarCliente({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    enviar(false);
   };
 
   return (

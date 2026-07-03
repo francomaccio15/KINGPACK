@@ -38,8 +38,7 @@ export default function NuevoCliente({
 
   const cerrar = () => { setOpen(false); setError(''); };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const enviar = async (forzarCuitDuplicado: boolean) => {
     setError('');
     setLoading(true);
     try {
@@ -57,9 +56,18 @@ export default function NuevoCliente({
           limite_credito:      parseFloat(form.limite_credito) || 0,
           descuento_adicional: parseFloat(form.descuento_adicional) || 0,
           saldo_inicial:       parseFloat(form.saldo_inicial) || 0,
+          forzar_cuit_duplicado: forzarCuitDuplicado,
         }),
       });
       const data = await res.json();
+
+      // CUIT ya existente: no es un error, es un aviso. Confirmamos y reenviamos.
+      if (res.status === 409 && data.cuit_duplicado) {
+        setLoading(false);
+        if (window.confirm(data.mensaje)) await enviar(true);
+        return;
+      }
+
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar');
       cerrar();
       router.refresh();
@@ -68,6 +76,11 @@ export default function NuevoCliente({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    enviar(false);
   };
 
   return (

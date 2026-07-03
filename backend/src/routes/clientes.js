@@ -88,10 +88,31 @@ router.post('/', async (req, res, next) => {
       razon_social, cuit, cond_iva_id, telefono, direccion,
       sucursal_default_id, lista_precio_id,
       limite_credito = 0, descuento_adicional = 0, saldo_inicial = 0,
+      forzar_cuit_duplicado = false,
     } = req.body;
 
     if (!razon_social || !cond_iva_id) {
       return res.status(400).json({ error: 'razon_social y cond_iva_id son requeridos' });
+    }
+
+    const cuitNorm = cuit?.trim() || null;
+
+    // Se permiten clientes con CUIT repetido (misma persona/empresa con cuentas
+    // separadas), pero como red de seguridad contra duplicados por tipeo se avisa
+    // si el CUIT ya existe. El frontend confirma y reenvía con forzar_cuit_duplicado.
+    if (cuitNorm && !forzar_cuit_duplicado) {
+      const { rows: dup } = await pool.query(
+        `SELECT id, razon_social FROM clientes WHERE cuit = $1 AND deleted_at IS NULL LIMIT 1`,
+        [cuitNorm]
+      );
+      if (dup[0]) {
+        return res.status(409).json({
+          error: 'CUIT_DUPLICADO',
+          cuit_duplicado: true,
+          cliente_existente: dup[0],
+          mensaje: `Ya existe el cliente "${dup[0].razon_social}" con el CUIT ${cuitNorm}. ¿Crear de todas formas?`,
+        });
+      }
     }
 
     const { rows } = await pool.query(`
@@ -102,7 +123,7 @@ router.post('/', async (req, res, next) => {
       RETURNING id, razon_social, cuit, activo, created_at
     `, [
       razon_social.trim(),
-      cuit?.trim() || null,
+      cuitNorm,
       cond_iva_id,
       telefono?.trim() || null,
       direccion?.trim() || null,
@@ -115,7 +136,6 @@ router.post('/', async (req, res, next) => {
 
     res.status(201).json({ cliente: rows[0] });
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe un cliente con ese CUIT' });
     next(err);
   }
 });
@@ -153,6 +173,23 @@ router.get('/:id', async (req, res, next) => {
 // ─── PUT /api/clientes/:id ────────────────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
   try {
+    // Aviso (no bloqueo) si se edita el CUIT hacia uno que ya usa OTRO cliente.
+    const cuitNorm = typeof req.body.cuit === 'string' ? (req.body.cuit.trim() || null) : req.body.cuit;
+    if (cuitNorm && !req.body.forzar_cuit_duplicado) {
+      const { rows: dup } = await pool.query(
+        `SELECT id, razon_social FROM clientes WHERE cuit = $1 AND id <> $2 AND deleted_at IS NULL LIMIT 1`,
+        [cuitNorm, req.params.id]
+      );
+      if (dup[0]) {
+        return res.status(409).json({
+          error: 'CUIT_DUPLICADO',
+          cuit_duplicado: true,
+          cliente_existente: dup[0],
+          mensaje: `Ya existe el cliente "${dup[0].razon_social}" con el CUIT ${cuitNorm}. ¿Guardar de todas formas?`,
+        });
+      }
+    }
+
     const fields = ['razon_social','cuit','cond_iva_id','telefono','direccion',
                     'sucursal_default_id','lista_precio_id','limite_credito',
                     'descuento_adicional','activo'];
@@ -178,7 +215,6 @@ router.put('/:id', async (req, res, next) => {
     if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json({ ok: true });
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'CUIT duplicado' });
     next(err);
   }
 });
