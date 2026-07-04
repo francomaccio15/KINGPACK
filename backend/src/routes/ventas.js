@@ -1313,16 +1313,11 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     const totalDescuento = itemsCalculados.reduce((s, i) => s + (i.precioLista - i.precioFinal) * i.cantidad, 0);
     const total          = subtotal;
 
-    // Actualizar observaciones si se provee motivo
-    const obsUpdate = observacion?.trim()
-      ? `, observaciones = CONCAT('[Editada: ', $3::text, ']', CASE WHEN observaciones IS NOT NULL AND observaciones <> '' THEN E'\n' || observaciones ELSE '' END)`
-      : '';
-    const obsParams = observacion?.trim() ? [subtotal, total, observacion.trim(), totalDescuento, id] : [subtotal, total, totalDescuento, id];
-    const obsIdx    = observacion?.trim() ? 5 : 4;
-
+    // El motivo de la edición NO se mete en observaciones (ensucia el comprobante);
+    // ya queda registrado en el historial venta_ediciones más abajo.
     await client.query(
-      `UPDATE ventas SET subtotal = $1, total = $2${obsUpdate}, descuento_total = $${obsIdx - 1} WHERE id = $${obsIdx}`,
-      obsParams
+      `UPDATE ventas SET subtotal = $1, total = $2, descuento_total = $3 WHERE id = $4`,
+      [subtotal, total, totalDescuento, id]
     );
 
     // ── Reconciliar pagos / caja / cuenta corriente con el nuevo total ──────────
