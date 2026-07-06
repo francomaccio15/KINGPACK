@@ -19,12 +19,14 @@ const fechaVigencia = (d: string) => {
 };
 
 const ESTADO_STYLE: Record<string, string> = {
-  borrador: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  enviada:  'bg-blue-500/10  text-blue-400  border-blue-500/30',
+  borrador:    'bg-amber-500/10  text-amber-400  border-amber-500/30',
+  enviada:     'bg-blue-500/10   text-blue-400   border-blue-500/30',
+  adjudicada:  'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
 };
 const ESTADO_LABEL: Record<string, string> = {
-  borrador: 'Borrador',
-  enviada:  'Enviada',
+  borrador:   'Borrador',
+  enviada:    'Enviada',
+  adjudicada: 'Adjudicada',
 };
 
 export const dynamic = 'force-dynamic';
@@ -39,9 +41,20 @@ async function fetchLicitacion(id: string) {
   }
 }
 
+async function fetchSucursales() {
+  try {
+    const res = await serverFetch('/api/sucursales', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.sucursales ?? json) as { id: string; nombre: string }[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function LicitacionDetallePage({ params }: { params: { id: string } }) {
   requireAuth('/licitaciones');
-  const data = await fetchLicitacion(params.id);
+  const [data, sucursales] = await Promise.all([fetchLicitacion(params.id), fetchSucursales()]);
 
   if (!data) {
     return (
@@ -83,7 +96,12 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
             {lic.titulo && <p className="text-base text-kp-white pl-3 font-medium">{lic.titulo}</p>}
             <p className="text-sm text-kp-gray pl-3 mt-0.5">{fechaFmt(lic.created_at)}</p>
           </div>
-          <AccionesLicitacion licitacionId={params.id} estadoActual={lic.estado} />
+          <AccionesLicitacion
+            licitacionId={params.id}
+            estadoActual={lic.estado}
+            ventaId={lic.venta_id ?? null}
+            sucursales={sucursales}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -160,6 +178,20 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
                   <div>
                     <p className="text-xs text-kp-gray uppercase tracking-widest mb-0.5">Observaciones</p>
                     <p className="text-kp-gray text-xs leading-relaxed">{lic.observaciones}</p>
+                  </div>
+                )}
+                {lic.venta_id && (
+                  <div className="pt-1 border-t border-kp-border">
+                    <p className="text-xs text-kp-gray uppercase tracking-widest mb-1.5">Venta generada</p>
+                    <Link
+                      href={`/ventas/${lic.venta_id}`}
+                      className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                      Ver venta
+                    </Link>
                   </div>
                 )}
               </div>

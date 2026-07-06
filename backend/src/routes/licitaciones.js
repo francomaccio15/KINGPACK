@@ -107,7 +107,7 @@ router.get('/:id', soloAdmin, async (req, res, next) => {
     const { rows: [lic] } = await pool.query(
       `SELECT
          l.id, l.numero, l.titulo, l.estado, l.observaciones, l.created_at,
-         l.cliente_id,
+         l.cliente_id, l.venta_id,
          c.razon_social     AS cliente_nombre,
          c.cuit             AS cliente_cuit,
          c.direccion        AS cliente_direccion,
@@ -155,6 +155,152 @@ router.put('/:id', soloAdmin, async (req, res, next) => {
     if (!updated) return res.status(404).json({ error: 'Licitación no encontrada' });
     res.json({ ok: true });
   } catch (err) { next(err); }
+});
+
+// ─── POST /api/licitaciones/:id/adjudicar ────────────────────────────────────
+router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { sucursal_id } = req.body;
+    if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
+
+    await client.query('BEGIN');
+
+    // Verificar licitación: debe existir, estar 'enviada' y no haber sido adjudicada
+    const { rows: [lic] } = await client.query(
+      `SELECT id, numero, cliente_id, estado, venta_id
+       FROM licitaciones
+       WHERE id = $1 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [req.params.id]
+    );
+    if (!lic) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Licitación no encontrada' });
+    }
+    if (lic.estado !== 'enviada') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Solo se pueden adjudicar licitaciones en estado "enviada"' });
+    }
+    if (lic.venta_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Esta licitación ya fue adjudicada' });
+    }
+
+    // Verificar sucursal
+    const { rows: [suc] } = await client.query(
+      `SELECT id FROM sucursales WHERE id = $1`,
+      [sucursal_id]
+    );
+    if (!suc) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Sucursal no válida' });
+    }
+
+    // Obtener items con datos del artículo (IVA)
+    const { rows: items } = await client.query(
+      `SELECT li.articulo_id, li.nombre, li.cantidad,
+              li.precio_licitacion,
+              COALESCE(ai.porcentaje, 0) AS iva_pct
+       FROM licitacion_items li
+       JOIN articulos a ON a.id = li.articulo_id
+       LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+       WHERE li.licitacion_id = $1
+       ORDER BY li.orden ASC, li.id ASC`,
+      [lic.id]
+    );
+    if (!items.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'La licitación no tiene artículos' });
+    }
+
+    // Calcular totales
+    let subtotalVenta = 0;
+    const itemsCalc = items.map(it => {
+      const precio   = parseFloat(it.precio_licitacion);
+      const cantidad = parseFloat(it.cantidad);
+      const iva_monto = parseFloat((precio * parseFloat(it.iva_pct) / 100).toFixed(2));
+      subtotalVenta += precio * cantidad;
+      return { ...it, precio, cantidad, iva_monto };
+    });
+    const total = parseFloat(subtotalVenta.toFixed(2));
+
+    // Número de venta secuencial por sucursal
+    const { rows: numRows } = await client.query(
+      `SELECT numero FROM ventas WHERE sucursal_id = $1
+       ORDER BY numero DESC LIMIT 1 FOR UPDATE`,
+      [sucursal_id]
+    );
+    const numero = (numRows[0]?.numero ?? 0) + 1;
+
+    // Crear venta confirmada
+    const { rows: [venta] } = await client.query(`
+      INSERT INTO ventas
+        (numero, sucursal_id, cliente_id, vendedor_id, lista_precio_id,
+         estado, observaciones, subtotal, descuento_total, total)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING id, numero, fecha, estado, total
+    `, [
+      numero,
+      sucursal_id,
+      lic.cliente_id || null,
+      req.usuario.id,
+      null,
+      'confirmada',
+      `Licitación #${lic.numero}`,
+      total.toFixed(2),
+      '0.00',
+      total.toFixed(2),
+    ]);
+
+    // Descontar stock
+    for (const it of itemsCalc) {
+      const { rows: stockRows } = await client.query(
+        `SELECT cantidad FROM stock
+         WHERE articulo_id = $1 AND sucursal_id = $2
+         FOR UPDATE`,
+        [it.articulo_id, sucursal_id]
+      );
+      const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
+      if (stockActual < it.cantidad) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: `Stock insuficiente para "${it.nombre}"`,
+          detalle: { articulo_id: it.articulo_id, nombre: it.nombre, disponible: stockActual, solicitado: it.cantidad },
+        });
+      }
+      await client.query(
+        `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (articulo_id, sucursal_id)
+         DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
+        [it.articulo_id, sucursal_id, parseFloat((stockActual - it.cantidad).toFixed(3))]
+      );
+    }
+
+    // Insertar items de la venta
+    for (const it of itemsCalc) {
+      await client.query(`
+        INSERT INTO venta_items
+          (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `, [venta.id, it.articulo_id, it.cantidad, it.precio, 0, it.precio, it.iva_monto]);
+    }
+
+    // Vincular venta a la licitación y marcarla adjudicada
+    await client.query(
+      `UPDATE licitaciones SET estado = 'adjudicada', venta_id = $1 WHERE id = $2`,
+      [venta.id, lic.id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ venta_id: venta.id, venta_numero: venta.numero });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── DELETE /api/licitaciones/:id ─────────────────────────────────────────────
