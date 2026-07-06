@@ -1,0 +1,365 @@
+const express = require('express');
+const { pool } = require('../config/db');
+const { requireRol } = require('../middleware/auth');
+
+const router = express.Router();
+
+// Todo el módulo es exclusivo del administrador.
+router.use(requireRol('administrador'));
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Saldo de movimientos (Σ debe − Σ haber) SIN el saldo inicial del proveedor,
+// igual criterio que el resto del sistema (el saldo inicial se suma aparte).
+async function saldoMovimientos(client, proveedorId) {
+  const { rows } = await client.query(
+    `SELECT COALESCE(SUM(debe) - SUM(haber), 0) AS saldo
+       FROM cuentas_corrientes_proveedor WHERE proveedor_id = $1`,
+    [proveedorId]
+  );
+  return parseFloat(rows[0].saldo) || 0;
+}
+
+async function esMedioEfectivo(client, medioPagoId) {
+  const { rows } = await client.query(
+    `SELECT nombre FROM medios_pago WHERE id = $1`, [medioPagoId]
+  );
+  return !!rows[0] && /efectivo/i.test(rows[0].nombre || '');
+}
+
+// Caja abierta de una sucursal (la más reciente si hubiera más de una).
+async function cajaAbierta(client, sucursalId) {
+  if (!sucursalId) return null;
+  const { rows } = await client.query(
+    `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta'
+      ORDER BY fecha_apertura DESC LIMIT 1`,
+    [sucursalId]
+  );
+  return rows[0]?.id || null;
+}
+
+// ─── GET /api/pagos-proveedor ─────────────────────────────────────────────────
+// ?proveedor_id=  ?fecha_desde=  ?fecha_hasta=  ?incluir_anulados=true
+router.get('/', async (req, res, next) => {
+  try {
+    const { proveedor_id, fecha_desde, fecha_hasta, incluir_anulados, limit = 100, offset = 0 } = req.query;
+
+    const cond = [];
+    const params = [];
+    let idx = 1;
+
+    if (proveedor_id) { cond.push(`pp.proveedor_id = $${idx++}`); params.push(proveedor_id); }
+    if (fecha_desde)  { cond.push(`pp.fecha >= $${idx++}`);       params.push(fecha_desde); }
+    if (fecha_hasta)  { cond.push(`pp.fecha <= $${idx++}`);       params.push(fecha_hasta); }
+    if (incluir_anulados !== 'true') cond.push(`pp.anulado = FALSE`);
+
+    const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
+    params.push(Math.min(parseInt(limit) || 100, 500));
+    params.push(Math.max(parseInt(offset) || 0, 0));
+
+    const { rows } = await pool.query(`
+      SELECT pp.id, pp.proveedor_id, pp.fecha, pp.monto, pp.observaciones,
+             pp.anulado, pp.motivo_anulacion, pp.created_at,
+             p.razon_social AS proveedor_nombre,
+             mp.nombre AS medio_pago_nombre,
+             s.nombre  AS sucursal_nombre,
+             u.nombre  AS usuario_nombre,
+             (SELECT COUNT(*) FROM pago_proveedor_aplicaciones a WHERE a.pago_proveedor_id = pp.id) AS aplicaciones_count
+        FROM pagos_proveedor pp
+        JOIN proveedores p   ON p.id  = pp.proveedor_id
+        JOIN medios_pago mp  ON mp.id = pp.medio_pago_id
+        LEFT JOIN sucursales s ON s.id = pp.sucursal_id
+        LEFT JOIN usuarios u   ON u.id = pp.usuario_id
+        ${where}
+       ORDER BY pp.fecha DESC, pp.created_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}
+    `, params);
+
+    res.json({ count: rows.length, pagos: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/pagos-proveedor/:id ─────────────────────────────────────────────
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [{ rows: cab }, { rows: aplic }, { rows: cheques }] = await Promise.all([
+      pool.query(`
+        SELECT pp.*, p.razon_social AS proveedor_nombre,
+               mp.nombre AS medio_pago_nombre, s.nombre AS sucursal_nombre
+          FROM pagos_proveedor pp
+          JOIN proveedores p  ON p.id  = pp.proveedor_id
+          JOIN medios_pago mp ON mp.id = pp.medio_pago_id
+          LEFT JOIN sucursales s ON s.id = pp.sucursal_id
+         WHERE pp.id = $1`, [id]),
+      pool.query(`
+        SELECT a.id, a.egreso_id, a.monto_aplicado,
+               e.descripcion, e.tipo_comprobante, e.punto_venta, e.numero_comprobante,
+               e.total AS egreso_total, e.estado_pago
+          FROM pago_proveedor_aplicaciones a
+          JOIN egresos e ON e.id = a.egreso_id
+         WHERE a.pago_proveedor_id = $1`, [id]),
+      pool.query(`SELECT * FROM pago_proveedor_cheques WHERE pago_proveedor_id = $1`, [id]),
+    ]);
+
+    if (!cab[0]) return res.status(404).json({ error: 'Pago no encontrado' });
+    res.json({ pago: cab[0], aplicaciones: aplic, cheques });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/pagos-proveedor ────────────────────────────────────────────────
+// Body:
+//   proveedor_id (req), medio_pago_id (req), monto (req), fecha?,
+//   cuenta_bancaria_id?, sucursal_id?, observaciones?, facturado? (pago a cuenta),
+//   aplicaciones?: [{ egreso_id, monto }]   → modo "aplicado a comprobantes"
+//   cheques?: [{ banco, numero_cheque, fecha_vencimiento, importe }]
+router.post('/', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const {
+      proveedor_id, medio_pago_id, monto, fecha,
+      cuenta_bancaria_id, sucursal_id, observaciones, facturado = false,
+      aplicaciones = [], cheques = [],
+    } = req.body;
+
+    if (!proveedor_id)  return res.status(400).json({ error: 'proveedor_id es requerido' });
+    if (!medio_pago_id) return res.status(400).json({ error: 'medio_pago_id es requerido' });
+    const montoTotal = parseFloat(monto);
+    if (!montoTotal || montoTotal <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
+
+    const { rows: provRows } = await client.query(
+      `SELECT id FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [proveedor_id]
+    );
+    if (!provRows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
+
+    // En modo "aplicado", la suma imputada debe igualar el monto del pago.
+    if (aplicar) {
+      const sumaAplic = aplicaciones.reduce((s, a) => s + (parseFloat(a.monto) || 0), 0);
+      if (Math.abs(sumaAplic - montoTotal) > 0.01) {
+        return res.status(400).json({
+          error: `La suma imputada (${sumaAplic.toFixed(2)}) no coincide con el monto del pago (${montoTotal.toFixed(2)})`,
+        });
+      }
+    }
+
+    // Si el pago es en efectivo, exige caja abierta en la sucursal para impactar el arqueo.
+    const efectivo = await esMedioEfectivo(client, medio_pago_id);
+    let cajaId = null;
+    if (efectivo) {
+      cajaId = await cajaAbierta(client, sucursal_id);
+      if (!cajaId) {
+        return res.status(409).json({
+          error: 'No hay una caja abierta en la sucursal seleccionada para registrar el pago en efectivo. Elegí una sucursal con caja abierta o cambiá el medio de pago.',
+        });
+      }
+    }
+
+    const usuarioId = req.usuario?.id ?? null;
+
+    await client.query('BEGIN');
+
+    // 1) Cabecera del pago
+    const { rows: pagoRows } = await client.query(`
+      INSERT INTO pagos_proveedor
+        (proveedor_id, fecha, medio_pago_id, monto, cuenta_bancaria_id,
+         sucursal_id, observaciones, facturado, usuario_id)
+      VALUES ($1, COALESCE($2::date, CURRENT_DATE), $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, fecha, monto
+    `, [proveedor_id, fecha || null, medio_pago_id, montoTotal,
+        cuenta_bancaria_id || null, sucursal_id || null,
+        observaciones?.trim() || null, !!facturado, usuarioId]);
+    const pago = pagoRows[0];
+
+    if (aplicar) {
+      // 2a) Imputación a cada egreso pendiente
+      for (const ap of aplicaciones) {
+        const montoAp = parseFloat(ap.monto);
+        if (!montoAp || montoAp <= 0) throw Object.assign(new Error('monto de imputación inválido'), { status: 400 });
+
+        const { rows: egRows } = await client.query(
+          `SELECT id, total, estado_pago, tipo_comprobante, proveedor_id
+             FROM egresos WHERE id = $1 AND deleted_at IS NULL`, [ap.egreso_id]
+        );
+        const egreso = egRows[0];
+        if (!egreso) throw Object.assign(new Error('Egreso no encontrado'), { status: 404 });
+        if (egreso.proveedor_id !== proveedor_id) {
+          throw Object.assign(new Error('Un comprobante no pertenece al proveedor'), { status: 400 });
+        }
+        if (egreso.estado_pago === 'pagado') {
+          throw Object.assign(new Error('Un comprobante seleccionado ya está pagado'), { status: 400 });
+        }
+
+        const { rows: pagadoRows } = await client.query(
+          `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [ap.egreso_id]
+        );
+        const pendiente = +(parseFloat(egreso.total) - parseFloat(pagadoRows[0].pagado)).toFixed(2);
+        if (montoAp - pendiente > 0.01) {
+          throw Object.assign(new Error(`La imputación (${montoAp.toFixed(2)}) supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`), { status: 400 });
+        }
+
+        // Registro de pago del egreso (mantiene el detalle en "Ver egreso")
+        await client.query(`
+          INSERT INTO egreso_pagos
+            (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones, pago_proveedor_id)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [ap.egreso_id, medio_pago_id, montoAp, cuenta_bancaria_id || null,
+            observaciones?.trim() || null, pago.id]);
+
+        // Nuevo estado del egreso
+        const nuevoPagado = +(parseFloat(pagadoRows[0].pagado) + montoAp).toFixed(2);
+        const nuevoEstado = Math.abs(nuevoPagado - parseFloat(egreso.total)) <= 0.01 ? 'pagado' : 'parcial';
+        await client.query(
+          `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
+          [nuevoEstado, ap.egreso_id]
+        );
+
+        // Haber en cuenta corriente (facturado según el comprobante)
+        const esFacturado = !!(egreso.tipo_comprobante && egreso.tipo_comprobante !== 'informal');
+        const saldoPrev = await saldoMovimientos(client, proveedor_id);
+        await client.query(`
+          INSERT INTO cuentas_corrientes_proveedor
+            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+          VALUES ($1, 0, $2, $3, 'pago', $4, $5, $6)
+        `, [proveedor_id, montoAp, +(saldoPrev - montoAp).toFixed(2), ap.egreso_id,
+            'Pago a proveedor', esFacturado]);
+
+        // Registro de la imputación
+        await client.query(`
+          INSERT INTO pago_proveedor_aplicaciones (pago_proveedor_id, egreso_id, monto_aplicado)
+          VALUES ($1, $2, $3)
+        `, [pago.id, ap.egreso_id, montoAp]);
+      }
+    } else {
+      // 2b) Pago a cuenta: un único haber global
+      const saldoPrev = await saldoMovimientos(client, proveedor_id);
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, 0, $2, $3, 'pago', $4, $5, $6)
+      `, [proveedor_id, montoTotal, +(saldoPrev - montoTotal).toFixed(2), pago.id,
+          `Pago a cuenta${observaciones ? ' — ' + observaciones.trim() : ''}`.substring(0, 200), !!facturado]);
+    }
+
+    // 3) Cheques del pago
+    for (const ch of cheques) {
+      if (!ch.banco || !ch.numero_cheque || !ch.fecha_vencimiento || !ch.importe) continue;
+      await client.query(`
+        INSERT INTO pago_proveedor_cheques
+          (pago_proveedor_id, banco, numero_cheque, fecha_vencimiento, importe)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+    }
+
+    // 4) Impacto en caja si el medio es efectivo
+    if (efectivo && cajaId) {
+      await client.query(`
+        INSERT INTO movimientos_caja
+          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
+        VALUES ($1, 'egreso', $2, $3, $4, $5, 'pago_proveedor', $6)
+      `, [cajaId, `Pago a proveedor`, montoTotal, medio_pago_id, usuarioId, pago.id]);
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ pago, caja_afectada: !!(efectivo && cajaId) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/pagos-proveedor/:id/anular ─────────────────────────────────────
+// Revierte cuenta corriente, estado de los egresos imputados y, si es posible,
+// el movimiento de caja (compensa en la caja abierta de la sucursal).
+router.post('/:id/anular', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    if (!motivo || !motivo.trim()) return res.status(400).json({ error: 'El motivo de anulación es requerido' });
+
+    const { rows: pagoRows } = await client.query(
+      `SELECT * FROM pagos_proveedor WHERE id = $1`, [id]
+    );
+    const pago = pagoRows[0];
+    if (!pago) return res.status(404).json({ error: 'Pago no encontrado' });
+    if (pago.anulado) return res.status(400).json({ error: 'El pago ya está anulado' });
+
+    await client.query('BEGIN');
+
+    // 1) Marcar anulado
+    await client.query(
+      `UPDATE pagos_proveedor SET anulado = TRUE, motivo_anulacion = $1, updated_at = NOW() WHERE id = $2`,
+      [motivo.trim(), id]
+    );
+
+    // 2) Revertir imputaciones a egresos
+    const { rows: aplic } = await client.query(
+      `SELECT egreso_id, monto_aplicado FROM pago_proveedor_aplicaciones WHERE pago_proveedor_id = $1`, [id]
+    );
+    for (const ap of aplic) {
+      // Borrar los egreso_pagos generados por este pago y recalcular estado
+      await client.query(`DELETE FROM egreso_pagos WHERE egreso_id = $1 AND pago_proveedor_id = $2`,
+        [ap.egreso_id, id]);
+      const { rows: egRows } = await client.query(`SELECT total FROM egresos WHERE id = $1`, [ap.egreso_id]);
+      const { rows: pagadoRows } = await client.query(
+        `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [ap.egreso_id]
+      );
+      const total   = parseFloat(egRows[0]?.total || 0);
+      const pagado  = parseFloat(pagadoRows[0].pagado);
+      const estado  = pagado <= 0.01 ? 'pendiente'
+                    : Math.abs(pagado - total) <= 0.01 ? 'pagado' : 'parcial';
+      await client.query(`UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
+        [estado, ap.egreso_id]);
+    }
+
+    // 3) Revertir cuenta corriente por los montos EXACTOS de este pago (un debe de
+    //    corrección por cada haber generado). No se consultan los haber por origen_id
+    //    para no revertir de más si el comprobante tuvo otros pagos.
+    const reversas = aplic.length
+      ? aplic.map(a => parseFloat(a.monto_aplicado))
+      : [parseFloat(pago.monto)];
+    for (const monto of reversas) {
+      if (!monto || monto <= 0) continue;
+      const saldoPrev = await saldoMovimientos(client, pago.proveedor_id);
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, 0, $3, 'correccion', $4, 'Anulación de pago a proveedor', FALSE)
+      `, [pago.proveedor_id, monto, +(saldoPrev + monto).toFixed(2), id]);
+    }
+
+    // 4) Revertir caja (best-effort): ingreso compensatorio en la caja abierta
+    let cajaRevertida = false;
+    const { rows: movCaja } = await client.query(
+      `SELECT monto, medio_pago_id FROM movimientos_caja
+        WHERE origen_tipo = 'pago_proveedor' AND origen_id = $1 AND tipo = 'egreso'`, [id]
+    );
+    if (movCaja[0]) {
+      const cajaId = await cajaAbierta(client, pago.sucursal_id);
+      if (cajaId) {
+        await client.query(`
+          INSERT INTO movimientos_caja
+            (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
+          VALUES ($1, 'ingreso', $2, $3, $4, $5, 'pago_proveedor_anulado', $6)
+        `, [cajaId, 'Anulación pago a proveedor', movCaja[0].monto, movCaja[0].medio_pago_id,
+            req.usuario?.id ?? null, id]);
+        cajaRevertida = true;
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, caja_revertida: cajaRevertida, requiere_ajuste_caja: !!movCaja[0] && !cajaRevertida });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;

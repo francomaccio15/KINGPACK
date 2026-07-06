@@ -149,6 +149,12 @@ const IcoProveedores = () => (
     <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
   </svg>
 );
+const IcoPagoProveedores = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M16 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <rect x="8" y="2" width="8" height="4" rx="1" /><path d="M9 13l2 2 4-4" />
+  </svg>
+);
 const IcoRubros = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />
@@ -181,6 +187,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Egresos',               href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Proveedores',           href: '/proveedores',          icon: <IcoProveedores /> },
+      { label: 'Pago a Proveedores',    href: '/pagos-proveedor',      icon: <IcoPagoProveedores /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
       { label: 'Cheques',               href: '/cheques',              icon: <IcoCheques /> },
