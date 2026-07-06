@@ -108,6 +108,12 @@ export default function PagosProveedorClient() {
   const [error, setError]                 = useState<string | null>(null);
   const [okMsg, setOkMsg]                 = useState<string | null>(null);
 
+  // Anulación de un pago del historial
+  const [anularTarget, setAnularTarget]   = useState<PagoHist | null>(null);
+  const [motivoAnular, setMotivoAnular]   = useState('');
+  const [anulando, setAnulando]           = useState(false);
+  const [anularError, setAnularError]     = useState<string | null>(null);
+
   // ── Cargar catálogos ──────────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
@@ -240,6 +246,34 @@ export default function PagosProveedorClient() {
   const recargarSaldos = async () => {
     const prov = await apiFetch('/api/proveedores?limit=500&activo=all').then(r => r.json()).catch(() => ({ proveedores: [] }));
     setProveedores(prov.proveedores ?? []);
+  };
+
+  const confirmarAnular = async () => {
+    if (!anularTarget) return;
+    setAnularError(null);
+    if (!motivoAnular.trim()) { setAnularError('Ingresá el motivo de la anulación'); return; }
+    setAnulando(true);
+    try {
+      const res = await apiFetch(`/api/pagos-proveedor/${anularTarget.id}/anular`, {
+        method: 'POST', body: JSON.stringify({ motivo: motivoAnular.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAnularError(data.error ?? 'Error al anular el pago'); return; }
+      setAnularTarget(null);
+      setMotivoAnular('');
+      setOkMsg(
+        'Pago anulado.' +
+        (data.requiere_ajuste_caja
+          ? ' ⚠ No había caja abierta en la sucursal, así que el efectivo NO se reintegró a caja: ajustalo manualmente.'
+          : data.caja_revertida ? ' El efectivo se reintegró a la caja.' : '')
+      );
+      await recargarSaldos();
+      await cargarProveedor(proveedorId);
+    } catch {
+      setAnularError('Error de conexión con el servidor');
+    } finally {
+      setAnulando(false);
+    }
   };
 
   const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
@@ -495,6 +529,7 @@ export default function PagosProveedorClient() {
                       <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Medio</th>
                       <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Detalle</th>
                       <th className="text-right px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Monto</th>
+                      <th className="px-3 py-2" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-kp-border">
@@ -508,6 +543,14 @@ export default function PagosProveedorClient() {
                           {h.anulado ? ' · ANULADO' : ''}
                         </td>
                         <td className="px-4 py-2 text-right tabular-nums font-semibold text-kp-white">{fmt(h.monto)}</td>
+                        <td className="px-3 py-2 text-right">
+                          {!h.anulado && (
+                            <button onClick={() => { setAnularTarget(h); setMotivoAnular(''); setAnularError(null); }}
+                              className="text-xs text-kp-gray hover:text-kp-red px-2 py-1 rounded border border-transparent hover:border-kp-red/40 hover:bg-kp-red/10 transition-colors">
+                              Anular
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -516,6 +559,43 @@ export default function PagosProveedorClient() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Modal de anulación ── */}
+      {anularTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget && !anulando) setAnularTarget(null); }}>
+          <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">Anular pago</h3>
+              <button onClick={() => !anulando && setAnularTarget(null)} className="text-kp-gray hover:text-kp-white">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-kp-gray-lt">
+                Vas a anular el pago de <span className="font-bold text-kp-white">{fmt(anularTarget.monto)}</span> del {fmtFecha(anularTarget.fecha)} ({anularTarget.medio_pago_nombre}).
+              </p>
+              <p className="text-xs text-amber-400/80">
+                Se revertirá la cuenta corriente y el estado de los comprobantes imputados. Si fue en efectivo, se reintegra a la caja abierta de la sucursal (si no hay caja abierta, deberás ajustarla a mano).
+              </p>
+              <div>
+                <label className={labelCls}>Motivo *</label>
+                <input type="text" value={motivoAnular} onChange={e => setMotivoAnular(e.target.value)}
+                  placeholder="Ej: cargado por error" className={inputCls} autoFocus />
+              </div>
+              {anularError && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{anularError}</p>}
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setAnularTarget(null)} disabled={anulando}
+                  className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={confirmarAnular} disabled={anulando}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
+                  {anulando ? <><Spinner /> Anulando…</> : 'Anular pago'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
