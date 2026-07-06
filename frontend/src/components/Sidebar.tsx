@@ -166,6 +166,11 @@ const IcoBanco = () => (
     <line x1="14" y1="18" x2="14" y2="11" /><line x1="18" y1="18" x2="18" y2="11" /><polygon points="12 2 20 7 4 7" />
   </svg>
 );
+const IcoLicitaciones = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -207,6 +212,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Gestión',
     items: [
+      { label: 'Licitaciones', href: '/licitaciones', icon: <IcoLicitaciones /> },
       { label: 'Usuarios',   href: '/usuarios',   icon: <IcoUsuarios />   },
       { label: 'Empleados',  href: '/empleados',  icon: <IcoEmpleados />  },
       { label: 'Rep. Ventas',    href: '/reportes',                    icon: <IcoReportes />   },

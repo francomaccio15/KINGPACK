@@ -35,6 +35,7 @@ const impuestosRouter         = require('./routes/impuestos');
 const conciliacionRouter      = require('./routes/conciliacion');
 const pagoClientesRouter      = require('./routes/pago-clientes');
 const pagosProveedorRouter    = require('./routes/pagos-proveedor');
+const licitacionesRouter      = require('./routes/licitaciones');
 const { verifyToken }         = require('./middleware/auth');
 
 const app = express();
@@ -86,6 +87,7 @@ app.use('/api/impuestos',             impuestosRouter);
 app.use('/api/conciliacion',          conciliacionRouter);
 app.use('/api/pago-clientes',         pagoClientesRouter);
 app.use('/api/pagos-proveedor',       pagosProveedorRouter);
+app.use('/api/licitaciones',          licitacionesRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
