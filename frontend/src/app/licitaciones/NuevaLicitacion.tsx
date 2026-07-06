@@ -92,9 +92,15 @@ export default function NuevaLicitacion() {
   };
 
   const setItemField = (idx: number, field: 'cantidad' | 'precio_licitacion', val: string) => {
-    const n = parseFloat(val);
-    if (isNaN(n) || n < 0) return;
-    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: n } : it));
+    if (field === 'cantidad') {
+      const n = parseInt(val, 10);
+      if (isNaN(n) || n < 1) return;
+      setItems(prev => prev.map((it, i) => i === idx ? { ...it, cantidad: n } : it));
+    } else {
+      const n = parseFloat(val);
+      if (isNaN(n) || n < 0) return;
+      setItems(prev => prev.map((it, i) => i === idx ? { ...it, precio_licitacion: n } : it));
+    }
   };
 
   const quitarItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
@@ -279,7 +285,7 @@ export default function NuevaLicitacion() {
                             <td className="px-3 py-2 text-center">
                               <input
                                 type="number"
-                                min="0.001"
+                                min="1"
                                 step="1"
                                 value={it.cantidad}
                                 onChange={e => setItemField(i, 'cantidad', e.target.value)}
