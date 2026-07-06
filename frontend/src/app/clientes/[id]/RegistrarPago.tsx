@@ -32,6 +32,14 @@ export default function RegistrarPago({
   const [medioPagoId, setMedioPagoId] = useState('');
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
 
+  // Datos del cheque (solo si el método es Cheque)
+  const [chBanco, setChBanco]       = useState('');
+  const [chNumero, setChNumero]     = useState('');
+  const [chEmision, setChEmision]   = useState('');
+  const [chVenc, setChVenc]         = useState('');
+
+  const esCheque = /cheque/i.test(mediosPago.find(m => m.id === medioPagoId)?.nombre ?? '');
+
   useEffect(() => {
     if (!open) return;
     apiFetch('/api/ventas/medios-pago')
@@ -52,11 +60,13 @@ export default function RegistrarPago({
     setMonto('');
     setConcepto('');
     setMedioPagoId('');
+    setChBanco(''); setChNumero(''); setChEmision(''); setChVenc('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
+    if (esCheque && !chVenc) { setError('Ingresá la fecha de pago del cheque'); return; }
     setError('');
     setLoading(true);
     try {
@@ -67,6 +77,9 @@ export default function RegistrarPago({
           concepto,
           medio_pago_id: medioPagoId,
           sucursal_id: sucursalId,
+          cheque: esCheque
+            ? { banco: chBanco, numero_cheque: chNumero, fecha_emision: chEmision || null, fecha_vencimiento: chVenc }
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -157,6 +170,36 @@ export default function RegistrarPago({
                   </div>
                 )}
               </div>
+
+              {/* Datos del cheque */}
+              {esCheque && (
+                <div className="space-y-3 rounded-xl border border-kp-border bg-kp-surface2/40 p-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Datos del cheque</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Banco</label>
+                      <input value={chBanco} onChange={e => setChBanco(e.target.value)} placeholder="Banco"
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Nº Cheque</label>
+                      <input value={chNumero} onChange={e => setChNumero(e.target.value)} placeholder="00000000"
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
+                      <input type="date" value={chEmision} onChange={e => setChEmision(e.target.value)}
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha de pago *</label>
+                      <input type="date" value={chVenc} onChange={e => setChVenc(e.target.value)}
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
+                </div>
+              )}
 
               {/* Concepto */}
               <div>

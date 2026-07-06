@@ -256,7 +256,7 @@ router.get('/:id/movimientos', async (req, res, next) => {
 // ─── POST /api/clientes/:id/pagos ─────────────────────────────────────────────
 router.post('/:id/pagos', async (req, res, next) => {
   try {
-    const { monto, concepto, medio_pago_id, sucursal_id } = req.body;
+    const { monto, concepto, medio_pago_id, sucursal_id, cheque } = req.body;
     if (!monto || parseFloat(monto) <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
@@ -305,29 +305,61 @@ router.post('/:id/pagos', async (req, res, next) => {
         `, [req.params.id, concepto.trim()]);
       }
 
-      // Registrar en caja si hay medio_pago_id y caja abierta.
-      // El efectivo entra en la caja del OPERADOR que recibe el pago, NO en la
-      // sucursal por defecto del cliente. Un cajero sólo puede mover SU propia
-      // caja, así que para cajeros se usa siempre su sucursal del JWT (se ignora
-      // el sucursal_id del body, que trae la sucursal default del cliente).
+      // Sucursal operativa del pago. El efectivo/cheque entra en la caja del
+      // OPERADOR que recibe el pago, NO en la sucursal por defecto del cliente. Un
+      // cajero sólo puede mover SU propia caja, así que para cajeros se usa siempre
+      // su sucursal del JWT (se ignora el sucursal_id del body, que trae la sucursal
+      // default del cliente).
+      const sucId = req.usuario?.rol === 'cajero'
+        ? (req.usuario.sucursal_default_id || null)
+        : (sucursal_id || req.usuario?.sucursal_default_id || null);
+
+      // ¿El medio de pago es cheque? En ese caso registramos el cheque recibido en
+      // el módulo de cheques (en cartera) para poder seguir su vencimiento/estado.
+      let esCheque = false;
       if (medio_pago_id) {
-        const sucId = req.usuario?.rol === 'cajero'
-          ? (req.usuario.sucursal_default_id || null)
-          : (sucursal_id || req.usuario?.sucursal_default_id || null);
-        if (sucId) {
-          const { rows: cajaRows } = await dbClient.query(
-            `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
-            [sucId]
-          );
-          if (cajaRows[0]) {
-            const conceptoCaja = concepto?.trim()
-              ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
-              : `Pago cliente — ${saldoRow.razon_social}`;
-            await dbClient.query(`
-              INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
-              VALUES ($1, 'ingreso', $2, $3, $4, $5)
-            `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null]);
-          }
+        const { rows: mpRows } = await dbClient.query(
+          `SELECT nombre FROM medios_pago WHERE id = $1`, [medio_pago_id]
+        );
+        esCheque = /cheque/i.test(mpRows[0]?.nombre || '');
+      }
+
+      if (esCheque && cheque && cheque.fecha_vencimiento) {
+        if (!sucId) {
+          await dbClient.query('ROLLBACK');
+          return res.status(400).json({ error: 'No se pudo determinar la sucursal para registrar el cheque' });
+        }
+        await dbClient.query(`
+          INSERT INTO cheques_manuales
+            (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
+             importe, estado, sucursal_id, cliente_id, observaciones)
+          VALUES ('recibido', $1, $2, $3, $4, $5, 'en_cartera', $6, $7, $8)
+        `, [
+          cheque.banco?.trim() || 'S/D',
+          cheque.numero_cheque?.trim() || 'S/N',
+          cheque.fecha_emision || null,
+          cheque.fecha_vencimiento,
+          montoNum,
+          sucId,
+          req.params.id,
+          concepto?.trim() || null,
+        ]);
+      }
+
+      // Registrar en caja si hay medio_pago_id y caja abierta.
+      if (medio_pago_id && sucId) {
+        const { rows: cajaRows } = await dbClient.query(
+          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+          [sucId]
+        );
+        if (cajaRows[0]) {
+          const conceptoCaja = concepto?.trim()
+            ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
+            : `Pago cliente — ${saldoRow.razon_social}`;
+          await dbClient.query(`
+            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
+            VALUES ($1, 'ingreso', $2, $3, $4, $5)
+          `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null]);
         }
       }
 
