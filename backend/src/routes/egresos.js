@@ -422,42 +422,71 @@ router.post('/', async (req, res, next) => {
           egreso.id, `Anticipo — ${descripcion}`.substring(0, 200)]);
     }
 
-    // --- Registrar pago inmediato ---
+    // --- Registrar pago inmediato (uno o varios medios: pago dividido) ---
     let estadoFinal = estado_pago;
-    if (pago && pago.medio_pago_id && parseFloat(pago.monto) > 0) {
-      const montoPago = parseFloat(pago.monto);
+    if (pago) {
+      // Compatibilidad: `medios` (nuevo) o `medio_pago_id`+`monto` (clásico).
+      const mediosPago = (Array.isArray(pago.medios) && pago.medios.length > 0)
+        ? pago.medios.map(m => ({
+            medio_pago_id: m.medio_pago_id,
+            monto: parseFloat(m.monto),
+            cuenta_bancaria_id: m.cuenta_bancaria_id || null,
+          }))
+        : (pago.medio_pago_id && parseFloat(pago.monto) > 0
+            ? [{ medio_pago_id: pago.medio_pago_id, monto: parseFloat(pago.monto), cuenta_bancaria_id: pago.cuenta_bancaria_id || null }]
+            : []);
 
-      const { rows: pagoRows } = await client.query(`
-        INSERT INTO egreso_pagos
-          (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id
-      `, [egreso.id, pago.medio_pago_id, montoPago,
-          pago.cuenta_bancaria_id || null, pago.observaciones || null]);
-      const pagoId = pagoRows[0].id;
+      const mediosValidos = mediosPago.filter(m => m.medio_pago_id && m.monto > 0);
+      if (mediosValidos.length > 0) {
+        const totalPago = mediosValidos.reduce((s, m) => s + m.monto, 0);
 
-      for (const ch of (pago.cheques || [])) {
-        await client.query(`
-          INSERT INTO egreso_cheques
-            (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+        // Nombres para detectar el medio cheque (los cheques se atan a esa línea)
+        const { rows: mpRows } = await client.query(
+          `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
+          [mediosValidos.map(m => m.medio_pago_id)]
+        );
+        const nombreOf = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
+
+        let chequePagoId = null;
+        for (const m of mediosValidos) {
+          const { rows: pagoRows } = await client.query(`
+            INSERT INTO egreso_pagos
+              (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+          `, [egreso.id, m.medio_pago_id, m.monto, m.cuenta_bancaria_id, pago.observaciones || null]);
+          if (/cheque/i.test(nombreOf[m.medio_pago_id] || '') && !chequePagoId) {
+            chequePagoId = pagoRows[0].id;
+          }
+        }
+
+        // Cheques → atados a la línea de pago con medio cheque
+        if (chequePagoId) {
+          for (const ch of (pago.cheques || [])) {
+            await client.query(`
+              INSERT INTO egreso_cheques
+                (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
+              VALUES ($1, $2, $3, $4, $5, $6)
+            `, [chequePagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+          }
+        }
+
+        // Haber en cuenta corriente del proveedor por el total pagado
+        if (proveedor_id) {
+          const saldo = await calcularSaldoProveedor(client, proveedor_id);
+          await client.query(`
+            INSERT INTO cuentas_corrientes_proveedor
+              (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+            VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago', $5)
+          `, [proveedor_id, totalPago, +(saldo - totalPago).toFixed(2), egreso.id, esFacturado]);
+        }
+
+        estadoFinal = Math.abs(totalPago - totalNum) <= 0.01 ? 'pagado' : 'parcial';
+        await client.query(
+          `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
+          [estadoFinal, egreso.id]
+        );
       }
-
-      if (proveedor_id) {
-        const saldo = await calcularSaldoProveedor(client, proveedor_id);
-        await client.query(`
-          INSERT INTO cuentas_corrientes_proveedor
-            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
-          VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago', $5)
-        `, [proveedor_id, montoPago, +(saldo - montoPago).toFixed(2), egreso.id, esFacturado]);
-      }
-
-      estadoFinal = Math.abs(montoPago - totalNum) <= 0.01 ? 'pagado' : 'parcial';
-      await client.query(
-        `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
-        [estadoFinal, egreso.id]
-      );
     }
 
     // --- Costo de flete: egreso aparte en el subrubro "Transporte de carga" ---

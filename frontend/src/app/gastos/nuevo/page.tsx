@@ -109,12 +109,10 @@ export default function NuevoEgresoPage() {
   // Costo de flete (se registra como egreso aparte, subrubro "Transporte de carga")
   const [costoFlete, setCostoFlete] = useState('');
 
-  // Pago
+  // Pago (uno o varios medios: pago dividido)
   const [estadoPago, setEstadoPago] = useState<'pendiente' | 'pagado'>('pendiente');
   const [fechaVenc, setFechaVenc] = useState('');
-  const [medioPagoId, setMedioPagoId] = useState('');
-  const [montoPago, setMontoPago] = useState('');
-  const [cuentaBancariaId, setCuentaBancariaId] = useState('');
+  const [pagoMedios, setPagoMedios] = useState<{ medio_pago_id: string; monto: string; cuenta_bancaria_id: string }[]>([]);
   const [cheques, setCheques] = useState<{ banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string }[]>([]);
 
   // Anticipo a vincular
@@ -142,10 +140,14 @@ export default function NuevoEgresoPage() {
     ]).then(([suc, prov, rub, mp, cb]) => {
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
-      if (sArr.length > 0) setSucursalId(sArr[0].id);
+      // Sucursal por defecto: Laprida (si existe); si no, la primera.
+      const laprida = sArr.find((s: { nombre: string }) => /laprida/i.test(s.nombre));
+      if (sArr.length > 0) setSucursalId((laprida ?? sArr[0]).id);
       setProveedores(prov.proveedores ?? []);
       setRubros(rub.rubros ?? []);
-      setMediosPago(mp.medios ?? mp.medios_pago ?? []);
+      const mediosArr = mp.medios ?? mp.medios_pago ?? [];
+      setMediosPago(mediosArr);
+      if (mediosArr.length > 0) setPagoMedios([{ medio_pago_id: mediosArr[0].id, monto: '', cuenta_bancaria_id: '' }]);
       setCuentasBancarias(cb.cuentas ?? []);
     }).catch(() => {});
   }, []);
@@ -173,6 +175,7 @@ export default function NuevoEgresoPage() {
     setPercepcionesIb('');
     setOtrosImpuestos('');
     setTotalComprobante('');
+    setCostoFlete('');
     setSaveError(null);
     if (TIPOS_CON_COMPROBANTE.includes(tipoOp)) {
       setTipoComp('factura_a');
@@ -180,6 +183,16 @@ export default function NuevoEgresoPage() {
       setTipoComp('');
     }
   }, [tipoOp]);
+
+  // ── Al incluir un medio Cheque, mostrar una fila de cheque lista para completar ─
+  useEffect(() => {
+    const hayChequeAhora = pagoMedios.some(m => /cheque/i.test(mediosPago.find(mp => mp.id === m.medio_pago_id)?.nombre ?? ''));
+    if (hayChequeAhora) {
+      setCheques(prev => prev.length === 0 ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }] : prev);
+    } else {
+      setCheques([]);
+    }
+  }, [pagoMedios, mediosPago]);
 
   // ── IVA automático para facturas en blanco ────────────────────────────────
   useEffect(() => {
@@ -254,8 +267,31 @@ export default function NuevoEgresoPage() {
   const updateCheque = (idx: number, f: string, v: string) => setCheques(p => p.map((c, i) => i === idx ? { ...c, [f]: v } : c));
   const removeCheque = (idx: number) => setCheques(p => p.filter((_, i) => i !== idx));
 
-  const medioSeleccionado = mediosPago.find(m => m.id === medioPagoId);
-  const esCheque = medioSeleccionado?.nombre?.toLowerCase().includes('cheque');
+  // ── Medios de pago (pago dividido) ────────────────────────────────────────
+  const nombreMedio    = (id: string) => mediosPago.find(m => m.id === id)?.nombre ?? '';
+  const esChequeId     = (id: string) => /cheque/i.test(nombreMedio(id));
+  const requiereCuenta = (id: string) => !!mediosPago.find(m => m.id === id)?.requiere_cuenta;
+  const hayCheque      = pagoMedios.some(m => esChequeId(m.medio_pago_id));
+
+  const totalCheques   = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+  const montoLinea     = (m: { medio_pago_id: string; monto: string }) =>
+    esChequeId(m.medio_pago_id) ? totalCheques : (parseFloat(m.monto) || 0);
+  const totalPagoMedios = pagoMedios.reduce((s, m) => s + montoLinea(m), 0);
+
+  const addMedioPago = () => {
+    const usados = new Set(pagoMedios.map(m => m.medio_pago_id));
+    const libre = mediosPago.find(m => !usados.has(m.id)) ?? mediosPago[0];
+    if (libre) setPagoMedios(p => [...p, { medio_pago_id: libre.id, monto: '', cuenta_bancaria_id: '' }]);
+  };
+  const updMedioPago = (i: number, f: 'medio_pago_id' | 'monto' | 'cuenta_bancaria_id', v: string) =>
+    setPagoMedios(p => p.map((m, j) => j === i ? { ...m, [f]: v } : m));
+  const delMedioPago = (i: number) => setPagoMedios(p => p.length > 1 ? p.filter((_, j) => j !== i) : p);
+  const restoMedioPago = (i: number) => {
+    const objetivo = parseFloat(totalComprobante) || 0;
+    return +(objetivo - pagoMedios.reduce((s, m, j) => s + (j === i ? 0 : montoLinea(m)), 0)).toFixed(2);
+  };
+
+  const esCheque = hayCheque;
 
   // ── Validación y envío ────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -275,7 +311,14 @@ export default function NuevoEgresoPage() {
     if (TIPOS_CON_COMPROBANTE.includes(tipoOp) && !totalOk) {
       return setSaveError(`El total (${ars.format(totalNum)}) no coincide con la suma de netos e impuestos (${ars.format(sumaFiscal)})`);
     }
-    if (estadoPago === 'pagado' && !medioPagoId) return setSaveError('Seleccioná el medio de pago');
+    if (estadoPago === 'pagado') {
+      if (pagoMedios.length === 0 || pagoMedios.some(m => !m.medio_pago_id)) return setSaveError('Seleccioná el medio de pago');
+      if (pagoMedios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setSaveError('Ingresá el monto de cada medio de pago');
+      if (pagoMedios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setSaveError('Seleccioná la cuenta bancaria del medio correspondiente');
+      if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) return setSaveError('Cargá el detalle de los cheques');
+      if (totalPagoMedios <= 0) return setSaveError('El monto pagado debe ser mayor a 0');
+      if (totalPagoMedios - parseFloat(totalComprobante) > 0.01) return setSaveError('El pago no puede superar el total del comprobante');
+    }
 
     const body: Record<string, unknown> = {
       tipo_operacion: tipoOp,
@@ -308,12 +351,15 @@ export default function NuevoEgresoPage() {
       })),
     };
 
-    if (estadoPago === 'pagado' && medioPagoId) {
+    if (estadoPago === 'pagado' && pagoMedios.length > 0) {
       body.pago = {
-        medio_pago_id: medioPagoId,
-        monto: parseFloat(montoPago) || parseFloat(totalComprobante),
-        cuenta_bancaria_id: cuentaBancariaId || null,
-        cheques: esCheque ? cheques : [],
+        monto: totalPagoMedios,
+        medios: pagoMedios.map(m => ({
+          medio_pago_id: m.medio_pago_id,
+          monto: montoLinea(m),
+          cuenta_bancaria_id: m.cuenta_bancaria_id || null,
+        })),
+        cheques: hayCheque ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe) : [],
       };
     }
 
@@ -352,7 +398,7 @@ export default function NuevoEgresoPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Comprobante — Compra</h2>
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Nuevo Egreso</h2>
         </div>
         <Link href="/gastos" className="text-sm text-kp-gray hover:text-kp-white transition-colors">
           ← Volver a Egresos
@@ -831,7 +877,8 @@ export default function NuevoEgresoPage() {
         </div>
       </div>
 
-      {/* ── Costo de flete (egreso aparte, subrubro "Transporte de carga") ── */}
+      {/* ── Costo de flete (solo Compra de Mercadería) — egreso aparte, subrubro "Transporte de carga" ── */}
+      {tipoOp === 'compra_mercaderia' && (
       <div className={sectionCls}>
         <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Costo de flete</h3>
         <div className="grid grid-cols-2 gap-4">
@@ -855,6 +902,7 @@ export default function NuevoEgresoPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Sección 7: Forma de pago ─── */}
       <div className={sectionCls}>
@@ -876,30 +924,77 @@ export default function NuevoEgresoPage() {
         </div>
 
         {estadoPago === 'pagado' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 border-t border-kp-border">
-            <div>
-              <label className={labelCls}>Medio de pago *</label>
-              <select value={medioPagoId} onChange={e => setMedioPagoId(e.target.value)} className={inputCls}>
-                <option value="">— Seleccionar —</option>
-                {mediosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-              </select>
+          <div className="space-y-2 pt-2 border-t border-kp-border">
+            <div className="flex items-center justify-between">
+              <label className={labelCls}>Medios de pago * <span className="normal-case text-kp-gray/60">— podés dividir el pago</span></label>
+              <button type="button" onClick={addMedioPago}
+                className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Agregar medio
+              </button>
             </div>
 
-            <div>
-              <label className={labelCls}>Monto pagado</label>
-              <NumericInput placeholder={totalComprobante || '0.00'}
-                value={montoPago} onChange={e => setMontoPago(e.target.value)} className={inputCls} />
-            </div>
+            {pagoMedios.map((m, i) => {
+              const cheque = esChequeId(m.medio_pago_id);
+              const cuenta = requiereCuenta(m.medio_pago_id);
+              const resto  = restoMedioPago(i);
+              return (
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface/60 p-2">
+                  <div className="sm:col-span-4">
+                    <label className={labelCls}>Medio</label>
+                    <select value={m.medio_pago_id} onChange={e => updMedioPago(i, 'medio_pago_id', e.target.value)} className={inputCls}>
+                      {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className={cuenta ? 'sm:col-span-4' : 'sm:col-span-7'}>
+                    <div className="flex items-center justify-between">
+                      <label className={labelCls}>Monto</label>
+                      {!cheque && resto > 0 && (
+                        <button type="button" onClick={() => updMedioPago(i, 'monto', String(resto))}
+                          className="text-[10px] text-kp-red hover:underline mb-1">usar resto {ars.format(resto)}</button>
+                      )}
+                    </div>
+                    {cheque
+                      ? <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt`}>
+                          <span className="tabular-nums">{ars.format(totalCheques)}</span>
+                          <span className="text-[10px] text-kp-gray">según cheques ↓</span>
+                        </div>
+                      : <NumericInput value={m.monto} placeholder="0.00" onChange={e => updMedioPago(i, 'monto', e.target.value)} className={inputCls} />
+                    }
+                  </div>
+                  {cuenta && (
+                    <div className="sm:col-span-3">
+                      <label className={labelCls}>Cuenta *</label>
+                      <select value={m.cuenta_bancaria_id} onChange={e => updMedioPago(i, 'cuenta_bancaria_id', e.target.value)} className={inputCls}>
+                        <option value="">— Cuenta —</option>
+                        {cuentasBancarias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="sm:col-span-1 flex justify-end">
+                    {pagoMedios.length > 1 && (
+                      <button type="button" onClick={() => delMedioPago(i)} title="Quitar medio"
+                        className="text-kp-gray hover:text-kp-red px-2 py-2">✕</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
 
-            {medioSeleccionado?.requiere_cuenta && (
-              <div>
-                <label className={labelCls}>Cuenta bancaria</label>
-                <select value={cuentaBancariaId} onChange={e => setCuentaBancariaId(e.target.value)} className={inputCls}>
-                  <option value="">— Seleccionar —</option>
-                  {cuentasBancarias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+            {/* Total pagado */}
+            <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
+              <span className="text-xs uppercase tracking-widest text-kp-gray">Total pagado</span>
+              <div className="text-right">
+                <span className={`text-sm font-bold tabular-nums ${totalPagoMedios > 0 && Math.abs(totalPagoMedios - (parseFloat(totalComprobante) || 0)) <= 0.01 ? 'text-green-400' : 'text-kp-white'}`}>
+                  {ars.format(totalPagoMedios)}
+                </span>
+                {parseFloat(totalComprobante) > 0 && totalPagoMedios > 0 && totalPagoMedios < parseFloat(totalComprobante) - 0.01 && (
+                  <span className="block text-[11px] text-amber-400">Pago parcial — quedan {ars.format(parseFloat(totalComprobante) - totalPagoMedios)}</span>
+                )}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -909,8 +1004,8 @@ export default function NuevoEgresoPage() {
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques</p>
               <button type="button" onClick={addCheque}
-                className="flex items-center gap-1 text-xs text-kp-gray hover:text-kp-white transition-colors px-2 py-1 rounded border border-kp-border hover:border-kp-gray">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Agregar cheque
@@ -951,9 +1046,7 @@ export default function NuevoEgresoPage() {
             {cheques.length > 0 && (
               <div className="flex justify-end text-sm">
                 <span className="text-kp-gray mr-2">Total cheques:</span>
-                <span className={`tabular-nums font-bold ${Math.abs(cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0) - (parseFloat(montoPago) || parseFloat(totalComprobante) || 0)) > 0.01 ? 'text-kp-red' : 'text-green-400'}`}>
-                  {ars.format(cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0))}
-                </span>
+                <span className="tabular-nums font-bold text-kp-white">{ars.format(totalCheques)}</span>
               </div>
             )}
           </div>
@@ -979,7 +1072,7 @@ export default function NuevoEgresoPage() {
             disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? <><Spinner /> Guardando…</> : 'Confirmar Compra'}
+            {saving ? <><Spinner /> Guardando…</> : 'Confirmar Egreso'}
           </button>
         </div>
       </div>
