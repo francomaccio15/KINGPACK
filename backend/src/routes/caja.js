@@ -355,7 +355,7 @@ router.post('/:id/cerrar', async (req, res, next) => {
     // es efectivo (o no se especificó, p. ej. un depósito manual de gerencia).
     const { rows: cajaRows } = await client.query(`
       SELECT
-        c.id, c.saldo_inicial,
+        c.id, c.saldo_inicial, c.sucursal_id,
         COALESCE(SUM(CASE
           WHEN m.tipo IN ('ingreso','venta')
            AND (LOWER(mp.nombre) LIKE '%efectivo%' OR m.medio_pago_id IS NULL)
@@ -365,7 +365,7 @@ router.post('/:id/cerrar', async (req, res, next) => {
       LEFT JOIN movimientos_caja m ON m.caja_id = c.id
       LEFT JOIN medios_pago mp ON mp.id = m.medio_pago_id
       WHERE c.id = $1 AND c.estado = 'abierta'
-      GROUP BY c.id, c.saldo_inicial
+      GROUP BY c.id, c.saldo_inicial, c.sucursal_id
     `, [id]);
 
     if (cajaRows.length === 0) {
@@ -390,6 +390,17 @@ router.post('/:id/cerrar', async (req, res, next) => {
       WHERE id = $4
       RETURNING id, estado, fecha_cierre, saldo_final_sistema, saldo_final_real, diferencia
     `, [saldoSistema.toFixed(2), saldoReal.toFixed(2), diferencia.toFixed(2), id]);
+
+    // El efectivo real contado queda guardado en la caja fuerte de la sucursal.
+    // Se acumula sobre el saldo previo (idempotente: el cierre solo corre una vez
+    // porque exige estado = 'abierta').
+    await client.query(`
+      INSERT INTO caja_fuerte (sucursal_id, saldo)
+      VALUES ($1, $2)
+      ON CONFLICT (sucursal_id) DO UPDATE
+        SET saldo      = caja_fuerte.saldo + EXCLUDED.saldo,
+            updated_at = NOW()
+    `, [caja.sucursal_id, saldoReal.toFixed(2)]);
 
     await client.query('COMMIT');
     res.json({ caja: updRows[0] });

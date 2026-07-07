@@ -27,6 +27,7 @@ router.get('/', async (req, res, next) => {
       transaccionesHoy,
       cobrosPorCuentaHoy,
       cobrosPorCuentaMes,
+      cajaFuerte,
     ] = await Promise.all([
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
@@ -205,6 +206,19 @@ router.get('/', async (req, res, next) => {
         GROUP BY vp.cuenta_destino
         ORDER BY monto_mes DESC
       `, p),
+
+      // Caja fuerte: efectivo acumulado por sucursal (todas las sucursales activas)
+      pool.query(`
+        SELECT
+          s.id           AS sucursal_id,
+          s.nombre       AS sucursal_nombre,
+          COALESCE(cf.saldo, 0)::float AS saldo,
+          cf.updated_at
+        FROM sucursales s
+        LEFT JOIN caja_fuerte cf ON cf.sucursal_id = s.id
+        WHERE s.activo = true
+        ORDER BY s.nombre
+      `),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
@@ -252,6 +266,7 @@ router.get('/', async (req, res, next) => {
       transacciones_hoy:      transaccionesHoy.rows,
       cobros_por_cuenta_hoy:  cobrosPorCuentaHoy.rows,
       cobros_por_cuenta_mes:  cobrosPorCuentaMes.rows,
+      caja_fuerte:            cajaFuerte.rows,
     });
   } catch (err) { next(err); }
 });

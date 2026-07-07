@@ -41,6 +41,13 @@ export type TransaccionHoy = {
   medios_pago: string | null;
 };
 
+export type CajaFuerteData = {
+  sucursal_id:     string;
+  sucursal_nombre: string;
+  saldo:           number;
+  updated_at:      string | null;
+};
+
 export type DashboardData = {
   ventas_hoy:        { cantidad: number; monto: number };
   ventas_ayer:       { cantidad: number; monto: number };
@@ -71,6 +78,7 @@ export type DashboardData = {
   transacciones_hoy:      TransaccionHoy[];
   cobros_por_cuenta_hoy:  CuentaData[];
   cobros_por_cuenta_mes:  { cuenta_destino: string; monto_mes: number }[];
+  caja_fuerte:            CajaFuerteData[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,20 +173,6 @@ function QuickAction({ href, label, sub, iconBg, iconColor, icon }: {
         <p className="text-xs text-kp-gray mt-1">{sub}</p>
       </div>
     </Link>
-  );
-}
-
-function EstadoBadge({ estado }: { estado: string }) {
-  const map: Record<string, string> = {
-    confirmada: 'bg-emerald-500/15 text-emerald-400',
-    facturada:  'bg-sky-500/15 text-sky-400',
-    preventa:   'bg-amber-500/15 text-amber-400',
-    anulada:    'bg-rose-500/15 text-rose-400',
-  };
-  return (
-    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${map[estado] ?? 'bg-kp-surface2 text-kp-gray'}`}>
-      {estado}
-    </span>
   );
 }
 
@@ -289,6 +283,7 @@ const IcoCard   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const IcoTransfer=() => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>;
 const IcoQR     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3"/><rect x="16" y="5" width="3" height="3"/><rect x="5" y="16" width="3" height="3"/><path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3"/></svg>;
 const IcoBank   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2L2 7h20L12 2z"/></svg>;
+const IcoVault  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5V6M12 18v-2.5M15.5 12H18M6 12h2.5"/></svg>;
 
 // ─── Medio de pago helpers ────────────────────────────────────────────────────
 function medioStyle(nombre: string): { icon: React.ReactNode; bg: string; color: string; bar: string } {
@@ -362,68 +357,53 @@ function CobrosDelDia({
           })}
         </div>
       )}
+    </section>
+  );
+}
 
-      {/* Tabla de transacciones del día */}
-      {transacciones.length > 0 && (
-        <div className="rounded-xl border border-kp-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-kp-border bg-kp-surface2 flex items-center justify-between">
-            <p className="text-xs font-bold text-kp-gray uppercase tracking-widest">Detalle de transacciones de hoy</p>
-            <Link href="/ventas" className="text-xs text-kp-red hover:underline font-semibold">Ver todas →</Link>
+// ─── CajaFuertePanel: efectivo acumulado por sucursal (solo administrador) ─────
+function CajaFuertePanel({ cajas }: { cajas: CajaFuerteData[] }) {
+  if (!cajas || cajas.length === 0) return null;
+
+  const total = cajas.reduce((a, c) => a + c.saldo, 0);
+
+  return (
+    <section className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+          <span className="w-5 h-px bg-kp-border inline-block" />
+          Efectivo en caja fuerte
+          <span className="flex-1 h-px bg-kp-border inline-block" />
+        </p>
+        {cajas.length > 1 && (
+          <span className="text-xs text-kp-gray ml-3 flex-shrink-0">
+            Total: <span className="text-kp-white font-bold">{fmt(total)}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Cards por sucursal */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {cajas.map(c => (
+          <div key={c.sucursal_id} className="rounded-xl border border-emerald-500/20 bg-kp-surface p-5 flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
+              <span className="text-emerald-400"><IcoVault /></span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
+                Caja fuerte · {c.sucursal_nombre}
+              </p>
+              <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
+              {c.updated_at && (
+                <p className="text-[10px] text-kp-gray mt-1.5">
+                  Últ. cierre: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm bg-kp-surface">
-              <thead>
-                <tr className="border-b border-kp-border">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">Hora</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">#</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray">Cliente</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell">Medio de pago</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Estado</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Monto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-kp-border">
-                {transacciones.map(t => {
-                  const hora = new Date(t.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-                  return (
-                    <tr key={t.id} className="hover:bg-kp-surface2 transition-colors">
-                      <td className="px-4 py-2.5 text-xs font-mono text-kp-gray whitespace-nowrap">{hora}</td>
-                      <td className="px-4 py-2.5">
-                        <Link href={`/ventas/${t.id}`} className="font-mono font-bold text-kp-red hover:underline text-xs">
-                          #{t.numero}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-kp-white max-w-[140px] truncate">{t.cliente}</td>
-                      <td className="px-4 py-2.5 hidden md:table-cell">
-                        {t.medios_pago ? (
-                          <div className="flex flex-wrap gap-1">
-                            {t.medios_pago.split(' + ').map(mp => {
-                              const s = medioStyle(mp);
-                              return (
-                                <span key={mp} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.color}`}>
-                                  {mp}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-kp-gray">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 hidden sm:table-cell">
-                        <EstadoBadge estado={t.estado} />
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-bold text-kp-white text-sm tabular-nums whitespace-nowrap">
-                        {fmt(t.total)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
     </section>
   );
 }
@@ -753,6 +733,11 @@ export default function DashboardView({
           />
         </div>
       </section>
+
+      {/* ── Efectivo en caja fuerte — solo administrador ── */}
+      {userRol === 'administrador' && (
+        <CajaFuertePanel cajas={d.caja_fuerte ?? []} />
+      )}
 
       {/* ── Cobros del día por medio de pago ── */}
       <CobrosDelDia
