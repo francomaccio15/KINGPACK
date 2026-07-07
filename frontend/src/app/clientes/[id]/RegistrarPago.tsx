@@ -111,7 +111,7 @@ export default function RegistrarPago({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
           onClick={e => { if (e.target === e.currentTarget) cerrar(); }}
         >
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
               <div className="flex items-center gap-2">
@@ -121,7 +121,7 @@ export default function RegistrarPago({
               <button onClick={cerrar} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
 
               {/* Saldo actual */}
               <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
