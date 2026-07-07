@@ -78,6 +78,9 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
 
   const totalUnidades = items.reduce((s: number, i: any) => s + parseFloat(i.cantidad ?? 0), 0);
 
+  const formatCantidad = (v: any) =>
+    parseFloat(v ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+
   // Número de remito legible (últimos 8 chars del UUID)
   const nroRemito = String(traspaso.id).replace(/-/g, '').slice(-8).toUpperCase();
 
@@ -145,7 +148,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
           </div>
           <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4">
             <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">Unidades</p>
-            <p className="text-lg font-bold tabular-nums text-kp-white">{totalUnidades.toFixed(3)}</p>
+            <p className="text-lg font-bold tabular-nums text-kp-white">{formatCantidad(totalUnidades)}</p>
           </div>
           {traspaso.fecha_envio && (
             <div className="bg-kp-surface2 border border-blue-500/20 rounded-xl p-4">
@@ -227,7 +230,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
                 <tr key={item.articulo_id} className="hover:bg-kp-surface2 transition-colors">
                   <td className="px-4 py-3 font-medium text-kp-white">{item.articulo_nombre}</td>
                   <td className="px-4 py-3 text-xs text-kp-gray font-mono">{item.articulo_codigo}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-kp-white">{item.cantidad}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-kp-white">{formatCantidad(item.cantidad)}</td>
                   {esAdmin && (
                     <td className={`px-4 py-3 text-right tabular-nums text-sm ${
                       parseFloat(item.stock_origen) < parseFloat(item.cantidad)
@@ -254,7 +257,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
               <tfoot>
                 <tr className="bg-kp-surface2 border-t border-kp-border">
                   <td colSpan={2} className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-kp-gray">Total</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">{totalUnidades.toFixed(3)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">{formatCantidad(totalUnidades)}</td>
                   {esAdmin && <td />}
                 </tr>
               </tfoot>
@@ -354,7 +357,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
                   <tr key={item.articulo_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-3 py-2 border-b border-gray-100 font-medium">{item.articulo_nombre}</td>
                     <td className="px-3 py-2 border-b border-gray-100 font-mono text-xs text-gray-500">{item.articulo_codigo}</td>
-                    <td className="px-3 py-2 border-b border-gray-100 text-right tabular-nums font-semibold">{item.cantidad}</td>
+                    <td className="px-3 py-2 border-b border-gray-100 text-right tabular-nums font-semibold">{formatCantidad(item.cantidad)}</td>
                   </tr>
                 ))}
                 {items.length === 0 && (
@@ -370,7 +373,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
                       Total — {items.length} artículo{items.length !== 1 ? 's' : ''}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-black rounded-br-lg">
-                      {totalUnidades.toFixed(3)} ud.
+                      {formatCantidad(totalUnidades)} ud.
                     </td>
                   </tr>
                 </tfoot>
