@@ -36,6 +36,7 @@ interface PagoHist {
   observaciones: string | null;
   anulado: boolean;
   aplicaciones_count: string;
+  proveedor_nombre?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,6 +87,11 @@ export default function PagosProveedorClient() {
   const [pendientes, setPendientes]       = useState<EgresoPendiente[]>([]);
   const [loadingPend, setLoadingPend]     = useState(false);
   const [historial, setHistorial]         = useState<PagoHist[]>([]);
+
+  // Registro global de todos los pagos a proveedores (siempre visible)
+  const [todosPagos, setTodosPagos]       = useState<PagoHist[]>([]);
+  const [loadingTodos, setLoadingTodos]   = useState(false);
+  const [filtroRegistro, setFiltroRegistro] = useState('');
 
   // Modo de pago
   const [modo, setModo]                   = useState<'aplicar' | 'cuenta'>('aplicar');
@@ -161,6 +167,29 @@ export default function PagosProveedorClient() {
     if (proveedorId) cargarProveedor(proveedorId);
     else { setPendientes([]); setHistorial([]); setAplic({}); }
   }, [proveedorId, cargarProveedor]);
+
+  // ── Registro global: todos los pagos a proveedores ─────────────────────────
+  const cargarTodos = useCallback(async () => {
+    setLoadingTodos(true);
+    try {
+      const data = await apiFetch('/api/pagos-proveedor?limit=200&incluir_anulados=true')
+        .then(r => r.json()).catch(() => ({ pagos: [] }));
+      setTodosPagos(data.pagos ?? []);
+    } finally {
+      setLoadingTodos(false);
+    }
+  }, []);
+
+  useEffect(() => { cargarTodos(); }, [cargarTodos]);
+
+  const registroFiltrado = useMemo(() => {
+    const q = filtroRegistro.trim().toLowerCase();
+    if (!q) return todosPagos;
+    return todosPagos.filter(p =>
+      (p.proveedor_nombre ?? '').toLowerCase().includes(q) ||
+      (p.observaciones ?? '').toLowerCase().includes(q) ||
+      (p.medio_pago_nombre ?? '').toLowerCase().includes(q));
+  }, [filtroRegistro, todosPagos]);
 
   // ── Derivados ──────────────────────────────────────────────────────────────
   const proveedor = proveedores.find(p => p.id === proveedorId);
@@ -278,6 +307,7 @@ export default function PagosProveedorClient() {
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
       await recargarSaldos();
       await cargarProveedor(proveedorId);
+      await cargarTodos();
     } catch {
       setError('Error de conexión con el servidor');
     } finally {
@@ -305,7 +335,8 @@ export default function PagosProveedorClient() {
       setMotivoAnular('');
       setOkMsg('Pago anulado.');
       await recargarSaldos();
-      await cargarProveedor(proveedorId);
+      if (proveedorId) await cargarProveedor(proveedorId);
+      await cargarTodos();
     } catch {
       setAnularError('Error de conexión con el servidor');
     } finally {
@@ -672,6 +703,68 @@ export default function PagosProveedorClient() {
           )}
         </>
       )}
+
+      {/* ── Registro global de pagos a proveedores (siempre visible) ── */}
+      <div className="pt-2 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-5 bg-kp-red rounded-full block" />
+            <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">Registro de pagos a proveedores</h3>
+            <span className="text-xs text-kp-gray">({registroFiltrado.length})</span>
+          </div>
+          <input
+            type="search"
+            value={filtroRegistro}
+            onChange={e => setFiltroRegistro(e.target.value)}
+            placeholder="Buscar por proveedor, medio u observación…"
+            className="w-full sm:w-80 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+          />
+        </div>
+
+        <div className="rounded-xl border border-kp-border overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-kp-surface2 border-b border-kp-border">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Fecha</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Proveedor</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Medio</th>
+                <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Detalle</th>
+                <th className="text-right px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Monto</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-kp-border">
+              {loadingTodos ? (
+                <tr><td colSpan={6} className="text-center py-10 text-kp-gray"><div className="flex justify-center"><Spinner /></div></td></tr>
+              ) : registroFiltrado.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-sm text-kp-gray">
+                  {filtroRegistro ? 'No hay pagos que coincidan con la búsqueda.' : 'Todavía no se registraron pagos a proveedores.'}
+                </td></tr>
+              ) : registroFiltrado.map(h => (
+                <tr key={h.id} className={`bg-kp-surface transition-colors hover:bg-kp-surface2 ${h.anulado ? 'opacity-40 line-through' : ''}`}>
+                  <td className="px-4 py-2 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(h.fecha)}</td>
+                  <td className="px-4 py-2 text-xs font-semibold text-kp-white">{h.proveedor_nombre ?? '—'}</td>
+                  <td className="px-4 py-2 text-xs text-kp-gray-lt whitespace-nowrap">{h.medio_pago_nombre}{h.sucursal_nombre ? ` · ${h.sucursal_nombre}` : ''}</td>
+                  <td className="px-4 py-2 text-xs text-kp-gray-lt max-w-[280px] truncate">
+                    {parseInt(h.aplicaciones_count) > 0 ? `${h.aplicaciones_count} comprobante(s)` : 'Pago a cuenta'}
+                    {h.observaciones ? ` — ${h.observaciones}` : ''}
+                    {h.anulado ? ' · ANULADO' : ''}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-kp-white whitespace-nowrap">{fmt(h.monto)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {!h.anulado && (
+                      <button onClick={() => { setAnularTarget(h); setMotivoAnular(''); setAnularError(null); }}
+                        className="text-xs text-kp-gray hover:text-kp-red px-2 py-1 rounded border border-transparent hover:border-kp-red/40 hover:bg-kp-red/10 transition-colors">
+                        Anular
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* ── Modal de anulación ── */}
       {anularTarget && (
