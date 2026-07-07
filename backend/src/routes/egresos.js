@@ -3,6 +3,27 @@ const { pool } = require('../config/db');
 
 const router = express.Router();
 
+// Descuenta de la caja fuerte de la sucursal los pagos hechos con el medio
+// "Efectivo Caja Fuerte". `medios` = [{ medio_pago_id, monto }].
+async function descontarCajaFuerte(client, sucursalId, medios) {
+  if (!sucursalId || !Array.isArray(medios) || medios.length === 0) return;
+  const ids = medios.map(m => m.medio_pago_id).filter(Boolean);
+  if (ids.length === 0) return;
+  const { rows } = await client.query(
+    `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [ids]
+  );
+  const esCajaFuerte = new Set(rows.filter(r => /caja fuerte/i.test(r.nombre)).map(r => r.id));
+  const totalCF = medios.reduce(
+    (s, m) => esCajaFuerte.has(m.medio_pago_id) ? s + (parseFloat(m.monto) || 0) : s, 0
+  );
+  if (totalCF > 0) {
+    await client.query(
+      `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
+      [totalCF.toFixed(2), sucursalId]
+    );
+  }
+}
+
 // ─── GET /api/egresos/rubros ──────────────────────────────────────────────────
 // Devuelve rubros con sus subrubros para el selector en caja
 router.get('/rubros', async (req, res, next) => {
@@ -481,6 +502,10 @@ router.post('/', async (req, res, next) => {
           `, [proveedor_id, totalPago, +(saldo - totalPago).toFixed(2), egreso.id, esFacturado]);
         }
 
+        // Si se pagó con "Efectivo Caja Fuerte", descontar de la caja fuerte
+        // de la sucursal del egreso.
+        await descontarCajaFuerte(client, sucursal_id, mediosValidos);
+
         estadoFinal = Math.abs(totalPago - totalNum) <= 0.01 ? 'pagado' : 'parcial';
         await client.query(
           `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
@@ -620,7 +645,7 @@ router.post('/:id/pago', async (req, res, next) => {
     if (!montoPago || montoPago <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
     const { rows: egresoRows } = await pool.query(
-      `SELECT id, total, proveedor_id, estado_pago, tipo_comprobante FROM egresos WHERE id = $1`, [id]
+      `SELECT id, total, proveedor_id, estado_pago, tipo_comprobante, sucursal_id FROM egresos WHERE id = $1`, [id]
     );
     if (!egresoRows[0]) return res.status(404).json({ error: 'Egreso no encontrado' });
     if (egresoRows[0].estado_pago === 'pagado') {
@@ -636,6 +661,10 @@ router.post('/:id/pago', async (req, res, next) => {
       RETURNING id
     `, [id, medio_pago_id, montoPago, cuenta_bancaria_id || null, observaciones || null]);
     const pagoId = pagoRows[0].id;
+
+    // Si se pagó con "Efectivo Caja Fuerte", descontar de la caja fuerte
+    // de la sucursal del egreso.
+    await descontarCajaFuerte(client, egresoRows[0].sucursal_id, [{ medio_pago_id, monto: montoPago }]);
 
     for (const ch of cheques) {
       await client.query(`
