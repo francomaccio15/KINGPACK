@@ -20,24 +20,6 @@ async function saldoMovimientos(client, proveedorId) {
   return parseFloat(rows[0].saldo) || 0;
 }
 
-async function esMedioEfectivo(client, medioPagoId) {
-  const { rows } = await client.query(
-    `SELECT nombre FROM medios_pago WHERE id = $1`, [medioPagoId]
-  );
-  return !!rows[0] && /efectivo/i.test(rows[0].nombre || '');
-}
-
-// Caja abierta de una sucursal (la más reciente si hubiera más de una).
-async function cajaAbierta(client, sucursalId) {
-  if (!sucursalId) return null;
-  const { rows } = await client.query(
-    `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta'
-      ORDER BY fecha_apertura DESC LIMIT 1`,
-    [sucursalId]
-  );
-  return rows[0]?.id || null;
-}
-
 // ─── GET /api/pagos-proveedor ─────────────────────────────────────────────────
 // ?proveedor_id=  ?fecha_desde=  ?fecha_hasta=  ?incluir_anulados=true
 router.get('/', async (req, res, next) => {
@@ -166,13 +148,12 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    // Nombres de los medios elegidos (para detectar efectivo / cheque)
+    // Nombres de los medios elegidos (para detectar cheque)
     const { rows: mpRows } = await client.query(
       `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
       [mediosLista.map(m => m.medio_pago_id)]
     );
     const nombreMedio = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
-    const esEfe = (mid) => /efectivo/i.test(nombreMedio[mid] || '');
     const esChq = (mid) => /cheque/i.test(nombreMedio[mid] || '');
 
     const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
@@ -194,18 +175,6 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({
         error: `El detalle de cheques (${sumaCheques.toFixed(2)}) no coincide con el importe abonado en cheque (${sumaChequeMedios.toFixed(2)})`,
       });
-    }
-
-    // Si hay algún medio en efectivo, exige caja abierta en la sucursal (arqueo).
-    const efectivoMedios = mediosLista.filter(m => esEfe(m.medio_pago_id));
-    let cajaId = null;
-    if (efectivoMedios.length > 0) {
-      cajaId = await cajaAbierta(client, sucursal_id);
-      if (!cajaId) {
-        return res.status(409).json({
-          error: 'No hay una caja abierta en la sucursal seleccionada para registrar el pago en efectivo. Elegí una sucursal con caja abierta o quitá el efectivo.',
-        });
-      }
     }
 
     const primaryMedioId = mediosLista[0].medio_pago_id;
@@ -316,19 +285,8 @@ router.post('/', async (req, res, next) => {
       `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
     }
 
-    // 4) Impacto en caja: un egreso por cada medio en efectivo
-    if (cajaId) {
-      for (const m of efectivoMedios) {
-        await client.query(`
-          INSERT INTO movimientos_caja
-            (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
-          VALUES ($1, 'egreso', $2, $3, $4, $5, 'pago_proveedor', $6)
-        `, [cajaId, 'Pago a proveedor (efectivo)', m.monto, m.medio_pago_id, usuarioId, pago.id]);
-      }
-    }
-
     await client.query('COMMIT');
-    res.status(201).json({ pago, caja_afectada: efectivoMedios.length > 0 && !!cajaId });
+    res.status(201).json({ pago });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -399,29 +357,8 @@ router.post('/:id/anular', async (req, res, next) => {
       `, [pago.proveedor_id, monto, +(saldoPrev + monto).toFixed(2), id]);
     }
 
-    // 4) Revertir caja (best-effort): un ingreso compensatorio por cada egreso
-    let cajaRevertida = false;
-    const { rows: movsCaja } = await client.query(
-      `SELECT monto, medio_pago_id FROM movimientos_caja
-        WHERE origen_tipo = 'pago_proveedor' AND origen_id = $1 AND tipo = 'egreso'`, [id]
-    );
-    if (movsCaja.length > 0) {
-      const cajaId = await cajaAbierta(client, pago.sucursal_id);
-      if (cajaId) {
-        for (const mc of movsCaja) {
-          await client.query(`
-            INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
-            VALUES ($1, 'ingreso', $2, $3, $4, $5, 'pago_proveedor_anulado', $6)
-          `, [cajaId, 'Anulación pago a proveedor', mc.monto, mc.medio_pago_id,
-              req.usuario?.id ?? null, id]);
-        }
-        cajaRevertida = true;
-      }
-    }
-
     await client.query('COMMIT');
-    res.json({ ok: true, caja_revertida: cajaRevertida, requiere_ajuste_caja: movsCaja.length > 0 && !cajaRevertida });
+    res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     next(err);

@@ -237,7 +237,6 @@ export default function PagosProveedorClient() {
     if (totalPago <= 0) return setError('El monto a pagar debe ser mayor a 0');
     if (medios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setError('Ingresá el monto de cada medio de pago');
     if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setError('Seleccioná la cuenta bancaria del medio correspondiente');
-    if (hayEfectivo && !sucursalId) return setError('Seleccioná la sucursal cuya caja registrará el efectivo');
     if (Math.abs(totalMedios - totalPago) > 0.01) {
       return setError(`Los medios de pago (${ars.format(totalMedios)}) deben sumar el total a pagar (${ars.format(totalPago)})`);
     }
@@ -273,7 +272,7 @@ export default function PagosProveedorClient() {
       const res = await apiFetch('/api/pagos-proveedor', { method: 'POST', body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Error al registrar el pago'); return; }
-      setOkMsg(`Pago de ${ars.format(totalPago)} registrado correctamente${data.caja_afectada ? ' · descontado de caja' : ''}.`);
+      setOkMsg(`Pago de ${ars.format(totalPago)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
@@ -304,12 +303,7 @@ export default function PagosProveedorClient() {
       if (!res.ok) { setAnularError(data.error ?? 'Error al anular el pago'); return; }
       setAnularTarget(null);
       setMotivoAnular('');
-      setOkMsg(
-        'Pago anulado.' +
-        (data.requiere_ajuste_caja
-          ? ' ⚠ No había caja abierta en la sucursal, así que el efectivo NO se reintegró a caja: ajustalo manualmente.'
-          : data.caja_revertida ? ' El efectivo se reintegró a la caja.' : '')
-      );
+      setOkMsg('Pago anulado.');
       await recargarSaldos();
       await cargarProveedor(proveedorId);
     } catch {
@@ -471,14 +465,13 @@ export default function PagosProveedorClient() {
                 <label className={labelCls}>Fecha</label>
                 <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className={inputCls} />
               </div>
-              {hayEfectivo && (
-                <div>
-                  <label className={labelCls}>Sucursal (caja) *</label>
-                  <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
-                    {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className={labelCls}>Sucursal</label>
+                <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
+                  <option value="">— Sin asignar —</option>
+                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </div>
             </div>
 
             {/* Medios de pago (uno o varios: pago dividido) */}
@@ -556,12 +549,6 @@ export default function PagosProveedorClient() {
                 </div>
               </div>
             </div>
-
-            {hayEfectivo && (
-              <p className="text-[11px] text-amber-400/80">
-                El efectivo se descuenta de la caja abierta de la sucursal elegida. Si esa caja no está abierta, el pago no se podrá registrar.
-              </p>
-            )}
 
             <div>
               <label className={labelCls}>Observaciones</label>
@@ -700,7 +687,7 @@ export default function PagosProveedorClient() {
                 Vas a anular el pago de <span className="font-bold text-kp-white">{fmt(anularTarget.monto)}</span> del {fmtFecha(anularTarget.fecha)} ({anularTarget.medio_pago_nombre}).
               </p>
               <p className="text-xs text-amber-400/80">
-                Se revertirá la cuenta corriente y el estado de los comprobantes imputados. Si fue en efectivo, se reintegra a la caja abierta de la sucursal (si no hay caja abierta, deberás ajustarla a mano).
+                Se revertirá la cuenta corriente y el estado de los comprobantes imputados.
               </p>
               <div>
                 <label className={labelCls}>Motivo *</label>
