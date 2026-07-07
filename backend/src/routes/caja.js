@@ -168,19 +168,38 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ─── POST /api/caja/:id/movimiento ───────────────────────────────────────────
-// Body: tipo ('ingreso'|'egreso'|'retiro'), concepto, monto, medio_pago_id (opt),
-//       subrubro_gasto_id (opt) — si se envía con tipo='egreso', crea registro en egresos
+// Body (nuevo): tipo, concepto, medios:[{medio_pago_id,monto}], cheques:[...],
+//               subrubro_gasto_id (opt para egresos), origen_tipo, origen_id
+// Body (legacy): tipo, concepto, monto, medio_pago_id — compatibilidad con RegistrarGasto
 router.post('/:id/movimiento', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { tipo, concepto, monto, medio_pago_id, origen_tipo, origen_id, subrubro_gasto_id } = req.body;
+    const {
+      tipo, concepto,
+      monto, medio_pago_id,          // formato legacy
+      medios: mediosBody,             // formato nuevo (array)
+      cheques: chequesBody,
+      origen_tipo, origen_id, subrubro_gasto_id,
+    } = req.body;
 
     if (!['ingreso', 'egreso', 'retiro'].includes(tipo)) {
       return res.status(400).json({ error: 'tipo debe ser ingreso, egreso o retiro' });
     }
     if (!concepto?.trim()) return res.status(400).json({ error: 'concepto es requerido' });
-    if (!monto || parseFloat(monto) <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
+
+    // Normalizar al formato de medios array
+    let mediosArr;
+    if (Array.isArray(mediosBody) && mediosBody.length > 0) {
+      mediosArr = mediosBody;
+    } else if (monto && parseFloat(monto) > 0) {
+      mediosArr = [{ medio_pago_id: medio_pago_id || null, monto: parseFloat(monto) }];
+    } else {
+      return res.status(400).json({ error: 'monto o medios son requeridos' });
+    }
+
+    const totalMonto = mediosArr.reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
+    if (totalMonto <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
     await client.query('BEGIN');
 
@@ -194,10 +213,8 @@ router.post('/:id/movimiento', async (req, res, next) => {
     }
 
     const usuario_id = req.usuario?.id ?? null;
-    const montoNum   = parseFloat(monto);
-    let   egreso_id  = null;
+    let egreso_id = null;
 
-    // Si es egreso, crear registro formal en la tabla egresos
     if (tipo === 'egreso') {
       const { rows: egrRows } = await client.query(`
         INSERT INTO egresos
@@ -205,20 +222,66 @@ router.post('/:id/movimiento', async (req, res, next) => {
            descripcion, neto_no_gravado, total, estado_pago, usuario_id)
         VALUES ('gasto_manual', 'informal', $1, $2, $3, $4, $4, 'pagado', $5)
         RETURNING id
-      `, [cajaRows[0].sucursal_id, subrubro_gasto_id || null, concepto.trim(), montoNum, usuario_id]);
+      `, [cajaRows[0].sucursal_id, subrubro_gasto_id || null, concepto.trim(), totalMonto, usuario_id]);
       egreso_id = egrRows[0].id;
     }
 
-    const { rows } = await client.query(`
-      INSERT INTO movimientos_caja
-        (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id, egreso_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, tipo, concepto, monto, fecha
-    `, [id, tipo, concepto.trim(), montoNum, medio_pago_id || null, usuario_id,
-        origen_tipo || null, origen_id || null, egreso_id]);
+    // Determinar qué medios son cheque (para vincular cheques al movimiento correcto)
+    const medioIds = mediosArr.map(m => m.medio_pago_id).filter(Boolean);
+    let mediosNombres = {};
+    if (medioIds.length > 0) {
+      const { rows: mpRows } = await client.query(
+        `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
+      );
+      mediosNombres = Object.fromEntries(mpRows.map(m => [m.id, m.nombre]));
+    }
+
+    // Insertar un movimiento_caja por cada medio de pago
+    let primerMovimiento = null;
+    let movimientoChequId = null;
+
+    for (const m of mediosArr) {
+      const montoMedio = parseFloat(m.monto) || 0;
+      if (montoMedio <= 0) continue;
+
+      const { rows } = await client.query(`
+        INSERT INTO movimientos_caja
+          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id, egreso_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, tipo, concepto, monto, fecha
+      `, [id, tipo, concepto.trim(), montoMedio, m.medio_pago_id || null,
+          usuario_id, origen_tipo || null, origen_id || null, egreso_id]);
+
+      if (!primerMovimiento) primerMovimiento = rows[0];
+
+      // Identificar el movimiento que corresponde al medio cheque
+      const nombreMedio = (mediosNombres[m.medio_pago_id] ?? '').toLowerCase();
+      if (nombreMedio.includes('cheque')) {
+        movimientoChequId = rows[0].id;
+      }
+    }
+
+    // Insertar detalle de cheques si los hay
+    const chequesArr = Array.isArray(chequesBody) ? chequesBody : [];
+    if (chequesArr.length > 0 && movimientoChequId) {
+      for (const ch of chequesArr) {
+        if (!ch.importe || parseFloat(ch.importe) <= 0) continue;
+        await client.query(`
+          INSERT INTO movimiento_caja_cheques
+            (movimiento_id, banco, numero_cheque, fecha_vencimiento, importe)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [
+          movimientoChequId,
+          ch.banco || null,
+          ch.numero_cheque || null,
+          ch.fecha_vencimiento || null,
+          parseFloat(ch.importe),
+        ]);
+      }
+    }
 
     await client.query('COMMIT');
-    res.status(201).json({ movimiento: rows[0] });
+    res.status(201).json({ movimiento: primerMovimiento });
   } catch (err) { await client.query('ROLLBACK'); next(err); }
   finally { client.release(); }
 });
