@@ -135,7 +135,10 @@ export default function PagosProveedorClient() {
       setCuentas(cb.cuentas ?? []);
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
-      if (sArr.length > 0) setSucursalId(sArr[0].id);
+      if (sArr.length > 0) {
+        const laprida = sArr.find((s: Sucursal) => /laprida/i.test(s.nombre));
+        setSucursalId((laprida ?? sArr[0]).id);
+      }
     });
   }, []);
 
