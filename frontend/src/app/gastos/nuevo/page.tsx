@@ -106,8 +106,9 @@ export default function NuevoEgresoPage() {
   const [otrosImpuestos, setOtrosImpuestos] = useState('');
   const [totalComprobante, setTotalComprobante] = useState('');
 
-  // Costo de flete (se registra como egreso aparte, subrubro "Transporte de carga")
-  const [costoFlete, setCostoFlete] = useState('');
+  // Flete como porcentaje del total del comprobante. Se registra como egreso
+  // aparte (subrubro "Transporte de carga") por el monto en pesos calculado.
+  const [fletePct, setFletePct] = useState('');
 
   // Pago (uno o varios medios: pago dividido)
   const [estadoPago, setEstadoPago] = useState<'pendiente' | 'pagado'>('pendiente');
@@ -175,7 +176,7 @@ export default function NuevoEgresoPage() {
     setPercepcionesIb('');
     setOtrosImpuestos('');
     setTotalComprobante('');
-    setCostoFlete('');
+    setFletePct('');
     setSaveError(null);
     if (TIPOS_CON_COMPROBANTE.includes(tipoOp)) {
       setTipoComp('factura_a');
@@ -210,6 +211,10 @@ export default function NuevoEgresoPage() {
   const totalNum = parseFloat(totalComprobante) || 0;
   const difTotal = Math.abs(totalNum - sumaFiscal);
   const totalOk = !TIPOS_CON_COMPROBANTE.includes(tipoOp) || difTotal <= 0.02 || sumaFiscal === 0;
+
+  // Flete: porcentaje sobre el total del comprobante → monto en pesos.
+  const fletePctNum = parseFloat(fletePct) || 0;
+  const fleteMonto  = parseFloat((totalNum * fletePctNum / 100).toFixed(2));
 
   // ── Búsqueda de artículos ─────────────────────────────────────────────────
   const searchArticulos = useCallback((q: string) => {
@@ -337,7 +342,7 @@ export default function NuevoEgresoPage() {
       percepciones_ib: parseFloat(percepcionesIb) || 0,
       otros_impuestos: parseFloat(otrosImpuestos) || 0,
       total: parseFloat(totalComprobante),
-      costo_flete: parseFloat(costoFlete) || 0,
+      costo_flete: fleteMonto,
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
       anticipo_id: vincularAnticipo && anticipoId ? anticipoId : null,
@@ -883,20 +888,27 @@ export default function NuevoEgresoPage() {
         <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Costo de flete</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Costo de flete (en pesos)</label>
+            <label className={labelCls}>Costo de flete (% del total)</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
               <NumericInput
                 placeholder="0.00"
-                value={costoFlete}
-                onChange={e => setCostoFlete(e.target.value)}
-                className={`${inputCls} pl-7`}
+                value={fletePct}
+                onChange={e => setFletePct(e.target.value)}
+                className={`${inputCls} pr-7`}
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">%</span>
             </div>
+            {fletePctNum > 0 && (
+              <p className="text-xs text-kp-gray mt-1.5">
+                = <span className="text-kp-white font-semibold">{ars.format(fleteMonto)}</span>
+                <span className="text-kp-gray/70"> sobre {ars.format(totalNum)}</span>
+              </p>
+            )}
           </div>
           <div className="flex items-end pb-1">
             <p className="text-xs text-kp-gray/70">
-              Si cargás un monto, se registra como un egreso aparte en el subrubro
+              Se calcula como porcentaje del total del comprobante y se registra como
+              un egreso aparte en el subrubro
               <span className="text-kp-gray"> «Transporte de carga»</span>. No se suma al total del comprobante.
             </p>
           </div>
