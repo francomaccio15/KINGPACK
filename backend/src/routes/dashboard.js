@@ -28,6 +28,7 @@ router.get('/', async (req, res, next) => {
       cobrosPorCuentaHoy,
       cobrosPorCuentaMes,
       cajaFuerte,
+      saldosBancarios,
     ] = await Promise.all([
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
@@ -219,6 +220,14 @@ router.get('/', async (req, res, next) => {
         WHERE s.activo = true
         ORDER BY s.nombre
       `),
+
+      // Saldos actuales de las cuentas bancarias de la empresa (carga manual)
+      pool.query(`
+        SELECT id, nombre, banco, saldo::float
+        FROM cuentas_bancarias_empresa
+        WHERE activo = true
+        ORDER BY nombre
+      `),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
@@ -267,6 +276,7 @@ router.get('/', async (req, res, next) => {
       cobros_por_cuenta_hoy:  cobrosPorCuentaHoy.rows,
       cobros_por_cuenta_mes:  cobrosPorCuentaMes.rows,
       caja_fuerte:            cajaFuerte.rows,
+      saldos_bancarios:       saldosBancarios.rows,
     });
   } catch (err) { next(err); }
 });

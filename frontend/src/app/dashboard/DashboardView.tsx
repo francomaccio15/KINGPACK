@@ -48,6 +48,13 @@ export type CajaFuerteData = {
   updated_at:      string | null;
 };
 
+export type SaldoBancarioData = {
+  id:     string;
+  nombre: string;
+  banco:  string | null;
+  saldo:  number;
+};
+
 export type DashboardData = {
   ventas_hoy:        { cantidad: number; monto: number };
   ventas_ayer:       { cantidad: number; monto: number };
@@ -79,6 +86,7 @@ export type DashboardData = {
   cobros_por_cuenta_hoy:  CuentaData[];
   cobros_por_cuenta_mes:  { cuenta_destino: string; monto_mes: number }[];
   caja_fuerte:            CajaFuerteData[];
+  saldos_bancarios:       SaldoBancarioData[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -361,11 +369,20 @@ function CobrosDelDia({
   );
 }
 
-// ─── CajaFuertePanel: efectivo acumulado por sucursal (solo administrador) ─────
-function CajaFuertePanel({ cajas }: { cajas: CajaFuerteData[] }) {
-  if (!cajas || cajas.length === 0) return null;
+// ─── EstadoCuentasPanel: caja fuerte + saldos bancarios (solo administrador) ───
+function EstadoCuentasPanel({
+  cajas, bancos,
+}: {
+  cajas: CajaFuerteData[];
+  bancos: SaldoBancarioData[];
+}) {
+  const hayCajas  = cajas && cajas.length > 0;
+  const hayBancos = bancos && bancos.length > 0;
+  if (!hayCajas && !hayBancos) return null;
 
-  const total = cajas.reduce((a, c) => a + c.saldo, 0);
+  const totalCajas  = (cajas  ?? []).reduce((a, c) => a + c.saldo, 0);
+  const totalBancos = (bancos ?? []).reduce((a, c) => a + c.saldo, 0);
+  const total       = totalCajas + totalBancos;
 
   return (
     <section className="space-y-3">
@@ -373,37 +390,55 @@ function CajaFuertePanel({ cajas }: { cajas: CajaFuerteData[] }) {
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
-          Efectivo en caja fuerte
+          Estado de cuentas
           <span className="flex-1 h-px bg-kp-border inline-block" />
         </p>
-        {cajas.length > 1 && (
-          <span className="text-xs text-kp-gray ml-3 flex-shrink-0">
-            Total: <span className="text-kp-white font-bold">{fmt(total)}</span>
-          </span>
-        )}
+        <span className="text-xs text-kp-gray ml-3 flex-shrink-0">
+          Total: <span className="text-kp-white font-bold">{fmt(total)}</span>
+        </span>
       </div>
 
-      {/* Cards por sucursal */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {cajas.map(c => (
-          <div key={c.sucursal_id} className="rounded-xl border border-emerald-500/20 bg-kp-surface p-5 flex items-center gap-4">
-            <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
-              <span className="text-emerald-400"><IcoVault /></span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
-                Caja fuerte · {c.sucursal_nombre}
-              </p>
-              <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
-              {c.updated_at && (
-                <p className="text-[10px] text-kp-gray mt-1.5">
-                  Últ. cierre: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+      {/* Caja fuerte */}
+      {hayCajas && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {cajas.map(c => (
+            <div key={c.sucursal_id} className="rounded-xl border border-emerald-500/20 bg-kp-surface p-5 flex items-center gap-4">
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
+                <span className="text-emerald-400"><IcoVault /></span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
+                  Caja fuerte · {c.sucursal_nombre}
                 </p>
-              )}
+                <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
+                {c.updated_at && (
+                  <p className="text-[10px] text-kp-gray mt-1.5">
+                    Últ. cierre: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Saldos bancarios */}
+      {hayBancos && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {bancos.map(b => (
+            <div key={b.id} className="rounded-xl border border-kp-border bg-kp-surface p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-sky-500/10">
+                <span className="text-sky-400"><IcoBank /></span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-kp-white leading-tight truncate">{b.nombre}</p>
+                <p className="text-lg font-bold leading-none text-sky-400 tabular-nums mt-1">{fmt(b.saldo)}</p>
+                {b.banco && <p className="text-[10px] text-kp-gray mt-1 truncate">{b.banco}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -734,9 +769,12 @@ export default function DashboardView({
         </div>
       </section>
 
-      {/* ── Efectivo en caja fuerte — solo administrador ── */}
+      {/* ── Estado de cuentas (caja fuerte + bancos) — solo administrador ── */}
       {userRol === 'administrador' && (
-        <CajaFuertePanel cajas={d.caja_fuerte ?? []} />
+        <EstadoCuentasPanel
+          cajas={d.caja_fuerte ?? []}
+          bancos={d.saldos_bancarios ?? []}
+        />
       )}
 
       {/* ── Cobros del día por medio de pago ── */}

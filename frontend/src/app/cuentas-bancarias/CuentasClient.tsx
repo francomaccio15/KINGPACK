@@ -11,7 +11,11 @@ interface Cuenta {
   alias: string | null;
   cbu: string | null;
   activo: boolean;
+  saldo: number;
 }
+
+const fmtMoneda = (n: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -70,6 +74,7 @@ function FormCuenta({
   const [titular, setTitular] = useState(inicial?.titular ?? '');
   const [alias,   setAlias]   = useState(inicial?.alias   ?? '');
   const [cbu,     setCbu]     = useState(inicial?.cbu     ?? '');
+  const [saldo,   setSaldo]   = useState(inicial?.saldo != null ? String(inicial.saldo) : '');
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
@@ -87,6 +92,7 @@ function FormCuenta({
         titular: titular.trim() || null,
         alias:   alias.trim()   || null,
         cbu:     cbu.trim()     || null,
+        saldo:   parseFloat(saldo) || 0,
       };
       const res  = await apiFetch(
         esEdicion ? `/api/cuentas-bancarias/${inicial!.id}` : '/api/cuentas-bancarias',
@@ -129,7 +135,13 @@ function FormCuenta({
         <input type="text" value={cbu} onChange={e => setCbu(e.target.value)}
           placeholder="CBU de la cuenta" className={inputCls} />
       </div>
-      {error && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>}
+      <div>
+        <label className={labelCls}>Saldo actual</label>
+        <input type="number" step="0.01" value={saldo} onChange={e => setSaldo(e.target.value)}
+          placeholder="0" className={inputCls} />
+        <p className="text-[10px] text-kp-gray mt-1">Saldo de carga manual. Se muestra en el dashboard.</p>
+      </div>
+      {error &&<p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>}
       <div className="flex gap-3 pt-2">
         <button onClick={onCerrar}
           className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
@@ -216,6 +228,7 @@ export default function CuentasClient() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Nombre</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Banco</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">CBU / Alias</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Saldo</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activa</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -232,6 +245,9 @@ export default function CuentasClient() {
                     {c.alias && <span className="block">{c.alias}</span>}
                     {c.cbu && <span className="block">{c.cbu}</span>}
                     {!c.alias && !c.cbu && '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-kp-white whitespace-nowrap">
+                    {fmtMoneda(c.saldo ?? 0)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
