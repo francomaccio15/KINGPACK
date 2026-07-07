@@ -279,10 +279,21 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
     );
     const esManual = manualRows.length > 0;
 
+    // ¿Es un cheque emitido desde Pago a Proveedores?
+    let esPagoProveedor = false;
+    if (!esManual) {
+      const { rows: ppcRows } = await client.query(
+        `SELECT id FROM pago_proveedor_cheques WHERE id = $1`, [id]
+      );
+      esPagoProveedor = ppcRows.length > 0;
+    }
+
     // Obtener estado actual
     const tabla = esManual
       ? 'cheques_manuales'
-      : (tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques');
+      : esPagoProveedor
+        ? 'pago_proveedor_cheques'
+        : (tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques');
     const { rows: actual } = await client.query(
       `SELECT id, estado FROM ${tabla} WHERE id = $1`,
       [id]
