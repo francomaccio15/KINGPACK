@@ -12,7 +12,10 @@ interface Cuenta {
   cbu: string | null;
   activo: boolean;
   saldo: number;
+  sucursal_id: string | null;
 }
+
+interface Sucursal { id: string; nombre: string }
 
 const fmtMoneda = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
@@ -61,9 +64,10 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 // ─── Formulario de cuenta (crear / editar) ────────────────────────────────────
 function FormCuenta({
-  inicial, onGuardar, onCerrar,
+  inicial, sucursales, onGuardar, onCerrar,
 }: {
   inicial?: Cuenta;
+  sucursales: Sucursal[];
   onGuardar: () => void;
   onCerrar: () => void;
 }) {
@@ -75,6 +79,7 @@ function FormCuenta({
   const [alias,   setAlias]   = useState(inicial?.alias   ?? '');
   const [cbu,     setCbu]     = useState(inicial?.cbu     ?? '');
   const [saldo,   setSaldo]   = useState(inicial?.saldo != null ? String(inicial.saldo) : '');
+  const [sucursalId, setSucursalId] = useState(inicial?.sucursal_id ?? '');
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
@@ -93,6 +98,7 @@ function FormCuenta({
         alias:   alias.trim()   || null,
         cbu:     cbu.trim()     || null,
         saldo:   parseFloat(saldo) || 0,
+        sucursal_id: sucursalId || null,
       };
       const res  = await apiFetch(
         esEdicion ? `/api/cuentas-bancarias/${inicial!.id}` : '/api/cuentas-bancarias',
@@ -141,6 +147,14 @@ function FormCuenta({
           placeholder="0" className={inputCls} />
         <p className="text-[10px] text-kp-gray mt-1">Saldo de carga manual. Se muestra en el dashboard.</p>
       </div>
+      <div>
+        <label className={labelCls}>Sucursal</label>
+        <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
+          <option value="">— Sin asignar —</option>
+          {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+        </select>
+        <p className="text-[10px] text-kp-gray mt-1">Determina bajo qué filtro de sucursal se muestra en el dashboard.</p>
+      </div>
       {error &&<p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>}
       <div className="flex gap-3 pt-2">
         <button onClick={onCerrar}
@@ -159,6 +173,7 @@ function FormCuenta({
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function CuentasClient() {
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [modalCrear,  setModalCrear]  = useState(false);
@@ -175,6 +190,16 @@ export default function CuentasClient() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    apiFetch('/api/sucursales')
+      .then(r => r.json())
+      .then(d => setSucursales(d.sucursales ?? []))
+      .catch(() => setSucursales([]));
+  }, []);
+
+  const sucursalNombre = (id: string | null) =>
+    id ? (sucursales.find(s => s.id === id)?.nombre ?? '—') : '—';
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -229,6 +254,7 @@ export default function CuentasClient() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Banco</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">CBU / Alias</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Saldo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Sucursal</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activa</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -249,6 +275,7 @@ export default function CuentasClient() {
                   <td className="px-4 py-3 text-right font-semibold tabular-nums text-kp-white whitespace-nowrap">
                     {fmtMoneda(c.saldo ?? 0)}
                   </td>
+                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{sucursalNombre(c.sucursal_id)}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => toggleActivo(c)}
@@ -281,6 +308,7 @@ export default function CuentasClient() {
       {modalCrear && (
         <Modal title="Nueva cuenta bancaria" onClose={() => setModalCrear(false)}>
           <FormCuenta
+            sucursales={sucursales}
             onGuardar={() => { setModalCrear(false); cargar(); }}
             onCerrar={() => setModalCrear(false)}
           />
@@ -292,6 +320,7 @@ export default function CuentasClient() {
         <Modal title="Editar cuenta bancaria" onClose={() => setModalEditar(null)}>
           <FormCuenta
             inicial={modalEditar}
+            sucursales={sucursales}
             onGuardar={() => { setModalEditar(null); cargar(); }}
             onCerrar={() => setModalEditar(null)}
           />

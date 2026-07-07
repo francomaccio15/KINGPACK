@@ -17,7 +17,7 @@ router.get('/', async (req, res, next) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, nombre, banco, titular, alias, cbu, activo, saldo::float FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
+      `SELECT id, nombre, banco, titular, alias, cbu, activo, saldo::float, sucursal_id FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
       params
     );
     res.json({ cuentas: rows });
@@ -28,13 +28,13 @@ router.get('/', async (req, res, next) => {
 // Body: { nombre, banco?, titular?, alias?, cbu? }
 router.post('/', async (req, res, next) => {
   try {
-    const { nombre, banco, titular, alias, cbu, saldo } = req.body;
+    const { nombre, banco, titular, alias, cbu, saldo, sucursal_id } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ error: 'nombre es requerido' });
 
     const { rows } = await pool.query(
-      `INSERT INTO cuentas_bancarias_empresa (nombre, banco, titular, alias, cbu, saldo)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [nombre.trim(), banco?.trim() || null, titular?.trim() || null, alias?.trim() || null, cbu?.trim() || null, parseFloat(saldo) || 0]
+      `INSERT INTO cuentas_bancarias_empresa (nombre, banco, titular, alias, cbu, saldo, sucursal_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [nombre.trim(), banco?.trim() || null, titular?.trim() || null, alias?.trim() || null, cbu?.trim() || null, parseFloat(saldo) || 0, sucursal_id || null]
     );
     res.status(201).json({ cuenta: rows[0] });
   } catch (err) { next(err); }
@@ -43,7 +43,7 @@ router.post('/', async (req, res, next) => {
 // ─── PUT /api/cuentas-bancarias/:id ──────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
   try {
-    const fields = ['nombre', 'banco', 'titular', 'alias', 'cbu', 'activo', 'saldo'];
+    const fields = ['nombre', 'banco', 'titular', 'alias', 'cbu', 'activo', 'saldo', 'sucursal_id'];
     const updates = [];
     const params = [];
     let idx = 1;

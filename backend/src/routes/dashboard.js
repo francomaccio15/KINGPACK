@@ -217,17 +217,18 @@ router.get('/', async (req, res, next) => {
           cf.updated_at
         FROM sucursales s
         LEFT JOIN caja_fuerte cf ON cf.sucursal_id = s.id
-        WHERE s.activo = true
+        WHERE s.activo = true ${sucId ? 'AND s.id = $1' : ''}
         ORDER BY s.nombre
-      `),
+      `, p),
 
-      // Saldos actuales de las cuentas bancarias de la empresa (carga manual)
+      // Saldos actuales de las cuentas bancarias de la empresa (carga manual),
+      // filtrados por la sucursal a la que está vinculada cada cuenta.
       pool.query(`
-        SELECT id, nombre, banco, saldo::float
+        SELECT id, nombre, banco, saldo::float, sucursal_id
         FROM cuentas_bancarias_empresa
-        WHERE activo = true
+        WHERE activo = true ${sucId ? 'AND sucursal_id = $1' : ''}
         ORDER BY nombre
-      `),
+      `, p),
     ]);
 
     const vh  = parseFloat(ventasHoy.rows[0].monto);
