@@ -26,6 +26,7 @@ interface MedioPago { id: string; nombre: string; requiere_cuenta: boolean }
 interface Cuenta   { id: string; nombre: string }
 interface Sucursal { id: string; nombre: string }
 interface Cheque   { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string }
+interface MedioLinea { medio_pago_id: string; monto: string; cuenta_bancaria_id: string }
 interface PagoHist {
   id: string;
   fecha: string;
@@ -96,9 +97,8 @@ export default function PagosProveedorClient() {
   const [montoCuenta, setMontoCuenta]     = useState('');
   const [facturado, setFacturado]         = useState(false);
 
-  // Forma de pago
-  const [medioPagoId, setMedioPagoId]     = useState('');
-  const [cuentaBancariaId, setCuentaId]   = useState('');
+  // Forma de pago (uno o varios medios: pago dividido)
+  const [medios, setMedios]               = useState<MedioLinea[]>([]);
   const [sucursalId, setSucursalId]       = useState('');
   const [fecha, setFecha]                 = useState(hoyAR());
   const [observaciones, setObs]           = useState('');
@@ -123,7 +123,9 @@ export default function PagosProveedorClient() {
       apiFetch('/api/sucursales').then(r => r.json()).catch(() => ({ sucursales: [] })),
     ]).then(([prov, mp, cb, suc]) => {
       setProveedores(prov.proveedores ?? []);
-      setMediosPago(mp.medios ?? mp.medios_pago ?? []);
+      const mediosArr: MedioPago[] = mp.medios ?? mp.medios_pago ?? [];
+      setMediosPago(mediosArr);
+      if (mediosArr.length > 0) setMedios([{ medio_pago_id: mediosArr[0].id, monto: '', cuenta_bancaria_id: '' }]);
       setCuentas(cb.cuentas ?? []);
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
@@ -173,34 +175,55 @@ export default function PagosProveedorClient() {
       p.razon_social.toLowerCase().includes(q) || (p.cuit ?? '').toLowerCase().includes(q));
   }, [busca, proveedores]);
 
-  const medio = mediosPago.find(m => m.id === medioPagoId);
-  const esEfectivo = /efectivo/i.test(medio?.nombre ?? '');
-  const esCheque   = /cheque/i.test(medio?.nombre ?? '');
+  // Helpers por medio de pago
+  const nombreMedio    = (id: string) => mediosPago.find(m => m.id === id)?.nombre ?? '';
+  const esEfectivoId   = (id: string) => /efectivo/i.test(nombreMedio(id));
+  const esChequeId     = (id: string) => /cheque/i.test(nombreMedio(id));
+  const requiereCuenta = (id: string) => !!mediosPago.find(m => m.id === id)?.requiere_cuenta;
 
-  // Al elegir Cheque, mostrar una fila de cheque lista para completar; al cambiar
-  // de medio, limpiar las filas cargadas.
+  const hayEfectivo = medios.some(m => esEfectivoId(m.medio_pago_id));
+  const hayCheque   = medios.some(m => esChequeId(m.medio_pago_id));
+
+  const totalCheques = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+  // Monto efectivo de una línea: si es cheque, lo determina el detalle de cheques.
+  const montoLinea = (m: MedioLinea) => esChequeId(m.medio_pago_id) ? totalCheques : (parseFloat(m.monto) || 0);
+  const totalMedios = medios.reduce((s, m) => s + montoLinea(m), 0);
+
+  // Al incluir un medio Cheque, mostrar una fila de cheque lista para completar;
+  // al quitarlo, limpiar las filas cargadas.
   useEffect(() => {
-    if (esCheque) {
+    if (hayCheque) {
       setCheques(prev => prev.length === 0
         ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]
         : prev);
     } else {
       setCheques([]);
     }
-  }, [esCheque]);
+  }, [hayCheque]);
 
   const totalAplicado = useMemo(() =>
     Object.values(aplic).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0),
     [aplic]);
 
   const totalPago = modo === 'aplicar' ? totalAplicado : (parseFloat(montoCuenta) || 0);
-  const totalCheques = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
 
   // ── Mutadores ───────────────────────────────────────────────────────────────
   const toggleEgreso = (id: string) => setAplic(p => ({ ...p, [id]: { ...p[id], sel: !p[id].sel } }));
   const setMontoEgreso = (id: string, v: string) => setAplic(p => ({ ...p, [id]: { ...p[id], monto: v } }));
   const seleccionarTodos = (sel: boolean) =>
     setAplic(p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, { ...v, sel }])));
+
+  // Medios de pago (líneas)
+  const addMedio = () => {
+    const usados = new Set(medios.map(m => m.medio_pago_id));
+    const libre = mediosPago.find(m => !usados.has(m.id)) ?? mediosPago[0];
+    if (libre) setMedios(p => [...p, { medio_pago_id: libre.id, monto: '', cuenta_bancaria_id: '' }]);
+  };
+  const updMedio = (i: number, f: keyof MedioLinea, v: string) =>
+    setMedios(p => p.map((m, j) => j === i ? { ...m, [f]: v } : m));
+  const delMedio = (i: number) => setMedios(p => p.length > 1 ? p.filter((_, j) => j !== i) : p);
+  // Autocompletar el monto de una línea con lo que falta para llegar al total
+  const restoMedio = (i: number) => +(totalPago - medios.reduce((s, m, j) => s + (j === i ? 0 : montoLinea(m)), 0)).toFixed(2);
 
   const addCheque = () => setCheques(p => [...p, { banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]);
   const updCheque = (i: number, f: keyof Cheque, v: string) => setCheques(p => p.map((c, j) => j === i ? { ...c, [f]: v } : c));
@@ -210,12 +233,16 @@ export default function PagosProveedorClient() {
   const submit = async () => {
     setError(null); setOkMsg(null);
     if (!proveedorId) return setError('Seleccioná un proveedor');
-    if (!medioPagoId) return setError('Seleccioná el medio de pago');
+    if (medios.length === 0 || medios.some(m => !m.medio_pago_id)) return setError('Seleccioná el medio de pago');
     if (totalPago <= 0) return setError('El monto a pagar debe ser mayor a 0');
-    if (medio?.requiere_cuenta && !cuentaBancariaId) return setError('Seleccioná la cuenta bancaria');
-    if (esEfectivo && !sucursalId) return setError('Seleccioná la sucursal cuya caja registrará el pago en efectivo');
-    if (esCheque && Math.abs(totalCheques - totalPago) > 0.01) {
-      return setError(`El total de cheques (${ars.format(totalCheques)}) no coincide con el monto a pagar (${ars.format(totalPago)})`);
+    if (medios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setError('Ingresá el monto de cada medio de pago');
+    if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setError('Seleccioná la cuenta bancaria del medio correspondiente');
+    if (hayEfectivo && !sucursalId) return setError('Seleccioná la sucursal cuya caja registrará el efectivo');
+    if (Math.abs(totalMedios - totalPago) > 0.01) {
+      return setError(`Los medios de pago (${ars.format(totalMedios)}) deben sumar el total a pagar (${ars.format(totalPago)})`);
+    }
+    if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) {
+      return setError('Cargá el detalle de los cheques');
     }
 
     const aplicaciones = modo === 'aplicar'
@@ -227,15 +254,18 @@ export default function PagosProveedorClient() {
 
     const body = {
       proveedor_id: proveedorId,
-      medio_pago_id: medioPagoId,
       monto: totalPago,
       fecha,
-      cuenta_bancaria_id: cuentaBancariaId || null,
       sucursal_id: sucursalId || null,
       observaciones: observaciones.trim() || null,
       facturado: modo === 'cuenta' ? facturado : undefined,
       aplicaciones,
-      cheques: esCheque ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe) : [],
+      medios: medios.map(m => ({
+        medio_pago_id: m.medio_pago_id,
+        monto: montoLinea(m),
+        cuenta_bancaria_id: m.cuenta_bancaria_id || null,
+      })),
+      cheques: hayCheque ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe) : [],
     };
 
     setSaving(true);
@@ -246,6 +276,7 @@ export default function PagosProveedorClient() {
       setOkMsg(`Pago de ${ars.format(totalPago)} registrado correctamente${data.caja_afectada ? ' · descontado de caja' : ''}.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
+      setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
       await recargarSaldos();
       await cargarProveedor(proveedorId);
     } catch {
@@ -437,26 +468,10 @@ export default function PagosProveedorClient() {
             <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Forma de pago</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <label className={labelCls}>Medio de pago *</label>
-                <select value={medioPagoId} onChange={e => setMedioPagoId(e.target.value)} className={inputCls}>
-                  <option value="">— Seleccionar —</option>
-                  {mediosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                </select>
-              </div>
-              <div>
                 <label className={labelCls}>Fecha</label>
                 <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className={inputCls} />
               </div>
-              {medio?.requiere_cuenta && (
-                <div>
-                  <label className={labelCls}>Cuenta bancaria *</label>
-                  <select value={cuentaBancariaId} onChange={e => setCuentaId(e.target.value)} className={inputCls}>
-                    <option value="">— Seleccionar —</option>
-                    {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                </div>
-              )}
-              {esEfectivo && (
+              {hayEfectivo && (
                 <div>
                   <label className={labelCls}>Sucursal (caja) *</label>
                   <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
@@ -466,9 +481,85 @@ export default function PagosProveedorClient() {
               )}
             </div>
 
-            {esEfectivo && (
+            {/* Medios de pago (uno o varios: pago dividido) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>Medios de pago * <span className="normal-case text-kp-gray/60">— podés dividir el pago</span></label>
+                <button type="button" onClick={addMedio}
+                  className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Agregar medio
+                </button>
+              </div>
+
+              {medios.map((m, i) => {
+                const cheque = esChequeId(m.medio_pago_id);
+                const cuenta = requiereCuenta(m.medio_pago_id);
+                const resto  = restoMedio(i);
+                return (
+                  <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-2">
+                    <div className="sm:col-span-4">
+                      <label className={labelCls}>Medio</label>
+                      <select value={m.medio_pago_id} onChange={e => updMedio(i, 'medio_pago_id', e.target.value)} className={inputCls}>
+                        {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className={cuenta ? 'sm:col-span-4' : 'sm:col-span-7'}>
+                      <div className="flex items-center justify-between">
+                        <label className={labelCls}>Monto</label>
+                        {!cheque && resto > 0 && (
+                          <button type="button" onClick={() => updMedio(i, 'monto', String(resto))}
+                            className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(resto)}</button>
+                        )}
+                      </div>
+                      {cheque
+                        ? <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt`}>
+                            <span className="tabular-nums">{fmt(totalCheques)}</span>
+                            <span className="text-[10px] text-kp-gray">según cheques ↓</span>
+                          </div>
+                        : <NumericInput value={m.monto} placeholder="0.00" onChange={e => updMedio(i, 'monto', e.target.value)} className={inputCls} />
+                      }
+                    </div>
+                    {cuenta && (
+                      <div className="sm:col-span-3">
+                        <label className={labelCls}>Cuenta *</label>
+                        <select value={m.cuenta_bancaria_id} onChange={e => updMedio(i, 'cuenta_bancaria_id', e.target.value)} className={inputCls}>
+                          <option value="">— Cuenta —</option>
+                          {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <div className="sm:col-span-1 flex justify-end">
+                      {medios.length > 1 && (
+                        <button type="button" onClick={() => delMedio(i)} title="Quitar medio"
+                          className="text-kp-gray hover:text-kp-red px-2 py-2">✕</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Total medios vs total a pagar */}
+              <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
+                <span className="text-xs uppercase tracking-widest text-kp-gray">Total medios</span>
+                <div className="text-right">
+                  <span className={`text-sm font-bold tabular-nums ${Math.abs(totalMedios - totalPago) <= 0.01 && totalPago > 0 ? 'text-green-400' : 'text-kp-red'}`}>
+                    {fmt(totalMedios)}
+                  </span>
+                  {Math.abs(totalMedios - totalPago) > 0.01 && totalPago > 0 && (
+                    <span className="block text-[11px] text-kp-red">
+                      {totalMedios < totalPago ? `Faltan ${fmt(totalPago - totalMedios)}` : `Se pasan ${fmt(totalMedios - totalPago)}`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {hayEfectivo && (
               <p className="text-[11px] text-amber-400/80">
-                El pago en efectivo se descuenta de la caja abierta de la sucursal elegida. Si esa caja no está abierta, el pago no se podrá registrar.
+                El efectivo se descuenta de la caja abierta de la sucursal elegida. Si esa caja no está abierta, el pago no se podrá registrar.
               </p>
             )}
 
@@ -479,7 +570,7 @@ export default function PagosProveedorClient() {
             </div>
 
             {/* Cheques */}
-            {esCheque && (
+            {hayCheque && (
               <div className="space-y-3 pt-3 border-t border-kp-border">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques ({cheques.length})</p>
@@ -520,21 +611,10 @@ export default function PagosProveedorClient() {
                   );
                 })}
 
-                {/* Total de cheques vs monto a pagar */}
+                {/* Total de cheques (define el importe del medio Cheque) */}
                 <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
                   <span className="text-xs uppercase tracking-widest text-kp-gray">Total cheques</span>
-                  <div className="text-right">
-                    <span className={`text-sm font-bold tabular-nums ${Math.abs(totalCheques - totalPago) <= 0.01 ? 'text-green-400' : 'text-kp-red'}`}>
-                      {fmt(totalCheques)}
-                    </span>
-                    {Math.abs(totalCheques - totalPago) > 0.01 && (
-                      <span className="block text-[11px] text-kp-red">
-                        {totalCheques < totalPago
-                          ? `Faltan ${fmt(totalPago - totalCheques)} para llegar al total`
-                          : `Se pasan ${fmt(totalCheques - totalPago)} del total`}
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-sm font-bold tabular-nums text-kp-white">{fmt(totalCheques)}</span>
                 </div>
               </div>
             )}

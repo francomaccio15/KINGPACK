@@ -61,7 +61,12 @@ router.get('/', async (req, res, next) => {
       SELECT pp.id, pp.proveedor_id, pp.fecha, pp.monto, pp.observaciones,
              pp.anulado, pp.motivo_anulacion, pp.created_at,
              p.razon_social AS proveedor_nombre,
-             mp.nombre AS medio_pago_nombre,
+             COALESCE(
+               (SELECT string_agg(DISTINCT mp2.nombre, ' + ')
+                  FROM pago_proveedor_medios m JOIN medios_pago mp2 ON mp2.id = m.medio_pago_id
+                 WHERE m.pago_proveedor_id = pp.id),
+               mp.nombre
+             ) AS medio_pago_nombre,
              s.nombre  AS sucursal_nombre,
              u.nombre  AS usuario_nombre,
              (SELECT COUNT(*) FROM pago_proveedor_aplicaciones a WHERE a.pago_proveedor_id = pp.id) AS aplicaciones_count
@@ -103,7 +108,13 @@ router.get('/:id', async (req, res, next) => {
     ]);
 
     if (!cab[0]) return res.status(404).json({ error: 'Pago no encontrado' });
-    res.json({ pago: cab[0], aplicaciones: aplic, cheques });
+
+    const { rows: medios } = await pool.query(`
+      SELECT m.medio_pago_id, m.monto, m.cuenta_bancaria_id, mp.nombre AS medio_nombre
+        FROM pago_proveedor_medios m JOIN medios_pago mp ON mp.id = m.medio_pago_id
+       WHERE m.pago_proveedor_id = $1`, [id]);
+
+    res.json({ pago: cab[0], aplicaciones: aplic, cheques, medios });
   } catch (err) { next(err); }
 });
 
@@ -119,11 +130,10 @@ router.post('/', async (req, res, next) => {
     const {
       proveedor_id, medio_pago_id, monto, fecha,
       cuenta_bancaria_id, sucursal_id, observaciones, facturado = false,
-      aplicaciones = [], cheques = [],
+      aplicaciones = [], cheques = [], medios,
     } = req.body;
 
     if (!proveedor_id)  return res.status(400).json({ error: 'proveedor_id es requerido' });
-    if (!medio_pago_id) return res.status(400).json({ error: 'medio_pago_id es requerido' });
     const montoTotal = parseFloat(monto);
     if (!montoTotal || montoTotal <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
@@ -131,6 +141,39 @@ router.post('/', async (req, res, next) => {
       `SELECT id FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [proveedor_id]
     );
     if (!provRows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    // ── Medios de pago (uno o varios: pago dividido) ────────────────────────────
+    // Compatibilidad: si no viene `medios`, se arma con el medio único clásico.
+    const mediosLista = (Array.isArray(medios) && medios.length > 0)
+      ? medios.map(m => ({
+          medio_pago_id: m.medio_pago_id,
+          monto: parseFloat(m.monto),
+          cuenta_bancaria_id: m.cuenta_bancaria_id || null,
+        }))
+      : (medio_pago_id
+          ? [{ medio_pago_id, monto: montoTotal, cuenta_bancaria_id: cuenta_bancaria_id || null }]
+          : []);
+
+    if (mediosLista.length === 0) return res.status(400).json({ error: 'Indicá al menos un medio de pago' });
+    for (const m of mediosLista) {
+      if (!m.medio_pago_id) return res.status(400).json({ error: 'Falta el medio de pago en una de las líneas' });
+      if (!m.monto || m.monto <= 0) return res.status(400).json({ error: 'El monto de cada medio debe ser mayor a 0' });
+    }
+    const sumaMedios = mediosLista.reduce((s, m) => s + m.monto, 0);
+    if (Math.abs(sumaMedios - montoTotal) > 0.01) {
+      return res.status(400).json({
+        error: `La suma de los medios (${sumaMedios.toFixed(2)}) no coincide con el total a pagar (${montoTotal.toFixed(2)})`,
+      });
+    }
+
+    // Nombres de los medios elegidos (para detectar efectivo / cheque)
+    const { rows: mpRows } = await client.query(
+      `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
+      [mediosLista.map(m => m.medio_pago_id)]
+    );
+    const nombreMedio = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
+    const esEfe = (mid) => /efectivo/i.test(nombreMedio[mid] || '');
+    const esChq = (mid) => /cheque/i.test(nombreMedio[mid] || '');
 
     const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
 
@@ -144,33 +187,52 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    // Si el pago es en efectivo, exige caja abierta en la sucursal para impactar el arqueo.
-    const efectivo = await esMedioEfectivo(client, medio_pago_id);
+    // El detalle de cheques debe igualar el importe abonado en cheque.
+    const sumaChequeMedios = mediosLista.filter(m => esChq(m.medio_pago_id)).reduce((s, m) => s + m.monto, 0);
+    const sumaCheques = (cheques || []).reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+    if (sumaChequeMedios > 0 && Math.abs(sumaCheques - sumaChequeMedios) > 0.01) {
+      return res.status(400).json({
+        error: `El detalle de cheques (${sumaCheques.toFixed(2)}) no coincide con el importe abonado en cheque (${sumaChequeMedios.toFixed(2)})`,
+      });
+    }
+
+    // Si hay algún medio en efectivo, exige caja abierta en la sucursal (arqueo).
+    const efectivoMedios = mediosLista.filter(m => esEfe(m.medio_pago_id));
     let cajaId = null;
-    if (efectivo) {
+    if (efectivoMedios.length > 0) {
       cajaId = await cajaAbierta(client, sucursal_id);
       if (!cajaId) {
         return res.status(409).json({
-          error: 'No hay una caja abierta en la sucursal seleccionada para registrar el pago en efectivo. Elegí una sucursal con caja abierta o cambiá el medio de pago.',
+          error: 'No hay una caja abierta en la sucursal seleccionada para registrar el pago en efectivo. Elegí una sucursal con caja abierta o quitá el efectivo.',
         });
       }
     }
 
+    const primaryMedioId = mediosLista[0].medio_pago_id;
+    const primaryCuenta  = mediosLista[0].cuenta_bancaria_id;
     const usuarioId = req.usuario?.id ?? null;
 
     await client.query('BEGIN');
 
-    // 1) Cabecera del pago
+    // 1) Cabecera del pago (medio_pago_id = medio primario, para compatibilidad)
     const { rows: pagoRows } = await client.query(`
       INSERT INTO pagos_proveedor
         (proveedor_id, fecha, medio_pago_id, monto, cuenta_bancaria_id,
          sucursal_id, observaciones, facturado, usuario_id)
       VALUES ($1, COALESCE($2::date, CURRENT_DATE), $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, fecha, monto
-    `, [proveedor_id, fecha || null, medio_pago_id, montoTotal,
-        cuenta_bancaria_id || null, sucursal_id || null,
+    `, [proveedor_id, fecha || null, primaryMedioId, montoTotal,
+        primaryCuenta, sucursal_id || null,
         observaciones?.trim() || null, !!facturado, usuarioId]);
     const pago = pagoRows[0];
+
+    // 1b) Líneas de medios de pago (pago dividido)
+    for (const m of mediosLista) {
+      await client.query(`
+        INSERT INTO pago_proveedor_medios (pago_proveedor_id, medio_pago_id, monto, cuenta_bancaria_id)
+        VALUES ($1, $2, $3, $4)
+      `, [pago.id, m.medio_pago_id, m.monto, m.cuenta_bancaria_id]);
+    }
 
     if (aplicar) {
       // 2a) Imputación a cada egreso pendiente
@@ -199,12 +261,14 @@ router.post('/', async (req, res, next) => {
           throw Object.assign(new Error(`La imputación (${montoAp.toFixed(2)}) supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`), { status: 400 });
         }
 
-        // Registro de pago del egreso (mantiene el detalle en "Ver egreso")
+        // Registro de pago del egreso (mantiene el detalle en "Ver egreso").
+        // En pagos divididos se usa el medio primario a nivel comprobante; el
+        // desglose fino por medio queda en pago_proveedor_medios.
         await client.query(`
           INSERT INTO egreso_pagos
             (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones, pago_proveedor_id)
           VALUES ($1, $2, $3, $4, $5, $6)
-        `, [ap.egreso_id, medio_pago_id, montoAp, cuenta_bancaria_id || null,
+        `, [ap.egreso_id, primaryMedioId, montoAp, primaryCuenta,
             observaciones?.trim() || null, pago.id]);
 
         // Nuevo estado del egreso
@@ -252,17 +316,19 @@ router.post('/', async (req, res, next) => {
       `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
     }
 
-    // 4) Impacto en caja si el medio es efectivo
-    if (efectivo && cajaId) {
-      await client.query(`
-        INSERT INTO movimientos_caja
-          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
-        VALUES ($1, 'egreso', $2, $3, $4, $5, 'pago_proveedor', $6)
-      `, [cajaId, `Pago a proveedor`, montoTotal, medio_pago_id, usuarioId, pago.id]);
+    // 4) Impacto en caja: un egreso por cada medio en efectivo
+    if (cajaId) {
+      for (const m of efectivoMedios) {
+        await client.query(`
+          INSERT INTO movimientos_caja
+            (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
+          VALUES ($1, 'egreso', $2, $3, $4, $5, 'pago_proveedor', $6)
+        `, [cajaId, 'Pago a proveedor (efectivo)', m.monto, m.medio_pago_id, usuarioId, pago.id]);
+      }
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ pago, caja_afectada: !!(efectivo && cajaId) });
+    res.status(201).json({ pago, caja_afectada: efectivoMedios.length > 0 && !!cajaId });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -333,27 +399,29 @@ router.post('/:id/anular', async (req, res, next) => {
       `, [pago.proveedor_id, monto, +(saldoPrev + monto).toFixed(2), id]);
     }
 
-    // 4) Revertir caja (best-effort): ingreso compensatorio en la caja abierta
+    // 4) Revertir caja (best-effort): un ingreso compensatorio por cada egreso
     let cajaRevertida = false;
-    const { rows: movCaja } = await client.query(
+    const { rows: movsCaja } = await client.query(
       `SELECT monto, medio_pago_id FROM movimientos_caja
         WHERE origen_tipo = 'pago_proveedor' AND origen_id = $1 AND tipo = 'egreso'`, [id]
     );
-    if (movCaja[0]) {
+    if (movsCaja.length > 0) {
       const cajaId = await cajaAbierta(client, pago.sucursal_id);
       if (cajaId) {
-        await client.query(`
-          INSERT INTO movimientos_caja
-            (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
-          VALUES ($1, 'ingreso', $2, $3, $4, $5, 'pago_proveedor_anulado', $6)
-        `, [cajaId, 'Anulación pago a proveedor', movCaja[0].monto, movCaja[0].medio_pago_id,
-            req.usuario?.id ?? null, id]);
+        for (const mc of movsCaja) {
+          await client.query(`
+            INSERT INTO movimientos_caja
+              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id)
+            VALUES ($1, 'ingreso', $2, $3, $4, $5, 'pago_proveedor_anulado', $6)
+          `, [cajaId, 'Anulación pago a proveedor', mc.monto, mc.medio_pago_id,
+              req.usuario?.id ?? null, id]);
+        }
         cajaRevertida = true;
       }
     }
 
     await client.query('COMMIT');
-    res.json({ ok: true, caja_revertida: cajaRevertida, requiere_ajuste_caja: !!movCaja[0] && !cajaRevertida });
+    res.json({ ok: true, caja_revertida: cajaRevertida, requiere_ajuste_caja: movsCaja.length > 0 && !cajaRevertida });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     next(err);
