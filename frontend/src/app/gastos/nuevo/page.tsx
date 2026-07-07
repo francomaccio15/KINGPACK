@@ -212,6 +212,23 @@ export default function NuevoEgresoPage() {
   const difTotal = Math.abs(totalNum - sumaFiscal);
   const totalOk = !TIPOS_CON_COMPROBANTE.includes(tipoOp) || difTotal <= 0.02 || sumaFiscal === 0;
 
+  // ── Auto-cálculo de montos desde los ítems (Compra de Mercadería) ──────────
+  // Neto gravado = subtotal de los ítems cargados arriba. El IVA 21% deriva del
+  // neto (effect de arriba). Los campos quedan editables para ajustes manuales
+  // (percepciones, IVA 10.5%, etc.), pero se re-sincronizan si cambian los ítems.
+  useEffect(() => {
+    if (tipoOp !== 'compra_mercaderia' || !esFacturaEnBlanco(tipoComp)) return;
+    setNetoGravado(totalItems > 0 ? totalItems.toFixed(2) : '');
+  }, [totalItems, tipoOp, tipoComp]);
+
+  // Total del comprobante = suma de netos + impuestos (factura en blanco) o el
+  // subtotal de ítems (comprobante informal).
+  useEffect(() => {
+    if (tipoOp !== 'compra_mercaderia') return;
+    const t = esFacturaEnBlanco(tipoComp) ? sumaFiscal : totalItems;
+    setTotalComprobante(t > 0 ? t.toFixed(2) : '');
+  }, [sumaFiscal, totalItems, tipoOp, tipoComp]);
+
   // Flete: porcentaje sobre el total del comprobante → monto en pesos.
   const fletePctNum = parseFloat(fletePct) || 0;
   const fleteMonto  = parseFloat((totalNum * fletePctNum / 100).toFixed(2));
@@ -819,6 +836,9 @@ export default function NuevoEgresoPage() {
               <label className={labelCls}>Neto gravado *</label>
               <NumericInput placeholder="0.00" value={netoGravado}
                 onChange={e => setNetoGravado(e.target.value)} className={inputCls} />
+              {items.length > 0 && (
+                <p className="text-[10px] text-kp-gray/70 mt-1">Calculado de los ítems. Editable.</p>
+              )}
             </div>
             <div>
               <label className={labelCls}>Neto no gravado / exento</label>
