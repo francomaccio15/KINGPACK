@@ -177,6 +177,18 @@ export default function PagosProveedorClient() {
   const esEfectivo = /efectivo/i.test(medio?.nombre ?? '');
   const esCheque   = /cheque/i.test(medio?.nombre ?? '');
 
+  // Al elegir Cheque, mostrar una fila de cheque lista para completar; al cambiar
+  // de medio, limpiar las filas cargadas.
+  useEffect(() => {
+    if (esCheque) {
+      setCheques(prev => prev.length === 0
+        ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]
+        : prev);
+    } else {
+      setCheques([]);
+    }
+  }, [esCheque]);
+
   const totalAplicado = useMemo(() =>
     Object.values(aplic).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0),
     [aplic]);
@@ -468,29 +480,62 @@ export default function PagosProveedorClient() {
 
             {/* Cheques */}
             {esCheque && (
-              <div className="space-y-3 pt-2 border-t border-kp-border">
+              <div className="space-y-3 pt-3 border-t border-kp-border">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques ({cheques.length})</p>
                   <button type="button" onClick={addCheque}
-                    className="flex items-center gap-1 text-xs text-kp-gray hover:text-kp-white transition-colors px-2 py-1 rounded border border-kp-border hover:border-kp-gray">
-                    + Agregar cheque
+                    className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Agregar cheque
                   </button>
                 </div>
-                {cheques.map((ch, i) => (
-                  <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
-                    <div><label className={labelCls}>Banco</label>
-                      <input type="text" value={ch.banco} onChange={e => updCheque(i, 'banco', e.target.value)} className={inputCls} /></div>
-                    <div><label className={labelCls}>Nº Cheque</label>
-                      <input type="text" value={ch.numero_cheque} onChange={e => updCheque(i, 'numero_cheque', e.target.value)} className={inputCls} /></div>
-                    <div><label className={labelCls}>Vencimiento</label>
-                      <input type="date" value={ch.fecha_vencimiento} onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)} className={inputCls} /></div>
-                    <div className="flex gap-2">
-                      <div className="flex-1"><label className={labelCls}>Importe</label>
-                        <NumericInput value={ch.importe} onChange={e => updCheque(i, 'importe', e.target.value)} className={inputCls} /></div>
-                      <button type="button" onClick={() => delCheque(i)} className="self-end text-kp-gray hover:text-kp-red pb-2">✕</button>
+
+                {cheques.map((ch, i) => {
+                  const restante = +(totalPago - cheques.reduce((s, c, j) => s + (j === i ? 0 : (parseFloat(c.importe) || 0)), 0)).toFixed(2);
+                  return (
+                    <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-3 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
+                      <div className="sm:col-span-3"><label className={labelCls}>Banco</label>
+                        <input type="text" value={ch.banco} placeholder="Banco" onChange={e => updCheque(i, 'banco', e.target.value)} className={inputCls} /></div>
+                      <div className="sm:col-span-3"><label className={labelCls}>Nº Cheque</label>
+                        <input type="text" value={ch.numero_cheque} placeholder="00000000" onChange={e => updCheque(i, 'numero_cheque', e.target.value)} className={inputCls} /></div>
+                      <div className="sm:col-span-3"><label className={labelCls}>Fecha del cheque *</label>
+                        <input type="date" value={ch.fecha_vencimiento} onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)} className={inputCls} /></div>
+                      <div className="sm:col-span-3">
+                        <div className="flex items-center justify-between">
+                          <label className={labelCls}>Importe *</label>
+                          {restante > 0 && (
+                            <button type="button" onClick={() => updCheque(i, 'importe', String(restante))}
+                              className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(restante)}</button>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <NumericInput value={ch.importe} placeholder="0.00" onChange={e => updCheque(i, 'importe', e.target.value)} className={inputCls} />
+                          <button type="button" onClick={() => delCheque(i)} title="Quitar cheque"
+                            className="self-stretch px-2 text-kp-gray hover:text-kp-red">✕</button>
+                        </div>
+                      </div>
                     </div>
+                  );
+                })}
+
+                {/* Total de cheques vs monto a pagar */}
+                <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
+                  <span className="text-xs uppercase tracking-widest text-kp-gray">Total cheques</span>
+                  <div className="text-right">
+                    <span className={`text-sm font-bold tabular-nums ${Math.abs(totalCheques - totalPago) <= 0.01 ? 'text-green-400' : 'text-kp-red'}`}>
+                      {fmt(totalCheques)}
+                    </span>
+                    {Math.abs(totalCheques - totalPago) > 0.01 && (
+                      <span className="block text-[11px] text-kp-red">
+                        {totalCheques < totalPago
+                          ? `Faltan ${fmt(totalPago - totalCheques)} para llegar al total`
+                          : `Se pasan ${fmt(totalCheques - totalPago)} del total`}
+                      </span>
+                    )}
                   </div>
-                ))}
+                </div>
               </div>
             )}
           </div>
