@@ -154,7 +154,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
   const today = new Date().toISOString().slice(0, 10);
 
   const [clienteId,       setClienteId]       = useState('');
-  const [sucursalId,      setSucursalId]       = useState(sucursales[0]?.id ?? '');
+  const [sucursalId,      setSucursalId]       = useState(sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '');
   const [fecha,           setFecha]            = useState(today);
   const [numRef,          setNumRef]           = useState('');
   const [motivo,          setMotivo]           = useState('');

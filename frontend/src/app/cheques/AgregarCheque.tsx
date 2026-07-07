@@ -57,7 +57,10 @@ export default function AgregarCheque() {
     ]).then(([suc, cli, prov]) => {
       const sArr = (suc.sucursales ?? []).map((s: any) => ({ id: s.id, nombre: s.nombre }));
       setSucursales(sArr);
-      if (sArr.length > 0) setSucursalId(sArr[0].id);
+      if (sArr.length > 0) {
+        const laprida = sArr.find((s: any) => /laprida/i.test(s.nombre));
+        setSucursalId((laprida ?? sArr[0]).id);
+      }
       setClientes((cli.clientes ?? []).map((c: any) => ({ id: c.id, nombre: c.razon_social })));
       setProveedores((prov.proveedores ?? []).map((p: any) => ({ id: p.id, nombre: p.razon_social })));
     });
@@ -76,7 +79,10 @@ export default function AgregarCheque() {
     setFechaEmision(''); setFechaVenc('');
     setEstado('en_cartera'); setClienteId(''); setProveedorId('');
     setObservaciones(''); setError('');
-    if (sucursales.length > 0) setSucursalId(sucursales[0].id);
+    if (sucursales.length > 0) {
+      const laprida = sucursales.find(s => /laprida/i.test(s.nombre));
+      setSucursalId((laprida ?? sucursales[0]).id);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

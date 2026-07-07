@@ -90,7 +90,7 @@ export default function StockEditor({
 }: {
   sucursales: Sucursal[]; sucursalActivaId: string;
 }) {
-  const [sucursalId, setSucursalId] = useState(sucursalActivaId || sucursales[0]?.id || '');
+  const [sucursalId, setSucursalId] = useState(sucursalActivaId || sucursales.find(s => /laprida/i.test(s.nombre))?.id || sucursales[0]?.id || '');
   const [q, setQ]             = useState('');
   const [arts, setArts]       = useState<Art[]>([]);
   const [loading, setLoading] = useState(false);

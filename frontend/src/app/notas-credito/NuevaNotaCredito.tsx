@@ -158,7 +158,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const today = new Date().toISOString().slice(0, 10);
 
   const [clienteId,       setClienteId]       = useState('');
-  const [sucursalId,      setSucursalId]       = useState(sucursales[0]?.id ?? '');
+  const [sucursalId,      setSucursalId]       = useState(sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '');
   const [tipoId,          setTipoId]           = useState(tiposNC[1]?.id ?? ''); // default B
   const [fecha,           setFecha]            = useState(today);
   const [numRef,          setNumRef]           = useState('');

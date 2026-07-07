@@ -49,8 +49,11 @@ export default function NuevoPedido({
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
+  // Sucursal por defecto: Laprida (fallback a la primera)
+  const sucursalDefault = sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '';
+
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [sucursalId, setSucursalId]   = useState(sucursales[0]?.id ?? '');
+  const [sucursalId, setSucursalId]   = useState(sucursalDefault);
   const [proveedorId, setProveedorId] = useState('');
   const [nroFactura, setNroFactura]   = useState('');
   const [items, setItems]             = useState<LineItem[]>([]);
@@ -83,7 +86,7 @@ export default function NuevoPedido({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const reset = () => {
-    setSucursalId(sucursales[0]?.id ?? '');
+    setSucursalId(sucursalDefault);
     setProveedorId('');
     setNroFactura('');
     setItems([]);

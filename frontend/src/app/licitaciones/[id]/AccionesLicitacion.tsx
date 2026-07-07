@@ -32,6 +32,8 @@ export default function AccionesLicitacion({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showAdjudicar, setShowAdjudicar] = useState(false);
+  // Sucursal por defecto: Laprida (fallback a la primera)
+  const sucursalDefault = sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '';
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState('');
   const [errorAdj, setErrorAdj] = useState('');
 
@@ -103,7 +105,7 @@ export default function AccionesLicitacion({
         {/* Adjudicar */}
         {estadoActual === 'enviada' && (
           <button
-            onClick={() => { setShowAdjudicar(true); setErrorAdj(''); setSucursalSeleccionada(sucursales[0]?.id ?? ''); }}
+            onClick={() => { setShowAdjudicar(true); setErrorAdj(''); setSucursalSeleccionada(sucursalDefault); }}
             disabled={loading}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
           >

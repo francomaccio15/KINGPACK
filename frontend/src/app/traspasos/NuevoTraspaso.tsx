@@ -48,7 +48,10 @@ export default function NuevoTraspaso({
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  const [origenId, setOrigenId]   = useState(sucursalDefaultId ?? sucursales[0]?.id ?? '');
+  // Origen por defecto: sucursal del usuario, sino Laprida, sino la primera.
+  const origenDefault = sucursalDefaultId ?? sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '';
+
+  const [origenId, setOrigenId]   = useState(origenDefault);
   const [destinoId, setDestinoId] = useState('');
   const [notas, setNotas]         = useState('');
   const [items, setItems]         = useState<LineItem[]>([]);
@@ -80,7 +83,7 @@ export default function NuevoTraspaso({
   const sucursalesDestino = sucursales.filter(s => s.id !== origenId);
 
   const reset = () => {
-    setOrigenId(sucursalDefaultId ?? sucursales[0]?.id ?? '');
+    setOrigenId(origenDefault);
     setDestinoId('');
     setNotas('');
     setItems([]);
