@@ -126,6 +126,12 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Los movimientos de pago_proveedor solo los ve el administrador.
+    const esAdmin = req.usuario?.rol === 'administrador';
+    const filtroPrivado = esAdmin
+      ? ''
+      : `AND (m.origen_tipo IS NULL OR m.origen_tipo != 'pago_proveedor')`;
+
     const [{ rows: cajaRows }, { rows: movRows }, { rows: mediosRows }] = await Promise.all([
       pool.query(`
         SELECT
@@ -138,7 +144,7 @@ router.get('/:id', async (req, res, next) => {
           COUNT(m.id) AS total_movimientos
         FROM cajas c
         LEFT JOIN sucursales s ON s.id = c.sucursal_id
-        LEFT JOIN movimientos_caja m ON m.caja_id = c.id
+        LEFT JOIN movimientos_caja m ON m.caja_id = c.id ${filtroPrivado}
         WHERE c.id = $1
         GROUP BY c.id, s.nombre
       `, [id]),
@@ -153,7 +159,7 @@ router.get('/:id', async (req, res, next) => {
         LEFT JOIN medios_pago mp ON mp.id = m.medio_pago_id
         LEFT JOIN usuarios    u  ON u.id  = m.usuario_id
         LEFT JOIN empleados   e  ON e.id  = m.origen_id AND m.origen_tipo = 'empleado'
-        WHERE m.caja_id = $1
+        WHERE m.caja_id = $1 ${filtroPrivado}
         ORDER BY m.fecha DESC
       `, [id]),
       pool.query(
