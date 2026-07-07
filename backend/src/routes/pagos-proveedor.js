@@ -203,6 +203,18 @@ router.post('/', async (req, res, next) => {
       `, [pago.id, m.medio_pago_id, m.monto, m.cuenta_bancaria_id]);
     }
 
+    // 1c) Si alguna línea se pagó con "Efectivo Caja Fuerte", descontar de la
+    //     caja fuerte de la sucursal del pago.
+    const totalCajaFuerte = mediosLista.reduce(
+      (s, m) => /caja fuerte/i.test(nombreMedio[m.medio_pago_id] || '') ? s + m.monto : s, 0
+    );
+    if (totalCajaFuerte > 0 && sucursal_id) {
+      await client.query(
+        `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
+        [totalCajaFuerte.toFixed(2), sucursal_id]
+      );
+    }
+
     if (aplicar) {
       // 2a) Imputación a cada egreso pendiente
       for (const ap of aplicaciones) {
@@ -320,6 +332,23 @@ router.post('/:id/anular', async (req, res, next) => {
       `UPDATE pagos_proveedor SET anulado = TRUE, motivo_anulacion = $1, updated_at = NOW() WHERE id = $2`,
       [motivo.trim(), id]
     );
+
+    // 1b) Reponer en la caja fuerte lo que este pago descontó (medios "Efectivo
+    //     Caja Fuerte"), sobre la sucursal del pago.
+    if (pago.sucursal_id) {
+      const { rows: cfRows } = await client.query(`
+        SELECT COALESCE(SUM(m.monto), 0) AS total
+        FROM pago_proveedor_medios m JOIN medios_pago mp ON mp.id = m.medio_pago_id
+        WHERE m.pago_proveedor_id = $1 AND mp.nombre ILIKE '%caja fuerte%'
+      `, [id]);
+      const totalCF = parseFloat(cfRows[0].total) || 0;
+      if (totalCF > 0) {
+        await client.query(
+          `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
+          [totalCF.toFixed(2), pago.sucursal_id]
+        );
+      }
+    }
 
     // 2) Revertir imputaciones a egresos
     const { rows: aplic } = await client.query(

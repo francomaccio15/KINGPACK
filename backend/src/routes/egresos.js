@@ -24,6 +24,27 @@ async function descontarCajaFuerte(client, sucursalId, medios) {
   }
 }
 
+// Repone en la caja fuerte de la sucursal lo que un egreso pagó con "Efectivo
+// Caja Fuerte" (se usa al anular/eliminar el egreso).
+async function reponerCajaFuerte(client, egresoId, sucursalId) {
+  if (!sucursalId) return;
+  // Solo los pagos hechos directamente desde el módulo de egresos (los que vinieron
+  // de un pago a proveedor se reponen al anular ese pago, no acá).
+  const { rows } = await client.query(`
+    SELECT COALESCE(SUM(ep.monto), 0) AS total
+    FROM egreso_pagos ep
+    JOIN medios_pago mp ON mp.id = ep.medio_pago_id
+    WHERE ep.egreso_id = $1 AND ep.pago_proveedor_id IS NULL AND mp.nombre ILIKE '%caja fuerte%'
+  `, [egresoId]);
+  const total = parseFloat(rows[0].total) || 0;
+  if (total > 0) {
+    await client.query(
+      `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
+      [total.toFixed(2), sucursalId]
+    );
+  }
+}
+
 // ─── GET /api/egresos/rubros ──────────────────────────────────────────────────
 // Devuelve rubros con sus subrubros para el selector en caja
 router.get('/rubros', async (req, res, next) => {
@@ -712,6 +733,7 @@ router.post('/:id/pago', async (req, res, next) => {
 
 // ─── DELETE /api/egresos/:id ──────────────────────────────────────────────────
 router.delete('/:id', async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { motivo } = req.body;
@@ -720,19 +742,35 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'El motivo de eliminación es requerido' });
     }
 
-    const { rowCount } = await pool.query(
+    await client.query('BEGIN');
+
+    // Sucursal del egreso (para reponer la caja fuerte si se pagó con ella).
+    const { rows: egRows } = await client.query(
+      `SELECT sucursal_id FROM egresos WHERE id = $1 AND deleted_at IS NULL`, [id]
+    );
+    if (egRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Egreso no encontrado o ya eliminado' });
+    }
+
+    await client.query(
       `UPDATE egresos
           SET deleted_at = NOW(), motivo_eliminacion = $1, updated_at = NOW()
         WHERE id = $2 AND deleted_at IS NULL`,
       [motivo.trim(), id]
     );
 
-    if (rowCount === 0) {
-      return res.status(404).json({ error: 'Egreso no encontrado o ya eliminado' });
-    }
+    // Devolver a la caja fuerte lo que este egreso descontó (si aplica).
+    await reponerCajaFuerte(client, id, egRows[0].sucursal_id);
 
+    await client.query('COMMIT');
     res.json({ ok: true });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
