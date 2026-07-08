@@ -132,6 +132,10 @@ export default function NuevoPresupuesto({
   const descuentoLista   = listas.find(l => l.id === listaId)?.descuento_lista ?? 0;
   const descuentoCliente = selectedClient?.descuento_adicional ?? 0;
 
+  // ── Descuento extra manual sobre el total (ad-hoc, NO ligado a lista ni cliente)
+  const [descExtraModo, setDescExtraModo] = useState<'pct' | 'monto'>('pct');
+  const [descExtraStr, setDescExtraStr]   = useState<string>('');
+
   // Save state
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -150,6 +154,8 @@ export default function NuevoPresupuesto({
     setSaveError('');
     setSaving(false);
     setSucursalId(initialSucursal);
+    setDescExtraStr('');
+    setDescExtraModo('pct');
   }, [initialSucursal]);
 
   const cerrar = useCallback(() => {
@@ -303,6 +309,19 @@ export default function NuevoPresupuesto({
   const subtotalFinal = cart.reduce((acc, i) => acc + i.precio_unitario_final * i.cantidad, 0);
   const descuentoTotal = subtotalBruto - subtotalFinal;
 
+  // ─── Descuento extra manual sobre el total ──────────────────────────────────
+  // Se aplica DESPUÉS de lista/cliente. Puede ser % o monto fijo ($). Se distribuye
+  // proporcionalmente en los ítems al guardar (extraFrac) para que el total se
+  // arrastre al confirmar la preventa (el backend recalcula desde los ítems).
+  const descExtraInput = parseFloat(descExtraStr.replace(',', '.')) || 0;
+  const descExtraMonto = subtotalFinal > 0
+    ? (descExtraModo === 'pct'
+        ? subtotalFinal * (Math.min(100, Math.max(0, descExtraInput)) / 100)
+        : Math.min(subtotalFinal, Math.max(0, descExtraInput)))
+    : 0;
+  const totalConExtra = parseFloat((subtotalFinal - descExtraMonto).toFixed(2));
+  const extraFrac     = subtotalFinal > 0 ? descExtraMonto / subtotalFinal : 0;
+
   // ─── Save (siempre como preventa = presupuesto) ─────────────────────────────
   const handleSave = async () => {
     if (cart.length === 0) return;
@@ -316,14 +335,22 @@ export default function NuevoPresupuesto({
       lista_precio_id: listaId || null,
       estado:          'preventa',
       observaciones:   null,
-      items: cart.map(i => ({
-        articulo_id:           i.articulo_id,
-        cantidad:              i.cantidad,
-        precio_lista:          i.precio_lista,
-        descuento_pct:         i.descuento_pct,
-        precio_unitario_final: i.precio_unitario_final,
-        iva_monto:             0,
-      })),
+      items: cart.map(i => {
+        // Distribuir el descuento extra proporcionalmente en cada ítem, foldeándolo
+        // dentro del descuento del renglón para que el total del backend coincida.
+        const finalConExtra = parseFloat((i.precio_unitario_final * (1 - extraFrac)).toFixed(2));
+        const descPctConExtra = i.precio_lista > 0
+          ? Math.min(100, Math.max(0, parseFloat(((1 - finalConExtra / i.precio_lista) * 100).toFixed(4))))
+          : i.descuento_pct;
+        return {
+          articulo_id:           i.articulo_id,
+          cantidad:              i.cantidad,
+          precio_lista:          i.precio_lista,
+          descuento_pct:         descPctConExtra,
+          precio_unitario_final: finalConExtra,
+          iva_monto:             0,
+        };
+      }),
       pagos: [],
     };
 
@@ -821,14 +848,62 @@ export default function NuevoPresupuesto({
                           </span>
                         </div>
                       )}
+                      {descExtraMonto > 0.001 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-kp-red">Descuento extra</span>
+                          <span className="text-xs text-kp-red tabular-nums font-semibold">
+                            −{ars.format(descExtraMonto)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between px-4 py-3.5 bg-kp-surface2 border-t border-kp-border">
                       <span className="text-sm font-bold uppercase tracking-wide text-kp-white">
                         Total
                       </span>
                       <span className="text-xl font-bold text-kp-white tabular-nums">
-                        {ars.format(subtotalFinal)}
+                        {ars.format(totalConExtra)}
                       </span>
+                    </div>
+
+                    {/* ── Descuento extra manual (sobre el total) ─────────── */}
+                    <div className="px-4 py-3 border-t border-kp-border space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                          Descuento extra
+                        </span>
+                        <div className="flex rounded-md border border-kp-border overflow-hidden">
+                          {(['pct', 'monto'] as const).map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setDescExtraModo(m)}
+                              className={`px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+                                descExtraModo === m
+                                  ? 'bg-kp-red text-white'
+                                  : 'text-kp-gray hover:text-kp-white'
+                              }`}
+                              aria-label={m === 'pct' ? 'Descuento en porcentaje' : 'Descuento en pesos'}
+                            >
+                              {m === 'pct' ? '%' : '$'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <NumericInput
+                          decimals={2}
+                          value={descExtraStr}
+                          onChange={e => setDescExtraStr(e.target.value)}
+                          placeholder={descExtraModo === 'pct' ? '0' : '0,00'}
+                          className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 pr-8 text-sm
+                            text-kp-white tabular-nums placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                          aria-label="Descuento extra"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-kp-gray">
+                          {descExtraModo === 'pct' ? '%' : '$'}
+                        </span>
+                      </div>
                     </div>
                   </section>
                 </div>
