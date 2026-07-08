@@ -399,6 +399,150 @@ router.get('/pdf-precios', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/articulos/pdf-conteo ───────────────────────────────────────────
+// Planilla de conteo de stock (para completar a mano). Lista todos los
+// artículos activos ordenados por nombre, con una columna CANTIDAD en blanco.
+// ?sucursal_id=UUID   (requerido) solo para el encabezado
+// ?ubicacion=         (requerido) adelante | deposito → etiqueta del encabezado
+router.get('/pdf-conteo', async (req, res, next) => {
+  try {
+    const sucursal_id = req.query.sucursal_id || null;
+    const ubicacion   = String(req.query.ubicacion || '').toLowerCase();
+
+    if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
+
+    const UBIC_LABEL = { adelante: 'Frente del local', deposito: 'Depósito' };
+    if (!UBIC_LABEL[ubicacion]) {
+      return res.status(400).json({ error: 'ubicacion debe ser "adelante" o "deposito"' });
+    }
+    const ubicLabel = UBIC_LABEL[ubicacion];
+
+    const { rows: sucRows } = await pool.query('SELECT nombre FROM sucursales WHERE id = $1', [sucursal_id]);
+    if (!sucRows[0]) return res.status(404).json({ error: 'Sucursal no encontrada' });
+    const sucursalNombre = sucRows[0].nombre;
+
+    const { rows } = await pool.query(`
+      SELECT a.nombre
+        FROM articulos a
+       WHERE a.deleted_at IS NULL AND a.activo = true
+       ORDER BY a.nombre
+    `);
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+
+    const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sucursal';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="conteo-stock-${slug(sucursalNombre)}-${ubicacion}.pdf"`);
+    doc.pipe(res);
+
+    const PW = doc.page.width;   // 595
+    const PH = doc.page.height;  // 842
+    const ML = 45;
+    const MR = 45;
+    const CW = PW - ML - MR;     // 505
+
+    // Layout de columnas: ARTÍCULO (izq) | CANTIDAD (der, recuadro en blanco)
+    const CANT_W    = 110;                 // ancho reservado para la columna cantidad
+    const COL_NAME  = ML;
+    const COL_NAME_W = CW - CANT_W - 10;
+    const BOX_W     = 90;
+    const BOX_X     = PW - MR - BOX_W;      // recuadro pegado al margen derecho
+
+    const ROW_H = 22;
+
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    const HEADER_H = 88;
+    doc.rect(0, 0, PW, HEADER_H).fill('#111111');
+    doc.rect(0, 0, PW, 4).fill('#333333');
+    doc.rect(ML, 20, 3, 32).fill('#333333');
+
+    doc.fillColor('#ffffff').fontSize(24).font('Helvetica-Bold')
+       .text('KING PACK', ML + 12, 20);
+    doc.fillColor('#aaaaaa').fontSize(9).font('Helvetica-Bold')
+       .text('PLANILLA DE CONTEO DE STOCK', ML + 12, 50);
+
+    const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    doc.fillColor('#888888').fontSize(8).font('Helvetica')
+       .text(`Fecha: ${fecha}`, 0, 22, { align: 'right', width: PW - MR });
+    doc.fillColor('#dddddd').fontSize(8.5).font('Helvetica-Bold')
+       .text(`Sucursal: ${sucursalNombre}`, 0, 40, { align: 'right', width: PW - MR });
+    doc.fillColor('#dddddd').fontSize(8.5).font('Helvetica-Bold')
+       .text(`Ubicación: ${ubicLabel}`, 0, 54, { align: 'right', width: PW - MR });
+
+    // ── COLUMN HEADERS ───────────────────────────────────────────────────────
+    const drawColHeader = (y) => {
+      doc.rect(0, y, PW, 22).fill('#f2f2f2');
+      doc.rect(0, y + 21, PW, 1).fill('#d0d0d0');
+      doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
+      doc.text('ARTÍCULO', COL_NAME, y + 7, { width: COL_NAME_W });
+      doc.text('CANTIDAD', BOX_X, y + 7, { width: BOX_W, align: 'center' });
+    };
+
+    const COL_HDR_Y = HEADER_H + 2;
+    drawColHeader(COL_HDR_Y);
+    let curY = COL_HDR_Y + 24;
+    let rowIndex = 0;
+
+    const ensureSpace = (needed) => {
+      if (curY + needed > PH - 55) {
+        doc.addPage();
+        drawColHeader(0);
+        curY = 26;
+        rowIndex = 0;
+      }
+    };
+
+    // ── ROWS ─────────────────────────────────────────────────────────────────
+    for (const art of rows) {
+      ensureSpace(ROW_H);
+
+      if (rowIndex % 2 === 1) {
+        doc.rect(0, curY, PW, ROW_H).fill('#f9f9f9');
+      }
+
+      // Nombre
+      doc.fillColor('#1a1a1a').fontSize(9).font('Helvetica')
+         .text(art.nombre, COL_NAME, curY + 6, { width: COL_NAME_W, lineBreak: false });
+
+      // Recuadro en blanco para anotar la cantidad
+      doc.strokeColor('#bbbbbb').lineWidth(0.7)
+         .rect(BOX_X, curY + 4, BOX_W, ROW_H - 8).stroke();
+
+      // Separador inferior de fila
+      doc.strokeColor('#e8e8e8').lineWidth(0.5)
+         .moveTo(ML, curY + ROW_H).lineTo(PW - MR, curY + ROW_H).stroke();
+
+      curY += ROW_H;
+      rowIndex++;
+    }
+
+    // ── FOOTER ───────────────────────────────────────────────────────────────
+    ensureSpace(40);
+    curY += 14;
+    doc.strokeColor('#cccccc').lineWidth(0.7)
+       .moveTo(ML, curY).lineTo(PW - MR, curY).stroke();
+    curY += 8;
+    doc.fillColor('#888888').fontSize(7).font('Helvetica')
+       .text('* Complete la cantidad real contada en cada artículo y luego actualice el sistema.', ML, curY, { width: CW });
+
+    // Numeración de páginas
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      if (totalPages > 1) {
+        doc.fillColor('#aaaaaa').fontSize(7).font('Helvetica')
+           .text(`Pág. ${i + 1} / ${totalPages}`, 0, PH - 22, { align: 'right', width: PW - MR });
+      }
+    }
+
+    doc.end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/articulos ──────────────────────────────────────────────────────
 // ?lista_id=UUID   precio_efectivo de esa lista (default: precio_madre)
 // ?q=              busca en nombre o código
