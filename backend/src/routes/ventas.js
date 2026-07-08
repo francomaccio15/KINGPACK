@@ -164,6 +164,7 @@ router.post('/', async (req, res, next) => {
       sucursal_id, cliente_id, lista_precio_id,
       estado = 'confirmada', observaciones,
       items = [], pagos = [],
+      descuento_extra_pct = 0, descuento_extra_monto = 0,
     } = req.body;
 
     if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
@@ -207,13 +208,14 @@ router.post('/', async (req, res, next) => {
     // Fetchear precios reales desde la DB — no confiar en el cliente
     const precioQuery = lista_precio_id
       ? `SELECT a.id, a.nombre, a.alicuota_iva_id, ai.porcentaje AS iva_pct,
+                a.precio_madre,
                 COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista
          FROM articulos a
          LEFT JOIN lista_precio_items lpi
            ON lpi.articulo_id = a.id AND lpi.lista_id = $2 AND lpi.activo = TRUE
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
          WHERE a.id = ANY($1) AND a.deleted_at IS NULL`
-      : `SELECT a.id, a.nombre, a.precio_madre AS precio_lista, a.alicuota_iva_id,
+      : `SELECT a.id, a.nombre, a.precio_madre, a.precio_madre AS precio_lista, a.alicuota_iva_id,
                 ai.porcentaje AS iva_pct
          FROM articulos a
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
@@ -231,9 +233,11 @@ router.post('/', async (req, res, next) => {
     // Recalcular precios y totales con datos de la DB
     let subtotal = 0;
     let descuento_total = 0;
+    let subtotal_bruto = 0; // Σ precio madre · cant — base del descuento extra en %
     const itemsCalculados = items.map(item => {
       const art        = artMap[item.articulo_id];
       const precio_lista  = parseFloat(art.precio_lista) || 0;
+      const precio_madre  = parseFloat(art.precio_madre) || precio_lista;
       const descuento_pct = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
       const precio_final  = parseFloat((precio_lista * (1 - descuento_pct / 100)).toFixed(2));
       const cantidad      = Math.max(0, parseFloat(item.cantidad) || 1);
@@ -242,10 +246,22 @@ router.post('/', async (req, res, next) => {
 
       subtotal        += precio_lista * cantidad;
       descuento_total += (precio_lista - precio_final) * cantidad;
+      subtotal_bruto  += precio_madre * cantidad;
 
       return { ...item, precio_lista, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad };
     });
-    const total = parseFloat((subtotal - descuento_total).toFixed(2));
+    const subtotalNeto = subtotal - descuento_total; // Σ precio final · cant
+
+    // ── Descuento extra a nivel venta (no se reparte en los ítems) ──────────────
+    // % → sobre el subtotal bruto (precio madre); $ → monto fijo. Se recalcula
+    // server-side para no confiar en el cliente y se topea al subtotal neto.
+    const descExtraPct = Math.max(0, Math.min(100, parseFloat(descuento_extra_pct) || 0));
+    let descExtraMonto = descExtraPct > 0
+      ? parseFloat((subtotal_bruto * descExtraPct / 100).toFixed(2))
+      : Math.max(0, parseFloat(descuento_extra_monto) || 0);
+    descExtraMonto = Math.min(descExtraMonto, parseFloat(subtotalNeto.toFixed(2)));
+
+    const total = parseFloat((subtotalNeto - descExtraMonto).toFixed(2));
 
     // Número de venta secuencial por sucursal
     const { rows: numRows } = await client.query(
@@ -259,8 +275,8 @@ router.post('/', async (req, res, next) => {
     const { rows: ventaRows } = await client.query(`
       INSERT INTO ventas
         (numero, sucursal_id, cliente_id, vendedor_id, lista_precio_id, estado, observaciones,
-         subtotal, descuento_total, total)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         subtotal, descuento_total, total, descuento_extra_pct, descuento_extra_monto)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING id, numero, fecha, estado, total
     `, [
       numero,
@@ -273,6 +289,8 @@ router.post('/', async (req, res, next) => {
       subtotal.toFixed(2),
       descuento_total.toFixed(2),
       total.toFixed(2),
+      descExtraPct.toFixed(2),
+      descExtraMonto.toFixed(2),
     ]);
     const venta = ventaRows[0];
 
@@ -474,6 +492,8 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           v.id, v.numero, v.fecha, v.estado, v.observaciones,
           v.subtotal, v.descuento_total, v.total,
+          v.descuento_extra_pct, v.descuento_extra_monto,
+          v.lista_precio_id,
           v.sucursal_id,
           c.id           AS cliente_id,
           c.razon_social AS cliente_nombre,
@@ -950,6 +970,7 @@ router.get('/:id/pdf', async (req, res, next) => {
     const [{ rows: ventaRows }, { rows: itemRows }, { rows: factRows }] = await Promise.all([
       pool.query(`
         SELECT v.numero, v.fecha, v.estado, v.subtotal, v.descuento_total, v.total,
+               v.descuento_extra_pct, v.descuento_extra_monto,
                c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit, c.telefono AS cliente_tel,
                ci.nombre AS cond_iva,
                s.nombre AS sucursal_nombre, s.direccion AS sucursal_dir,
@@ -1154,11 +1175,20 @@ router.get('/:id/pdf', async (req, res, next) => {
       const baseI  = madreI >= finalI ? madreI : (parseFloat(it.precio_lista) || madreI);
       return s + baseI * parseFloat(it.cantidad || 0);
     }, 0);
-    const descuentoBasePdf = Math.max(0, subtotalBasePdf - parseFloat(venta.total || 0));
+    const descExtraPdf     = parseFloat(venta.descuento_extra_monto || 0) || 0;
+    // El descuento por lista/ítem es todo el descuento MENOS el extra (que se
+    // muestra como su propio renglón).
+    const descuentoBasePdf = Math.max(0, subtotalBasePdf - parseFloat(venta.total || 0) - descExtraPdf);
 
     drawTotalRow('Subtotal', subtotalBasePdf);
     if (descuentoBasePdf > 0.01) {
       drawTotalRow('Descuento', -descuentoBasePdf, false, '#555555');
+    }
+    if (descExtraPdf > 0.01) {
+      const lblExtra = parseFloat(venta.descuento_extra_pct || 0) > 0
+        ? `Descuento extra ${parseFloat(venta.descuento_extra_pct).toFixed(2).replace(/\.?0+$/, '')}%`
+        : 'Descuento extra';
+      drawTotalRow(lblExtra, -descExtraPdf, false, '#555555');
     }
     drawTotalRow('TOTAL', venta.total, true, '#111111');
 
@@ -1203,7 +1233,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { items = [], observacion, pagos } = req.body;
+    const { items = [], observacion, pagos, descuento_extra_pct = 0, descuento_extra_monto = 0 } = req.body;
 
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
 
@@ -1311,13 +1341,22 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     // Recalcular totales de la venta
     const subtotal       = itemsCalculados.reduce((s, i) => s + i.precioFinal * i.cantidad, 0);
     const totalDescuento = itemsCalculados.reduce((s, i) => s + (i.precioLista - i.precioFinal) * i.cantidad, 0);
-    const total          = subtotal;
+    const subtotalBruto  = itemsCalculados.reduce((s, i) => s + (parseFloat(i.art.precio_madre) || i.precioLista) * i.cantidad, 0);
+
+    // ── Descuento extra a nivel venta (no se reparte en los ítems) ──────────────
+    const descExtraPct = Math.max(0, Math.min(100, parseFloat(descuento_extra_pct) || 0));
+    let descExtraMonto = descExtraPct > 0
+      ? parseFloat((subtotalBruto * descExtraPct / 100).toFixed(2))
+      : Math.max(0, parseFloat(descuento_extra_monto) || 0);
+    descExtraMonto = Math.min(descExtraMonto, parseFloat(subtotal.toFixed(2)));
+    const total = parseFloat((subtotal - descExtraMonto).toFixed(2));
 
     // El motivo de la edición NO se mete en observaciones (ensucia el comprobante);
     // ya queda registrado en el historial venta_ediciones más abajo.
     await client.query(
-      `UPDATE ventas SET subtotal = $1, total = $2, descuento_total = $3 WHERE id = $4`,
-      [subtotal, total, totalDescuento, id]
+      `UPDATE ventas SET subtotal = $1, total = $2, descuento_total = $3,
+              descuento_extra_pct = $4, descuento_extra_monto = $5 WHERE id = $6`,
+      [subtotal, total, totalDescuento, descExtraPct.toFixed(2), descExtraMonto.toFixed(2), id]
     );
 
     // ── Reconciliar pagos / caja / cuenta corriente con el nuevo total ──────────

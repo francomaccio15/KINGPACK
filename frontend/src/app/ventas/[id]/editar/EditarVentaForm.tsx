@@ -13,17 +13,13 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (n: number) => ars.format(n);
 
-// Combina dos descuentos de forma aditiva (se suman los puntos), tope 100%.
-// Ej: 30% del artículo + 5% extra a toda la venta = 35% (no 33,5% en cascada).
-const combinar = (base: number, extra: number) =>
-  Math.min(100, Math.round((base + extra) * 100) / 100);
-
 interface ItemVenta {
   articulo_id: string;
   nombre: string;
   codigo: string;
   cantidad: number;
   precio_lista: number;
+  precio_madre?: number | string;
   descuento_pct: number;
   precio_unitario_final: number;
 }
@@ -43,6 +39,7 @@ interface CartItem {
   codigo: string;
   cantidad: number;
   precio_lista: number;
+  precio_madre: number;             // precio base — para el subtotal bruto del descuento extra
   descuento_manual: number | null; // % fijado a mano para ESTE ítem (null = hereda el de la venta)
   descuento_pct: number;
   precio_unitario_final: number;
@@ -58,6 +55,8 @@ export default function EditarVentaForm({
   ventaEstado,
   listaPrecioId,
   observacionesActuales,
+  descuentoExtraPctInicial = 0,
+  descuentoExtraMontoInicial = 0,
 }: {
   ventaId: string;
   itemsIniciales: ItemVenta[];
@@ -65,6 +64,8 @@ export default function EditarVentaForm({
   ventaEstado?: string;
   listaPrecioId: string | null;
   observacionesActuales: string;
+  descuentoExtraPctInicial?: number;
+  descuentoExtraMontoInicial?: number;
 }) {
   const router = useRouter();
 
@@ -72,12 +73,14 @@ export default function EditarVentaForm({
   const [cart, setCart] = useState<CartItem[]>(
     itemsIniciales.map(i => {
       const saved = parseFloat(String(i.descuento_pct)) || 0;
+      const lista = parseFloat(String(i.precio_lista)) || 0;
       return {
         articulo_id: i.articulo_id,
         nombre: i.nombre,
         codigo: i.codigo,
         cantidad: parseFloat(String(i.cantidad)),
-        precio_lista: parseFloat(String(i.precio_lista)),
+        precio_lista: lista,
+        precio_madre: parseFloat(String(i.precio_madre ?? lista)) || lista,
         descuento_manual: saved, // los ítems existentes muestran su descuento explícito
         descuento_pct: saved,
         precio_unitario_final: parseFloat(String(i.precio_unitario_final)),
@@ -96,8 +99,15 @@ export default function EditarVentaForm({
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
 
-  // Descuento extra aplicado a TODA la venta (se combina en cascada con el de cada ítem).
-  const [descuentoGlobal, setDescuentoGlobal] = useState(0);
+  // Descuento extra a nivel venta (renglón propio, NO se reparte en los ítems).
+  const [descExtraModo, setDescExtraModo] = useState<'pct' | 'monto'>(
+    descuentoExtraPctInicial > 0 || descuentoExtraMontoInicial <= 0 ? 'pct' : 'monto'
+  );
+  const [descExtraStr, setDescExtraStr] = useState<string>(
+    descuentoExtraPctInicial > 0
+      ? String(descuentoExtraPctInicial)
+      : descuentoExtraMontoInicial > 0 ? String(descuentoExtraMontoInicial) : ''
+  );
 
   // Medios de pago (solo para ventas confirmadas)
   const esConfirmada = ventaEstado === 'confirmada' || ventaEstado === 'facturada';
@@ -126,18 +136,6 @@ export default function EditarVentaForm({
       })
       .catch(() => {});
   }, [esConfirmada]);
-
-  // Descuento propio del ítem (su manual, o el de la venta si hereda).
-  const descPropio = (i: CartItem) => (i.descuento_manual != null ? i.descuento_manual : descuentoVenta);
-
-  // Al cambiar el descuento global, re-precia todos los ítems combinándolo con el de cada uno.
-  useEffect(() => {
-    setCart(prev => prev.map(i => {
-      const eff = combinar(descPropio(i), descuentoGlobal);
-      return { ...i, descuento_pct: eff, precio_unitario_final: +(i.precio_lista * (1 - eff / 100)).toFixed(4) };
-    }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descuentoGlobal]);
 
   const agregarPago = () => {
     const primero = mediosPago[0]?.id ?? '';
@@ -183,14 +181,14 @@ export default function EditarVentaForm({
           : i
         );
       }
-      // Ítem nuevo: hereda el descuento de la venta (descuento_manual = null)
-      // y también el descuento global aplicado a toda la venta.
+      // Ítem nuevo: hereda el descuento de la venta (descuento_manual = null).
       const precioLista = art.precio_madre || art.precio_lista;
-      const eff = combinar(descuentoVenta, descuentoGlobal);
+      const eff = descuentoVenta;
       const precioFinal = +(precioLista * (1 - eff / 100)).toFixed(4);
       return [...prev, {
         articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
         cantidad: 1, precio_lista: precioLista,
+        precio_madre: art.precio_madre || precioLista,
         descuento_manual: null, descuento_pct: eff,
         precio_unitario_final: precioFinal,
       }];
@@ -216,8 +214,7 @@ export default function EditarVentaForm({
     }
     setCart(prev => prev.map(i => {
       if (i.articulo_id !== articulo_id) return i;
-      const propio = manual != null ? manual : descuentoVenta;
-      const eff = combinar(propio, descuentoGlobal);
+      const eff = manual != null ? manual : descuentoVenta;
       return {
         ...i,
         descuento_manual: manual,
@@ -231,7 +228,21 @@ export default function EditarVentaForm({
     setCart(prev => prev.filter(i => i.articulo_id !== articulo_id));
   };
 
-  const subtotal = cart.reduce((s, i) => s + i.precio_unitario_final * i.cantidad, 0);
+  // Subtotal de los ítems (con su descuento de lista/cliente/ítem, sin el extra).
+  const subtotalItems = cart.reduce((s, i) => s + i.precio_unitario_final * i.cantidad, 0);
+  // Subtotal bruto (precio madre) — base del descuento extra en %.
+  const subtotalBruto = cart.reduce((s, i) => s + i.precio_madre * i.cantidad, 0);
+
+  // ── Descuento extra a nivel venta ──────────────────────────────────────────
+  const descExtraInput = parseFloat(descExtraStr.replace(',', '.')) || 0;
+  const extraPctPts    = descExtraModo === 'pct' ? Math.min(100, Math.max(0, descExtraInput)) : 0;
+  const extraMontoFijo = descExtraModo === 'monto' && subtotalItems > 0
+    ? Math.min(subtotalItems, Math.max(0, descExtraInput))
+    : 0;
+  const descExtraMonto = descExtraModo === 'pct'
+    ? Math.min(subtotalItems, +(subtotalBruto * extraPctPts / 100).toFixed(2))
+    : extraMontoFijo;
+  const subtotal = +(subtotalItems - descExtraMonto).toFixed(2); // total final con extra
 
   const guardar = async () => {
     if (cart.length === 0) { setError('Agregá al menos un artículo.'); return; }
@@ -246,7 +257,12 @@ export default function EditarVentaForm({
     setSaving(true);
     setError('');
     try {
-      const body: any = { items: cart, observacion: observacion.trim() };
+      const body: any = {
+        items: cart,
+        observacion: observacion.trim(),
+        descuento_extra_pct:   extraPctPts,
+        descuento_extra_monto: descExtraModo === 'monto' ? extraMontoFijo : descExtraMonto,
+      };
       if (editarPagos && pagos.length > 0) {
         body.pagos = pagos.map(p => ({ medio_pago_id: p.medio_pago_id, monto: parseFloat(p.monto) }));
       }
@@ -314,33 +330,49 @@ export default function EditarVentaForm({
         </div>
       </div>
 
-      {/* ── Descuento a toda la venta ── */}
+      {/* ── Descuento extra a toda la venta ── */}
       <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Descuento a toda la venta</h3>
-            <p className="text-xs text-kp-gray mt-1">Se aplica como % <span className="text-kp-white font-semibold">extra</span> sobre el descuento que ya tiene cada artículo.</p>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Descuento extra</h3>
+            <p className="text-xs text-kp-gray mt-1">Se descuenta del total de la venta, aparte del descuento de cada artículo.</p>
           </div>
-          <div className="flex items-center shrink-0">
-            <NumericInput
-              decimals={2}
-              placeholder="0"
-              value={descuentoGlobal || ''}
-              onChange={e => {
-                const v = parseFloat(e.target.value);
-                setDescuentoGlobal(isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
-              }}
-              className={`w-20 text-center bg-kp-surface2 border rounded-l px-2 py-1.5 text-sm tabular-nums focus:outline-none transition-colors ${
-                descuentoGlobal > 0 ? 'border-kp-red text-kp-red font-semibold' : 'border-kp-border text-kp-white focus:border-kp-red'
-              }`}
-              aria-label="Descuento a toda la venta"
-            />
-            <span className="px-2 py-1.5 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">%</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex rounded-md border border-kp-border overflow-hidden">
+              {(['pct', 'monto'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setDescExtraModo(m)}
+                  className={`px-2.5 py-1 text-xs font-bold transition-colors ${
+                    descExtraModo === m ? 'bg-kp-red text-white' : 'text-kp-gray hover:text-kp-white'
+                  }`}
+                  aria-label={m === 'pct' ? 'Descuento en porcentaje' : 'Descuento en pesos'}
+                >
+                  {m === 'pct' ? '%' : '$'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center">
+              <NumericInput
+                decimals={2}
+                placeholder={descExtraModo === 'pct' ? '0' : '0,00'}
+                value={descExtraStr}
+                onChange={e => setDescExtraStr(e.target.value)}
+                className={`w-24 text-center bg-kp-surface2 border rounded-l px-2 py-1.5 text-sm tabular-nums focus:outline-none transition-colors ${
+                  descExtraMonto > 0 ? 'border-kp-red text-kp-red font-semibold' : 'border-kp-border text-kp-white focus:border-kp-red'
+                }`}
+                aria-label="Descuento extra"
+              />
+              <span className="px-2 py-1.5 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">
+                {descExtraModo === 'pct' ? '%' : '$'}
+              </span>
+            </div>
           </div>
         </div>
-        {descuentoGlobal > 0 && (
+        {descExtraMonto > 0 && (
           <p className="text-xs text-kp-red font-semibold mt-3">
-            Aplicando {descuentoGlobal}% adicional a los {cart.length} artículo{cart.length !== 1 ? 's' : ''} de la venta.
+            Descontando {fmt(descExtraMonto)} del total{descExtraModo === 'pct' ? ` (${extraPctPts}% del subtotal)` : ''}.
           </p>
         )}
       </div>
@@ -434,9 +466,23 @@ export default function EditarVentaForm({
         {/* Total */}
         {cart.length > 0 && (
           <div className="border-t border-kp-border bg-kp-surface2 px-5 py-3 flex justify-end">
-            <div className="text-right">
-              <p className="text-xs text-kp-gray uppercase tracking-widest">Total</p>
-              <p className="text-2xl font-bold text-kp-white tabular-nums">{fmt(subtotal)}</p>
+            <div className="text-right space-y-1 min-w-[220px]">
+              {descExtraMonto > 0 && (
+                <>
+                  <div className="flex justify-between text-xs text-kp-gray">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">{fmt(subtotalItems)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-kp-gray">Descuento extra{descExtraModo === 'pct' ? ` ${extraPctPts}%` : ''}</span>
+                    <span className="text-kp-red font-semibold tabular-nums">−{fmt(descExtraMonto)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between items-baseline pt-1">
+                <span className="text-xs text-kp-gray uppercase tracking-widest">Total</span>
+                <span className="text-2xl font-bold text-kp-white tabular-nums">{fmt(subtotal)}</span>
+              </div>
             </div>
           </div>
         )}

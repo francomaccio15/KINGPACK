@@ -601,25 +601,18 @@ export default function NuevaVenta({
       lista_precio_id: listaId || null,
       estado,
       observaciones:  null,
-      items: cart.map(i => {
-        // Foldear el descuento extra dentro del renglón para que el total del
-        // backend (que recalcula el final como precio_lista·(1−descuento_pct))
-        // coincida con totalConExtra. finalUnitConExtra ya aplica el % extra sobre
-        // el descuento efectivo respecto al precio base (aditivo: 30%+5% = 35%),
-        // así que basta re-expresar ese final como descuento_pct sobre precio_lista.
-        const finalConExtra   = parseFloat(finalUnitConExtra(i).toFixed(2));
-        const descPctConExtra = i.precio_lista > 0
-          ? Math.min(100, Math.max(0, parseFloat(((1 - finalConExtra / i.precio_lista) * 100).toFixed(4))))
-          : i.descuento_pct;
-        return {
-          articulo_id:           i.articulo_id,
-          cantidad:              i.cantidad,
-          precio_lista:          i.precio_lista,
-          descuento_pct:         descPctConExtra,
-          precio_unitario_final: finalConExtra,
-          iva_monto:             0,
-        };
-      }),
+      // Los ítems van con su descuento REAL (lista/cliente/ítem). El descuento
+      // extra NO se reparte acá: viaja aparte y el backend lo resta del total.
+      items: cart.map(i => ({
+        articulo_id:           i.articulo_id,
+        cantidad:              i.cantidad,
+        precio_lista:          i.precio_lista,
+        descuento_pct:         i.descuento_pct,
+        precio_unitario_final: i.precio_unitario_final,
+        iva_monto:             0,
+      })),
+      descuento_extra_pct:   extraPctPts,
+      descuento_extra_monto: descExtraModo === 'monto' ? extraMontoFijo : descExtraMonto,
       pagos,
     };
 

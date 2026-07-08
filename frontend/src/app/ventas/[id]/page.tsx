@@ -73,7 +73,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
   const totalVenta   = parseFloat(venta.total || '0');
   const subtotalBase = items.reduce(
     (acc: number, it: any) => acc + desglosePrecio(it).base * parseFloat(it.cantidad || '0'), 0);
-  const descuento    = Math.max(0, subtotalBase - totalVenta);
+  // Descuento extra (renglón propio de la venta) y descuento por lista/ítem (el resto).
+  const descExtraMonto = parseFloat(venta.descuento_extra_monto || '0') || 0;
+  const descExtraPct   = parseFloat(venta.descuento_extra_pct || '0') || 0;
+  const descuento      = Math.max(0, subtotalBase - totalVenta - descExtraMonto);
+  const descExtraLabel = descExtraPct > 0
+    ? `Descuento extra ${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
+    : 'Descuento extra';
 
   // Historial de ediciones (solo para admin/supervisor)
   const esAdmin = user.rol === 'administrador' || user.rol === 'supervisor';
@@ -196,6 +202,12 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   <div className="flex justify-between text-sm">
                     <span className="text-kp-gray">Descuento</span>
                     <span className="text-kp-red tabular-nums font-semibold">−{fmt(descuento)}</span>
+                  </div>
+                )}
+                {descExtraMonto > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-kp-gray">{descExtraLabel}</span>
+                    <span className="text-kp-red tabular-nums font-semibold">−{fmt(descExtraMonto)}</span>
                   </div>
                 )}
                 <div className="border-t border-kp-border pt-3 flex justify-between">
@@ -500,17 +512,24 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             )}
           </div>
           <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
-            {descuento > 0 && (
+            {(descuento > 0 || descExtraMonto > 0) && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
                   <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotalBase)}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
-                  <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
-                </div>
+                {descuento > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
+                    <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
+                  </div>
+                )}
+                {descExtraMonto > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
+                    <span>{descExtraLabel}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descExtraMonto)}</span>
+                  </div>
+                )}
               </>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '2px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: (descuento > 0 || descExtraMonto > 0) ? '2px solid #111' : undefined, paddingTop: (descuento > 0 || descExtraMonto > 0) ? '3px' : undefined }}>
               <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
             </div>
           </div>
@@ -653,17 +672,24 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
             {/* Total */}
             <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
-              {descuento > 0 && (
+              {(descuento > 0 || descExtraMonto > 0) && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
                     <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotalBase)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
-                    <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
-                  </div>
+                  {descuento > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
+                      <span>Descuento</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descuento)}</span>
+                    </div>
+                  )}
+                  {descExtraMonto > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#dc2626', marginBottom: '2px' }}>
+                      <span>{descExtraLabel}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmt(descExtraMonto)}</span>
+                    </div>
+                  )}
                 </>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: descuento > 0 ? '2px solid #111' : undefined, paddingTop: descuento > 0 ? '3px' : undefined }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: (descuento > 0 || descExtraMonto > 0) ? '2px solid #111' : undefined, paddingTop: (descuento > 0 || descExtraMonto > 0) ? '3px' : undefined }}>
                 <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
               </div>
             </div>

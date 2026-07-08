@@ -54,6 +54,8 @@ export default async function EditarVentaPage({ params }: { params: { id: string
         ventaEstado={venta.estado}
         listaPrecioId={venta.lista_precio_id ?? null}
         observacionesActuales={venta.observaciones ?? ''}
+        descuentoExtraPctInicial={parseFloat(venta.descuento_extra_pct ?? '0') || 0}
+        descuentoExtraMontoInicial={parseFloat(venta.descuento_extra_monto ?? '0') || 0}
       />
     </section>
   );
