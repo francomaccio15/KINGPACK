@@ -68,9 +68,14 @@ function calcFinalPrice(precioLista: number, discountPct: number): number {
 }
 
 function recalcItem(item: CartItem, descuentoLista: number, descuentoCliente: number): CartItem {
-  const descuento_pct = calcCombinedDiscount(descuentoLista, descuentoCliente);
-  const precio_unitario_final = calcFinalPrice(item.precio_madre, descuento_pct);
-  return { ...item, descuento_pct, precio_unitario_final };
+  // El precio de lista (precio_efectivo) YA incluye el descuento de la lista.
+  // Sobre ese precio solo se aplica el descuento adicional del cliente; el
+  // backend calcula igual (precio_efectivo × (1 − descuento_pct)), por lo que
+  // descuento_pct debe ser únicamente el del cliente para no duplicar la lista.
+  const precio_lista = item.precio_madre * (1 - descuentoLista / 100);
+  const descuento_pct = descuentoCliente;
+  const precio_unitario_final = calcFinalPrice(precio_lista, descuento_pct);
+  return { ...item, precio_lista, descuento_pct, precio_unitario_final };
 }
 
 function Spinner() {
@@ -244,11 +249,13 @@ export default function NuevoPresupuesto({
       if (existing !== -1) {
         return prev.map((item, idx) => idx === existing ? { ...item, cantidad: item.cantidad + 1 } : item);
       }
-      // La base del descuento es el PRECIO DE LA LISTA (precio_efectivo), igual
-      // que el backend. Usar precio_madre desincronizaba el pago del total real.
-      const base         = art.precio_lista ?? art.precio_madre;
-      const descuento    = calcCombinedDiscount(descuentoLista, descuentoCliente);
-      const finalPrice   = calcFinalPrice(base, descuento);
+      // art.precio_lista = precio_efectivo de la lista (ya trae el descuento de
+      // la lista incorporado). Sobre ese precio se aplica SOLO el descuento
+      // adicional del cliente — igual que el backend. Aplicar acá el descuento
+      // combinado (lista + cliente) duplicaba el descuento de la lista.
+      const precioEfectivo = art.precio_lista ?? art.precio_madre;
+      const descuento      = descuentoCliente;
+      const finalPrice     = calcFinalPrice(precioEfectivo, descuento);
       return [
         ...prev,
         {
@@ -256,8 +263,8 @@ export default function NuevoPresupuesto({
           nombre:                art.nombre,
           codigo:                art.codigo,
           cantidad:              1,
-          precio_lista:          base,
-          precio_madre:          base,
+          precio_lista:          precioEfectivo,
+          precio_madre:          art.precio_madre,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
