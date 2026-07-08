@@ -34,6 +34,7 @@ export default function NuevoArticulo({
   const [error, setError]       = useState('');
   const [form, setForm]         = useState(EMPTY_FORM);
   const [categorias, setCategorias] = useState<Categoria[]>(categoriasInit);
+  const [codigoAuto, setCodigoAuto] = useState(true); // el código fue autogenerado (no editado a mano)
 
   // Precio de venta editable. Al cambiarlo se recalcula el margen (costo y flete
   // quedan fijos), igual que en Editar Artículo.
@@ -54,6 +55,24 @@ export default function NuevoArticulo({
       alicuota_iva_id: iva21?.id ?? alicuotas[0]?.id ?? '',
     }));
   }, [categoriasInit, alicuotas]);
+
+  // Autogenera el siguiente código correlativo (solo número) desde el backend.
+  const generarCodigo = async () => {
+    try {
+      const res  = await apiFetch(`/api/articulos/next-codigo`);
+      const data = await res.json();
+      if (res.ok && data.codigo) {
+        setForm(f => ({ ...f, codigo: data.codigo }));
+        setCodigoAuto(true);
+      }
+    } catch { /* silencioso: siempre se puede escribir a mano */ }
+  };
+
+  // Al abrir el formulario, traer el próximo código.
+  useEffect(() => {
+    if (open) generarCodigo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const catActiva  = categorias.find(c => c.id === form.categoria_id);
   const ivaActiva  = alicuotas.find(a => a.id === form.alicuota_iva_id);
@@ -224,8 +243,9 @@ export default function NuevoArticulo({
                 <div className="col-span-1">
                   <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Código *</label>
                   <input
-                    required value={form.codigo} onChange={set('codigo')}
-                    placeholder="ej: DES-001"
+                    required value={form.codigo}
+                    onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); setCodigoAuto(false); }}
+                    placeholder="ej: 001"
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
                       placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                   />
@@ -255,7 +275,8 @@ export default function NuevoArticulo({
                     </button>
                   </div>
                   <select
-                    required value={form.categoria_id} onChange={onCategoria}
+                    required value={form.categoria_id}
+                    onChange={e => { onCategoria(e); if (codigoAuto) generarCodigo(); }}
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
                       focus:outline-none focus:border-kp-red transition-colors"
                   >

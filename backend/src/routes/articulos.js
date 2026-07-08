@@ -132,6 +132,21 @@ router.get('/alicuotas', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/articulos/next-codigo ──────────────────────────────────────────
+// Sugiere el siguiente código correlativo (solo número, sin prefijo).
+// Toma el mayor número al final de los códigos existentes y le suma 1.
+router.get('/next-codigo', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT COALESCE(MAX((substring(codigo from '([0-9]+)$'))::bigint), 0) + 1 AS next
+        FROM articulos
+       WHERE deleted_at IS NULL AND codigo ~ '[0-9]+$'
+    `);
+    const n = Number(rows[0].next);
+    res.json({ next: n, codigo: String(n).padStart(3, '0') });
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/articulos ──────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
