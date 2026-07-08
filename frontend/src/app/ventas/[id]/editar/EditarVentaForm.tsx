@@ -13,10 +13,10 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 const fmt = (n: number) => ars.format(n);
 
-// Combina dos descuentos en cascada: 1 - (1 - a) * (1 - b), en %.
-// Ej: 30% del artículo + 5% extra a toda la venta = 33,5% efectivo.
+// Combina dos descuentos de forma aditiva (se suman los puntos), tope 100%.
+// Ej: 30% del artículo + 5% extra a toda la venta = 35% (no 33,5% en cascada).
 const combinar = (base: number, extra: number) =>
-  Math.round((1 - (1 - base / 100) * (1 - extra / 100)) * 10000) / 100;
+  Math.min(100, Math.round((base + extra) * 100) / 100);
 
 interface ItemVenta {
   articulo_id: string;
