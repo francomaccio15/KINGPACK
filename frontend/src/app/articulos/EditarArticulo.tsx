@@ -186,14 +186,15 @@ export default function EditarArticulo({
       {/* ── Botón por fila ── */}
       <button
         onClick={() => setOpen(true)}
-        title="Editar precio"
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg
-          text-kp-gray hover:text-kp-white hover:bg-kp-surface2 border border-transparent
-          hover:border-kp-border"
+        title="Editar artículo"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+          text-kp-gray-lt hover:text-kp-white bg-kp-surface2 border border-kp-border
+          hover:border-kp-red transition-colors"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
           <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
         </svg>
+        <span className="hidden sm:inline">Editar</span>
       </button>
 
       {/* ── Modal ── */}
