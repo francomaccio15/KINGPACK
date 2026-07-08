@@ -502,13 +502,17 @@ export default function NuevaVenta({
   // Se distribuye proporcionalmente en los ítems al guardar (extraFrac) para que
   // el backend —que recalcula el total desde los ítems— refleje este descuento.
   const descExtraInput = parseFloat(descExtraStr.replace(',', '.')) || 0;
+  // El % extra se SUMA al descuento de cada renglón (aditivo, no compuesto):
+  // 30% + 5% = 35% (no 33,5%). El monto fijo ($) se descuenta del total tal cual.
+  const extraPctPts    = descExtraModo === 'pct' ? Math.min(100, Math.max(0, descExtraInput)) : 0;
+  const subtotalLista  = cart.reduce((acc, i) => acc + i.precio_lista * i.cantidad, 0);
   const descExtraMonto = subtotalFinal > 0
     ? (descExtraModo === 'pct'
-        ? subtotalFinal * (Math.min(100, Math.max(0, descExtraInput)) / 100)
+        ? Math.min(subtotalFinal, subtotalLista * extraPctPts / 100)
         : Math.min(subtotalFinal, Math.max(0, descExtraInput)))
     : 0;
   const totalConExtra = parseFloat((subtotalFinal - descExtraMonto).toFixed(2));
-  const extraFrac     = subtotalFinal > 0 ? descExtraMonto / subtotalFinal : 0;
+  const extraFrac     = subtotalFinal > 0 ? descExtraMonto / subtotalFinal : 0; // sólo para modo $ (fold proporcional)
 
   // ─── Vuelto ────────────────────────────────────────────────────────────────
   const totalAPagar      = Math.max(0, totalConExtra - Math.min(saldoAFavorAplicado, totalConExtra));
@@ -585,13 +589,21 @@ export default function NuevaVenta({
       estado,
       observaciones:  null,
       items: cart.map(i => {
-        // Distribuir el descuento extra proporcionalmente en cada ítem: se lo
-        // folda dentro del descuento del renglón para que el total del backend
-        // (que se recalcula desde los ítems) coincida con totalConExtra.
-        const finalConExtra = parseFloat((i.precio_unitario_final * (1 - extraFrac)).toFixed(2));
-        const descPctConExtra = i.precio_lista > 0
-          ? Math.min(100, Math.max(0, parseFloat(((1 - finalConExtra / i.precio_lista) * 100).toFixed(4))))
-          : i.descuento_pct;
+        // Foldear el descuento extra dentro del renglón para que el total del
+        // backend (que se recalcula desde los ítems) coincida con totalConExtra.
+        //  • % extra → se SUMA al descuento del renglón (aditivo).
+        //  • $ extra → se reparte proporcionalmente.
+        let descPctConExtra: number;
+        let finalConExtra: number;
+        if (descExtraModo === 'pct') {
+          descPctConExtra = Math.min(100, i.descuento_pct + extraPctPts);
+          finalConExtra   = parseFloat((i.precio_lista * (1 - descPctConExtra / 100)).toFixed(2));
+        } else {
+          finalConExtra   = parseFloat((i.precio_unitario_final * (1 - extraFrac)).toFixed(2));
+          descPctConExtra = i.precio_lista > 0
+            ? Math.min(100, Math.max(0, parseFloat(((1 - finalConExtra / i.precio_lista) * 100).toFixed(4))))
+            : i.descuento_pct;
+        }
         return {
           articulo_id:           i.articulo_id,
           cantidad:              i.cantidad,
