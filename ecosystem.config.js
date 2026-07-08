@@ -27,6 +27,9 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000,
         TZ: 'America/Argentina/Buenos_Aires',
+        // Directorio de build activo (deploy sin caída). Lo fija el auto-deploy
+        // al alternar entre .next y .next-build; default .next.
+        NEXT_DIST_DIR: process.env.NEXT_DIST_DIR || '.next',
       },
     },
   ],

@@ -45,15 +45,27 @@ git pull --ff-only
 # ── Backend: dependencias + migraciones (idempotentes) ──────────────────────
 ( cd backend && npm install --omit=dev --no-audit --no-fund && node db/runner.js )
 
-# ── Frontend: build con el server detenido ──────────────────────────────────
-# Parar kingpack-frontend antes de borrar .next evita el ENOENT por carrera
-# (el server viejo leyendo .next mientras el build lo reescribe).
+# ── Frontend: build SIN caída (ping-pong de directorios) ────────────────────
+# Se compila en un directorio ALTERNO (.next / .next-build) mientras la versión
+# anterior sigue sirviendo. Recién al terminar se reinicia el frontend apuntando
+# al build nuevo (swap de unos segundos, no ~2 min). Si el build falla, set -e
+# corta acá ANTES del swap y la versión vieja sigue online → sin caída.
 ( cd frontend && npm install --no-audit --no-fund )
-pm2 stop kingpack-frontend || true
-rm -rf frontend/.next
-( cd frontend && npm run build )
 
-pm2 restart ecosystem.config.js --update-env
+LIVE=$(cat frontend/.next-live 2>/dev/null || echo .next)
+if [ "$LIVE" = ".next" ]; then BUILD=.next-build; else BUILD=.next; fi
+log "Compilando frontend en '$BUILD' (activo: '$LIVE')…"
+
+# El rm del dir alterno limpia también el build viejo del deploy anterior.
+( cd frontend && rm -rf "$BUILD" && NEXT_DIST_DIR="$BUILD" npm run build )
+
+# Swap: el frontend arranca sirviendo el build nuevo (distDir = $BUILD, que
+# coincide con lo grabado en required-server-files.json). Downtime ≈ el restart.
+NEXT_DIST_DIR="$BUILD" pm2 restart ecosystem.config.js --only kingpack-frontend --update-env
+echo "$BUILD" > frontend/.next-live
+
+# Backend: sin build, reinicio breve.
+pm2 restart ecosystem.config.js --only kingpack-backend --update-env
 pm2 save --force
 
 # ── Healthcheck del backend con reintentos (~30s) ───────────────────────────
