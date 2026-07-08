@@ -148,7 +148,7 @@ export default function ArticulosTabla({
               {a.codigo}
             </td>
 
-            <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors">
+            <td className="px-4 py-3 font-medium text-kp-white group-hover:text-kp-red transition-colors max-w-[180px] sm:max-w-xs truncate" title={a.nombre}>
               {a.nombre}
             </td>
 
@@ -228,8 +228,9 @@ export default function ArticulosTabla({
               )}
             </td>
 
-            {/* Editar (oculto para cajero) */}
-            <td className="px-3 py-3 text-center">
+            {/* Editar (oculto para cajero) — columna fija a la derecha para que
+                el botón siempre quede visible sin scroll horizontal */}
+            <td className="sticky right-0 z-10 px-3 py-3 text-center bg-kp-surface group-hover:bg-kp-surface2 border-l border-kp-border">
               {!esCajero && (
                 <EditarArticulo
                   articulo={a}

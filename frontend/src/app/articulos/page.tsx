@@ -333,7 +333,7 @@ export default async function ArticulosPage({
                 {modeTodas ? 'Stock' : `Stock · ${sucursalActiva?.nombre ?? ''}`}
               </th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
-              <th className="px-3 py-3" />
+              <th className="sticky right-0 z-20 bg-kp-surface2 border-l border-kp-border px-3 py-3 w-px" />
             </tr>
           </thead>
 
