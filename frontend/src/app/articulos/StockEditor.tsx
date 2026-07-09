@@ -136,7 +136,7 @@ export default function StockEditor({
     if (!sucursalId) { setArts([]); return; }
     setLoading(true); setError('');
     try {
-      const qs = new URLSearchParams({ sucursal_id: sucursalId, activo: 'true', limit: '100' });
+      const qs = new URLSearchParams({ sucursal_id: sucursalId, activo: 'true', limit: '1000' });
       if (q.trim()) qs.set('q', q.trim());
       const r = await apiFetch(`/api/articulos?${qs}`);
       const d = await r.json();
