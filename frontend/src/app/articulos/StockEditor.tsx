@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import NumericInput from '@/components/NumericInput';
 
 type Sucursal = { id: string; nombre: string };
-type Art = { id: string; codigo: string; nombre: string; stock_total: string };
+type Art = {
+  id: string; codigo: string; nombre: string;
+  stock_total: string; stock_adelante: string; stock_deposito: string;
+};
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -23,16 +26,26 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 function FilaStock({
   art, sucursalId, onSaved,
 }: {
-  art: Art; sucursalId: string; onSaved: (id: string, cantidad: number) => void;
+  art: Art; sucursalId: string;
+  onSaved: (id: string, cantidad: number, adelante: number, deposito: number) => void;
 }) {
-  const actual = parseFloat(art.stock_total) || 0;
-  const [val, setVal]       = useState(String(actual));
+  const adeActual = parseFloat(art.stock_adelante) || 0;
+  const depActual = parseFloat(art.stock_deposito) || 0;
+
+  const [ade, setAde]       = useState(String(adeActual));
+  const [dep, setDep]       = useState(String(depActual));
   const [saving, setSaving] = useState(false);
   const [estado, setEstado] = useState<'idle' | 'ok' | 'err'>('idle');
   const [msg, setMsg]       = useState('');
 
-  const nuevo  = parseFloat(val);
-  const cambio = Number.isFinite(nuevo) && nuevo >= 0 && Math.abs(nuevo - actual) > 0.0001;
+  const nAde = parseFloat(ade);
+  const nDep = parseFloat(dep);
+  const adeOk = Number.isFinite(nAde) && nAde >= 0;
+  const depOk = Number.isFinite(nDep) && nDep >= 0;
+  const total = (adeOk ? nAde : 0) + (depOk ? nDep : 0);
+
+  const cambio = adeOk && depOk &&
+    (Math.abs(nAde - adeActual) > 0.0001 || Math.abs(nDep - depActual) > 0.0001);
 
   const guardar = async () => {
     if (!cambio) return;
@@ -40,12 +53,16 @@ function FilaStock({
     try {
       const r = await apiFetch(`/api/articulos/${art.id}/stock`, {
         method: 'PUT',
-        body: JSON.stringify({ sucursal_id: sucursalId, cantidad: nuevo }),
+        body: JSON.stringify({
+          sucursal_id: sucursalId,
+          cantidad_adelante: nAde,
+          cantidad_deposito: nDep,
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error al guardar');
       setEstado('ok');
-      onSaved(art.id, d.cantidad);
+      onSaved(art.id, d.cantidad, d.cantidad_adelante, d.cantidad_deposito);
     } catch (e: any) {
       setEstado('err'); setMsg(e.message);
     } finally {
@@ -53,25 +70,44 @@ function FilaStock({
     }
   };
 
+  const inputCls = 'w-24 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-right text-kp-white ' +
+    'placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+
   return (
     <tr className="border-b border-kp-border/40 hover:bg-kp-surface2/30 transition-colors">
       <td className="px-4 py-2 font-mono text-xs text-kp-gray whitespace-nowrap">{art.codigo}</td>
       <td className="px-4 py-2 text-kp-white">{art.nombre}</td>
-      <td className="px-4 py-2 text-center tabular-nums text-kp-gray whitespace-nowrap">{actual}</td>
       <td className="px-4 py-2">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex justify-end">
           <NumericInput
-            value={val}
-            onChange={e => { setVal(e.target.value); setEstado('idle'); }}
+            value={ade}
+            onChange={e => { setAde(e.target.value); setEstado('idle'); }}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') guardar(); }}
             placeholder="0"
-            className="w-24 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-right text-kp-white
-              placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+            className={inputCls}
           />
+        </div>
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex justify-end">
+          <NumericInput
+            value={dep}
+            onChange={e => { setDep(e.target.value); setEstado('idle'); }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') guardar(); }}
+            placeholder="0"
+            className={inputCls}
+          />
+        </div>
+      </td>
+      <td className="px-4 py-2 text-center tabular-nums font-semibold text-kp-white whitespace-nowrap">
+        {Number.isFinite(total) ? total : '—'}
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex items-center justify-end">
           <button
             onClick={guardar}
             disabled={!cambio || saving}
-            title={cambio ? 'Guardar nueva cantidad' : 'Sin cambios'}
+            title={cambio ? 'Guardar cantidades' : 'Sin cambios'}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40
               bg-kp-red text-white hover:bg-kp-red-dark disabled:hover:bg-kp-red"
           >
@@ -155,8 +191,10 @@ export default function StockEditor({
     return () => clearTimeout(t);
   }, [cargar]);
 
-  const onSaved = (id: string, cantidad: number) =>
-    setArts(prev => prev.map(a => (a.id === id ? { ...a, stock_total: String(cantidad) } : a)));
+  const onSaved = (id: string, cantidad: number, adelante: number, deposito: number) =>
+    setArts(prev => prev.map(a => (a.id === id
+      ? { ...a, stock_total: String(cantidad), stock_adelante: String(adelante), stock_deposito: String(deposito) }
+      : a)));
 
   const selectCls = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
 
@@ -194,7 +232,7 @@ export default function StockEditor({
       </div>
 
       <p className="text-xs text-kp-gray/70">
-        Ingresá la cantidad real de stock (valor absoluto). El sistema calcula la diferencia y la registra como ajuste.
+        Ingresá la cantidad real contada en cada ubicación (Adelante y Depósito). El <span className="text-kp-white font-semibold">Stock actual</span> es la suma de ambas; el sistema calcula la diferencia y la registra como ajuste.
       </p>
 
       {error && (
@@ -208,15 +246,17 @@ export default function StockEditor({
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
+              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Stock adelante</th>
+              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Stock depósito</th>
               <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Stock actual</th>
-              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Nueva cantidad</th>
+              <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="px-4 py-10 text-center text-kp-gray">Cargando…</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-kp-gray">Cargando…</td></tr>
             ) : arts.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-10 text-center text-kp-gray">
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-kp-gray">
                 {sucursalId ? 'No hay artículos para mostrar.' : 'Elegí una sucursal.'}
               </td></tr>
             ) : (

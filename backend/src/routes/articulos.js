@@ -63,20 +63,30 @@ router.patch('/:id/stock-minimo', async (req, res, next) => {
 });
 
 // ─── PUT /api/articulos/:id/stock ────────────────────────────────────────────
-// Fija la cantidad ABSOLUTA de stock de un artículo en una sucursal y registra
-// el ajuste (delta = nueva − actual) en ajustes_stock para auditoría.
-// Body: { sucursal_id, cantidad, motivo? }
+// Fija el stock ABSOLUTO de un artículo en una sucursal, desglosado en las dos
+// ubicaciones (adelante + depósito). El total es la suma de ambas y es lo que
+// usa el resto del sistema. Registra el ajuste (delta del total) en
+// ajustes_stock para auditoría.
+// Body: { sucursal_id, cantidad_adelante, cantidad_deposito, motivo? }
+//   (compat: si viene solo `cantidad`, se toma como depósito y adelante = 0)
 router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { sucursal_id, cantidad, motivo } = req.body;
+    const { sucursal_id, cantidad_adelante, cantidad_deposito, cantidad, motivo } = req.body;
 
     if (!sucursal_id) return res.status(400).json({ error: 'Se requiere sucursal_id' });
-    const nueva = parseFloat(cantidad);
-    if (!Number.isFinite(nueva) || nueva < 0) {
+
+    // Compat hacia atrás: si mandan solo `cantidad`, va todo al depósito.
+    const legacy   = cantidad_adelante === undefined && cantidad_deposito === undefined;
+    const adelante = parseFloat(legacy ? 0 : cantidad_adelante);
+    const deposito = parseFloat(legacy ? cantidad : cantidad_deposito);
+
+    if (!Number.isFinite(adelante) || adelante < 0 ||
+        !Number.isFinite(deposito) || deposito < 0) {
       return res.status(400).json({ error: 'Cantidad inválida' });
     }
+    const nueva = parseFloat((adelante + deposito).toFixed(3));
 
     await client.query('BEGIN');
 
@@ -86,7 +96,7 @@ router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, 
     const suc = await client.query('SELECT id FROM sucursales WHERE id = $1', [sucursal_id]);
     if (!suc.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Sucursal no encontrada' }); }
 
-    // Cantidad actual (0 si todavía no hay registro de stock para esa sucursal)
+    // Total actual (0 si todavía no hay registro de stock para esa sucursal)
     const cur = await client.query(
       'SELECT cantidad FROM stock WHERE articulo_id = $1 AND sucursal_id = $2',
       [id, sucursal_id]
@@ -94,15 +104,17 @@ router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, 
     const actual = cur.rows[0] ? parseFloat(cur.rows[0].cantidad) : 0;
     const delta  = parseFloat((nueva - actual).toFixed(3));
 
-    // Upsert de la cantidad
+    // Upsert de los componentes (el trigger recalcula `cantidad` = adelante + depósito)
     await client.query(`
-      INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
-      VALUES ($1, $2, $3, NOW())
+      INSERT INTO stock (articulo_id, sucursal_id, cantidad, cantidad_adelante, cantidad_deposito, ultima_actualizacion)
+      VALUES ($1, $2, $3, $4, $5, NOW())
       ON CONFLICT (articulo_id, sucursal_id)
-      DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()
-    `, [id, sucursal_id, nueva]);
+      DO UPDATE SET cantidad_adelante = EXCLUDED.cantidad_adelante,
+                    cantidad_deposito = EXCLUDED.cantidad_deposito,
+                    ultima_actualizacion = NOW()
+    `, [id, sucursal_id, nueva, adelante, deposito]);
 
-    // Registrar el ajuste solo si la cantidad cambió
+    // Registrar el ajuste solo si el total cambió
     if (Math.abs(delta) > 0.0001) {
       await client.query(`
         INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
@@ -111,7 +123,7 @@ router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, 
     }
 
     await client.query('COMMIT');
-    res.json({ ok: true, cantidad: nueva, delta });
+    res.json({ ok: true, cantidad: nueva, cantidad_adelante: adelante, cantidad_deposito: deposito, delta });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     next(err);
@@ -592,6 +604,8 @@ router.get('/', async (req, res, next) => {
       stockSubquery = `
         SELECT articulo_id,
                COALESCE(cantidad, 0)                                            AS cantidad_total,
+               COALESCE(cantidad_adelante, 0)                                   AS cantidad_adelante,
+               COALESCE(cantidad_deposito, 0)                                   AS cantidad_deposito,
                (COALESCE(cantidad, 0) <= stock_minimo AND stock_minimo > 0)     AS stock_bajo,
                COALESCE(stock_minimo, 0)                                        AS stock_minimo,
                NULL::json                                                       AS stock_detalle
@@ -603,6 +617,8 @@ router.get('/', async (req, res, next) => {
       stockSubquery = `
         SELECT st.articulo_id,
                SUM(st.cantidad)                                                      AS cantidad_total,
+               SUM(st.cantidad_adelante)                                             AS cantidad_adelante,
+               SUM(st.cantidad_deposito)                                             AS cantidad_deposito,
                BOOL_OR(st.cantidad <= st.stock_minimo AND st.stock_minimo > 0)      AS stock_bajo,
                COALESCE(MAX(st.stock_minimo), 0)                                    AS stock_minimo,
                json_agg(
@@ -642,6 +658,8 @@ router.get('/', async (req, res, next) => {
           c.nombre       AS categoria,
           ${precioListaExpr},
           COALESCE(st.cantidad_total, 0)::numeric  AS stock_total,
+          COALESCE(st.cantidad_adelante, 0)::numeric AS stock_adelante,
+          COALESCE(st.cantidad_deposito, 0)::numeric AS stock_deposito,
           COALESCE(st.stock_bajo,    false)         AS stock_bajo,
           COALESCE(st.stock_minimo,  0)::numeric    AS stock_minimo,
           st.stock_detalle
