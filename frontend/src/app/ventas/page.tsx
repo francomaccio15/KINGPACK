@@ -19,6 +19,7 @@ type Venta = {
   cae: string | null;
   facturada_ok: boolean | null;
   items_count: number;
+  medios_pago: string | null;
   vendedor_nombre: string | null;
   vendedor_rol: string | null;
 };

@@ -18,6 +18,7 @@ type Venta = {
   cae: string | null;
   facturada_ok: boolean | null;
   items_count: number;
+  medios_pago: string | null;
   fue_editada: boolean;
   vendedor_nombre: string | null;
   vendedor_rol: string | null;
@@ -104,7 +105,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
             <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Fecha</th>
             <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Cliente</th>
             <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Sucursal</th>
-            <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Items</th>
+            <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Medios de Pago</th>
             <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Descuento</th>
             <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Total</th>
             <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
@@ -145,8 +146,21 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                   <td className="px-4 py-3 text-xs text-kp-gray-lt">
                     {v.sucursal_nombre ?? '—'}
                   </td>
-                  <td className="px-4 py-3 text-center text-xs text-kp-gray tabular-nums">
-                    {v.items_count}
+                  <td className="px-4 py-3 text-xs">
+                    {v.medios_pago ? (
+                      <div className="flex flex-wrap gap-1">
+                        {v.medios_pago.split(', ').map((m) => (
+                          <span
+                            key={m}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-kp-surface2 text-kp-gray-lt border border-kp-border whitespace-nowrap"
+                          >
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-kp-border">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-xs">
                     {descuento > 0

@@ -124,6 +124,10 @@ router.get('/', async (req, res, next) => {
           f.cae            AS cae,
           f.ok             AS facturada_ok,
           (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
+          (SELECT string_agg(DISTINCT mp.nombre, ', ')
+             FROM venta_pagos vp
+             JOIN medios_pago mp ON mp.id = vp.medio_pago_id
+            WHERE vp.venta_id = v.id) AS medios_pago,
           EXISTS(SELECT 1 FROM venta_ediciones ve WHERE ve.venta_id = v.id) AS fue_editada
         FROM ventas v
         LEFT JOIN clientes c ON c.id = v.cliente_id
