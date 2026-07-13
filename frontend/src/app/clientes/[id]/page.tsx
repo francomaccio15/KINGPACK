@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import RegistrarPago from './RegistrarPago';
+import EditarPago from './EditarPago';
 import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
 
@@ -14,7 +15,8 @@ const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-AR', { day: '
 export const dynamic = 'force-dynamic';
 
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
-  requireAuth('/clientes');
+  const user = requireAuth('/clientes');
+  const puedeEditarPago = user.rol === 'cajero' || user.rol === 'administrador';
   const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes, ventasRes] = await Promise.all([
     serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
     serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
@@ -245,11 +247,16 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                         {m.origen_tipo === 'edicion_venta' ? 'Modificación →' : 'Venta →'}
                       </Link>
                     ) : (
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded border
-                        ${m.origen_tipo === 'pago'
-                          ? 'text-green-400 bg-green-400/10 border-green-400/30'
-                          : 'text-kp-gray-lt bg-kp-surface2 border-kp-border'}`}>
-                        {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded border
+                          ${m.origen_tipo === 'pago'
+                            ? 'text-green-400 bg-green-400/10 border-green-400/30'
+                            : 'text-kp-gray-lt bg-kp-surface2 border-kp-border'}`}>
+                          {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
+                        </span>
+                        {m.origen_tipo === 'pago' && puedeEditarPago && (
+                          <EditarPago clienteId={cliente.id} movId={m.id} montoActual={parseFloat(m.haber) || 0} />
+                        )}
                       </span>
                     )}
                   </td>

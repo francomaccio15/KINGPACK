@@ -1,8 +1,41 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { sucursalEfectiva } = require('../middleware/auth');
+const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 
 const router = express.Router();
+
+const arsFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const fmtMoneda = (v) => arsFmt.format(parseFloat(v) || 0);
+
+// Recalcula la columna `saldo` (saldo acumulado por renglón) de toda la cuenta
+// corriente de un cliente en orden cronológico. Se usa después de editar un
+// movimiento (ej: el monto de un pago), donde los saldos posteriores quedan
+// desfasados. La base arranca en el saldo inicial del cliente más sus
+// correcciones, igual que el cálculo del saldo actual.
+async function recomputarSaldosCliente(client, cliente_id) {
+  const { rows: [base] } = await client.query(
+    `SELECT COALESCE(c.saldo_inicial, 0) + COALESCE(cs.total_correcciones, 0) AS base
+       FROM clientes c
+       LEFT JOIN (SELECT cliente_id, SUM(monto) AS total_correcciones
+                    FROM correcciones_saldo_cliente GROUP BY cliente_id) cs
+         ON cs.cliente_id = c.id
+      WHERE c.id = $1`,
+    [cliente_id]
+  );
+  let saldo = parseFloat(base?.base ?? '0');
+  const { rows: movs } = await client.query(
+    `SELECT id, debe, haber FROM cuentas_corrientes_cliente
+      WHERE cliente_id = $1 ORDER BY fecha ASC, id ASC`,
+    [cliente_id]
+  );
+  for (const m of movs) {
+    saldo = parseFloat((saldo + parseFloat(m.debe) - parseFloat(m.haber)).toFixed(2));
+    await client.query(
+      `UPDATE cuentas_corrientes_cliente SET saldo = $1 WHERE id = $2`,
+      [saldo, m.id]
+    );
+  }
+}
 
 // ─── GET /api/clientes/cond-iva ───────────────────────────────────────────────
 router.get('/cond-iva', async (req, res, next) => {
@@ -372,6 +405,83 @@ router.post('/:id/pagos', async (req, res, next) => {
       dbClient.release();
     }
   } catch (err) { next(err); }
+});
+
+// ─── PUT /api/clientes/:id/pagos/:movId ───────────────────────────────────────
+// Editar el monto de un pago ya registrado. El motivo es OBLIGATORIO: queda como
+// nota de equipo (le aparece al administrador en la campanita) y como corrección
+// en la ficha del cliente para dejar traza. Sólo cajero/administrador.
+// No toca la caja del pago (puede estar cerrada); el aviso al admin permite
+// reconciliar si el pago original impactó una caja.
+router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (req, res, next) => {
+  const { id, movId } = req.params;
+  const { monto, motivo } = req.body;
+  const montoNum = parseFloat(monto);
+
+  if (!montoNum || montoNum <= 0) {
+    return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  }
+  if (!motivo?.trim()) {
+    return res.status(400).json({ error: 'Debe indicar el motivo de la edición' });
+  }
+
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+
+    // El movimiento a editar debe ser un pago de este cliente
+    const { rows: [mov] } = await dbClient.query(`
+      SELECT cc.id, cc.haber, c.razon_social
+        FROM cuentas_corrientes_cliente cc
+        JOIN clientes c ON c.id = cc.cliente_id
+       WHERE cc.id = $1 AND cc.cliente_id = $2 AND cc.origen_tipo = 'pago'
+       FOR UPDATE OF cc
+    `, [movId, id]);
+
+    if (!mov) {
+      await dbClient.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pago no encontrado' });
+    }
+
+    const montoAnterior = parseFloat(mov.haber) || 0;
+
+    // Actualizar el monto del pago y recalcular los saldos posteriores
+    await dbClient.query(
+      `UPDATE cuentas_corrientes_cliente SET haber = $1 WHERE id = $2`,
+      [montoNum, movId]
+    );
+    await recomputarSaldosCliente(dbClient, id);
+
+    // Traza en la ficha del cliente (monto 0: no altera el saldo, es informativo)
+    const detalle = `Pago editado: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}. Motivo: ${motivo.trim()}`;
+    await dbClient.query(
+      `INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
+       VALUES ($1, 0, $2)`,
+      [id, detalle]
+    );
+
+    // Aviso al administrador vía nota de equipo (aparece en la campanita)
+    const nota = `✏️ Pago editado — ${mov.razon_social}: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}. Motivo: ${motivo.trim()}`;
+    await dbClient.query(
+      `INSERT INTO notas_equipo (contenido, tipo, usuario_id)
+       VALUES ($1, 'aviso', $2)`,
+      [nota, req.usuario.id]
+    );
+
+    const { rows: [actualizado] } = await dbClient.query(
+      `SELECT id, debe, haber, saldo, fecha, origen_tipo, origen_id
+         FROM cuentas_corrientes_cliente WHERE id = $1`,
+      [movId]
+    );
+
+    await dbClient.query('COMMIT');
+    res.json({ movimiento: actualizado });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    next(err);
+  } finally {
+    dbClient.release();
+  }
 });
 
 // ─── GET /api/clientes/:id/pdf-estado-cuenta ─────────────────────────────────
