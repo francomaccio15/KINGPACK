@@ -15,7 +15,25 @@ function verifyToken(req, res, next) {
   try {
     req.usuario = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     next();
-  } catch {
+  } catch (err) {
+    // Instrumentación de cierres de sesión: registrar por qué se rechaza un token
+    // que SÍ vino (expirado vs. firma inválida) con los tiempos reales, para
+    // diagnosticar si la sesión se cae antes de lo esperado. Grep: [auth-401]
+    try {
+      const decoded = jwt.decode(token) || {};
+      const now  = Math.floor(Date.now() / 1000);
+      const info = {
+        motivo:  err.name === 'TokenExpiredError' ? 'EXPIRADO' : 'INVALIDO',
+        ruta:    `${req.method} ${(req.originalUrl || req.url || '').split('?')[0]}`,
+        ip:      req.headers['x-forwarded-for'] || req.ip || null,
+        usuario: decoded.email || decoded.id || null,
+      };
+      if (err.name === 'TokenExpiredError' && decoded.iat && decoded.exp) {
+        info.vida_util_min     = Math.round((decoded.exp - decoded.iat) / 60);
+        info.expirado_hace_min = Math.round((now - decoded.exp) / 60);
+      }
+      console.warn('[auth-401]', JSON.stringify(info));
+    } catch { /* logging best-effort */ }
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 }

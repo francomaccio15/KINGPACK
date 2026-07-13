@@ -12,8 +12,10 @@ const USER_KEY  = 'kp_user';
 export function saveSession(token: string, usuario: AuthUser): void {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(usuario));
-  // Cookie para que los Server Components puedan leer el token
-  document.cookie = `kp_token=${token}; path=/; max-age=${60 * 60 * 8}; SameSite=Strict`;
+  // Cookie para que los Server Components puedan leer el token.
+  // max-age = 24h, igual que la expiración del JWT (JWT_EXPIRES_IN en el backend);
+  // deben coincidir para que la cookie no muera antes ni después que el token.
+  document.cookie = `kp_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict`;
 }
 
 export function clearSession(): void {

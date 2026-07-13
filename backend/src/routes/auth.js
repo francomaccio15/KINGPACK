@@ -8,7 +8,7 @@ const { verifyToken } = require('../middleware/auth');
 const router = express.Router();
 
 const JWT_SECRET     = process.env.JWT_SECRET;     // falta → process.exit(1) en middleware/auth.js
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

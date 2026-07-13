@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { landingPath } from '@/lib/permissions';
 import { KingPackLogoFull } from '@/components/KingPackLogo';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const router = useRouter();
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -21,10 +19,15 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const usuario = await login(email, password);
-      router.replace(landingPath(usuario.rol));
+      // Navegación DURA (full reload) en lugar de router.replace: fuerza al
+      // servidor a renderizar la landing con la cookie recién seteada. Evita el
+      // Router Cache de Next, que mientras estábamos deslogueados prefeteó las
+      // rutas protegidas como "redirigir a /login" y hacía rebotar el login
+      // (obligaba a reintentar varias veces). No reseteamos loading: la página
+      // se va a recargar entera.
+      window.location.assign(landingPath(usuario.rol));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
-    } finally {
       setLoading(false);
     }
   }
