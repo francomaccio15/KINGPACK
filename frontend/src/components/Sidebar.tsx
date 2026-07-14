@@ -63,6 +63,11 @@ const IcoArticulos = () => (
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 2 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
   </svg>
 );
+const IcoSeguimiento = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><path d="M11 8v3l2 1.5" />
+  </svg>
+);
 const IcoListas = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
     <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
@@ -205,6 +210,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Catálogo',
     items: [
       { label: 'Artículos',             href: '/articulos',      icon: <IcoArticulos />   },
+      { label: 'Seguimiento de Artículos', href: '/trazabilidad', icon: <IcoSeguimiento /> },
       { label: 'Administración de Listas', href: '/listas-precios', icon: <IcoListas />   },
       { label: 'Categorías',            href: '/categorias',     icon: <IcoCategorias /> },
     ],

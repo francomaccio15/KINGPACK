@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { requireRol } = require('../middleware/auth');
+const { requireRol, sucursalEfectiva } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -563,6 +563,76 @@ router.get('/pdf-conteo', async (req, res, next) => {
 // ?stock_bajo=     'true' — solo artículos con cantidad <= stock_minimo
 // ?limit=          max 1000, default 500
 // ?offset=         default 0
+// ─── GET /api/articulos/:id/ventas ───────────────────────────────────────────
+// Trazabilidad de un artículo: todas las ventas que lo incluyen, con cliente,
+// vendedor, cantidad e importe por renglón. Sirve para controlar a qué venta
+// corresponde un artículo y a quién se le vendió.
+// Filtros: ?fecha_desde= ?fecha_hasta= ?estado=  (sucursal según rol)
+router.get('/:id/ventas', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { fecha_desde, fecha_hasta, estado } = req.query;
+
+    const { rows: artRows } = await pool.query(
+      'SELECT id, codigo, nombre FROM articulos WHERE id = $1 AND deleted_at IS NULL',
+      [id]
+    );
+    if (!artRows[0]) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+    const conditions = ['vi.articulo_id = $1', 'v.deleted_at IS NULL'];
+    const params = [id];
+    let idx = 2;
+
+    if (estado)      { conditions.push(`v.estado = $${idx++}`);   params.push(estado); }
+    if (fecha_desde) { conditions.push(`v.fecha >= $${idx++}`);   params.push(fecha_desde); }
+    if (fecha_hasta) { conditions.push(`v.fecha < ($${idx++}::date + interval '1 day')`); params.push(fecha_hasta); }
+
+    const sucId = sucursalEfectiva(req);
+    if (sucId) { conditions.push(`v.sucursal_id = $${idx++}`); params.push(sucId); }
+
+    const where = conditions.join(' AND ');
+
+    const { rows } = await pool.query(`
+      SELECT
+        v.id                 AS venta_id,
+        v.numero,
+        v.fecha,
+        v.estado,
+        vi.cantidad,
+        vi.precio_unitario_final,
+        (vi.cantidad * vi.precio_unitario_final) AS importe,
+        c.id                 AS cliente_id,
+        c.razon_social       AS cliente_nombre,
+        s.nombre             AS sucursal_nombre,
+        u.nombre             AS vendedor_nombre,
+        u.rol                AS vendedor_rol
+      FROM venta_items vi
+      JOIN ventas v          ON v.id = vi.venta_id
+      LEFT JOIN clientes c   ON c.id = v.cliente_id
+      LEFT JOIN sucursales s ON s.id = v.sucursal_id
+      LEFT JOIN usuarios u   ON u.id = v.vendedor_id
+      WHERE ${where}
+      ORDER BY v.fecha DESC, v.numero DESC
+    `, params);
+
+    // Resumen: las anuladas no cuentan como vendido, pero se listan igual para control.
+    const vigentes = rows.filter(r => r.estado !== 'anulada');
+    const totalUnidades = vigentes.reduce((acc, r) => acc + parseFloat(r.cantidad), 0);
+    const totalImporte  = vigentes.reduce((acc, r) => acc + parseFloat(r.importe), 0);
+
+    res.json({
+      articulo: artRows[0],
+      movimientos: rows,
+      resumen: {
+        cantidad_ventas: rows.length,
+        total_unidades:  totalUnidades,
+        total_importe:   totalImporte,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/articulos ───────────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
     const { q, categoria_id, lista_id, sucursal_id, activo = 'true', stock_bajo, limit = 500, offset = 0 } = req.query;
