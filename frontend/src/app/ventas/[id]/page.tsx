@@ -81,6 +81,24 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
     ? `Descuento extra ${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
     : 'Descuento extra';
 
+  // Discriminación de IVA para la factura fiscal. precio_unitario_final YA incluye
+  // IVA y descuento; el IVA se calcula sobre el neto ya descontado, agrupado por
+  // alícuota (neto = total_grupo / (1 + alíc); IVA = total_grupo − neto).
+  const letraFactura = facturacion?.tipo_comprobante?.split(' ').pop() ?? '';
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const ivaPorAlic: Record<string, number> = {};
+  for (const it of items) {
+    const alic = parseFloat(it.alicuota) || 21;
+    ivaPorAlic[alic] = (ivaPorAlic[alic] || 0) + parseFloat(it.precio_unitario_final || '0') * parseFloat(it.cantidad || '0');
+  }
+  const discrimIva = Object.entries(ivaPorAlic).map(([alic, incl]) => {
+    const a = parseFloat(alic);
+    const neto = r2(incl / (1 + a / 100));
+    return { alic: a, neto, iva: r2(incl - neto) };
+  }).sort((x, y) => x.alic - y.alic);
+  const netoGravado  = r2(discrimIva.reduce((s, d) => s + d.neto, 0));
+  const ivaContenido = r2(discrimIva.reduce((s, d) => s + d.iva, 0));
+
   // Historial de ediciones (solo para admin/supervisor)
   const esAdmin = user.rol === 'administrador' || user.rol === 'supervisor';
   let ediciones: any[] = [];
@@ -671,7 +689,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
 
             {/* Total */}
-            <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
+            <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '150px' }}>
               {(descuento > 0 || descExtraMonto > 0) && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
@@ -689,11 +707,32 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   )}
                 </>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: (descuento > 0 || descExtraMonto > 0) ? '2px solid #111' : undefined, paddingTop: (descuento > 0 || descExtraMonto > 0) ? '3px' : undefined }}>
+              {/* Factura A: discriminación de IVA (neto gravado + IVA por alícuota) */}
+              {letraFactura === 'A' && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
+                    <span>Neto gravado</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(netoGravado)}</span>
+                  </div>
+                  {discrimIva.map(d => (
+                    <div key={d.alic} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
+                      <span>IVA {String(d.alic).replace('.', ',')}%</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(d.iva)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: (descuento > 0 || descExtraMonto > 0 || letraFactura === 'A') ? '2px solid #111' : undefined, paddingTop: (descuento > 0 || descExtraMonto > 0 || letraFactura === 'A') ? '3px' : undefined }}>
                 <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
               </div>
             </div>
           </div>
+
+          {/* Factura B — Régimen de Transparencia Fiscal al Consumidor (Ley 27.743) */}
+          {letraFactura === 'B' && (
+            <div style={{ marginTop: '4px', paddingTop: '3px', borderTop: '1px solid #bbb', fontSize: '7px', color: '#374151' }}>
+              <strong>IVA contenido: {fmt(ivaContenido)}</strong>
+              {' — '}Régimen de Transparencia Fiscal al Consumidor, Ley 27.743
+            </div>
+          )}
 
         </div>
       )}

@@ -522,9 +522,11 @@ router.get('/:id', async (req, res, next) => {
           vi.articulo_id, vi.cantidad, vi.precio_lista,
           vi.descuento_pct, vi.precio_unitario_final, vi.iva_monto,
           a.nombre, a.codigo,
-          a.precio_madre
+          a.precio_madre,
+          COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
+        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
         WHERE vi.venta_id = $1
         ORDER BY a.nombre
       `, [id]),
