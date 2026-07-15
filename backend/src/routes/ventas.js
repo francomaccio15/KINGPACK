@@ -893,7 +893,38 @@ router.post('/:id/facturar', async (req, res, next) => {
     const v = ventaRows[0];
 
     const total = parseFloat(v.total);
-    const neto  = +(total / 1.21).toFixed(2);
+
+    // Ítems reales para discriminar el IVA POR ALÍCUOTA. precio_unitario_final YA
+    // incluye el IVA y el descuento; el neto gravado sale de quitarle el IVA.
+    // Se agrupa el total (con IVA, ya descontado) por alícuota y se pasa el NETO
+    // de cada grupo, así el IVA se calcula sobre el neto ya descontado.
+    const { rows: itemsIva } = await pool.query(`
+      SELECT vi.cantidad, vi.precio_unitario_final,
+             COALESCE(ai.porcentaje, 21)::float AS alicuota
+        FROM venta_items vi
+        JOIN articulos a ON a.id = vi.articulo_id
+        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+       WHERE vi.venta_id = $1
+    `, [id]);
+
+    const grupos = {};
+    for (const it of itemsIva) {
+      const alic = parseFloat(it.alicuota) || 21;
+      grupos[alic] = (grupos[alic] || 0) + parseFloat(it.precio_unitario_final) * parseFloat(it.cantidad);
+    }
+
+    const itemsFactura = Object.keys(grupos).length > 0
+      ? Object.entries(grupos).map(([alic, totalIncl]) => {
+          const a = parseFloat(alic);
+          return {
+            descripcion:    `Neto gravado ${a}%`,
+            cantidad:       1,
+            precioUnitario: +(totalIncl / (1 + a / 100)).toFixed(2),
+            alicuotaIva:    a,
+          };
+        })
+      // Fallback (venta sin ítems): asume 21%.
+      : [{ descripcion: `Venta #${id.slice(0,8)}`, cantidad: 1, precioUnitario: +(total / 1.21).toFixed(2), alicuotaIva: 21 }];
 
     // Tipo de comprobante según la condición de IVA del cliente (emisor = RI).
     const comp = arca.comprobanteParaCliente(v.cond_iva_afip, v.cliente_cuit);
@@ -906,14 +937,7 @@ router.post('/:id/facturar', async (req, res, next) => {
         tipoDoc: comp.docTipo,
         nroDoc:  comp.docNro,
       },
-      items: [
-        {
-          descripcion:    `Venta #${id.slice(0,8)} — ${v.cliente_nombre || 'Consumidor Final'}`,
-          cantidad:       1,
-          precioUnitario: neto,
-          alicuotaIva:    21,
-        },
-      ],
+      items: itemsFactura,
     });
 
     // Guardar en facturaciones si OK (best-effort — no falla la respuesta si hay un error de BD)
@@ -989,9 +1013,11 @@ router.get('/:id/pdf', async (req, res, next) => {
       pool.query(`
         SELECT vi.cantidad, vi.precio_lista, vi.descuento_pct,
                vi.precio_unitario_final, vi.iva_monto,
-               a.nombre, a.codigo, a.precio_madre
+               a.nombre, a.codigo, a.precio_madre,
+               COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
+        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
         WHERE vi.venta_id = $1 ORDER BY a.nombre
       `, [id]),
       pool.query(`
@@ -1184,6 +1210,23 @@ router.get('/:id/pdf', async (req, res, next) => {
     // muestra como su propio renglón).
     const descuentoBasePdf = Math.max(0, subtotalBasePdf - parseFloat(venta.total || 0) - descExtraPdf);
 
+    // Discriminación de IVA: sobre el total REAL (ya descontado, con IVA incluido)
+    // agrupado por alícuota. neto = total_grupo / (1 + alíc); IVA = total_grupo − neto.
+    // El descuento ya está aplicado en precio_unitario_final, así que el IVA se
+    // calcula sobre el neto ya descontado.
+    const letraFact = tieneFactura ? (fact.letra || 'B') : null;
+    const ivaPorAlic = {};
+    for (const it of itemRows) {
+      const alic = parseFloat(it.alicuota) || 21;
+      ivaPorAlic[alic] = (ivaPorAlic[alic] || 0) + parseFloat(it.precio_unitario_final || 0) * parseFloat(it.cantidad || 0);
+    }
+    const discrim = Object.entries(ivaPorAlic).map(([alic, incl]) => {
+      const a = parseFloat(alic);
+      const neto = +(incl / (1 + a / 100)).toFixed(2);
+      return { alic: a, neto, iva: +(incl - neto).toFixed(2) };
+    }).sort((x, y) => x.alic - y.alic);
+    const netoGravadoPdf = +discrim.reduce((s, d) => s + d.neto, 0).toFixed(2);
+
     drawTotalRow('Subtotal', subtotalBasePdf);
     if (descuentoBasePdf > 0.01) {
       drawTotalRow('Descuento', -descuentoBasePdf, false, '#555555');
@@ -1193,6 +1236,13 @@ router.get('/:id/pdf', async (req, res, next) => {
         ? `Descuento extra ${parseFloat(venta.descuento_extra_pct).toFixed(2).replace(/\.?0+$/, '')}%`
         : 'Descuento extra';
       drawTotalRow(lblExtra, -descExtraPdf, false, '#555555');
+    }
+    // Factura A: se discrimina el neto gravado + el IVA por alícuota antes del total.
+    if (letraFact === 'A') {
+      drawTotalRow('Neto gravado', netoGravadoPdf);
+      for (const d of discrim) {
+        drawTotalRow(`IVA ${String(d.alic).replace('.', ',')}%`, d.iva);
+      }
     }
     drawTotalRow('TOTAL', venta.total, true, '#111111');
 
@@ -1205,6 +1255,18 @@ router.get('/:id/pdf', async (req, res, next) => {
     if (!tieneFactura) {
       doc.fillColor('#aaaaaa').fontSize(7).font('Helvetica')
          .text('Este comprobante no tiene validez fiscal. Documento interno de King Pack.', ML, curY, { width: CW });
+      curY += 12;
+    }
+
+    // Factura B — Régimen de Transparencia Fiscal al Consumidor (Ley 27.743):
+    // el precio ya incluye el IVA; se informa el importe contenido + la leyenda.
+    if (letraFact === 'B') {
+      const ivaContenido = discrim.reduce((s, d) => s + d.iva, 0);
+      doc.fillColor('#333333').fontSize(8).font('Helvetica-Bold')
+         .text(`IVA contenido: ${ars(ivaContenido)}`, ML, curY, { width: CW });
+      curY += 11;
+      doc.fillColor('#888888').fontSize(7).font('Helvetica')
+         .text('Régimen de Transparencia Fiscal al Consumidor — Ley 27.743', ML, curY, { width: CW });
       curY += 12;
     }
 
