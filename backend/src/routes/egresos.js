@@ -374,7 +374,7 @@ router.post('/', async (req, res, next) => {
       const cant = parseFloat(it.cantidad) || 1;
       const precio = parseFloat(it.precio_unitario) || 0;
       const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
-      const precioConDto = parseFloat((precio * (1 - descPct / 100)).toFixed(2));
+      const precioConDto = parseFloat((precio * (1 - descPct / 100)).toFixed(3));
       const neto = parseFloat((cant * precioConDto).toFixed(2));
       const sucImp = it.sucursal_imputacion_id || sucursal_id;
 
@@ -394,7 +394,7 @@ router.post('/', async (req, res, next) => {
         const cant = parseFloat(it.cantidad) || 1;
         const precio = parseFloat(it.precio_unitario) || 0;
         const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
-        return s + cant * parseFloat((precio * (1 - descPct / 100)).toFixed(2));
+        return s + cant * parseFloat((precio * (1 - descPct / 100)).toFixed(3));
       }, 0);
 
       const { rows: pedidoRows } = await client.query(`

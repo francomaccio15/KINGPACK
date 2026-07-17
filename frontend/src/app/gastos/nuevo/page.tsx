@@ -768,6 +768,7 @@ export default function NuevoEgresoPage() {
                         <NumericInput
                           value={item.precio_unitario}
                           onChange={e => updateItem(item.key, 'precio_unitario', parseFloat(e.target.value) || 0)}
+                          decimals={3}
                           className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                         />
                       </td>
