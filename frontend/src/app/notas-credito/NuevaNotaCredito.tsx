@@ -167,6 +167,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [items,           setItems]            = useState<NcItem[]>([emptyItem()]);
   const [saving,          setSaving]           = useState(false);
   const [error,           setError]            = useState('');
+  const [confirmSinCliente, setConfirmSinCliente] = useState(false);
 
   // — Historial de notas de crédito del cliente seleccionado —
   const [historial,        setHistorial]        = useState<NotaCredito[]>([]);
@@ -175,15 +176,22 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   // — Devolución de venta completa —
   const [modoDevolucion,  setModoDevolucion]   = useState(false);
   const [ventaNumero,     setVentaNumero]      = useState('');
-  const [ventaCargada,    setVentaCargada]     = useState<{ numero: number; cliente: string | null } | null>(null);
+  const [ventaCargada,    setVentaCargada]     = useState<{ numero: number; cliente: string | null; letra: string | null } | null>(null);
   const [buscandoVenta,   setBuscandoVenta]    = useState(false);
   const [errorVenta,      setErrorVenta]       = useState('');
 
-  const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[]) => {
+  const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[], facturacion?: Record<string, unknown> | null) => {
     if (venta.cliente_id)  setClienteId(String(venta.cliente_id));
     if (venta.sucursal_id) setSucursalId(String(venta.sucursal_id));
     setNumRef(`Venta #${venta.numero}`);
     setMotivo('Devolución de mercadería');
+
+    // La NC debe emitirse con la misma letra que el comprobante original (A/B/C)
+    const letraFactura = facturacion?.tipo_letra as string | undefined;
+    if (letraFactura) {
+      const tipoMatch = tiposNC.find(t => t.letra === letraFactura);
+      if (tipoMatch) setTipoId(tipoMatch.id);
+    }
 
     setItems(ventaItems.map(it => ({
       descripcion:     it.nombre,
@@ -193,7 +201,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
       articulo_id:     it.articulo_id,
     })));
 
-    setVentaCargada({ numero: Number(venta.numero), cliente: (venta.cliente_nombre as string | null) ?? null });
+    setVentaCargada({ numero: Number(venta.numero), cliente: (venta.cliente_nombre as string | null) ?? null, letra: letraFactura ?? null });
     setErrorVenta('');
   };
 
@@ -211,7 +219,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
       const r2 = await apiFetch(`/api/ventas/${match.id}`);
       const data2 = await r2.json();
       if (!r2.ok) { setErrorVenta(data2.error ?? 'Error al cargar la venta'); return; }
-      cargarVenta(data2.venta, data2.items ?? []);
+      cargarVenta(data2.venta, data2.items ?? [], data2.facturacion);
     } catch {
       setErrorVenta('Error de conexión al buscar la venta');
     } finally {
@@ -264,6 +272,10 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     if (!tipoId)        { setError('Seleccioná el tipo de comprobante'); return; }
     if (items.some(it => !it.descripcion.trim())) { setError('Completá la descripción de cada ítem'); return; }
     if (total <= 0)     { setError('El total debe ser mayor a 0'); return; }
+    if (!clienteId && !confirmSinCliente) {
+      setError('Seleccioná un cliente o confirmá que es para consumidor final');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -396,6 +408,11 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                   <option key={t.id} value={t.id}>{t.descripcion}</option>
                 ))}
               </select>
+              {ventaCargada?.letra && tiposNC.find(t => t.id === tipoId)?.letra !== ventaCargada.letra && (
+                <p className="text-[11px] text-amber-400/90 mt-1 leading-snug">
+                  La Venta #{ventaCargada.numero} se facturó como Factura {ventaCargada.letra}. ARCA exige que la NC tenga la misma letra que el comprobante original.
+                </p>
+              )}
             </div>
             <div>
               <label className={labelCls}>Fecha de emisión *</label>
@@ -416,7 +433,11 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Cliente (receptor)</label>
-              <select value={clienteId} onChange={e => setClienteId(e.target.value)} className={selectCls}>
+              <select
+                value={clienteId}
+                onChange={e => { setClienteId(e.target.value); if (e.target.value) setConfirmSinCliente(false); }}
+                className={selectCls}
+              >
                 <option value="">Consumidor final / Sin cliente</option>
                 {clientes.map(c => (
                   <option key={c.id} value={c.id}>
@@ -424,6 +445,20 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                   </option>
                 ))}
               </select>
+              {!clienteId && (
+                <label className="mt-2 flex items-start gap-2 text-[11px] text-amber-400/90 leading-snug cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmSinCliente}
+                    onChange={e => setConfirmSinCliente(e.target.checked)}
+                    className="mt-0.5 accent-kp-red"
+                  />
+                  <span>
+                    Confirmo que esta nota de crédito es para consumidor final / sin cliente registrado.
+                    Si el cliente existe pero no aparece en la lista, puede estar inactivo — revisalo en Clientes.
+                  </span>
+                </label>
+              )}
             </div>
             <div>
               <label className={labelCls}>Sucursal emisora</label>

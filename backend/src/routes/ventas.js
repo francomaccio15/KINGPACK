@@ -553,7 +553,7 @@ router.get('/:id', async (req, res, next) => {
       pool.query(`
         SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,
                f.punto_venta, f.total, f.qr_url, f.ok, f.mensaje_afip,
-               f.fecha_emision, tc.descripcion AS tipo_comprobante
+               f.fecha_emision, tc.descripcion AS tipo_comprobante, tc.letra AS tipo_letra
         FROM facturaciones f
         LEFT JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
         WHERE f.venta_id = $1 AND f.deleted_at IS NULL
