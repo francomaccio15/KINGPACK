@@ -56,7 +56,8 @@ function LetraBadge({ letra }: { letra: string | null }) {
 
 export default function NotasCreditoView({ notasIniciales, totalCount, clientes, sucursales, tiposNC }: Props) {
   const { user } = useAuth();
-  const isAdmin  = user?.rol === 'administrador'; // anular y eliminar solo admin
+  const isAdmin   = user?.rol === 'administrador'; // eliminar solo admin
+  const puedeAnular = user?.rol === 'administrador' || user?.rol === 'cajero';
 
   const [notas,        setNotas]        = useState<NotaCredito[]>(notasIniciales);
   const [showForm,     setShowForm]     = useState(false);
@@ -237,46 +238,44 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                         <IcoPrint />
                       </Link>
 
-                      {isAdmin && (
-                        <>
-                          {/* Anular (solo emitidas) */}
-                          {n.estado === 'emitida' && (
-                            confirmId === n.id ? (
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => handleAnular(n.id)} disabled={anulando === n.id}
-                                  className="text-[10px] font-bold text-rose-400 hover:underline">
-                                  {anulando === n.id ? '…' : 'Anular'}
-                                </button>
-                                <span className="text-kp-border">/</span>
-                                <button onClick={() => setConfirmId(null)}
-                                  className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setConfirmId(n.id)}
-                                className="text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1">
-                                Anular
-                              </button>
-                            )
-                          )}
-
-                          {/* Eliminar (todas) */}
-                          {confirmDelId === n.id ? (
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => handleEliminar(n.id)} disabled={eliminando === n.id}
-                                className="text-[10px] font-bold text-rose-500 hover:underline">
-                                {eliminando === n.id ? '…' : '¡Eliminar!'}
-                              </button>
-                              <span className="text-kp-border">/</span>
-                              <button onClick={() => setConfirmDelId(null)}
-                                className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setConfirmDelId(n.id)} title="Eliminar"
-                              className="w-7 h-7 flex items-center justify-center rounded-md text-kp-gray hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
-                              <IcoTrash />
+                      {/* Anular (solo emitidas) — admin y cajero */}
+                      {puedeAnular && n.estado === 'emitida' && (
+                        confirmId === n.id ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleAnular(n.id)} disabled={anulando === n.id}
+                              className="text-[10px] font-bold text-rose-400 hover:underline">
+                              {anulando === n.id ? '…' : 'Anular'}
                             </button>
-                          )}
-                        </>
+                            <span className="text-kp-border">/</span>
+                            <button onClick={() => setConfirmId(null)}
+                              className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmId(n.id)}
+                            className="text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1">
+                            Anular
+                          </button>
+                        )
+                      )}
+
+                      {/* Eliminar (todas) — solo admin */}
+                      {isAdmin && (
+                        confirmDelId === n.id ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleEliminar(n.id)} disabled={eliminando === n.id}
+                              className="text-[10px] font-bold text-rose-500 hover:underline">
+                              {eliminando === n.id ? '…' : '¡Eliminar!'}
+                            </button>
+                            <span className="text-kp-border">/</span>
+                            <button onClick={() => setConfirmDelId(null)}
+                              className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDelId(n.id)} title="Eliminar"
+                            className="w-7 h-7 flex items-center justify-center rounded-md text-kp-gray hover:text-rose-500 hover:bg-rose-500/10 transition-colors">
+                            <IcoTrash />
+                          </button>
+                        )
                       )}
                     </div>
                   </td>

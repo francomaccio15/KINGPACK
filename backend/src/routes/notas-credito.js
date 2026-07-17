@@ -290,7 +290,7 @@ router.post('/', async (req, res, next) => {
 // Revierte en transacción:
 //   1. Descuenta el stock que fue devuelto (vuelve a quitar la mercadería)
 //   2. Inserta debe en CC del cliente para cancelar el haber original
-router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) => {
+router.patch('/:id/anular', requireRol('administrador', 'cajero'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
