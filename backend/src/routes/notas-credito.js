@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const arca = require('../services/arca');
 const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
@@ -188,29 +189,95 @@ router.post('/', async (req, res, next) => {
       cajaId = cajaRows[0].id;
     }
 
-    // Número correlativo para el tipo de comprobante
-    const { rows: lastNum } = await client.query(
-      `SELECT COALESCE(MAX(numero), 0) + 1 AS next_num
-         FROM notas_credito
-        WHERE tipo_comprobante_id = $1 AND deleted_at IS NULL`,
+    // ── Emisión ante ARCA/AFIP: se pide el CAE ANTES de insertar. Si ARCA
+    // rechaza o falla, la nota de crédito no se crea (no puede existir sin CAE).
+    const { rows: tcRows } = await client.query(
+      `SELECT letra, codigo_afip FROM tipos_comprobante WHERE id = $1`,
       [tipo_comprobante_id]
     );
-    const numero = lastNum[0].next_num;
+    if (!tcRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Tipo de comprobante inválido' });
+    }
+    const tipoComp = tcRows[0];
 
-    // Insertar la nota de crédito
+    let cuitDigits = '';
+    if (cliente_id) {
+      const { rows: clRows } = await client.query('SELECT cuit FROM clientes WHERE id = $1', [cliente_id]);
+      cuitDigits = clRows[0]?.cuit ? String(clRows[0].cuit).replace(/\D/g, '') : '';
+    }
+    if (tipoComp.letra === 'A' && cuitDigits.length !== 11) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'La Nota de Crédito A requiere un cliente con CUIT válido' });
+    }
+
+    let sucursalNombre = null;
+    if (sucursal_id) {
+      const { rows: sucRows } = await client.query('SELECT nombre FROM sucursales WHERE id = $1', [sucursal_id]);
+      sucursalNombre = sucRows[0]?.nombre || null;
+    }
+
+    // Discrimina el IVA por ítem usando la alícuota real del artículo (igual que
+    // /api/ventas/:id/facturar); los ítems sin articulo_id asumen 21%.
+    const articuloIds = items.filter(it => it.articulo_id).map(it => it.articulo_id);
+    let alicuotaPorArticulo = {};
+    if (articuloIds.length) {
+      const { rows: aliRows } = await client.query(`
+        SELECT a.id, COALESCE(ai.porcentaje, 21)::float AS alicuota
+          FROM articulos a
+          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+         WHERE a.id = ANY($1::uuid[])
+      `, [articuloIds]);
+      alicuotaPorArticulo = Object.fromEntries(aliRows.map(r => [r.id, r.alicuota]));
+    }
+
+    const gruposIva = {};
+    for (const it of items) {
+      const importe = (parseFloat(it.cantidad) || 0) * (parseFloat(it.precio_unitario) || 0);
+      const alic = it.articulo_id ? (alicuotaPorArticulo[it.articulo_id] ?? 21) : 21;
+      gruposIva[alic] = (gruposIva[alic] || 0) + importe;
+    }
+    const itemsArca = Object.entries(gruposIva).map(([alic, totalIncl]) => {
+      const a = parseFloat(alic);
+      return {
+        descripcion:    `Neto gravado ${a}%`,
+        cantidad:       1,
+        precioUnitario: +(totalIncl / (1 + a / 100)).toFixed(2),
+        alicuotaIva:    a,
+      };
+    });
+
+    let resultadoArca;
+    try {
+      resultadoArca = await arca.generarFactura({
+        puntoVenta:      arca.puntoVentaPara(sucursalNombre),
+        tipoComprobante: tipoComp.codigo_afip,
+        concepto:        arca.CONCEPTO.PRODUCTOS,
+        cliente: tipoComp.letra === 'A'
+          ? { tipoDoc: arca.TIPO_DOC.CUIT, nroDoc: cuitDigits }
+          : { tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR, nroDoc: 0 },
+        items: itemsArca,
+      });
+    } catch (arcaErr) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: `ARCA rechazó la nota de crédito: ${arcaErr.message}` });
+    }
+
+    // Insertar la nota de crédito (numero = número oficial devuelto por ARCA)
     const { rows } = await client.query(
       `INSERT INTO notas_credito
          (factura_id, cliente_id, sucursal_id, tipo_comprobante_id,
           numero, numero_referencia, motivo, items,
-          subtotal, iva_pct, iva_monto, total, estado, emitida_por, fecha, forma_devolucion)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14,$15)
+          subtotal, iva_pct, iva_monto, total, estado, emitida_por, fecha, forma_devolucion,
+          cae, respuesta_afip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14,$15,$16,$17::jsonb)
        RETURNING id`,
       [
         factura_id || null,
         cliente_id || null,
         sucursal_id || null,
         tipo_comprobante_id,
-        numero,
+        resultadoArca.nroComprobante,
         numero_referencia || null,
         motivo.trim(),
         items.length ? JSON.stringify(items) : null,
@@ -221,6 +288,8 @@ router.post('/', async (req, res, next) => {
         req.usuario.id,
         fecha || new Date().toISOString(),
         formaDev,
+        resultadoArca.CAE,
+        JSON.stringify(resultadoArca),
       ]
     );
     const ncId = rows[0].id;
@@ -259,7 +328,7 @@ router.post('/', async (req, res, next) => {
 
     // ── 3. Egreso de caja (efectivo): descontar la plata devuelta ─────────────
     if (formaDev === 'efectivo' && cajaId && totalNum > 0) {
-      const concepto = `Nota de crédito #${numero}` +
+      const concepto = `Nota de crédito #${resultadoArca.nroComprobante}` +
         (numero_referencia ? ` — ${numero_referencia}` : '');
       await client.query(
         `INSERT INTO movimientos_caja
