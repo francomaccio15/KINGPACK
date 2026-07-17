@@ -42,6 +42,7 @@ router.get('/', async (req, res, next) => {
         pedidosPendientes,
         fechaInfo,
         concPrev,
+        impuestosPagados,
       ] = await Promise.all([
 
         // Artículos con stock bajo
@@ -103,7 +104,8 @@ router.get('/', async (req, res, next) => {
                                      INTERVAL '1 day') d
                WHERE EXTRACT(ISODOW FROM d) < 6
             ))::int AS primer_habil_dia,
-            (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date AS periodo_ant
+            (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date AS periodo_ant,
+            date_trunc('month', CURRENT_DATE)::date AS periodo_actual
         `),
 
         // ¿Ya se cargó la conciliación del mes anterior?
@@ -111,6 +113,12 @@ router.get('/', async (req, res, next) => {
           SELECT 1
             FROM conciliacion_bancaria
            WHERE periodo = (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date
+        `),
+
+        // Obligaciones impositivas ya marcadas como pagadas este mes
+        pool.query(`
+          SELECT obligacion FROM impuestos_pagados
+           WHERE periodo = date_trunc('month', CURRENT_DATE)::date
         `),
       ]);
 
@@ -159,17 +167,21 @@ router.get('/', async (req, res, next) => {
       // ── Recordatorios de obligaciones impositivas (por día del mes) ──
       // Ventana: 3 días antes (warning) → el día (error "vence hoy") → hasta 3
       // días después (error "vencido"). Lista fija de obligaciones del comercio.
+      // Si ya se marcó como pagada este mes (impuestos_pagados), no se muestra.
       const diaMes = parseInt(fechaInfo.rows[0].dia_mes, 10);
+      const periodoActual = fechaInfo.rows[0].periodo_actual;
+      const pagadasSet = new Set(impuestosPagados.rows.map(r => r.obligacion));
       const OBLIGACIONES = [
-        { dia: 7,  label: 'Cargas sociales y laborales' },
-        { dia: 7,  label: 'Autónomos' },
-        { dia: 14, label: 'Impuestos municipales (TISH)' },
-        { dia: 14, label: 'Rentas Salta' },
-        { dia: 17, label: 'Impuestos nacionales' },
-        { dia: 19, label: 'Monotributo' },
+        { dia: 7,  slug: 'cargas_sociales',  label: 'Cargas sociales y laborales' },
+        { dia: 7,  slug: 'autonomos',        label: 'Autónomos' },
+        { dia: 14, slug: 'municipales_tish', label: 'Impuestos municipales (TISH)' },
+        { dia: 14, slug: 'rentas_salta',     label: 'Rentas Salta' },
+        { dia: 17, slug: 'nacionales',       label: 'Impuestos nacionales' },
+        { dia: 19, slug: 'monotributo',      label: 'Monotributo' },
       ];
       const DIAS_ANTES = 3, DIAS_DESPUES = 3;
       for (const o of OBLIGACIONES) {
+        if (pagadasSet.has(o.slug)) continue;
         const diff = diaMes - o.dia; // <0 faltan días · 0 hoy · >0 vencido hace
         if (diff < -DIAS_ANTES || diff > DIAS_DESPUES) continue;
         let nivel, label;
@@ -183,7 +195,10 @@ router.get('/', async (req, res, next) => {
           nivel = 'error';
           label = `${o.label}: vencido hace ${diff} día${diff !== 1 ? 's' : ''}`;
         }
-        alertas.push({ tipo: 'impuesto', nivel, href: '/impuestos', label });
+        alertas.push({
+          tipo: 'impuesto', nivel, href: '/impuestos', label,
+          obligacion: o.slug, periodo: periodoActual,
+        });
       }
 
       // ── Recordatorio: conciliación bancaria del mes anterior ──
@@ -211,6 +226,28 @@ router.get('/', async (req, res, next) => {
       alertas,
       ultima_vista: ultimaVista,
     });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/notificaciones/impuestos/pagar ────────────────────────────────
+// Marca una obligación impositiva como pagada para un período (mes), lo que
+// apaga su recordatorio en la campanita aunque siga dentro de la ventana de
+// vencimiento. Solo administrador.
+router.post('/impuestos/pagar', async (req, res, next) => {
+  try {
+    if (req.usuario.rol !== 'administrador') {
+      return res.status(403).json({ error: 'Solo un administrador puede marcar un impuesto como pagado' });
+    }
+    const { obligacion, periodo } = req.body;
+    if (!obligacion?.trim() || !periodo) {
+      return res.status(400).json({ error: 'Faltan datos (obligacion, periodo)' });
+    }
+    await pool.query(`
+      INSERT INTO impuestos_pagados (obligacion, periodo, usuario_id)
+      VALUES ($1, $2::date, $3)
+      ON CONFLICT (obligacion, periodo) DO NOTHING
+    `, [obligacion.trim(), periodo, req.usuario.id]);
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 

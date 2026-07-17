@@ -18,6 +18,8 @@ type Alerta = {
   count: number;
   href: string;
   label: string;
+  obligacion?: string;
+  periodo?: string;
 };
 
 type NotifData = {
@@ -52,6 +54,8 @@ type UnifiedItem = {
   href:       string;
   isNew?:     boolean;
   sortOrder:  number; // 0=error 1=warning 2=notas 3=info
+  obligacion?: string;
+  periodo?:    string;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,6 +96,7 @@ export default function NotifBell() {
   const [open, setOpen]     = useState(false);
   const [data, setData]     = useState<NotifData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [marcando, setMarcando] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // ── Fetch solo el conteo (liviano, para el badge) ─────────────────────────
@@ -112,6 +117,21 @@ export default function NotifBell() {
     const id = setInterval(fetchCount, 60_000);
     return () => clearInterval(id);
   }, [fetchCount]);
+
+  // ── Marcar una obligación impositiva como pagada (apaga su recordatorio) ──
+  const marcarPagado = async (obligacion: string, periodo: string) => {
+    const key = `${obligacion}-${periodo}`;
+    setMarcando(key);
+    try {
+      const r = await apiFetch('/api/notificaciones/impuestos/pagar', {
+        method: 'POST',
+        body: JSON.stringify({ obligacion, periodo }),
+      });
+      if (r.ok) await fetchCount();
+    } finally {
+      setMarcando(null);
+    }
+  };
 
   // ── Abrir panel: fetch completo + marcar leído ────────────────────────────
   const handleOpen = async () => {
@@ -159,6 +179,8 @@ export default function NotifBell() {
         title:      a.label,
         href:       a.href,
         sortOrder:  cfg.order,
+        obligacion: a.obligacion,
+        periodo:    a.periodo,
       });
     }
     // Notas nuevas
@@ -244,41 +266,60 @@ export default function NotifBell() {
                 <p className="text-sm text-kp-gray">Todo al día, sin pendientes.</p>
               </div>
             ) : (
-              items.map(item => (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-start gap-3 px-4 py-3.5 hover:bg-kp-surface2 transition-colors group"
-                >
-                  {/* Dot */}
-                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${item.dot}`} />
+              items.map(item => {
+                const pagoKey = item.obligacion && item.periodo ? `${item.obligacion}-${item.periodo}` : null;
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-start gap-2 px-4 py-3.5 hover:bg-kp-surface2 transition-colors group"
+                  >
+                    <Link
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className="flex items-start gap-3 flex-1 min-w-0"
+                    >
+                      {/* Dot */}
+                      <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${item.dot}`} />
 
-                  {/* Contenido */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-kp-white leading-snug line-clamp-2">{item.title}</p>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      <span className={`text-[10px] font-bold ${item.labelColor}`}>{item.tagLabel}</span>
-                      {item.isNew && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red/15 text-kp-red border border-kp-red/20">
-                          Nueva
-                        </span>
-                      )}
-                      {item.meta && (
-                        <>
-                          <span className="text-kp-gray/40">·</span>
-                          <span className="text-[10px] text-kp-gray">{item.meta}</span>
-                        </>
-                      )}
-                    </div>
+                      {/* Contenido */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-kp-white leading-snug line-clamp-2">{item.title}</p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className={`text-[10px] font-bold ${item.labelColor}`}>{item.tagLabel}</span>
+                          {item.isNew && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red/15 text-kp-red border border-kp-red/20">
+                              Nueva
+                            </span>
+                          )}
+                          {item.meta && (
+                            <>
+                              <span className="text-kp-gray/40">·</span>
+                              <span className="text-[10px] text-kp-gray">{item.meta}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Flecha hover */}
+                      <span className={`mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${item.labelColor}`}>
+                        <IcoChev />
+                      </span>
+                    </Link>
+
+                    {pagoKey && (
+                      <button
+                        type="button"
+                        onClick={() => marcarPagado(item.obligacion!, item.periodo!)}
+                        disabled={marcando === pagoKey}
+                        title="Marcar como pagado"
+                        className="shrink-0 self-center text-[10px] font-bold px-2 py-1 rounded-md border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40 whitespace-nowrap"
+                      >
+                        {marcando === pagoKey ? '…' : '✓ Pagado'}
+                      </button>
+                    )}
                   </div>
-
-                  {/* Flecha hover */}
-                  <span className={`mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${item.labelColor}`}>
-                    <IcoChev />
-                  </span>
-                </Link>
-              ))
+                );
+              })
             )}
           </div>
 
