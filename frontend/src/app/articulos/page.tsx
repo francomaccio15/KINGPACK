@@ -306,10 +306,10 @@ export default async function ArticulosPage({
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
-              <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Categoría</th>
-              <th className="text-right px-4 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+              <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
+              <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
+              <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Categoría</th>
+              <th className="text-right px-3 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                 <span className="text-kp-red">
                   {listaActiva ? (TIPO_LABEL[listaActiva.tipo] ?? listaActiva.nombre) : 'Precio'}
                 </span>
@@ -320,19 +320,19 @@ export default async function ArticulosPage({
                 )}
               </th>
               {!esBase && !esCajero && (
-                <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                <th className="text-right px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                   Precio Base
                 </th>
               )}
               {esBase && esAdmin && (
-                <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+                <th className="text-right px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                   Margen
                 </th>
               )}
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
+              <th className="text-center px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">
                 {modeTodas ? 'Stock' : `Stock · ${sucursalActiva?.nombre ?? ''}`}
               </th>
-              <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
+              <th className="text-center px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Estado</th>
               <th className="sticky right-0 z-20 bg-kp-surface2 border-l border-kp-border px-3 py-3 w-px" />
             </tr>
           </thead>
