@@ -45,7 +45,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
 
   const emisor = {
     razon_social: 'KING PACK S.R.L.',
-    cuit:         nota.sucursal_cuit ?? '—',
+    cuit:         nota.sucursal_cuit ?? '30-71792696-6',
     cond_iva:     'Responsable Inscripto',
     domicilio:    nota.sucursal_direccion ?? 'Salta, Argentina',
     telefono:     nota.sucursal_telefono ?? '',
@@ -119,7 +119,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
               <Row label="Razón Social" value={nota.cliente_razon_social ?? 'Consumidor Final'} />
               {nota.cliente_cuit && <Row label="CUIT" value={nota.cliente_cuit} />}
               {nota.cliente_direccion && <Row label="Domicilio" value={nota.cliente_direccion} />}
-              <Row label="Cond. IVA" value="—" />
+              <Row label="Cond. IVA" value={nota.cliente_cond_iva ?? 'Consumidor Final'} />
             </div>
           </div>
 

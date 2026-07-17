@@ -31,6 +31,7 @@ const SELECT_NC = `
     c.razon_social AS cliente_razon_social,
     c.cuit         AS cliente_cuit,
     c.direccion    AS cliente_direccion,
+    ci.nombre      AS cliente_cond_iva,
     -- Tipo comprobante
     tc.descripcion AS tipo_comprobante,
     tc.letra       AS tipo_letra,
@@ -47,8 +48,9 @@ const SELECT_NC = `
     f.numero       AS factura_numero,
     f.punto_venta  AS factura_punto_venta
   FROM notas_credito nc
-  LEFT JOIN clientes c              ON c.id = nc.cliente_id
-  LEFT JOIN tipos_comprobante tc    ON tc.id = nc.tipo_comprobante_id
+  LEFT JOIN clientes c               ON c.id = nc.cliente_id
+  LEFT JOIN cond_iva ci              ON ci.id = c.cond_iva_id
+  LEFT JOIN tipos_comprobante tc     ON tc.id = nc.tipo_comprobante_id
   LEFT JOIN sucursales s            ON s.id = nc.sucursal_id
   LEFT JOIN usuarios u              ON u.id = nc.emitida_por
   LEFT JOIN facturaciones f         ON f.id = nc.factura_id

@@ -24,6 +24,7 @@ export type NotaCredito = {
   cliente_razon_social: string | null;
   cliente_cuit: string | null;
   cliente_direccion: string | null;
+  cliente_cond_iva: string | null;
   // Comprobante
   tipo_comprobante: string | null;
   tipo_letra: string | null;
