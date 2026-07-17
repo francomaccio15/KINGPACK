@@ -50,6 +50,13 @@ function _buildFECAESolicitar(c, token, sign) {
     .map(i => `<ar:AlicIva><ar:Id>${i.id}</ar:Id><ar:BaseImp>${i.baseImp.toFixed(2)}</ar:BaseImp><ar:Importe>${i.importe.toFixed(2)}</ar:Importe></ar:AlicIva>`)
     .join('');
 
+  // Obligatorio para Notas de Débito/Crédito (AFIP error 10197): referencian el
+  // comprobante original (Tipo/PtoVta/Nro AFIP, no el id interno de KingPack).
+  const cbtesAsoc = (c.cbtesAsoc || [])
+    .map(a => `<ar:CbteAsoc><ar:Tipo>${a.tipo}</ar:Tipo><ar:PtoVta>${a.ptoVta}</ar:PtoVta><ar:Nro>${a.nro}</ar:Nro></ar:CbteAsoc>`)
+    .join('');
+  const cbtesAsocXml = cbtesAsoc ? `<ar:CbtesAsoc>${cbtesAsoc}</ar:CbtesAsoc>` : '';
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -83,6 +90,7 @@ function _buildFECAESolicitar(c, token, sign) {
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>${c.moneda || 'PES'}</ar:MonId>
             <ar:MonCotiz>${c.cotizacion || 1}</ar:MonCotiz>
+            ${cbtesAsocXml}
             <ar:Iva>${iva}</ar:Iva>
           </ar:FECAEDetRequest>
         </ar:FeDetReq>

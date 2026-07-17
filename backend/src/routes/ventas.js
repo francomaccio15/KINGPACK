@@ -551,9 +551,10 @@ router.get('/:id', async (req, res, next) => {
         GROUP BY vp.monto, vp.cuenta_destino, mp.nombre
       `, [id]),
       pool.query(`
-        SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,
+        SELECT f.id, f.cae, f.cae_vencimiento, f.numero AS factura_numero,
                f.punto_venta, f.total, f.qr_url, f.ok, f.mensaje_afip,
-               f.fecha_emision, tc.descripcion AS tipo_comprobante, tc.letra AS tipo_letra
+               f.fecha_emision, tc.descripcion AS tipo_comprobante, tc.letra AS tipo_letra,
+               tc.codigo_afip AS tipo_codigo_afip
         FROM facturaciones f
         LEFT JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
         WHERE f.venta_id = $1 AND f.deleted_at IS NULL

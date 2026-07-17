@@ -164,6 +164,7 @@ router.post('/', async (req, res, next) => {
     if (!motivo?.trim())           return res.status(400).json({ error: 'El motivo es obligatorio' });
     if (!tipo_comprobante_id)      return res.status(400).json({ error: 'El tipo de comprobante es obligatorio' });
     if (total === undefined || total === null) return res.status(400).json({ error: 'El total es obligatorio' });
+    if (!factura_id) return res.status(400).json({ error: 'Debés indicar la factura de referencia (ARCA exige asociar la NC a un comprobante ya autorizado). Usá "Devolver venta completa" para cargarla.' });
 
     const FORMAS_VALIDAS = ['cuenta_corriente', 'efectivo', 'transferencia'];
     const formaDev = FORMAS_VALIDAS.includes(forma_devolucion) ? forma_devolucion : 'cuenta_corriente';
@@ -200,6 +201,20 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Tipo de comprobante inválido' });
     }
     const tipoComp = tcRows[0];
+
+    // Comprobante original a referenciar (CbteAsoc): AFIP rechaza toda NC/ND
+    // que no venga asociada a un comprobante ya autorizado (error 10197).
+    const { rows: facRows } = await client.query(`
+      SELECT f.punto_venta, f.numero, tc.codigo_afip
+        FROM facturaciones f
+        JOIN tipos_comprobante tc ON tc.id = f.tipo_comprobante_id
+       WHERE f.id = $1 AND f.cae IS NOT NULL AND f.deleted_at IS NULL
+    `, [factura_id]);
+    if (!facRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'La factura de referencia no existe o no tiene CAE autorizado por ARCA' });
+    }
+    const cbtesAsoc = [{ tipo: facRows[0].codigo_afip, ptoVta: facRows[0].punto_venta, nro: facRows[0].numero }];
 
     let cuitDigits = '';
     if (cliente_id) {
@@ -257,6 +272,7 @@ router.post('/', async (req, res, next) => {
           ? { tipoDoc: arca.TIPO_DOC.CUIT, nroDoc: cuitDigits }
           : { tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR, nroDoc: 0 },
         items: itemsArca,
+        cbtesAsoc,
       });
     } catch (arcaErr) {
       await client.query('ROLLBACK');

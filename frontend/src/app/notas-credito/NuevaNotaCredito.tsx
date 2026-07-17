@@ -179,6 +179,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [ventaCargada,    setVentaCargada]     = useState<{ numero: number; cliente: string | null; letra: string | null } | null>(null);
   const [buscandoVenta,   setBuscandoVenta]    = useState(false);
   const [errorVenta,      setErrorVenta]       = useState('');
+  const [facturaId,       setFacturaId]        = useState('');
 
   const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[], facturacion?: Record<string, unknown> | null) => {
     if (venta.cliente_id)  setClienteId(String(venta.cliente_id));
@@ -192,6 +193,9 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
       const tipoMatch = tiposNC.find(t => t.letra === letraFactura);
       if (tipoMatch) setTipoId(tipoMatch.id);
     }
+
+    // ARCA exige asociar la NC al comprobante original (CbteAsoc) — sin esto rechaza la emisión.
+    setFacturaId(facturacion?.id ? String(facturacion.id) : '');
 
     setItems(ventaItems.map(it => ({
       descripcion:     it.nombre,
@@ -276,6 +280,10 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
       setError('Seleccioná un cliente o confirmá que es para consumidor final');
       return;
     }
+    if (!facturaId) {
+      setError('ARCA exige asociar la nota de crédito a la factura original. Cargá la venta facturada con "Devolver venta completa".');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -286,6 +294,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           sucursal_id:         sucursalId || null,
           tipo_comprobante_id: tipoId,
           numero_referencia:   numRef || null,
+          factura_id:          facturaId,
           motivo,
           items,
           subtotal,
@@ -334,7 +343,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           <div className={`rounded-xl border transition-colors ${modoDevolucion ? 'border-blue-500/30 bg-blue-500/5' : 'border-kp-border bg-kp-surface2'}`}>
             <button
               type="button"
-              onClick={() => { setModoDevolucion(v => !v); setVentaNumero(''); setVentaCargada(null); setErrorVenta(''); }}
+              onClick={() => { setModoDevolucion(v => !v); setVentaNumero(''); setVentaCargada(null); setErrorVenta(''); setFacturaId(''); }}
               className="w-full flex items-center justify-between px-4 py-3 text-left"
             >
               <div className="flex items-center gap-2">
@@ -342,7 +351,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
                 </svg>
                 <span className={`text-xs font-bold uppercase tracking-wider ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
-                  Devolver venta completa
+                  Devolver venta completa <span className="normal-case font-semibold text-amber-400/90">(obligatorio para ARCA)</span>
                 </span>
                 {ventaCargada && (
                   <span className="ml-1 text-xs font-semibold text-green-400">— Venta #{ventaCargada.numero} cargada ✓</span>

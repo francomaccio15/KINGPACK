@@ -226,6 +226,7 @@ function _buildComprobante(params) {
     cliente,
     items          = [],
     fecha,
+    cbtesAsoc,
   } = params;
 
   if (!tipoComprobante) throw new Error('tipoComprobante es requerido');
@@ -265,6 +266,7 @@ function _buildComprobante(params) {
     total:      +total.toFixed(2),
     moneda:     'PES',
     nroComprobante: null, // se resuelve en generarFactura()
+    cbtesAsoc,
   };
 }
 
