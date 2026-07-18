@@ -36,7 +36,12 @@ if pm2 describe kingpack-backend >/dev/null 2>&1; then
   # Frontend: restart DURO, no reload. Tras el 'rm -rf .next' el proceso viejo de
   # 'next start' queda con referencias a chunks borrados -> MODULE_NOT_FOUND. Un
   # reload graceful no lo arregla; hay que matar y arrancar fresco contra el .next nuevo.
-  pm2 restart kingpack-frontend
+  #
+  # IMPORTANTE: se fuerza NEXT_DIST_DIR=.next con --update-env. Sin esto, 'pm2
+  # restart' conserva el entorno viejo del proceso; si alguna vez quedó apuntando
+  # a .next-build, seguiría sirviendo ese build viejo aunque el deploy buildee en
+  # .next (desfase crónico: el frontend "no se actualiza nunca").
+  NEXT_DIST_DIR=.next pm2 restart kingpack-frontend --update-env
 else
   pm2 start ecosystem.config.js
   pm2 save
