@@ -3,45 +3,57 @@ const { pool } = require('../config/db');
 
 const router = express.Router();
 
-// Descuenta de la caja fuerte de la sucursal los pagos hechos con el medio
-// "Efectivo Caja Fuerte". `medios` = [{ medio_pago_id, monto }].
+// Descuenta de la caja fuerte los pagos hechos con un medio "Efectivo Caja
+// Fuerte". Cada medio puede estar atado a una sucursal (caja_fuerte_sucursal_id);
+// si no lo está (medio genérico viejo), usa la sucursal del comprobante.
+// `medios` = [{ medio_pago_id, monto }].
 async function descontarCajaFuerte(client, sucursalId, medios) {
-  if (!sucursalId || !Array.isArray(medios) || medios.length === 0) return;
+  if (!Array.isArray(medios) || medios.length === 0) return;
   const ids = medios.map(m => m.medio_pago_id).filter(Boolean);
   if (ids.length === 0) return;
   const { rows } = await client.query(
-    `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [ids]
+    `SELECT id, nombre, caja_fuerte_sucursal_id FROM medios_pago WHERE id = ANY($1::uuid[])`, [ids]
   );
-  const esCajaFuerte = new Set(rows.filter(r => /caja fuerte/i.test(r.nombre)).map(r => r.id));
-  const totalCF = medios.reduce(
-    (s, m) => esCajaFuerte.has(m.medio_pago_id) ? s + (parseFloat(m.monto) || 0) : s, 0
-  );
-  if (totalCF > 0) {
-    await client.query(
-      `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
-      [totalCF.toFixed(2), sucursalId]
-    );
+  const medioMap = new Map(rows.map(r => [r.id, r]));
+  // Agrupar el efectivo de caja fuerte por sucursal a descontar.
+  const porSucursal = new Map();
+  for (const m of medios) {
+    const mp = medioMap.get(m.medio_pago_id);
+    if (!mp || !/caja fuerte/i.test(mp.nombre)) continue;
+    const suc = mp.caja_fuerte_sucursal_id || sucursalId;
+    if (!suc) continue;
+    porSucursal.set(suc, (porSucursal.get(suc) || 0) + (parseFloat(m.monto) || 0));
+  }
+  for (const [suc, monto] of porSucursal) {
+    if (monto > 0) {
+      await client.query(
+        `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
+        [monto.toFixed(2), suc]
+      );
+    }
   }
 }
 
-// Repone en la caja fuerte de la sucursal lo que un egreso pagó con "Efectivo
-// Caja Fuerte" (se usa al anular/eliminar el egreso).
+// Repone en la caja fuerte lo que un egreso pagó con "Efectivo Caja Fuerte"
+// (al anular/eliminar el egreso), sobre la sucursal de cada medio.
 async function reponerCajaFuerte(client, egresoId, sucursalId) {
-  if (!sucursalId) return;
   // Solo los pagos hechos directamente desde el módulo de egresos (los que vinieron
   // de un pago a proveedor se reponen al anular ese pago, no acá).
   const { rows } = await client.query(`
-    SELECT COALESCE(SUM(ep.monto), 0) AS total
+    SELECT COALESCE(mp.caja_fuerte_sucursal_id, $2) AS suc, COALESCE(SUM(ep.monto), 0) AS total
     FROM egreso_pagos ep
     JOIN medios_pago mp ON mp.id = ep.medio_pago_id
     WHERE ep.egreso_id = $1 AND ep.pago_proveedor_id IS NULL AND mp.nombre ILIKE '%caja fuerte%'
-  `, [egresoId]);
-  const total = parseFloat(rows[0].total) || 0;
-  if (total > 0) {
-    await client.query(
-      `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
-      [total.toFixed(2), sucursalId]
-    );
+    GROUP BY COALESCE(mp.caja_fuerte_sucursal_id, $2)
+  `, [egresoId, sucursalId]);
+  for (const r of rows) {
+    const total = parseFloat(r.total) || 0;
+    if (total > 0 && r.suc) {
+      await client.query(
+        `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
+        [total.toFixed(2), r.suc]
+      );
+    }
   }
 }
 

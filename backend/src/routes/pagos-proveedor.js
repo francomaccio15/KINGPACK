@@ -150,10 +150,11 @@ router.post('/', async (req, res, next) => {
 
     // Nombres de los medios elegidos (para detectar cheque)
     const { rows: mpRows } = await client.query(
-      `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
+      `SELECT id, nombre, caja_fuerte_sucursal_id FROM medios_pago WHERE id = ANY($1::uuid[])`,
       [mediosLista.map(m => m.medio_pago_id)]
     );
     const nombreMedio = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
+    const cfSucursalMedio = Object.fromEntries(mpRows.map(r => [r.id, r.caja_fuerte_sucursal_id]));
     const esChq = (mid) => /cheque/i.test(nombreMedio[mid] || '');
 
     const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
@@ -204,15 +205,21 @@ router.post('/', async (req, res, next) => {
     }
 
     // 1c) Si alguna línea se pagó con "Efectivo Caja Fuerte", descontar de la
-    //     caja fuerte de la sucursal del pago.
-    const totalCajaFuerte = mediosLista.reduce(
-      (s, m) => /caja fuerte/i.test(nombreMedio[m.medio_pago_id] || '') ? s + m.monto : s, 0
-    );
-    if (totalCajaFuerte > 0 && sucursal_id) {
-      await client.query(
-        `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
-        [totalCajaFuerte.toFixed(2), sucursal_id]
-      );
+    //     caja fuerte correspondiente (la del medio; fallback a la del pago).
+    const cfPorSucursal = new Map();
+    for (const m of mediosLista) {
+      if (!/caja fuerte/i.test(nombreMedio[m.medio_pago_id] || '')) continue;
+      const suc = cfSucursalMedio[m.medio_pago_id] || sucursal_id;
+      if (!suc) continue;
+      cfPorSucursal.set(suc, (cfPorSucursal.get(suc) || 0) + (parseFloat(m.monto) || 0));
+    }
+    for (const [suc, monto] of cfPorSucursal) {
+      if (monto > 0) {
+        await client.query(
+          `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
+          [monto.toFixed(2), suc]
+        );
+      }
     }
 
     if (aplicar) {
@@ -334,19 +341,22 @@ router.post('/:id/anular', async (req, res, next) => {
     );
 
     // 1b) Reponer en la caja fuerte lo que este pago descontó (medios "Efectivo
-    //     Caja Fuerte"), sobre la sucursal del pago.
-    if (pago.sucursal_id) {
+    //     Caja Fuerte"), sobre la sucursal de cada medio (fallback a la del pago).
+    {
       const { rows: cfRows } = await client.query(`
-        SELECT COALESCE(SUM(m.monto), 0) AS total
+        SELECT COALESCE(mp.caja_fuerte_sucursal_id, $2) AS suc, COALESCE(SUM(m.monto), 0) AS total
         FROM pago_proveedor_medios m JOIN medios_pago mp ON mp.id = m.medio_pago_id
         WHERE m.pago_proveedor_id = $1 AND mp.nombre ILIKE '%caja fuerte%'
-      `, [id]);
-      const totalCF = parseFloat(cfRows[0].total) || 0;
-      if (totalCF > 0) {
-        await client.query(
-          `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
-          [totalCF.toFixed(2), pago.sucursal_id]
-        );
+        GROUP BY COALESCE(mp.caja_fuerte_sucursal_id, $2)
+      `, [id, pago.sucursal_id]);
+      for (const r of cfRows) {
+        const totalCF = parseFloat(r.total) || 0;
+        if (totalCF > 0 && r.suc) {
+          await client.query(
+            `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
+            [totalCF.toFixed(2), r.suc]
+          );
+        }
       }
     }
 
