@@ -377,15 +377,41 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-kp-surface2 border-t border-kp-border">
+              <tr className={Array.isArray(egreso.bonificaciones) && egreso.bonificaciones.length > 0
+                ? 'border-t border-kp-border' : 'bg-kp-surface2 border-t border-kp-border'}>
                 <td colSpan={3} className="px-4 py-3 text-xs text-kp-gray font-semibold text-right uppercase tracking-wide">
-                  Total ítems
+                  {Array.isArray(egreso.bonificaciones) && egreso.bonificaciones.length > 0 ? 'Subtotal ítems' : 'Total ítems'}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
                   {fmt(items.reduce((s: number, i: any) => s + parseFloat(i.neto_linea ?? 0), 0))}
                 </td>
                 <td />
               </tr>
+              {Array.isArray(egreso.bonificaciones) && egreso.bonificaciones.length > 0 && (
+                <>
+                  {egreso.bonificaciones.map((b: any, i: number) => (
+                    <tr key={i} className="border-t border-kp-border/40">
+                      <td colSpan={3} className="px-4 py-2 text-xs text-kp-gray text-right">
+                        Bonif. {i + 1} ({parseFloat(b.pct ?? 0).toFixed(2)}%)
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-kp-gray-lt">− {fmt(b.monto)}</td>
+                      <td />
+                    </tr>
+                  ))}
+                  <tr className="bg-kp-surface2 border-t border-kp-border">
+                    <td colSpan={3} className="px-4 py-3 text-xs text-kp-gray font-semibold text-right uppercase tracking-wide">
+                      Neto tras bonificaciones
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-kp-white">
+                      {fmt(
+                        items.reduce((s: number, i: any) => s + parseFloat(i.neto_linea ?? 0), 0)
+                        - egreso.bonificaciones.reduce((s: number, b: any) => s + parseFloat(b.monto ?? 0), 0)
+                      )}
+                    </td>
+                    <td />
+                  </tr>
+                </>
+              )}
             </tfoot>
           </table>
         </div>

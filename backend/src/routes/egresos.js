@@ -272,7 +272,19 @@ router.post('/', async (req, res, next) => {
       items = [],
       pago,
       costo_flete = 0,
+      bonificaciones = [],
     } = req.body;
+
+    // Bonificaciones (descuento extra en cascada sobre el subtotal de la lista).
+    // Lista flexible; el neto_gravado que llega ya refleja su resultado.
+    const bonificacionesLimpias = Array.isArray(bonificaciones)
+      ? bonificaciones
+          .map(b => ({
+            pct:   Math.max(0, Math.min(100, parseFloat(b?.pct) || 0)),
+            monto: Math.max(0, parseFloat(b?.monto) || 0),
+          }))
+          .filter(b => b.pct > 0)
+      : [];
 
     // --- Validaciones básicas ---
     const TIPOS_VALIDOS = [
@@ -342,8 +354,8 @@ router.post('/', async (req, res, next) => {
         tipo_operacion, tipo_comprobante, punto_venta, numero_comprobante, fecha_emision,
         proveedor_id, sucursal_id, subrubro_gasto_id, descripcion,
         neto_gravado, neto_no_gravado, iva_21, iva_105, percepciones_ib, otros_impuestos,
-        total, estado_pago, fecha_vencimiento_pago, anticipo_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        total, estado_pago, fecha_vencimiento_pago, anticipo_id, bonificaciones
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       RETURNING id, fecha_emision, estado_pago, total
     `, [
       tipo_operacion,
@@ -365,6 +377,7 @@ router.post('/', async (req, res, next) => {
       estado_pago,
       fecha_vencimiento_pago || null,
       anticipo_id || null,
+      JSON.stringify(bonificacionesLimpias),
     ]);
     const egreso = egresoRows[0];
 

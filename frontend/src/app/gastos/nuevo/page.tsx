@@ -97,6 +97,9 @@ export default function NuevoEgresoPage() {
   const [items, setItems] = useState<LineItem[]>([]);
   const nextKey = useRef(0);
 
+  // Bonificaciones / descuento extra en cascada sobre el subtotal de ítems
+  const [bonificaciones, setBonificaciones] = useState<{ pct: string }[]>([]);
+
   // Montos fiscales
   const [netoGravado, setNetoGravado] = useState('');
   const [netoNoGravado, setNetoNoGravado] = useState('');
@@ -205,6 +208,27 @@ export default function NuevoEgresoPage() {
   // ── Total calculado de ítems ──────────────────────────────────────────────
   const totalItems = items.reduce((s, i) => s + i.cantidad * i.precio_unitario * (1 - i.descuento_pct / 100), 0);
 
+  // ── Bonificaciones en cascada sobre el subtotal ───────────────────────────
+  // Cada bonificación se aplica sobre el subtotal ya descontado por las
+  // anteriores (ej. 6% → luego 3% sobre el resto), igual que en la factura.
+  const bonif = bonificaciones.reduce<{ rows: { pct: number; monto: number }[]; neto: number }>(
+    (acc, b) => {
+      const pct = Math.max(0, Math.min(100, parseFloat(b.pct) || 0));
+      const monto = acc.neto * pct / 100;
+      acc.rows.push({ pct, monto });
+      acc.neto -= monto;
+      return acc;
+    },
+    { rows: [], neto: totalItems }
+  );
+  const netoBonificado = bonif.neto;
+
+  const addBonificacion = () => setBonificaciones(prev => [...prev, { pct: '' }]);
+  const updBonificacion = (i: number, pct: string) =>
+    setBonificaciones(prev => prev.map((b, idx) => (idx === i ? { pct } : b)));
+  const removeBonificacion = (i: number) =>
+    setBonificaciones(prev => prev.filter((_, idx) => idx !== i));
+
   // ── Diferencia total vs suma fiscal ──────────────────────────────────────
   const sumaFiscal = [netoGravado, netoNoGravado, iva21, iva105, percepcionesIb, otrosImpuestos]
     .reduce((s, v) => s + (parseFloat(v) || 0), 0);
@@ -218,8 +242,8 @@ export default function NuevoEgresoPage() {
   // (percepciones, IVA 10.5%, etc.), pero se re-sincronizan si cambian los ítems.
   useEffect(() => {
     if (tipoOp !== 'compra_mercaderia' || !esFacturaEnBlanco(tipoComp)) return;
-    setNetoGravado(totalItems > 0 ? totalItems.toFixed(2) : '');
-  }, [totalItems, tipoOp, tipoComp]);
+    setNetoGravado(netoBonificado > 0 ? netoBonificado.toFixed(2) : '');
+  }, [netoBonificado, tipoOp, tipoComp]);
 
   // Total del comprobante = suma de netos + impuestos (factura en blanco) o el
   // subtotal de ítems (comprobante informal).
@@ -371,6 +395,9 @@ export default function NuevoEgresoPage() {
         descuento_pct: i.descuento_pct || 0,
         sucursal_imputacion_id: i.sucursal_imputacion_id || sucursalId,
       })),
+      bonificaciones: bonif.rows
+        .filter(b => b.pct > 0)
+        .map(b => ({ pct: b.pct, monto: parseFloat(b.monto.toFixed(2)) })),
     };
 
     if (estadoPago === 'pagado' && pagoMedios.length > 0) {
@@ -824,6 +851,68 @@ export default function NuevoEgresoPage() {
         </div>
       )}
 
+      {/* ── Bonificaciones / descuento extra sobre el subtotal ─── */}
+      {tipoOp === 'compra_mercaderia' && esFacturaEnBlanco(tipoComp) && items.length > 0 && (
+        <div className={sectionCls}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+              Bonificaciones sobre el subtotal
+            </h3>
+            <button
+              type="button"
+              onClick={addBonificacion}
+              className="text-xs font-semibold text-kp-red hover:underline"
+            >
+              + Agregar bonificación
+            </button>
+          </div>
+
+          {bonificaciones.length === 0 ? (
+            <p className="text-[11px] text-kp-gray/70">
+              Descuento extra que el proveedor aplica sobre el total de la lista (aparte del
+              descuento por línea). Se aplican en cascada, en el orden cargado.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {bonificaciones.map((b, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs text-kp-gray w-16">Bonif. {i + 1}</span>
+                  <div className="relative w-28">
+                    <NumericInput
+                      decimals={2}
+                      value={b.pct}
+                      onChange={e => updBonificacion(i, e.target.value)}
+                      placeholder="0"
+                      className={inputCls + ' pr-6 text-right'}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+                  </div>
+                  <span className="text-sm text-kp-gray-lt tabular-nums flex-1 text-right">
+                    − {ars.format(bonif.rows[i]?.monto ?? 0)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeBonificacion(i)}
+                    className="text-kp-gray hover:text-kp-red text-lg leading-none px-1"
+                    aria-label="Quitar bonificación"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-kp-border pt-2 mt-1">
+                <span className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+                  Neto tras bonificaciones
+                </span>
+                <span className="text-sm font-bold tabular-nums text-kp-white">
+                  {ars.format(netoBonificado)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Sección 6: Impuestos y totales ─── */}
       <div className={sectionCls}>
         <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
@@ -838,7 +927,11 @@ export default function NuevoEgresoPage() {
               <NumericInput placeholder="0.00" value={netoGravado}
                 onChange={e => setNetoGravado(e.target.value)} className={inputCls} />
               {items.length > 0 && (
-                <p className="text-[10px] text-kp-gray/70 mt-1">Calculado de los ítems. Editable.</p>
+                <p className="text-[10px] text-kp-gray/70 mt-1">
+                  {bonif.rows.length > 0
+                    ? 'Calculado de los ítems menos bonificaciones. Editable.'
+                    : 'Calculado de los ítems. Editable.'}
+                </p>
               )}
             </div>
             <div>
