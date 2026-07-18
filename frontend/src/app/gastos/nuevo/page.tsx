@@ -214,9 +214,11 @@ export default function NuevoEgresoPage() {
   const bonif = bonificaciones.reduce<{ rows: { pct: number; monto: number }[]; neto: number }>(
     (acc, b) => {
       const pct = Math.max(0, Math.min(100, parseFloat(b.pct) || 0));
-      const monto = acc.neto * pct / 100;
+      // Se redondea cada bonificación a 2 decimales (pesos) y se resta ese valor,
+      // igual que la factura del proveedor (Subtotal → Bonif.1 → Bonif.2 → Neto).
+      const monto = parseFloat((acc.neto * pct / 100).toFixed(2));
       acc.rows.push({ pct, monto });
-      acc.neto -= monto;
+      acc.neto = parseFloat((acc.neto - monto).toFixed(2));
       return acc;
     },
     { rows: [], neto: totalItems }
