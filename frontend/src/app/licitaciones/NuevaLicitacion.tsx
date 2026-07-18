@@ -16,7 +16,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   });
 };
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: number) => ars.format(v);
 
 type Cliente = { id: string; razon_social: string; cuit: string | null };
@@ -299,7 +299,7 @@ export default function NuevaLicitacion() {
                               <input
                                 type="number"
                                 min="0"
-                                step="0.01"
+                                step="0.001"
                                 value={it.precio_licitacion}
                                 onChange={e => setItemField(i, 'precio_licitacion', e.target.value)}
                                 className="w-32 text-right bg-kp-surface border border-kp-red/40 rounded px-1.5 py-1 text-xs text-kp-white focus:outline-none focus:border-kp-red"

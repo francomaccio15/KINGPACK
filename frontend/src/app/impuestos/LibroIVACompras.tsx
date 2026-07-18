@@ -28,7 +28,7 @@ interface Totales {
 }
 
 function fmt(n: string | number) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(Number(n));
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(Number(n));
 }
 function fmtFecha(iso: string) {
   // El backend puede mandar 'YYYY-MM-DD' o un ISO completo 'YYYY-MM-DDTHH:mm:ssZ'.

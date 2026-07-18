@@ -643,7 +643,7 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
       {catExpandida && (() => {
         const cat = cats.find(c => c.id === catExpandida);
         const idx = cat ? paletteIdx(cat.nombre) : 0;
-        const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+        const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
         return (
           <div ref={panelRef} className={`rounded-2xl border bg-gradient-to-b from-kp-surface2 to-kp-surface border-kp-border`}>
             {/* Header del panel */}

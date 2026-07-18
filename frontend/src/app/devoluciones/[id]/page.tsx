@@ -15,7 +15,7 @@ async function fetchDevolucion(id: string): Promise<Devolucion | null> {
 }
 
 const ars = (n: number) =>
-  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 const FORMA_LABEL: Record<FormaDevolucion, string> = {
   efectivo:         'Efectivo',

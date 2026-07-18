@@ -29,7 +29,7 @@ const TIPOS = [
   { value: 'retiro',  label: 'Retiro',  color: 'border-amber-500/40 text-amber-400 bg-amber-500/5 hover:bg-amber-500/15' },
 ];
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (n: number) => ars.format(n);
 
 function Spinner() {

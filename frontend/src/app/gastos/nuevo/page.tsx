@@ -48,7 +48,7 @@ interface Anticipo {
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -766,6 +766,7 @@ export default function NuevoEgresoPage() {
                       </td>
                       <td className="px-3 py-2">
                         <NumericInput
+                          decimals={3}
                           value={item.precio_unitario}
                           onChange={e => updateItem(item.key, 'precio_unitario', parseFloat(e.target.value) || 0)}
                           decimals={3}

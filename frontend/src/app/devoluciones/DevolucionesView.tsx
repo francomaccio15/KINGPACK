@@ -12,7 +12,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string,string>||{}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } });
 };
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 type Cliente  = { id: string; razon_social: string; cuit: string | null };
 type Sucursal = { id: string; nombre: string };

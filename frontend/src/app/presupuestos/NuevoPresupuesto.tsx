@@ -53,7 +53,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !
 const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency',
   currency: 'ARS',
-  minimumFractionDigits: 2,
+  minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -112,7 +112,7 @@ function ArticuloInput({
                 <p className="text-[10px] text-kp-gray font-mono">{art.codigo}</p>
               </div>
               <span className="text-xs text-kp-gray-lt tabular-nums shrink-0">
-                {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(art.precio_madre)}
+                {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2, maximumFractionDigits: 3}).format(art.precio_madre)}
               </span>
             </button>
           ))}
@@ -142,7 +142,7 @@ const MOTIVOS_PRESET = [
   'Diferencia de precios',
 ];
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 interface Props {
   clientes: Cliente[];

@@ -17,7 +17,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   });
 };
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 function Spinner() {
   return (

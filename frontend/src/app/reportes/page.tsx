@@ -56,7 +56,7 @@ interface ReportesData {
 const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency',
   currency: 'ARS',
-  minimumFractionDigits: 2,
+  minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));

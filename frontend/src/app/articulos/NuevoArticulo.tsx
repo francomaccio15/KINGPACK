@@ -11,7 +11,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
 
 const ars = new Intl.NumberFormat('es-AR', {
-  style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
+  style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 
 const EMPTY_FORM = {
@@ -351,6 +351,7 @@ export default function NuevoArticulo({
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
                     <NumericInput
                       required
+                      decimals={3}
                       value={form.costo_base} onChange={onCosto}
                       placeholder="0.00"
                       className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white

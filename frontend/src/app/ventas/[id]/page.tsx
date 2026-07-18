@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import FacturaQR from './FacturaQR';
 import { KingPackLogoPrint } from '@/components/KingPackLogo';
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);

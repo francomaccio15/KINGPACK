@@ -34,7 +34,7 @@ type Alicuota  = { id: string; porcentaje: string; descripcion: string };
 type Lista     = { id: string; nombre: string; tipo: string; descuento_base_pct: string };
 type Sucursal  = { id: string; nombre: string };
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null | undefined) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);

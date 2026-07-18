@@ -36,7 +36,9 @@ export default function NumericInput({
     const num = parseFloat(raw);
     if (isNaN(num)) return '';
     return new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: decimals,
+      // Muestra al menos 2 decimales (o menos si se pidió) y hasta `decimals`.
+      // Así un precio "redondo" se ve "12,00" y uno con 3 decimales "12,345".
+      minimumFractionDigits: Math.min(decimals, 2),
       maximumFractionDigits: decimals,
     }).format(num);
   }

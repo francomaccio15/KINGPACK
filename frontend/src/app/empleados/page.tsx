@@ -25,7 +25,7 @@ export type Empleado = {
 export type Sucursal = { id: string; nombre: string };
 
 const ars = new Intl.NumberFormat('es-AR', {
-  style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
+  style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 
 async function fetchData(q?: string, activo?: string, sucursal_id?: string) {

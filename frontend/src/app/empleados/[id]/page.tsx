@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/requireAuth';
 export const dynamic = 'force-dynamic';
 
 const ars = new Intl.NumberFormat('es-AR', {
-  style: 'currency', currency: 'ARS', minimumFractionDigits: 2,
+  style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 
 export default async function EmpleadoDetallePage({

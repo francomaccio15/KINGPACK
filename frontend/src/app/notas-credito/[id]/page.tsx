@@ -15,7 +15,7 @@ async function fetchNota(id: string): Promise<NotaCredito | null> {
 }
 
 const ars = (n: number) =>
-  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (

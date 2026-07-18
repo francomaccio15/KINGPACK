@@ -12,7 +12,7 @@ type Cliente = {
   limite_credito: string; descuento_adicional: string; saldo_actual: string; activo: boolean;
 };
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 
 async function fetchAll(q?: string, activo?: string) {

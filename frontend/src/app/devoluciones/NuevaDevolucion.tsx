@@ -103,7 +103,7 @@ function ArticuloInput({
                 <p className="text-[10px] text-kp-gray font-mono">{art.codigo}</p>
               </div>
               <span className="text-xs text-kp-gray-lt tabular-nums shrink-0">
-                {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(art.precio_madre)}
+                {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2, maximumFractionDigits: 3}).format(art.precio_madre)}
               </span>
             </button>
           ))}
@@ -139,7 +139,7 @@ const FORMAS: { value: FormaDevolucion; label: string }[] = [
   { value: 'cambio',           label: 'Solo cambio de mercadería (sin dinero)' },
 ];
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 interface Props {
   clientes: Cliente[];
@@ -481,6 +481,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
                       className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-center outline-none py-0.5 tabular-nums transition-colors"
                     />
                     <NumericInput
+                      decimals={3}
                       value={it.precio_unitario}
                       onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
                       className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-right outline-none py-0.5 tabular-nums transition-colors"

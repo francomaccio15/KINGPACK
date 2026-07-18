@@ -7,7 +7,7 @@ import MovimientosTabla from './MovimientosTabla';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
 
-const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);

@@ -19,7 +19,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 };
 
 const fmtMoneda = (n: number) =>
-  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
+  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 const fmtNum = (n: number) =>
   n.toLocaleString('es-AR', { maximumFractionDigits: 3 });

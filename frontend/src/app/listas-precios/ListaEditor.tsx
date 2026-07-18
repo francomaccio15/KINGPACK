@@ -122,7 +122,7 @@ export default function ListaEditor({ lista }: { lista: Lista }) {
                 </p>
                 <p className="text-kp-gray-lt">
                   Ej: $1.000 → <strong className="text-kp-white">
-                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 })
+                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 })
                       .format(precioEjemplo)}
                   </strong>
                 </p>
