@@ -374,8 +374,11 @@ router.post('/', async (req, res, next) => {
       const cant = parseFloat(it.cantidad) || 1;
       const precio = parseFloat(it.precio_unitario) || 0;
       const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
-      const precioConDto = parseFloat((precio * (1 - descPct / 100)).toFixed(3));
-      const neto = parseFloat((cant * precioConDto).toFixed(2));
+      // Neto de la línea: se multiplica con el precio unitario a precisión plena
+      // y se redondea SÓLO el total final. Redondear el precio con descuento
+      // antes de multiplicar dejaba el neto guardado distinto del que muestra la
+      // pantalla (cant × precio × (1 - desc)).
+      const neto = parseFloat((cant * precio * (1 - descPct / 100)).toFixed(2));
       const sucImp = it.sucursal_imputacion_id || sucursal_id;
 
       await client.query(`
@@ -394,7 +397,7 @@ router.post('/', async (req, res, next) => {
         const cant = parseFloat(it.cantidad) || 1;
         const precio = parseFloat(it.precio_unitario) || 0;
         const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
-        return s + cant * parseFloat((precio * (1 - descPct / 100)).toFixed(3));
+        return s + cant * precio * (1 - descPct / 100);
       }, 0);
 
       const { rows: pedidoRows } = await client.query(`
