@@ -10,9 +10,14 @@
  *
  * Los `endosado` quedan afuera a propósito: ese cheque ya no es nuestro.
  *
- * Efecto en el banco: sólo los EMITIDOS mueven saldo acá (egreso de la cuenta
- * marcada `es_cuenta_cheques`). Los recibidos ya acreditaron al cargarse en el
- * sistema, así que este paso es sólo higiene de estado — ver mig 049.
+ * Efecto en el banco, siempre sobre la cuenta marcada `es_cuenta_cheques`:
+ *   - EMITIDO: egreso.
+ *   - RECIBIDO: normalmente nada, porque ya acreditó al cargarse en el sistema.
+ *     La excepción son los cargados antes de esa regla (21/07/2026), que no
+ *     tienen movimiento: esos acreditan acá, si no el saldo del banco queda
+ *     corto para siempre.
+ * El criterio no es el tipo sino si el cheque ya movió el saldo alguna vez, así
+ * que nunca duplica — ver mig 049.
  *
  * Es idempotente: al terminar, el cheque queda en un estado que esta consulta ya
  * no selecciona. Si un día no corre, la corrida siguiente barre el atraso.
@@ -89,27 +94,29 @@ async function main() {
         `, [ch.tipo, ch.id, ch.estado, estadoNuevo,
             `Automático: vencido hace más de ${DIAS_GRACIA} días`]);
 
-        // Sólo el emitido mueve el banco. El recibido ya acreditó al cargarse.
-        if (ch.tipo === 'emitido') {
-          // Defensivo: si alguien ya lo imputó a mano, no duplicar.
-          const { rows: ya } = await client.query(
-            `SELECT 1 FROM movimientos_cuenta_bancaria WHERE origen_tipo='cheque' AND origen_id=$1`,
-            [ch.id]
-          );
-          const cuenta = ya.length ? null : await cuentaChequesId(client);
-          if (cuenta) {
-            await registrarMovimientoBancario(client, {
-              cuenta_bancaria_id: cuenta,
-              tipo: 'egreso',
-              monto: ch.importe,
-              concepto: `Cheque debitado — ${ch.banco ?? 's/banco'} #${ch.numero_cheque ?? 's/nro'} (automático)`,
-              origen_tipo: 'cheque',
-              origen_id: ch.id,
-              usuario_id: null,
-              fecha: ch.fecha_efectiva,
-            });
-            montoBanco += ch.importe;
-          }
+        // El emitido descuenta al debitarse. El recibido normalmente ya acreditó
+        // al cargarse, salvo los cargados antes de esa regla (21/07/2026): esos
+        // no tienen movimiento y hay que acreditarlos al cobrarse, o el saldo
+        // del banco queda corto para siempre. Por eso se mira si el cheque ya
+        // movió el saldo, en vez de asumirlo por el tipo.
+        const { rows: ya } = await client.query(
+          `SELECT 1 FROM movimientos_cuenta_bancaria WHERE origen_tipo='cheque' AND origen_id=$1`,
+          [ch.id]
+        );
+        const cuenta = ya.length ? null : await cuentaChequesId(client);
+        if (cuenta) {
+          const esIngreso = ch.tipo === 'recibido';
+          await registrarMovimientoBancario(client, {
+            cuenta_bancaria_id: cuenta,
+            tipo: esIngreso ? 'ingreso' : 'egreso',
+            monto: ch.importe,
+            concepto: `Cheque ${esIngreso ? 'acreditado' : 'debitado'} — ${ch.banco ?? 's/banco'} #${ch.numero_cheque ?? 's/nro'} (automático)`,
+            origen_tipo: 'cheque',
+            origen_id: ch.id,
+            usuario_id: null,
+            fecha: ch.fecha_efectiva,
+          });
+          montoBanco += esIngreso ? ch.importe : -ch.importe;
         }
 
         await client.query('COMMIT');
@@ -123,7 +130,7 @@ async function main() {
     }
 
     log(`Listo — ${acreditados} acreditado(s), ${debitados} debitado(s), ${omitidos} con error. ` +
-        `Impacto en el banco: -$${montoBanco.toFixed(2)}`);
+        `Impacto neto en el banco: $${montoBanco.toFixed(2)}`);
 
     // Que el cron falle si algo quedó a medias, para que se note en el log.
     process.exitCode = omitidos > 0 ? 1 : 0;

@@ -371,23 +371,34 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
     // ── Efecto en el banco (mig 049) ───────────────────────────────────────────
     // Todos los cheques se cobran/pagan por la cuenta marcada `es_cuenta_cheques`.
     //
-    // Los RECIBIDOS ya acreditaron al cargarse (ver POST de arriba), así que acá
-    // no se vuelven a sumar: pasar a 'depositado' o 'acreditado' no mueve saldo.
-    // Los EMITIDOS descuentan recién cuando el banco los debita de verdad.
-    const impactaBanco = (tipo === 'emitido' && estado_nuevo === 'debitado');
+    // Los EMITIDOS descuentan cuando el banco los debita de verdad.
+    //
+    // Los RECIBIDOS normalmente ya acreditaron al cargarse (ver POST de arriba),
+    // así que acá no se vuelven a sumar. La excepción son los cargados ANTES de
+    // esa regla (21/07/2026): no tienen movimiento, y si no se acreditaran al
+    // cobrarse el saldo del banco quedaría corto para siempre. Por eso se mira
+    // si el cheque ya movió el saldo alguna vez, en vez de asumirlo.
+    const impactaBanco =
+      (tipo === 'emitido'  && estado_nuevo === 'debitado') ||
+      (tipo === 'recibido' && estado_nuevo === 'acreditado');
 
     if (impactaBanco) {
-      const cuenta = await cuentaChequesId(client);
+      const { rows: yaMovio } = await client.query(
+        `SELECT 1 FROM movimientos_cuenta_bancaria
+          WHERE origen_tipo = 'cheque' AND origen_id = $1 LIMIT 1`, [id]
+      );
+      const cuenta = yaMovio.length ? null : await cuentaChequesId(client);
       if (cuenta) {
         const { rows: chq } = await client.query(
           `SELECT importe, banco, numero_cheque FROM ${tabla} WHERE id = $1`, [id]
         );
         const c = chq[0];
+        const esIngreso = tipo === 'recibido';
         await registrarMovimientoBancario(client, {
           cuenta_bancaria_id: cuenta,
-          tipo: 'egreso',
+          tipo: esIngreso ? 'ingreso' : 'egreso',
           monto: c.importe,
-          concepto: `Cheque debitado — ${c.banco ?? 's/banco'} #${c.numero_cheque ?? 's/nro'}`,
+          concepto: `Cheque ${esIngreso ? 'acreditado' : 'debitado'} — ${c.banco ?? 's/banco'} #${c.numero_cheque ?? 's/nro'}`,
           origen_tipo: 'cheque',
           origen_id: id,
           usuario_id,
