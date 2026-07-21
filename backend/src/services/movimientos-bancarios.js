@@ -95,8 +95,37 @@ async function revertirMovimientosBancarios(client, origen_tipo, origen_id) {
   }
 }
 
+// Fija el saldo de una cuenta en un valor dado (corrección manual: el saldo real
+// del home banking). Como `saldo` es derivado, NO se puede escribir a secas: se
+// re-basa `saldo_inicial` para que el invariante siga valiendo y los movimientos
+// ya registrados se conserven.
+//
+//   saldo_inicial = nuevoSaldo − (Σingresos − Σegresos)
+//
+// No registra un movimiento de ajuste a propósito: corregir una cifra de partida
+// mal cargada no es plata que entró o salió de la cuenta.
+async function fijarSaldoBancario(client, cuenta_bancaria_id, nuevoSaldo) {
+  const saldo = +(parseFloat(nuevoSaldo) || 0).toFixed(2);
+
+  const { rows } = await client.query(`
+    SELECT COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE -monto END), 0)::float AS mov
+      FROM movimientos_cuenta_bancaria WHERE cuenta_bancaria_id = $1
+  `, [cuenta_bancaria_id]);
+
+  const inicial = +(saldo - (rows[0].mov || 0)).toFixed(2);
+
+  const { rowCount } = await client.query(`
+    UPDATE cuentas_bancarias_empresa
+       SET saldo = $1, saldo_inicial = $2, updated_at = NOW()
+     WHERE id = $3
+  `, [saldo, inicial, cuenta_bancaria_id]);
+
+  return rowCount > 0;
+}
+
 module.exports = {
   registrarMovimientoBancario,
   registrarMovimientosDeMedios,
   revertirMovimientosBancarios,
+  fijarSaldoBancario,
 };
