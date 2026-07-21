@@ -28,6 +28,7 @@ router.get('/', async (req, res, next) => {
       cobrosPorCuentaHoy,
       cobrosPorCuentaMes,
       cajaFuerte,
+      movimientosCajaFuerte,
       saldosBancarios,
     ] = await Promise.all([
 
@@ -221,6 +222,22 @@ router.get('/', async (req, res, next) => {
         ORDER BY s.nombre
       `, p),
 
+      // Últimos movimientos del ledger de caja fuerte (mig 047). Es lo que
+      // respalda el saldo de arriba: cada peso que entró o salió, con su origen.
+      pool.query(`
+        SELECT
+          m.id, m.fecha, m.tipo, m.monto::float, m.concepto,
+          m.origen_tipo, m.origen_id,
+          s.nombre AS sucursal_nombre,
+          u.nombre AS usuario_nombre
+        FROM movimientos_caja_fuerte m
+        JOIN sucursales s ON s.id = m.sucursal_id
+        LEFT JOIN usuarios u ON u.id = m.usuario_id
+        ${sucId ? 'WHERE m.sucursal_id = $1' : ''}
+        ORDER BY m.fecha DESC, m.created_at DESC
+        LIMIT 15
+      `, p),
+
       // Saldos actuales de las cuentas bancarias de la empresa (carga manual),
       // filtrados por la sucursal a la que está vinculada cada cuenta.
       pool.query(`
@@ -277,6 +294,7 @@ router.get('/', async (req, res, next) => {
       cobros_por_cuenta_hoy:  cobrosPorCuentaHoy.rows,
       cobros_por_cuenta_mes:  cobrosPorCuentaMes.rows,
       caja_fuerte:            cajaFuerte.rows,
+      movimientos_caja_fuerte: movimientosCajaFuerte.rows,
       saldos_bancarios:       saldosBancarios.rows,
     });
   } catch (err) { next(err); }

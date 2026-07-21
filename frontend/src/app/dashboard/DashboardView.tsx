@@ -48,6 +48,18 @@ export type CajaFuerteData = {
   updated_at:      string | null;
 };
 
+export type MovimientoCajaFuerteData = {
+  id:              string;
+  fecha:           string;
+  tipo:            'ingreso' | 'egreso';
+  monto:           number;
+  concepto:        string | null;
+  origen_tipo:     string | null;
+  origen_id:       string | null;
+  sucursal_nombre: string;
+  usuario_nombre:  string | null;
+};
+
 export type SaldoBancarioData = {
   id:     string;
   nombre: string;
@@ -86,6 +98,7 @@ export type DashboardData = {
   cobros_por_cuenta_hoy:  CuentaData[];
   cobros_por_cuenta_mes:  { cuenta_destino: string; monto_mes: number }[];
   caja_fuerte:            CajaFuerteData[];
+  movimientos_caja_fuerte: MovimientoCajaFuerteData[];
   saldos_bancarios:       SaldoBancarioData[];
 };
 
@@ -371,9 +384,10 @@ function CobrosDelDia({
 
 // ─── EstadoCuentasPanel: caja fuerte + saldos bancarios (solo administrador) ───
 function EstadoCuentasPanel({
-  cajas, bancos,
+  cajas, movimientos, bancos,
 }: {
   cajas: CajaFuerteData[];
+  movimientos: MovimientoCajaFuerteData[];
   bancos: SaldoBancarioData[];
 }) {
   const hayCajas  = cajas && cajas.length > 0;
@@ -413,7 +427,7 @@ function EstadoCuentasPanel({
                 <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
                 {c.updated_at && (
                   <p className="text-[10px] text-kp-gray mt-1.5">
-                    Últ. cierre: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    Últ. movimiento: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
                 )}
               </div>
@@ -421,6 +435,9 @@ function EstadoCuentasPanel({
           ))}
         </div>
       )}
+
+      {/* Movimientos de caja fuerte: el detalle que respalda los saldos de arriba */}
+      {hayCajas && <MovimientosCajaFuertePanel movimientos={movimientos ?? []} />}
 
       {/* Saldos bancarios */}
       {hayBancos && (
@@ -440,6 +457,72 @@ function EstadoCuentasPanel({
         </div>
       )}
     </section>
+  );
+}
+
+// ─── MovimientosCajaFuertePanel ───────────────────────────────────────────────
+// Ledger de la caja fuerte (mig 047): cada entrada/salida que compone el saldo.
+// De dónde vino cada movimiento, para poder rastrearlo.
+const ORIGEN_LABEL: Record<string, string> = {
+  cierre_caja:    'Cierre de caja',
+  egreso:         'Gasto',
+  pago_proveedor: 'Pago a proveedor',
+  ajuste:         'Ajuste',
+};
+
+function MovimientosCajaFuertePanel({ movimientos }: { movimientos: MovimientoCajaFuerteData[] }) {
+  // Con más de una sucursal a la vista conviene aclarar de cuál es cada fila.
+  const variasSucursales = new Set(movimientos.map(m => m.sucursal_nombre)).size > 1;
+
+  return (
+    <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray">
+          Movimientos de caja fuerte
+        </p>
+        <span className="text-[10px] text-kp-gray">últimos {movimientos.length || ''}</span>
+      </div>
+
+      {movimientos.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-kp-gray">
+          Todavía no hay movimientos registrados. El saldo actual es el de partida.
+        </p>
+      ) : (
+        <ul className="divide-y divide-kp-border">
+          {movimientos.map(m => {
+            const esIngreso = m.tipo === 'ingreso';
+            return (
+              <li key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                {/* Flecha: entra o sale */}
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+                  esIngreso ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                }`}>
+                  {esIngreso ? '↓' : '↑'}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-kp-white truncate">
+                    {m.concepto || ORIGEN_LABEL[m.origen_tipo ?? ''] || 'Movimiento'}
+                  </p>
+                  <p className="text-[10px] text-kp-gray truncate">
+                    {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                    {variasSucursales && <> · {m.sucursal_nombre}</>}
+                    {m.origen_tipo && <> · {ORIGEN_LABEL[m.origen_tipo] ?? m.origen_tipo}</>}
+                    {m.usuario_nombre && <> · {m.usuario_nombre}</>}
+                  </p>
+                </div>
+
+                <p className={`text-sm font-bold tabular-nums flex-shrink-0 ${
+                  esIngreso ? 'text-emerald-400' : 'text-rose-400'
+                }`}>
+                  {esIngreso ? '+' : '−'}{fmt(m.monto)}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -773,6 +856,7 @@ export default function DashboardView({
       {userRol === 'administrador' && (
         <EstadoCuentasPanel
           cajas={d.caja_fuerte ?? []}
+          movimientos={d.movimientos_caja_fuerte ?? []}
           bancos={d.saldos_bancarios ?? []}
         />
       )}
