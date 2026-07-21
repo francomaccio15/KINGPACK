@@ -5,6 +5,10 @@ const {
   registrarMovimientosDeMedios,
   revertirMovimientosBancarios,
 } = require('../services/movimientos-bancarios');
+const {
+  registrarEgresosCajaFuerteDeMedios,
+  revertirMovimientosCajaFuerte,
+} = require('../services/movimientos-caja-fuerte');
 
 const router = express.Router();
 
@@ -154,11 +158,10 @@ router.post('/', async (req, res, next) => {
 
     // Nombres de los medios elegidos (para detectar cheque)
     const { rows: mpRows } = await client.query(
-      `SELECT id, nombre, caja_fuerte_sucursal_id FROM medios_pago WHERE id = ANY($1::uuid[])`,
+      `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`,
       [mediosLista.map(m => m.medio_pago_id)]
     );
     const nombreMedio = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
-    const cfSucursalMedio = Object.fromEntries(mpRows.map(r => [r.id, r.caja_fuerte_sucursal_id]));
     const esChq = (mid) => /cheque/i.test(nombreMedio[mid] || '');
 
     const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
@@ -209,22 +212,15 @@ router.post('/', async (req, res, next) => {
     }
 
     // 1c) Si alguna línea se pagó con "Efectivo Caja Fuerte", descontar de la
-    //     caja fuerte correspondiente (la del medio; fallback a la del pago).
-    const cfPorSucursal = new Map();
-    for (const m of mediosLista) {
-      if (!/caja fuerte/i.test(nombreMedio[m.medio_pago_id] || '')) continue;
-      const suc = cfSucursalMedio[m.medio_pago_id] || sucursal_id;
-      if (!suc) continue;
-      cfPorSucursal.set(suc, (cfPorSucursal.get(suc) || 0) + (parseFloat(m.monto) || 0));
-    }
-    for (const [suc, monto] of cfPorSucursal) {
-      if (monto > 0) {
-        await client.query(
-          `UPDATE caja_fuerte SET saldo = saldo - $1, updated_at = NOW() WHERE sucursal_id = $2`,
-          [monto.toFixed(2), suc]
-        );
-      }
-    }
+    //     caja fuerte correspondiente (la del medio; fallback a la del pago) y
+    //     dejarlo asentado en el ledger.
+    await registrarEgresosCajaFuerteDeMedios(client, mediosLista, {
+      concepto: 'Pago a proveedor',
+      origen_tipo: 'pago_proveedor',
+      origen_id: pago.id,
+      usuario_id: usuarioId,
+      fecha: pago.fecha,
+    }, sucursal_id);
 
     // 1d) Las líneas pagadas desde una cuenta bancaria (Transferencia) se
     //     descuentan de esa cuenta y quedan asentadas en el ledger.
@@ -356,24 +352,8 @@ router.post('/:id/anular', async (req, res, next) => {
     );
 
     // 1b) Reponer en la caja fuerte lo que este pago descontó (medios "Efectivo
-    //     Caja Fuerte"), sobre la sucursal de cada medio (fallback a la del pago).
-    {
-      const { rows: cfRows } = await client.query(`
-        SELECT COALESCE(mp.caja_fuerte_sucursal_id, $2) AS suc, COALESCE(SUM(m.monto), 0) AS total
-        FROM pago_proveedor_medios m JOIN medios_pago mp ON mp.id = m.medio_pago_id
-        WHERE m.pago_proveedor_id = $1 AND mp.nombre ILIKE '%caja fuerte%'
-        GROUP BY COALESCE(mp.caja_fuerte_sucursal_id, $2)
-      `, [id, pago.sucursal_id]);
-      for (const r of cfRows) {
-        const totalCF = parseFloat(r.total) || 0;
-        if (totalCF > 0 && r.suc) {
-          await client.query(
-            `UPDATE caja_fuerte SET saldo = saldo + $1, updated_at = NOW() WHERE sucursal_id = $2`,
-            [totalCF.toFixed(2), r.suc]
-          );
-        }
-      }
-    }
+    //     Caja Fuerte"), según lo asentado en el ledger.
+    await revertirMovimientosCajaFuerte(client, 'pago_proveedor', id);
 
     // 1c) Devolver a las cuentas bancarias lo que este pago descontó.
     await revertirMovimientosBancarios(client, 'pago_proveedor', id);
