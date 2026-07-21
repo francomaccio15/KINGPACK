@@ -145,7 +145,10 @@ function FormCuenta({
         <label className={labelCls}>Saldo actual</label>
         <input type="number" step="0.01" value={saldo} onChange={e => setSaldo(e.target.value)}
           placeholder="0" className={inputCls} />
-        <p className="text-[10px] text-kp-gray mt-1">Saldo de carga manual. Se muestra en el dashboard.</p>
+        <p className="text-[10px] text-kp-gray mt-1">
+          El saldo se mantiene solo con cada cobro y pago. Ponelo acá sólo para corregirlo
+          con el real del banco: pasa a ser el punto de partida y los movimientos siguen contando sobre él.
+        </p>
       </div>
       <div>
         <label className={labelCls}>Sucursal</label>

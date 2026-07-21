@@ -232,6 +232,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Rubros de Egresos',  href: '/rubros-gastos',      icon: <IcoRubros /> },
       { label: 'Cuentas Bancarias',  href: '/cuentas-bancarias',  icon: <IcoBanco /> },
+      { label: 'Caja Fuerte',        href: '/caja-fuerte',        icon: <IcoBanco /> },
     ],
   },
 ];
