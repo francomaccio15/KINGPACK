@@ -19,6 +19,8 @@ interface EgresoPendiente {
   fecha_emision: string;
   descripcion: string;
   total: string;
+  pagado?: string;
+  pendiente?: string;
   estado_pago: 'pendiente' | 'parcial';
   fecha_vencimiento_pago: string | null;
 }
@@ -56,6 +58,33 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 const fmtFecha = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-AR'); };
 const hoyAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+
+// Reparte `disponible` entre las líneas en proporción a su monto (pago parcial).
+// Cada línea se redondea a 2 decimales y el residuo del redondeo se acomoda en
+// las más grandes, sin superar su tope, para que la suma cierre EXACTO con lo
+// que se paga: el backend rechaza el pago si la suma imputada no coincide.
+function prorratear(
+  lineas: { egreso_id: string; monto: number }[],
+  disponible: number,
+): { egreso_id: string; monto: number }[] {
+  const base = lineas.reduce((s, l) => s + l.monto, 0);
+  if (base <= 0 || disponible <= 0) return [];
+
+  const out = lineas
+    .map(l => ({ egreso_id: l.egreso_id, max: l.monto, monto: +(l.monto * disponible / base).toFixed(2) }))
+    .filter(l => l.monto > 0);
+  if (out.length === 0) return [];
+
+  let dif = +(disponible - out.reduce((s, l) => s + l.monto, 0)).toFixed(2);
+  const orden = out.map((_, i) => i).sort((a, b) => out[b].monto - out[a].monto);
+  for (const i of orden) {
+    if (Math.abs(dif) < 0.005) break;
+    const ajustado = +Math.min(out[i].max, Math.max(0, out[i].monto + dif)).toFixed(2);
+    dif = +(dif - (ajustado - out[i].monto)).toFixed(2);
+    out[i].monto = ajustado;
+  }
+  return out.filter(l => l.monto > 0).map(({ egreso_id, monto }) => ({ egreso_id, monto }));
+}
 
 const TIPO_COMP_LABEL: Record<string, string> = {
   factura_a: 'Fac. A', factura_b: 'Fac. B', factura_c: 'Fac. C',
@@ -154,11 +183,13 @@ export default function PagosProveedorClient() {
       const egresos: EgresoPendiente[] = pend.egresos ?? [];
       setPendientes(egresos);
       setHistorial(hist.pagos ?? []);
-      // Inicializar mapa de aplicaciones (monto pendiente aún no considera pagos
-      // parciales; el backend valida el tope real por comprobante)
+      // Inicializar mapa de aplicaciones con el SALDO pendiente real (total menos
+      // lo ya pagado), no con el total del comprobante: un egreso 'parcial' se
+      // ofrece por lo que falta. El backend valida el tope igual.
       const map: Record<string, { sel: boolean; monto: string; pend: number }> = {};
       for (const e of egresos) {
-        map[e.id] = { sel: false, monto: parseFloat(e.total).toFixed(2), pend: parseFloat(e.total) };
+        const pend = parseFloat(e.pendiente ?? e.total) || 0;
+        map[e.id] = { sel: false, monto: pend.toFixed(2), pend };
       }
       setAplic(map);
     } finally {
@@ -239,6 +270,18 @@ export default function PagosProveedorClient() {
 
   const totalPago = modo === 'aplicar' ? totalAplicado : (parseFloat(montoCuenta) || 0);
 
+  // ── Pago parcial ───────────────────────────────────────────────────────────
+  // Si los medios suman menos que lo tildado, se paga igual: el importe se
+  // prorratea entre los comprobantes seleccionados y lo no cubierto queda como
+  // deuda (el backend deja cada egreso en 'parcial' y sigue listándose acá).
+  const esParcial   = modo === 'aplicar' && totalMedios > 0 && totalMedios < totalPago - 0.01;
+  const restoDeuda  = esParcial ? +(totalPago - totalMedios).toFixed(2) : 0;
+  const seleccionados = useMemo(() =>
+    Object.entries(aplic)
+      .filter(([, a]) => a.sel && parseFloat(a.monto) > 0)
+      .map(([egreso_id, a]) => ({ egreso_id, monto: parseFloat(a.monto), pend: a.pend })),
+    [aplic]);
+
   // ── Mutadores ───────────────────────────────────────────────────────────────
   const toggleEgreso = (id: string) => setAplic(p => ({ ...p, [id]: { ...p[id], sel: !p[id].sel } }));
   const setMontoEgreso = (id: string, v: string) => setAplic(p => ({ ...p, [id]: { ...p[id], monto: v } }));
@@ -269,23 +312,38 @@ export default function PagosProveedorClient() {
     if (totalPago <= 0) return setError('El monto a pagar debe ser mayor a 0');
     if (medios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setError('Ingresá el monto de cada medio de pago');
     if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setError('Seleccioná la cuenta bancaria del medio correspondiente');
-    if (Math.abs(totalMedios - totalPago) > 0.01) {
+    // En «aplicar» se admite pagar de MENOS (queda parcial y se prorratea).
+    // Pagar de más no: excedería el saldo de los comprobantes tildados.
+    if (modo === 'cuenta' && Math.abs(totalMedios - totalPago) > 0.01) {
       return setError(`Los medios de pago (${ars.format(totalMedios)}) deben sumar el total a pagar (${ars.format(totalPago)})`);
+    }
+    if (modo === 'aplicar') {
+      if (totalMedios <= 0) return setError('Ingresá el monto de los medios de pago');
+      if (totalMedios - totalPago > 0.01) {
+        return setError(`Los medios (${ars.format(totalMedios)}) superan el saldo de los comprobantes tildados (${ars.format(totalPago)}). Usá «Pago a cuenta» para el excedente.`);
+      }
+      if (seleccionados.some(s => s.monto - s.pend > 0.01)) {
+        return setError('Hay un comprobante con un monto mayor a su saldo pendiente');
+      }
     }
     if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) {
       return setError('Cargá el detalle de los cheques');
     }
 
+    // Lo que realmente se paga son los medios cargados. Si alcanza para todo lo
+    // tildado se imputa tal cual; si no, se prorratea entre esos comprobantes.
+    const montoPagado = modo === 'aplicar' ? +totalMedios.toFixed(2) : totalPago;
     const aplicaciones = modo === 'aplicar'
-      ? Object.entries(aplic).filter(([, a]) => a.sel && parseFloat(a.monto) > 0)
-          .map(([egreso_id, a]) => ({ egreso_id, monto: parseFloat(a.monto) }))
+      ? (esParcial
+          ? prorratear(seleccionados.map(({ egreso_id, monto }) => ({ egreso_id, monto })), montoPagado)
+          : seleccionados.map(({ egreso_id, monto }) => ({ egreso_id, monto })))
       : [];
 
     if (modo === 'aplicar' && aplicaciones.length === 0) return setError('Seleccioná al menos un comprobante a pagar');
 
     const body = {
       proveedor_id: proveedorId,
-      monto: totalPago,
+      monto: montoPagado,
       fecha,
       sucursal_id: sucursalId || null,
       observaciones: observaciones.trim() || null,
@@ -304,7 +362,9 @@ export default function PagosProveedorClient() {
       const res = await apiFetch('/api/pagos-proveedor', { method: 'POST', body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Error al registrar el pago'); return; }
-      setOkMsg(`Pago de ${ars.format(totalPago)} registrado correctamente.`);
+      setOkMsg(esParcial
+        ? `Pago parcial de ${ars.format(montoPagado)} registrado. Quedan ${ars.format(restoDeuda)} como deuda con el proveedor.`
+        : `Pago de ${ars.format(montoPagado)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
@@ -455,7 +515,12 @@ export default function PagosProveedorClient() {
                             </td>
                             <td className="px-3 py-2 text-xs text-kp-gray-lt max-w-[220px] truncate">{e.descripcion}</td>
                             <td className="px-3 py-2 text-center text-xs text-kp-gray whitespace-nowrap">{e.fecha_vencimiento_pago ? fmtFecha(e.fecha_vencimiento_pago) : '—'}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-xs text-kp-gray-lt">{fmt(e.total)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-xs text-kp-gray-lt">
+                              {fmt(e.total)}
+                              {a && Math.abs(a.pend - (parseFloat(e.total) || 0)) > 0.01 && (
+                                <span className="block text-[10px] text-blue-400">pendiente {fmt(a.pend)}</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2">
                               <NumericInput value={a?.monto ?? ''} disabled={!a?.sel}
                                 onChange={ev => setMontoEgreso(e.id, ev.target.value)}
@@ -572,10 +637,18 @@ export default function PagosProveedorClient() {
               <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
                 <span className="text-xs uppercase tracking-widest text-kp-gray">Total medios</span>
                 <div className="text-right">
-                  <span className={`text-sm font-bold tabular-nums ${Math.abs(totalMedios - totalPago) <= 0.01 && totalPago > 0 ? 'text-green-400' : 'text-kp-red'}`}>
+                  <span className={`text-sm font-bold tabular-nums ${
+                    totalPago <= 0                            ? 'text-kp-red'
+                    : esParcial                               ? 'text-amber-400'
+                    : Math.abs(totalMedios - totalPago) <= 0.01 ? 'text-green-400'
+                    : 'text-kp-red'}`}>
                     {fmt(totalMedios)}
                   </span>
-                  {Math.abs(totalMedios - totalPago) > 0.01 && totalPago > 0 && (
+                  {esParcial ? (
+                    <span className="block text-[11px] text-amber-400">
+                      Pago parcial — quedan {fmt(restoDeuda)} como deuda, prorrateados entre {seleccionados.length} comprobante{seleccionados.length === 1 ? '' : 's'}
+                    </span>
+                  ) : totalPago > 0 && Math.abs(totalMedios - totalPago) > 0.01 && (
                     <span className="block text-[11px] text-kp-red">
                       {totalMedios < totalPago ? `Faltan ${fmt(totalPago - totalMedios)}` : `Se pasan ${fmt(totalMedios - totalPago)}`}
                     </span>

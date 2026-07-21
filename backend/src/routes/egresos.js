@@ -149,13 +149,23 @@ router.get('/pendientes', async (req, res, next) => {
     params.push(Math.min(parseInt(limit) || 100, 500));
     params.push(Math.max(parseInt(offset) || 0, 0));
 
+    // `pagado` sale de egreso_pagos (la anulación de un pago borra esas filas,
+    // así que la suma siempre refleja lo realmente cobrado). `pendiente` es el
+    // saldo real del comprobante: sin esto, un egreso en estado 'parcial'
+    // volvería a ofrecerse por su total completo.
     const { rows } = await pool.query(`
       SELECT e.id, e.tipo_operacion, e.tipo_comprobante, e.punto_venta, e.numero_comprobante,
              e.fecha_emision, e.descripcion, e.total, e.estado_pago, e.fecha_vencimiento_pago,
+             COALESCE(ep.pagado, 0)             AS pagado,
+             e.total - COALESCE(ep.pagado, 0)   AS pendiente,
              p.razon_social AS proveedor_nombre, p.cuit AS proveedor_cuit,
              s.nombre AS sucursal_nombre,
              sg.nombre AS subrubro_nombre
       FROM egresos e
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(monto), 0) AS pagado
+          FROM egreso_pagos WHERE egreso_id = e.id
+      ) ep ON TRUE
       LEFT JOIN proveedores p    ON p.id  = e.proveedor_id
       LEFT JOIN sucursales s     ON s.id  = e.sucursal_id
       LEFT JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
