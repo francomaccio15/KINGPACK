@@ -123,9 +123,20 @@ async function fijarSaldoBancario(client, cuenta_bancaria_id, nuevoSaldo) {
   return rowCount > 0;
 }
 
+// Cuenta por la que se cobran y pagan todos los cheques (mig 049). Devuelve null
+// si nadie la tiene marcada: en ese caso el cheque simplemente no mueve saldo,
+// no se rompe la operación.
+async function cuentaChequesId(client) {
+  const { rows } = await client.query(
+    `SELECT id FROM cuentas_bancarias_empresa WHERE es_cuenta_cheques LIMIT 1`
+  );
+  return rows[0]?.id ?? null;
+}
+
 module.exports = {
   registrarMovimientoBancario,
   registrarMovimientosDeMedios,
   revertirMovimientosBancarios,
   fijarSaldoBancario,
+  cuentaChequesId,
 };

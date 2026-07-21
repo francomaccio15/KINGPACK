@@ -1,6 +1,11 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva } = require('../middleware/auth');
+const {
+  registrarMovimientoBancario,
+  revertirMovimientosBancarios,
+  cuentaChequesId,
+} = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -333,6 +338,41 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [tipo, id, estadoActual, estado_nuevo, observacion || null, usuario_id]
     );
+
+    // ── Efecto en el banco (mig 049) ───────────────────────────────────────────
+    // Todos los cheques se cobran/pagan por la cuenta marcada `es_cuenta_cheques`.
+    // Impacta recién cuando el banco movió la plata de verdad: un cheque en
+    // cartera, depositado o endosado no toca el saldo.
+    const impactaBanco =
+      (tipo === 'recibido' && estado_nuevo === 'acreditado') ||
+      (tipo === 'emitido'  && estado_nuevo === 'debitado');
+
+    if (impactaBanco) {
+      const cuenta = await cuentaChequesId(client);
+      if (cuenta) {
+        const { rows: chq } = await client.query(
+          `SELECT importe, banco, numero_cheque FROM ${tabla} WHERE id = $1`, [id]
+        );
+        const c = chq[0];
+        await registrarMovimientoBancario(client, {
+          cuenta_bancaria_id: cuenta,
+          tipo: tipo === 'recibido' ? 'ingreso' : 'egreso',
+          monto: c.importe,
+          concepto: `Cheque ${estado_nuevo} — ${c.banco ?? 's/banco'} #${c.numero_cheque ?? 's/nro'}`,
+          origen_tipo: 'cheque',
+          origen_id: id,
+          usuario_id,
+          fecha: fechaEstado,
+        });
+      }
+    }
+
+    // Si el cheque se rechaza, se deshace lo que hubiera impactado en el banco.
+    // Hoy las transiciones no permiten rechazar uno ya acreditado/debitado, así
+    // que esto es una red de seguridad: sin movimientos, no hace nada.
+    if (estado_nuevo === 'rechazado' || estado_nuevo === 'anulado') {
+      await revertirMovimientosBancarios(client, 'cheque', id);
+    }
 
     // ── Efecto en Caja ─────────────────────────────────────────────────────────
     // Cheque RECIBIDO rechazado → reversal en caja (el ingreso original queda anulado)
