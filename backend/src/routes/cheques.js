@@ -201,28 +201,57 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: `Estado inválido para cheque ${tipo}: ${estadoInicial}` });
     }
 
-    const { rows } = await pool.query(`
-      INSERT INTO cheques_manuales
-        (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
-         importe, estado, fecha_estado, sucursal_id, cliente_id, proveedor_id, observaciones)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-      RETURNING id
-    `, [
-      tipo,
-      banco.trim(),
-      numero_cheque.trim(),
-      fecha_emision || null,
-      fecha_vencimiento,
-      importeNum,
-      estadoInicial,
-      estado ? new Date().toISOString().slice(0, 10) : null,
-      sucursal_id,
-      tipo === 'recibido' ? (cliente_id || null) : null,
-      tipo === 'emitido'  ? (proveedor_id || null) : null,
-      observaciones?.trim() || null,
-    ]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    res.status(201).json({ ok: true, id: rows[0].id });
+      const { rows } = await client.query(`
+        INSERT INTO cheques_manuales
+          (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
+           importe, estado, fecha_estado, sucursal_id, cliente_id, proveedor_id, observaciones)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id
+      `, [
+        tipo,
+        banco.trim(),
+        numero_cheque.trim(),
+        fecha_emision || null,
+        fecha_vencimiento,
+        importeNum,
+        estadoInicial,
+        estado ? new Date().toISOString().slice(0, 10) : null,
+        sucursal_id,
+        tipo === 'recibido' ? (cliente_id || null) : null,
+        tipo === 'emitido'  ? (proveedor_id || null) : null,
+        observaciones?.trim() || null,
+      ]);
+
+      // Un cheque RECIBIDO acredita apenas se carga (decisión del usuario,
+      // 21/07/2026). Los emitidos no: recién descuentan al pasar a 'debitado'.
+      // Si nace rechazado o anulado no acredita nada.
+      if (tipo === 'recibido' && !['rechazado', 'anulado'].includes(estadoInicial)) {
+        const cuenta = await cuentaChequesId(client);
+        if (cuenta) {
+          await registrarMovimientoBancario(client, {
+            cuenta_bancaria_id: cuenta,
+            tipo: 'ingreso',
+            monto: importeNum,
+            concepto: `Cheque recibido — ${banco.trim()} #${numero_cheque.trim()}`,
+            origen_tipo: 'cheque',
+            origen_id: rows[0].id,
+            usuario_id: req.usuario?.id ?? null,
+          });
+        }
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json({ ok: true, id: rows[0].id });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) { next(err); }
 });
 
@@ -341,11 +370,11 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
 
     // ── Efecto en el banco (mig 049) ───────────────────────────────────────────
     // Todos los cheques se cobran/pagan por la cuenta marcada `es_cuenta_cheques`.
-    // Impacta recién cuando el banco movió la plata de verdad: un cheque en
-    // cartera, depositado o endosado no toca el saldo.
-    const impactaBanco =
-      (tipo === 'recibido' && estado_nuevo === 'acreditado') ||
-      (tipo === 'emitido'  && estado_nuevo === 'debitado');
+    //
+    // Los RECIBIDOS ya acreditaron al cargarse (ver POST de arriba), así que acá
+    // no se vuelven a sumar: pasar a 'depositado' o 'acreditado' no mueve saldo.
+    // Los EMITIDOS descuentan recién cuando el banco los debita de verdad.
+    const impactaBanco = (tipo === 'emitido' && estado_nuevo === 'debitado');
 
     if (impactaBanco) {
       const cuenta = await cuentaChequesId(client);
@@ -356,9 +385,9 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
         const c = chq[0];
         await registrarMovimientoBancario(client, {
           cuenta_bancaria_id: cuenta,
-          tipo: tipo === 'recibido' ? 'ingreso' : 'egreso',
+          tipo: 'egreso',
           monto: c.importe,
-          concepto: `Cheque ${estado_nuevo} — ${c.banco ?? 's/banco'} #${c.numero_cheque ?? 's/nro'}`,
+          concepto: `Cheque debitado — ${c.banco ?? 's/banco'} #${c.numero_cheque ?? 's/nro'}`,
           origen_tipo: 'cheque',
           origen_id: id,
           usuario_id,
