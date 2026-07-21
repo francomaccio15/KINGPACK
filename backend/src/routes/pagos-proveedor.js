@@ -1,6 +1,10 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol } = require('../middleware/auth');
+const {
+  registrarMovimientosDeMedios,
+  revertirMovimientosBancarios,
+} = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -222,6 +226,17 @@ router.post('/', async (req, res, next) => {
       }
     }
 
+    // 1d) Las líneas pagadas desde una cuenta bancaria (Transferencia) se
+    //     descuentan de esa cuenta y quedan asentadas en el ledger.
+    await registrarMovimientosDeMedios(client, mediosLista, {
+      tipo: 'egreso',
+      concepto: 'Pago a proveedor',
+      origen_tipo: 'pago_proveedor',
+      origen_id: pago.id,
+      usuario_id: usuarioId,
+      fecha: pago.fecha,
+    });
+
     if (aplicar) {
       // 2a) Imputación a cada egreso pendiente
       for (const ap of aplicaciones) {
@@ -359,6 +374,9 @@ router.post('/:id/anular', async (req, res, next) => {
         }
       }
     }
+
+    // 1c) Devolver a las cuentas bancarias lo que este pago descontó.
+    await revertirMovimientosBancarios(client, 'pago_proveedor', id);
 
     // 2) Revertir imputaciones a egresos
     const { rows: aplic } = await client.query(

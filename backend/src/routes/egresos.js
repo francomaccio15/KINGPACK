@@ -1,5 +1,9 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const {
+  registrarMovimientosDeMedios,
+  revertirMovimientosBancarios,
+} = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -565,6 +569,16 @@ router.post('/', async (req, res, next) => {
         // de la sucursal del egreso.
         await descontarCajaFuerte(client, sucursal_id, mediosValidos);
 
+        // Si alguna línea salió de una cuenta bancaria (Transferencia),
+        // descontarla de esa cuenta y dejarlo asentado en el ledger.
+        await registrarMovimientosDeMedios(client, mediosValidos, {
+          tipo: 'egreso',
+          concepto: `Pago de egreso — ${descripcion.trim()}`,
+          origen_tipo: 'egreso',
+          origen_id: egreso.id,
+          usuario_id: req.usuario?.id ?? null,
+        });
+
         estadoFinal = Math.abs(totalPago - totalNum) <= 0.01 ? 'pagado' : 'parcial';
         await client.query(
           `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
@@ -725,6 +739,15 @@ router.post('/:id/pago', async (req, res, next) => {
     // de la sucursal del egreso.
     await descontarCajaFuerte(client, egresoRows[0].sucursal_id, [{ medio_pago_id, monto: montoPago }]);
 
+    // Si salió de una cuenta bancaria (Transferencia), descontarla también.
+    await registrarMovimientosDeMedios(client, [{ cuenta_bancaria_id, monto: montoPago }], {
+      tipo: 'egreso',
+      concepto: 'Pago de egreso',
+      origen_tipo: 'egreso',
+      origen_id: id,
+      usuario_id: req.usuario?.id ?? null,
+    });
+
     for (const ch of cheques) {
       await client.query(`
         INSERT INTO egreso_cheques
@@ -800,6 +823,9 @@ router.delete('/:id', async (req, res, next) => {
 
     // Devolver a la caja fuerte lo que este egreso descontó (si aplica).
     await reponerCajaFuerte(client, id, egRows[0].sucursal_id);
+
+    // Devolver a las cuentas bancarias lo que este egreso descontó.
+    await revertirMovimientosBancarios(client, 'egreso', id);
 
     await client.query('COMMIT');
     res.json({ ok: true });

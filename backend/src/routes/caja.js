@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva } = require('../middleware/auth');
+const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -252,13 +253,27 @@ router.post('/:id/movimiento', async (req, res, next) => {
 
       const { rows } = await client.query(`
         INSERT INTO movimientos_caja
-          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id, egreso_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, origen_tipo, origen_id, egreso_id,
+           cuenta_bancaria_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id, tipo, concepto, monto, fecha
       `, [id, tipo, concepto.trim(), montoMedio, m.medio_pago_id || null,
-          usuario_id, origen_tipo || null, origen_id || null, egreso_id]);
+          usuario_id, origen_tipo || null, origen_id || null, egreso_id,
+          m.cuenta_bancaria_id || null]);
 
       if (!primerMovimiento) primerMovimiento = rows[0];
+
+      // Si el medio va contra una cuenta bancaria (Transferencia), mover su saldo:
+      // un ingreso la acredita y un egreso la debita.
+      await registrarMovimientoBancario(client, {
+        cuenta_bancaria_id: m.cuenta_bancaria_id || null,
+        tipo: tipo === 'egreso' ? 'egreso' : 'ingreso',
+        monto: montoMedio,
+        concepto: concepto.trim(),
+        origen_tipo: 'movimiento_caja',
+        origen_id: rows[0].id,
+        usuario_id,
+      });
 
       // Identificar el movimiento que corresponde al medio cheque
       const nombreMedio = (mediosNombres[m.medio_pago_id] ?? '').toLowerCase();

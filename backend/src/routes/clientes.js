@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
+const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -289,7 +290,7 @@ router.get('/:id/movimientos', async (req, res, next) => {
 // ─── POST /api/clientes/:id/pagos ─────────────────────────────────────────────
 router.post('/:id/pagos', async (req, res, next) => {
   try {
-    const { monto, concepto, medio_pago_id, sucursal_id, cheque } = req.body;
+    const { monto, concepto, medio_pago_id, sucursal_id, cheque, cuenta_bancaria_id } = req.body;
     if (!monto || parseFloat(monto) <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
@@ -390,11 +391,26 @@ router.post('/:id/pagos', async (req, res, next) => {
             ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
             : `Pago cliente — ${saldoRow.razon_social}`;
           await dbClient.query(`
-            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
-            VALUES ($1, 'ingreso', $2, $3, $4, $5)
-          `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null]);
+            INSERT INTO movimientos_caja
+              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id)
+            VALUES ($1, 'ingreso', $2, $3, $4, $5, $6)
+          `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null,
+              cuenta_bancaria_id || null]);
         }
       }
+
+      // Si el cobro entró por transferencia, acreditar la cuenta bancaria. Va
+      // fuera del bloque de caja a propósito: que la plata entre al banco no
+      // depende de que haya una caja abierta en la sucursal.
+      await registrarMovimientoBancario(dbClient, {
+        cuenta_bancaria_id: cuenta_bancaria_id || null,
+        tipo: 'ingreso',
+        monto: montoNum,
+        concepto: `Pago cliente — ${saldoRow.razon_social}`,
+        origen_tipo: 'pago_cliente',
+        origen_id: mov.id,
+        usuario_id: req.usuario?.id ?? null,
+      });
 
       await dbClient.query('COMMIT');
       res.status(201).json({ movimiento: mov, saldo_nuevo: saldoDespues });

@@ -17,10 +17,11 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   });
 };
 
-type MedioPago   = { id: string; nombre: string };
+type MedioPago   = { id: string; nombre: string; requiere_cuenta?: boolean };
 type Subrubro    = { id: string; nombre: string };
 type Rubro       = { id: string; nombre: string; subrubros: Subrubro[] };
-type MedioLinea  = { medio_pago_id: string; monto: string };
+type MedioLinea  = { medio_pago_id: string; monto: string; cuenta_bancaria_id?: string };
+type CuentaBancaria = { id: string; nombre: string; banco?: string | null };
 type ChequeLinea = { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
 
 const TIPOS = [
@@ -62,6 +63,19 @@ export default function RegistrarMovimiento({
   // Detectar si algún medio seleccionado es cheque
   const esCheque = (id: string) => /cheque/i.test(mediosPago.find(m => m.id === id)?.nombre ?? '');
   const hayCheque = medios.some(m => esCheque(m.medio_pago_id));
+
+  // Medios que van contra una cuenta bancaria (Transferencia): hay que decir a
+  // qué cuenta entra/sale la plata para poder mover su saldo.
+  const requiereCuenta = (id: string) => !!mediosPago.find(m => m.id === id)?.requiere_cuenta;
+  const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    apiFetch('/api/cuentas-bancarias')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setCuentas(d.cuentas ?? []))
+      .catch(() => {});
+  }, [open]);
 
   const totalCheques = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
   const montoLinea   = (m: MedioLinea) => esCheque(m.medio_pago_id) ? totalCheques : (parseFloat(m.monto) || 0);
@@ -123,6 +137,9 @@ export default function RegistrarMovimiento({
       setError('Cargá el detalle y el importe de los cheques'); return;
     }
     if (totalMedios <= 0) { setError('El monto total debe ser mayor a 0'); return; }
+    if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) {
+      setError('Elegí la cuenta bancaria del medio correspondiente'); return;
+    }
 
     setSaving(true);
     setError(null);
@@ -130,6 +147,7 @@ export default function RegistrarMovimiento({
       const mediosPayload = medios.map(m => ({
         medio_pago_id: m.medio_pago_id || null,
         monto: esCheque(m.medio_pago_id) ? totalCheques : parseFloat(m.monto),
+        cuenta_bancaria_id: requiereCuenta(m.medio_pago_id) ? (m.cuenta_bancaria_id || null) : null,
       }));
 
       const body: Record<string, unknown> = {
@@ -291,6 +309,21 @@ export default function RegistrarMovimiento({
                           />
                         )}
                       </div>
+                      {requiereCuenta(m.medio_pago_id) && (
+                        <div className="col-span-11">
+                          <label className={labelCls}>Cuenta bancaria</label>
+                          <select
+                            value={m.cuenta_bancaria_id ?? ''}
+                            onChange={e => updMedio(i, 'cuenta_bancaria_id', e.target.value)}
+                            className={inputCls}
+                          >
+                            <option value="">Seleccioná la cuenta</option>
+                            {cuentas.map(c => (
+                              <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div className="col-span-1 flex justify-end">
                         {medios.length > 1 && (
                           <button

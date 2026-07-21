@@ -2,6 +2,10 @@ const express = require('express');
 const { pool } = require('../config/db');
 const arca = require('../services/arca');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
+const {
+  registrarMovimientoBancario,
+  revertirMovimientosBancarios,
+} = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -408,9 +412,10 @@ router.post('/', async (req, res, next) => {
 
       for (const pago of pagos) {
         await client.query(`
-          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
-          VALUES ($1,$2,$3,$4)
-        `, [venta.id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]);
+          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino, cuenta_bancaria_id)
+          VALUES ($1,$2,$3,$4,$5)
+        `, [venta.id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null,
+            pago.cuenta_bancaria_id || null]);
 
         for (const ch of (pago.cheques || [])) {
           await client.query(`
@@ -428,15 +433,29 @@ router.post('/', async (req, res, next) => {
         const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
         if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(`
-            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
-            VALUES ($1, 'venta', $2, $3, $4)
+            INSERT INTO movimientos_caja
+              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
+            VALUES ($1, 'venta', $2, $3, $4, $5)
           `, [
             cajaId,
             `Venta #${numero}`,
             parseFloat(pago.monto),
             pago.medio_pago_id || null,
+            pago.cuenta_bancaria_id || null,
           ]);
         }
+
+        // Cobro por transferencia → acredita la cuenta bancaria. Fuera del bloque
+        // de caja: el dinero entra al banco haya o no una caja abierta.
+        await registrarMovimientoBancario(client, {
+          cuenta_bancaria_id: pago.cuenta_bancaria_id || null,
+          tipo: 'ingreso',
+          monto: parseFloat(pago.monto),
+          concepto: `Venta #${numero}`,
+          origen_tipo: 'venta',
+          origen_id: venta.id,
+          usuario_id: req.usuario?.id ?? null,
+        });
       }
 
       // Registrar deuda en cuenta corriente del cliente si algún pago fue en "Cuenta Corriente"
@@ -687,18 +706,34 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
 
       for (const pago of pagos) {
         await client.query(
-          `INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino) VALUES ($1,$2,$3,$4)`,
-          [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]
+          `INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino, cuenta_bancaria_id)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null,
+           pago.cuenta_bancaria_id || null]
         );
         const medio = mediosMap[pago.medio_pago_id];
         const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
         const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
         if (medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(
-            `INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id) VALUES ($1,'venta',$2,$3,$4)`,
-            [cajaId, `Venta #${numero}`, parseFloat(pago.monto), pago.medio_pago_id]
+            `INSERT INTO movimientos_caja
+               (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
+             VALUES ($1,'venta',$2,$3,$4,$5)`,
+            [cajaId, `Venta #${numero}`, parseFloat(pago.monto), pago.medio_pago_id,
+             pago.cuenta_bancaria_id || null]
           );
         }
+
+        // Cobro por transferencia → acredita la cuenta bancaria.
+        await registrarMovimientoBancario(client, {
+          cuenta_bancaria_id: pago.cuenta_bancaria_id || null,
+          tipo: 'ingreso',
+          monto: parseFloat(pago.monto),
+          concepto: `Venta #${numero}`,
+          origen_tipo: 'venta',
+          origen_id: id,
+          usuario_id: req.usuario?.id ?? null,
+        });
         // Registrar deuda en cuenta corriente si pago en cuenta corriente
         if (cliente_id && esCuentaCorriente) {
           const { rows: [saldoRow] } = await client.query(`
@@ -818,6 +853,9 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
           );
         }
       }
+
+      // Si algún pago entró a una cuenta bancaria, sacarlo de ahí.
+      await revertirMovimientosBancarios(client, 'venta', id);
 
       // Revertir el ingreso de caja que generó la venta. Al confirmarse, cada
       // pago que NO fue cuenta corriente ni saldo a favor (efectivo, tarjeta,
@@ -1437,7 +1475,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     let pagosEfectivos = Array.isArray(pagos) && pagos.length > 0 ? pagos : null;
     if (!pagosEfectivos) {
       const { rows: pagosPrevios } = await client.query(
-        `SELECT medio_pago_id, monto::float AS monto, cuenta_destino
+        `SELECT medio_pago_id, monto::float AS monto, cuenta_destino, cuenta_bancaria_id
            FROM venta_pagos WHERE venta_id = $1`,
         [id]
       );
@@ -1450,7 +1488,12 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
             ? parseFloat((total - acumulado).toFixed(2))
             : parseFloat((p.monto / totalPrevio * total).toFixed(2));
           if (idx < pagosPrevios.length - 1) acumulado += monto;
-          return { medio_pago_id: p.medio_pago_id, monto, cuenta_destino: p.cuenta_destino };
+          return {
+            medio_pago_id: p.medio_pago_id,
+            monto,
+            cuenta_destino: p.cuenta_destino,
+            cuenta_bancaria_id: p.cuenta_bancaria_id,
+          };
         });
       }
     }
@@ -1523,6 +1566,10 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       // Eliminar pagos anteriores
       await client.query(`DELETE FROM venta_pagos WHERE venta_id = $1`, [id]);
 
+      // Los cobros bancarios de esta venta se recalculan más abajo junto con los
+      // pagos, así que primero se deshacen los anteriores para no duplicarlos.
+      await revertirMovimientosBancarios(client, 'venta', id);
+
       // Obtener caja abierta para reemplazar movimientos
       const { rows: cajaRows } = await client.query(
         `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
@@ -1540,19 +1587,32 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
       for (const pago of pagosEfectivos) {
         await client.query(`
-          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino)
-          VALUES ($1,$2,$3,$4)
-        `, [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null]);
+          INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino, cuenta_bancaria_id)
+          VALUES ($1,$2,$3,$4,$5)
+        `, [id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null,
+            pago.cuenta_bancaria_id || null]);
 
         const medio = mediosMap[pago.medio_pago_id];
         const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
         const esCuentaCorriente = nombreMedio.includes('cuenta corriente') || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
         if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(`
-            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
-            VALUES ($1, 'venta', $2, $3, $4)
-          `, [cajaId, `Venta #${ventaNumero}`, parseFloat(pago.monto), pago.medio_pago_id || null]);
+            INSERT INTO movimientos_caja
+              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
+            VALUES ($1, 'venta', $2, $3, $4, $5)
+          `, [cajaId, `Venta #${ventaNumero}`, parseFloat(pago.monto), pago.medio_pago_id || null,
+              pago.cuenta_bancaria_id || null]);
         }
+
+        await registrarMovimientoBancario(client, {
+          cuenta_bancaria_id: pago.cuenta_bancaria_id || null,
+          tipo: 'ingreso',
+          monto: parseFloat(pago.monto),
+          concepto: `Venta #${ventaNumero}`,
+          origen_tipo: 'venta',
+          origen_id: id,
+          usuario_id: req.usuario?.id ?? null,
+        });
       }
 
       // El impacto en la CC del cliente ya quedó registrado arriba como un único

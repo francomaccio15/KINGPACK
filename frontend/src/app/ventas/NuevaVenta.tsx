@@ -553,6 +553,9 @@ export default function NuevaVenta({
       medio_pago_id: string;
       monto: number;
       cuenta_destino?: string | null;
+      // El ID va aparte de `cuenta_destino` (que es sólo el nombre, texto libre):
+      // es lo que el backend usa para acreditar el saldo de la cuenta.
+      cuenta_bancaria_id?: string | null;
       cheques?: object[];
     }[] = [];
 
@@ -570,6 +573,7 @@ export default function NuevaVenta({
           medio_pago_id: medioPagoId,
           monto: monto1Num,
           cuenta_destino: esTransferencia ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null) : null,
+          cuenta_bancaria_id: esTransferencia ? (cuentaDestinoId || null) : null,
           cheques: esCheque ? chequesValidos : undefined,
         });
       }
@@ -578,6 +582,7 @@ export default function NuevaVenta({
           medio_pago_id: medioPagoId2,
           monto: monto2Num,
           cuenta_destino: esTransferencia2 ? (cuentasBancarias.find(c => c.id === cuentaDestinoId2)?.nombre ?? null) : null,
+          cuenta_bancaria_id: esTransferencia2 ? (cuentaDestinoId2 || null) : null,
           cheques: esCheque2 ? chequesValidos : undefined,
         });
       }
@@ -588,6 +593,7 @@ export default function NuevaVenta({
         cuenta_destino: esTransferencia
           ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
           : null,
+        cuenta_bancaria_id: esTransferencia ? (cuentaDestinoId || null) : null,
         cheques: esCheque
           ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
                    .map(c => ({ ...c, importe: parseFloat(c.importe) }))

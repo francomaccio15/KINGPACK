@@ -12,7 +12,8 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
-interface MedioPago { id: string; nombre: string; }
+interface MedioPago { id: string; nombre: string; requiere_cuenta?: boolean }
+interface CuentaBancaria { id: string; nombre: string; banco?: string | null }
 
 export default function RegistrarPago({
   clienteId,
@@ -31,6 +32,9 @@ export default function RegistrarPago({
   const [concepto, setConcepto]     = useState('');
   const [medioPagoId, setMedioPagoId] = useState('');
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
+  // Cuenta a la que entra la plata cuando el cobro es por transferencia.
+  const [cuentas, setCuentas]       = useState<CuentaBancaria[]>([]);
+  const [cuentaId, setCuentaId]     = useState('');
 
   // Datos del cheque (solo si el método es Cheque)
   const [chBanco, setChBanco]       = useState('');
@@ -38,7 +42,9 @@ export default function RegistrarPago({
   const [chEmision, setChEmision]   = useState('');
   const [chVenc, setChVenc]         = useState('');
 
-  const esCheque = /cheque/i.test(mediosPago.find(m => m.id === medioPagoId)?.nombre ?? '');
+  const medioElegido = mediosPago.find(m => m.id === medioPagoId);
+  const esCheque      = /cheque/i.test(medioElegido?.nombre ?? '');
+  const requiereCuenta = !!medioElegido?.requiere_cuenta;
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +58,14 @@ export default function RegistrarPago({
         if (lista.length > 0 && !medioPagoId) setMedioPagoId(lista[0].id);
       })
       .catch(() => {});
+    apiFetch('/api/cuentas-bancarias')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setCuentas(d.cuentas ?? []))
+      .catch(() => {});
   }, [open]);
+
+  // Al cambiar a un medio que no va contra el banco, limpiar la cuenta elegida.
+  useEffect(() => { if (!requiereCuenta) setCuentaId(''); }, [requiereCuenta]);
 
   const cerrar = () => {
     setOpen(false);
@@ -60,12 +73,14 @@ export default function RegistrarPago({
     setMonto('');
     setConcepto('');
     setMedioPagoId('');
+    setCuentaId('');
     setChBanco(''); setChNumero(''); setChEmision(''); setChVenc('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
+    if (requiereCuenta && !cuentaId) { setError('Seleccioná la cuenta que recibe el pago'); return; }
     if (esCheque && !chVenc) { setError('Ingresá la fecha de pago del cheque'); return; }
     setError('');
     setLoading(true);
@@ -77,6 +92,7 @@ export default function RegistrarPago({
           concepto,
           medio_pago_id: medioPagoId,
           sucursal_id: sucursalId,
+          cuenta_bancaria_id: cuentaId || null,
           cheque: esCheque
             ? { banco: chBanco, numero_cheque: chNumero, fecha_emision: chEmision || null, fecha_vencimiento: chVenc }
             : undefined,
@@ -170,6 +186,21 @@ export default function RegistrarPago({
                   </div>
                 )}
               </div>
+
+              {/* Cuenta destino: sólo para medios que van contra el banco */}
+              {requiereCuenta && (
+                <div>
+                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Cuenta que recibe *</label>
+                  <select value={cuentaId} onChange={e => setCuentaId(e.target.value)}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
+                    <option value="">Seleccioná la cuenta</option>
+                    {cuentas.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-kp-gray">Se acredita en el saldo de esa cuenta.</p>
+                </div>
+              )}
 
               {/* Datos del cheque */}
               {esCheque && (
