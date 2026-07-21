@@ -51,6 +51,7 @@ export type CajaFuerteData = {
 export type MovimientoCajaFuerteData = {
   id:              string;
   fecha:           string;
+  created_at:      string;
   tipo:            'ingreso' | 'egreso';
   monto:           number;
   concepto:        string | null;
@@ -506,6 +507,10 @@ function MovimientosCajaFuertePanel({ movimientos }: { movimientos: MovimientoCa
                   </p>
                   <p className="text-[10px] text-kp-gray truncate">
                     {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                    {/* La hora es la de registro: los pagos a proveedor guardan
+                        la fecha del comprobante sin hora, y sin esto dos
+                        movimientos del mismo día se ven idénticos. */}
+                    {m.created_at && <> {new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</>}
                     {variasSucursales && <> · {m.sucursal_nombre}</>}
                     {m.origen_tipo && <> · {ORIGEN_LABEL[m.origen_tipo] ?? m.origen_tipo}</>}
                     {m.usuario_nombre && <> · {m.usuario_nombre}</>}

@@ -226,7 +226,7 @@ router.get('/', async (req, res, next) => {
       // respalda el saldo de arriba: cada peso que entró o salió, con su origen.
       pool.query(`
         SELECT
-          m.id, m.fecha, m.tipo, m.monto::float, m.concepto,
+          m.id, m.fecha, m.created_at, m.tipo, m.monto::float, m.concepto,
           m.origen_tipo, m.origen_id,
           s.nombre AS sucursal_nombre,
           u.nombre AS usuario_nombre
@@ -234,7 +234,10 @@ router.get('/', async (req, res, next) => {
         JOIN sucursales s ON s.id = m.sucursal_id
         LEFT JOIN usuarios u ON u.id = m.usuario_id
         ${sucId ? 'WHERE m.sucursal_id = $1' : ''}
-        ORDER BY m.fecha DESC, m.created_at DESC
+        -- Por created_at, no por fecha: los pagos a proveedor guardan la fecha
+        -- del comprobante (sin hora), así que ordenar por ella escondía un pago
+        -- recién hecho debajo de movimientos anteriores del mismo día.
+        ORDER BY m.created_at DESC
         LIMIT 15
       `, p),
 
