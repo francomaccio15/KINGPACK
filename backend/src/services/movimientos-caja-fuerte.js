@@ -119,8 +119,40 @@ async function ajustarSaldo(client, sucursal_id, delta) {
   `, [sucursal_id, delta.toFixed(2)]);
 }
 
+// Fija el saldo de una caja fuerte en un valor dado (corrección manual: el
+// efectivo realmente contado). Como `saldo` es derivado, NO se escribe a secas:
+// se re-basa `saldo_inicial` para que el invariante siga valiendo y los
+// movimientos ya registrados se conserven.
+//
+//   saldo_inicial = nuevoSaldo − (Σingresos − Σegresos)
+//
+// No deja un movimiento de ajuste a propósito: corregir una cifra de partida no
+// es plata que entró o salió de la caja. Gemelo de `fijarSaldoBancario`.
+async function fijarSaldoCajaFuerte(client, sucursal_id, nuevoSaldo) {
+  const saldo = +(parseFloat(nuevoSaldo) || 0).toFixed(2);
+
+  const { rows } = await client.query(`
+    SELECT COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE -monto END), 0)::float AS mov
+      FROM movimientos_caja_fuerte WHERE sucursal_id = $1
+  `, [sucursal_id]);
+
+  const inicial = +(saldo - (rows[0].mov || 0)).toFixed(2);
+
+  await client.query(`
+    INSERT INTO caja_fuerte (sucursal_id, saldo, saldo_inicial)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (sucursal_id) DO UPDATE
+      SET saldo = EXCLUDED.saldo,
+          saldo_inicial = EXCLUDED.saldo_inicial,
+          updated_at = NOW()
+  `, [sucursal_id, saldo, inicial]);
+
+  return { saldo, saldo_inicial: inicial };
+}
+
 module.exports = {
   registrarMovimientoCajaFuerte,
+  fijarSaldoCajaFuerte,
   registrarEgresosCajaFuerteDeMedios,
   agruparMediosCajaFuerte,
   revertirMovimientosCajaFuerte,
