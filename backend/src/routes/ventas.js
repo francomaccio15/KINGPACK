@@ -256,7 +256,7 @@ router.post('/', async (req, res, next) => {
       descuento_total += (precio_lista - precio_final) * cantidad;
       subtotal_bruto  += precio_madre * cantidad;
 
-      return { ...item, precio_lista, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad };
+      return { ...item, precio_lista, precio_madre, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad };
     });
     const subtotalNeto = subtotal - descuento_total; // Σ precio final · cant
 
@@ -340,13 +340,14 @@ router.post('/', async (req, res, next) => {
     for (const item of itemsCalculados) {
       await client.query(`
         INSERT INTO venta_items
-          (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       `, [
         venta.id,
         item.articulo_id,
         item.cantidad,
         item.precio_lista,
+        item.precio_madre,
         item.descuento_pct,
         item.precio_unitario_final,
         item.iva_monto,
@@ -541,7 +542,7 @@ router.get('/:id', async (req, res, next) => {
           vi.articulo_id, vi.cantidad, vi.precio_lista,
           vi.descuento_pct, vi.precio_unitario_final, vi.iva_monto,
           a.nombre, a.codigo,
-          a.precio_madre,
+          COALESCE(vi.precio_madre, a.precio_madre) AS precio_madre,
           COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
@@ -1054,7 +1055,8 @@ router.get('/:id/pdf', async (req, res, next) => {
       pool.query(`
         SELECT vi.cantidad, vi.precio_lista, vi.descuento_pct,
                vi.precio_unitario_final, vi.iva_monto,
-               a.nombre, a.codigo, a.precio_madre,
+               a.nombre, a.codigo,
+               COALESCE(vi.precio_madre, a.precio_madre) AS precio_madre,
                COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
@@ -1185,12 +1187,13 @@ router.get('/:id/pdf', async (req, res, next) => {
     let rowIdx = 0;
     for (const item of itemRows) {
       const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
-      // P. LISTA mostrado = precio de lista CONGELADO de la venta (no el madre vivo);
-      // el descuento es el guardado, o se deriva de lista→final congelado si falta.
-      const baseItem  = parseFloat(item.precio_lista) || 0;
+      // P. LISTA mostrado = precio madre CONGELADO al momento de la venta (precio_madre
+      // ya viene con COALESCE al madre vivo para ventas viejas). El descuento se calcula
+      // respecto a ese madre para que el descuento de la lista quede visible.
+      const madreItem = parseFloat(item.precio_madre || item.precio_lista || 0) || 0;
       const finalItem = parseFloat(item.precio_unitario_final) || 0;
-      const descStored = parseFloat(item.descuento_pct) || 0;
-      const descItem  = descStored > 0 ? descStored : (baseItem > 0 ? (1 - finalItem / baseItem) * 100 : 0);
+      const baseItem  = madreItem >= finalItem ? madreItem : (parseFloat(item.precio_lista) || madreItem);
+      const descItem  = baseItem > 0 ? (1 - finalItem / baseItem) * 100 : 0;
       const tieneDesc = descItem > 0.05;
 
       if (rowIdx % 2 === 1) {
@@ -1238,10 +1241,12 @@ router.get('/:id/pdf', async (req, res, next) => {
       curY += bold ? 22 : 18;
     };
 
-    // Subtotal/descuento sobre el precio de lista CONGELADO, para que coincida con
-    // las columnas de arriba (base lista → descuento → total). El total no cambia.
+    // Subtotal/descuento sobre el precio madre CONGELADO, para que coincida con las
+    // columnas de arriba (base madre → descuento → total). El total no cambia.
     const subtotalBasePdf = itemRows.reduce((s, it) => {
-      const baseI = parseFloat(it.precio_lista || 0) || 0;
+      const madreI = parseFloat(it.precio_madre || it.precio_lista || 0) || 0;
+      const finalI = parseFloat(it.precio_unitario_final) || 0;
+      const baseI  = madreI >= finalI ? madreI : (parseFloat(it.precio_lista) || madreI);
       return s + baseI * parseFloat(it.cantidad || 0);
     }, 0);
     const descExtraPdf     = parseFloat(venta.descuento_extra_monto || 0) || 0;
@@ -1408,9 +1413,9 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
     for (const item of itemsCalculados) {
       await client.query(
-        `INSERT INTO venta_items (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, item.articulo_id, item.cantidad, item.precioLista, item.descPct, item.precioFinal, item.ivaMonto]
+        `INSERT INTO venta_items (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, item.articulo_id, item.cantidad, item.precioLista, (parseFloat(item.art.precio_madre) || item.precioLista), item.descPct, item.precioFinal, item.ivaMonto]
       );
     }
 

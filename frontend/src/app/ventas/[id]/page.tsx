@@ -15,17 +15,16 @@ const fechaFmt = (d: string) => new Date(d).toLocaleString('es-AR', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-// Se usan los valores CONGELADOS de la venta (snapshot en venta_items), no el
-// precio madre vivo del artículo: precio_lista y descuento_pct son los que estaban
-// vigentes al momento de vender. Comparar contra el madre actual inventaba un
-// "descuento" que nunca existió cuando el madre cambiaba después de la venta.
+// El "precio de lista" que se muestra es el precio MADRE CONGELADO al momento de la
+// venta (el backend lo trae con COALESCE al madre vivo para ventas viejas). El
+// descuento se calcula respecto a ese madre para que el descuento de la lista quede
+// VISIBLE (base madre → desc% → precio final). Usar el madre congelado (y no el
+// vivo) evita que el descuento cambie si el precio del artículo se actualiza después.
 function desglosePrecio(item: any) {
-  const base  = parseFloat(String(item.precio_lista ?? '0')) || 0;
+  const madre = parseFloat(String(item.precio_madre ?? item.precio_lista ?? '0')) || 0;
   const final = parseFloat(String(item.precio_unitario_final ?? '0')) || 0;
-  const descStored = parseFloat(String(item.descuento_pct ?? '0')) || 0;
-  // El descuento real es el guardado; si por algún dato viejo no está, se deriva
-  // de la diferencia lista→final congelada (nunca contra el madre actual).
-  const descPct = descStored > 0 ? descStored : (base > 0 ? (1 - final / base) * 100 : 0);
+  const base  = madre >= final ? madre : parseFloat(String(item.precio_lista ?? madre)) || madre;
+  const descPct = base > 0 ? (1 - final / base) * 100 : 0;
   return { base, final, descPct, tieneDesc: descPct > 0.05 };
 }
 const fechaCorta = (d: string) => new Date(d).toLocaleDateString('es-AR', {
@@ -69,7 +68,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
   }
 
   const { venta, items, pagos, facturacion } = data;
-  // Subtotal y descuento calculados sobre el precio de lista CONGELADO de cada ítem
+  // Subtotal y descuento calculados sobre el precio madre congelado de cada ítem
   // (para que el descuento sea visible y coincida con las columnas P. Lista/Desc.).
   // El total (lo efectivamente cobrado) no cambia: sigue siendo venta.total.
   const totalVenta   = parseFloat(venta.total || '0');

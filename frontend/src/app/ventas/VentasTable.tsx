@@ -30,6 +30,7 @@ type VentaItem = {
   codigo: string;
   nombre: string;
   precio_lista: string;
+  precio_madre: string;
   descuento_pct: string;
   precio_unitario_final: string;
 };
@@ -248,15 +249,19 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                             {items.map((it, i) => {
                               const pFinal = parseFloat(it.precio_unitario_final || '0');
                               const subtotal = pFinal * it.cantidad;
-                              const dto = parseFloat(it.descuento_pct || '0');
+                              // P. LISTA = madre congelado; DTO% = descuento respecto al
+                              // madre (incluye el de la lista), igual que el detalle.
+                              const madre = parseFloat(it.precio_madre || it.precio_lista || '0') || 0;
+                              const base = madre >= pFinal ? madre : (parseFloat(it.precio_lista || '0') || madre);
+                              const dto = base > 0 ? (1 - pFinal / base) * 100 : 0;
                               return (
                                 <tr key={i} className="hover:bg-kp-surface transition-colors">
                                   <td className="py-1.5 pr-4 font-mono text-kp-gray/70">{it.codigo}</td>
                                   <td className="py-1.5 pr-4 text-kp-white font-medium">{it.nombre}</td>
                                   <td className="py-1.5 px-4 text-center tabular-nums text-kp-gray-lt">{it.cantidad}</td>
-                                  <td className="py-1.5 px-4 text-right tabular-nums text-kp-gray">{fmt(it.precio_lista)}</td>
+                                  <td className="py-1.5 px-4 text-right tabular-nums text-kp-gray">{fmt(base)}</td>
                                   <td className="py-1.5 px-4 text-right tabular-nums">
-                                    {dto > 0
+                                    {dto > 0.05
                                       ? <span className="text-kp-red">−{dto.toFixed(1)}%</span>
                                       : <span className="text-kp-border">—</span>}
                                   </td>

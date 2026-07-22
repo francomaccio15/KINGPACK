@@ -282,9 +282,9 @@ router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
     for (const it of itemsCalc) {
       await client.query(`
         INSERT INTO venta_items
-          (venta_id, articulo_id, cantidad, precio_lista, descuento_pct, precio_unitario_final, iva_monto)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [venta.id, it.articulo_id, it.cantidad, it.precio, 0, it.precio, it.iva_monto]);
+          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `, [venta.id, it.articulo_id, it.cantidad, it.precio, it.precio, 0, it.precio, it.iva_monto]);
     }
 
     // Vincular venta a la licitación y marcarla adjudicada
