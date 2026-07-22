@@ -128,6 +128,10 @@ router.get('/', async (req, res, next) => {
           f.cae            AS cae,
           f.ok             AS facturada_ok,
           (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
+          -- Descuento total real (incluye el de la lista): madre congelado − precio final.
+          (SELECT COALESCE(SUM((COALESCE(vi.precio_madre, a.precio_madre) - vi.precio_unitario_final) * vi.cantidad), 0)
+             FROM venta_items vi JOIN articulos a ON a.id = vi.articulo_id
+            WHERE vi.venta_id = v.id) AS descuento_madre,
           (SELECT string_agg(DISTINCT mp.nombre, ', ')
              FROM venta_pagos vp
              JOIN medios_pago mp ON mp.id = vp.medio_pago_id

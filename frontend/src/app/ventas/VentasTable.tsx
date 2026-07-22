@@ -12,6 +12,7 @@ type Venta = {
   total: string;
   subtotal: string;
   descuento_total: string;
+  descuento_madre: string;
   cliente_nombre: string | null;
   sucursal_nombre: string | null;
   lista_precio: string | null;
@@ -115,7 +116,8 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
         </thead>
         <tbody className="bg-kp-surface divide-y divide-kp-border">
           {ventas.map((v) => {
-            const descuento = parseFloat(v.descuento_total || '0');
+            // Descuento total real (incluye el de la lista), no solo el extra.
+            const descuento = parseFloat(v.descuento_madre || v.descuento_total || '0');
             const fecha = new Date(v.fecha).toLocaleDateString('es-AR', {
               day: '2-digit', month: '2-digit', year: 'numeric',
             });
