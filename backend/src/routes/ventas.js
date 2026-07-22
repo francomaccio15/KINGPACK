@@ -1185,12 +1185,12 @@ router.get('/:id/pdf', async (req, res, next) => {
     let rowIdx = 0;
     for (const item of itemRows) {
       const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
-      // P. LISTA mostrado = precio madre (nuestro precio base); el descuento se
-      // calcula respecto al madre para que quede visible (el precio final ya lo trae).
-      const madreItem = parseFloat(item.precio_madre || item.precio_lista || 0) || 0;
+      // P. LISTA mostrado = precio de lista CONGELADO de la venta (no el madre vivo);
+      // el descuento es el guardado, o se deriva de lista→final congelado si falta.
+      const baseItem  = parseFloat(item.precio_lista) || 0;
       const finalItem = parseFloat(item.precio_unitario_final) || 0;
-      const baseItem  = madreItem >= finalItem ? madreItem : (parseFloat(item.precio_lista) || madreItem);
-      const descItem  = baseItem > 0 ? (1 - finalItem / baseItem) * 100 : 0;
+      const descStored = parseFloat(item.descuento_pct) || 0;
+      const descItem  = descStored > 0 ? descStored : (baseItem > 0 ? (1 - finalItem / baseItem) * 100 : 0);
       const tieneDesc = descItem > 0.05;
 
       if (rowIdx % 2 === 1) {
@@ -1238,12 +1238,10 @@ router.get('/:id/pdf', async (req, res, next) => {
       curY += bold ? 22 : 18;
     };
 
-    // Subtotal/descuento sobre el precio madre, para que coincida con las columnas
-    // de arriba (base madre → descuento → total). El total no cambia.
+    // Subtotal/descuento sobre el precio de lista CONGELADO, para que coincida con
+    // las columnas de arriba (base lista → descuento → total). El total no cambia.
     const subtotalBasePdf = itemRows.reduce((s, it) => {
-      const madreI = parseFloat(it.precio_madre || it.precio_lista || 0) || 0;
-      const finalI = parseFloat(it.precio_unitario_final) || 0;
-      const baseI  = madreI >= finalI ? madreI : (parseFloat(it.precio_lista) || madreI);
+      const baseI = parseFloat(it.precio_lista || 0) || 0;
       return s + baseI * parseFloat(it.cantidad || 0);
     }, 0);
     const descExtraPdf     = parseFloat(venta.descuento_extra_monto || 0) || 0;

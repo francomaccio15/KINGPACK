@@ -15,15 +15,17 @@ const fechaFmt = (d: string) => new Date(d).toLocaleString('es-AR', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-// El "precio de lista" que se muestra es el precio MADRE (nuestro precio base).
-// Todas las listas son un % de descuento sobre el madre, y el precio final ya
-// viene con ese descuento aplicado; por eso el descuento se calcula respecto al
-// madre para que quede VISIBLE (base madre → desc% → precio final con descuento).
+// Se usan los valores CONGELADOS de la venta (snapshot en venta_items), no el
+// precio madre vivo del artículo: precio_lista y descuento_pct son los que estaban
+// vigentes al momento de vender. Comparar contra el madre actual inventaba un
+// "descuento" que nunca existió cuando el madre cambiaba después de la venta.
 function desglosePrecio(item: any) {
-  const madre = parseFloat(String(item.precio_madre ?? item.precio_lista ?? '0')) || 0;
+  const base  = parseFloat(String(item.precio_lista ?? '0')) || 0;
   const final = parseFloat(String(item.precio_unitario_final ?? '0')) || 0;
-  const base  = madre >= final ? madre : parseFloat(String(item.precio_lista ?? madre)) || madre;
-  const descPct = base > 0 ? (1 - final / base) * 100 : 0;
+  const descStored = parseFloat(String(item.descuento_pct ?? '0')) || 0;
+  // El descuento real es el guardado; si por algún dato viejo no está, se deriva
+  // de la diferencia lista→final congelada (nunca contra el madre actual).
+  const descPct = descStored > 0 ? descStored : (base > 0 ? (1 - final / base) * 100 : 0);
   return { base, final, descPct, tieneDesc: descPct > 0.05 };
 }
 const fechaCorta = (d: string) => new Date(d).toLocaleDateString('es-AR', {
@@ -67,9 +69,9 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
   }
 
   const { venta, items, pagos, facturacion } = data;
-  // Subtotal y descuento calculados sobre el precio madre (para que el descuento
-  // sea visible y coincida con las columnas P. Lista/Desc. de cada ítem). El total
-  // (lo efectivamente cobrado) no cambia: sigue siendo venta.total.
+  // Subtotal y descuento calculados sobre el precio de lista CONGELADO de cada ítem
+  // (para que el descuento sea visible y coincida con las columnas P. Lista/Desc.).
+  // El total (lo efectivamente cobrado) no cambia: sigue siendo venta.total.
   const totalVenta   = parseFloat(venta.total || '0');
   const subtotalBase = items.reduce(
     (acc: number, it: any) => acc + desglosePrecio(it).base * parseFloat(it.cantidad || '0'), 0);
