@@ -62,14 +62,20 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
     return s + cant * (parseFloat(i.precio_compra) || 0);
   }, 0);
 
-  const hayAlgo = Object.values(cantidades).some(v => parseFloat(v) > 0);
+  // ¿Queda algo por recibir según lo ya registrado en la base?
+  const pendienteTotal = items.reduce((s, i) =>
+    s + Math.max(0, (parseFloat(i.cantidad) || 0) - (parseFloat(i.cantidad_recibida) || 0)), 0);
+  const nadaPendiente = pendienteTotal <= 0.001;
+
+  // Si no queda nada pendiente, igual se puede confirmar para cerrar el pedido.
+  const hayAlgo = nadaPendiente || Object.values(cantidades).some(v => parseFloat(v) > 0);
 
   const confirmarRecepcion = async () => {
     const itemsARecibir = items
       .map(i => ({ articulo_id: i.articulo_id, cantidad_recibida: parseFloat(cantidades[i.articulo_id]) || 0 }))
       .filter(i => i.cantidad_recibida > 0);
 
-    if (itemsARecibir.length === 0) { setError('Ingresá al menos una cantidad mayor a 0'); return; }
+    if (itemsARecibir.length === 0 && !nadaPendiente) { setError('Ingresá al menos una cantidad mayor a 0'); return; }
 
     setLoading(true);
     setError(null);
@@ -131,7 +137,9 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                 <path d="M20 7l-8 8-4-4"/>
                 <path d="M5 12H3a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2"/>
               </svg>
-              {pedido.estado === 'recibido_parcial' ? 'Registrar entrega restante' : 'Registrar Recepción'}
+              {nadaPendiente
+                ? 'Cerrar pedido'
+                : pedido.estado === 'recibido_parcial' ? 'Registrar entrega restante' : 'Registrar Recepción'}
             </button>
           )}
 
@@ -183,7 +191,9 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
               <div>
                 <h3 className="font-bold text-kp-white">Registrar Recepción</h3>
                 <p className="text-xs text-kp-gray mt-0.5">
-                  Ingresá las cantidades que llegaron hoy. Podés recibir parcialmente.
+                  {nadaPendiente
+                    ? 'Ya está todo recibido. Confirmá para cerrar el pedido.'
+                    : 'Ingresá las cantidades que llegaron hoy. Podés recibir parcialmente.'}
                 </p>
               </div>
               <button onClick={() => setRecibirOpen(false)} className="text-kp-gray hover:text-kp-white text-xl leading-none">✕</button>
@@ -278,7 +288,7 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                   className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
                   {loading
                     ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
-                    : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg>Confirmar recepción</>
+                    : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg>{nadaPendiente ? 'Cerrar pedido como recibido' : 'Confirmar recepción'}</>
                   }
                 </button>
               </div>
