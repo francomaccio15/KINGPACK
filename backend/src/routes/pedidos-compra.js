@@ -362,7 +362,7 @@ router.patch('/:id/recibir', async (req, res, next) => {
     const { id }    = req.params;
     const { items } = req.body;
 
-    if (!Array.isArray(items)) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem con cantidad recibida' });
     }
 
@@ -407,28 +407,6 @@ router.patch('/:id/recibir', async (req, res, next) => {
 
     const itemMap = Object.fromEntries(pedidoItems.map(i => [i.articulo_id, i]));
     let totalRecibido = 0;
-
-    // Nada que recibir: si el pedido ya está completo pero quedó con un estado
-    // desactualizado (ej. 'pendiente'), simplemente lo cerramos. Evita el pedido
-    // "trabado" que no se puede confirmar porque no queda ninguna cantidad pendiente.
-    const hayPositivos = items.some(i => (parseFloat(i.cantidad_recibida) || 0) > 0);
-    if (!hayPositivos) {
-      const pendienteTotal = pedidoItems.reduce(
-        (s, i) => s + Math.max(0, parseFloat(i.cantidad) - parseFloat(i.ya_recibida || 0)), 0
-      );
-      if (pendienteTotal > 0.001) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Se requiere al menos un ítem con cantidad recibida' });
-      }
-      await client.query(`
-        UPDATE pedidos_compra
-        SET estado = 'recibido', stock_acreditado = TRUE,
-            fecha_recepcion = COALESCE(fecha_recepcion, NOW()), updated_at = NOW()
-        WHERE id = $1
-      `, [id]);
-      await client.query('COMMIT');
-      return res.json({ ok: true, estado: 'recibido', items_acreditados: 0 });
-    }
 
     for (const recibido of items) {
       const { articulo_id, cantidad_recibida } = recibido;
