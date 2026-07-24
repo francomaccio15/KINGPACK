@@ -258,6 +258,7 @@ export default function NuevaVenta({
         const cuentas: CuentaBancaria[] = data.cuentas ?? [];
         setCuentasBancarias(cuentas);
         setCuentaDestinoId(cuentas[0]?.id ?? '');
+        setCuentaDestinoId2(cuentas[0]?.id ?? '');
       })
       .catch(() => {});
   }, [open]);
@@ -1242,7 +1243,7 @@ export default function NuevaVenta({
                         {mediosPago.length >= 1 && (
                           <button
                             type="button"
-                            onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); setCuentaDestinoId2(''); }}
+                            onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); setCuentaDestinoId2(cuentasBancarias[0]?.id ?? ''); }}
                             className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
                               usarSegundoMedio
                                 ? 'bg-kp-red/10 border-kp-red/40 text-kp-red'
@@ -1368,7 +1369,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
-                  {esTransferencia && saldoAFavorAplicado < totalConExtra - 0.001 && (
+                  {esTransferencia && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
@@ -1409,7 +1410,7 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cuenta destino medio 2 (Transferencia / MP / QR) ── */}
-                  {usarSegundoMedio && esTransferencia2 && cuentasBancarias.length > 0 && monto2Num > 0.001 && (
+                  {usarSegundoMedio && esTransferencia2 && cuentasBancarias.length > 0 && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino (Medio 2)

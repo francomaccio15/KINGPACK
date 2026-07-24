@@ -104,6 +104,10 @@ export default function AccionesVenta({
           cuenta_destino: esMedioTransferencia(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre)
             ? (cuentasBancarias.find(c => c.id === p.cuenta_destino_id)?.nombre ?? null)
             : null,
+          // Sin el ID el backend no puede acreditar el saldo de la cuenta bancaria
+          cuenta_bancaria_id: esMedioTransferencia(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre)
+            ? (p.cuenta_destino_id || null)
+            : null,
         })) }),
       });
       const data = await res.json();
