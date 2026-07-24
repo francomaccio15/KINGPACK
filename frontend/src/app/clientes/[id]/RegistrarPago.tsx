@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { filtrarMediosPorRol } from '@/lib/mediosPago';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -25,6 +27,7 @@ export default function RegistrarPago({
   sucursalId?: string;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [open, setOpen]             = useState(false);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
@@ -51,8 +54,11 @@ export default function RegistrarPago({
     apiFetch('/api/ventas/medios-pago')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => {
-        const lista: MedioPago[] = (d.medios_pago ?? []).filter((m: MedioPago) =>
-          m.nombre !== 'Saldo a favor' && m.nombre !== 'Cuenta Corriente'
+        const lista = filtrarMediosPorRol(
+          (d.medios_pago ?? []).filter((m: MedioPago) =>
+            m.nombre !== 'Saldo a favor' && m.nombre !== 'Cuenta Corriente'
+          ) as MedioPago[],
+          user?.rol,
         );
         setMediosPago(lista);
         if (lista.length > 0 && !medioPagoId) setMedioPagoId(lista[0].id);
@@ -62,7 +68,7 @@ export default function RegistrarPago({
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setCuentas(d.cuentas ?? []))
       .catch(() => {});
-  }, [open]);
+  }, [open, user?.rol]);
 
   // Al cambiar a un medio que no va contra el banco, limpiar la cuenta elegida.
   useEffect(() => { if (!requiereCuenta) setCuentaId(''); }, [requiereCuenta]);

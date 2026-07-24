@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -146,6 +148,7 @@ export default function NuevaVenta({
   listas: Lista[];
 }) {
   const router = useRouter();
+  const { user } = useAuth();
 
   // ── Modal open state
   const [open, setOpen] = useState(false);
@@ -240,12 +243,12 @@ export default function NuevaVenta({
     apiFetch(`/api/ventas/medios-pago`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        const list: MedioPago[] = data.medios_pago ?? data ?? [];
+        const todos: MedioPago[] = data.medios_pago ?? data ?? [];
+        const list = filtrarMediosPorRol(todos, user?.rol);
         setMediosPago(list);
         // Por defecto siempre Efectivo (el orden alfabético dejaba "Cheque" primero)
         const seleccionables = list.filter(m => m.id !== SALDO_FAVOR_MP_ID);
-        const efectivo = seleccionables.find(m => m.nombre.toLowerCase().includes('efectivo'));
-        const porDefecto = efectivo ?? seleccionables[0];
+        const porDefecto = medioEfectivo(seleccionables) ?? seleccionables[0];
         setMedioPagoId(porDefecto?.id ?? '');
         setMedioPagoId2(
           seleccionables.find(m => m.id !== porDefecto?.id)?.id ?? porDefecto?.id ?? ''
@@ -261,7 +264,7 @@ export default function NuevaVenta({
         setCuentaDestinoId2(cuentas[0]?.id ?? '');
       })
       .catch(() => {});
-  }, [open]);
+  }, [open, user?.rol]);
 
   // ─── Verificar caja abierta cuando cambia sucursal o se abre el modal ────────
   useEffect(() => {

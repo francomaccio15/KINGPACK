@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -35,6 +37,7 @@ export default function AccionesVenta({
   observaciones: string | null;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [facturarOpen,   setFacturarOpen]   = useState(false);
   const [arcaModo,       setArcaModo]       = useState<string>('');
   const [loadingFactura, setLoadingFactura] = useState(false);
@@ -64,14 +67,15 @@ export default function AccionesVenta({
     apiFetch('/api/ventas/medios-pago')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => {
-        const lista: MedioPago[] = d.medios_pago ?? [];
+        const lista = filtrarMediosPorRol((d.medios_pago ?? []) as MedioPago[], user?.rol);
         setMediosPago(lista);
         if (pagos.length === 0 && lista.length > 0) {
-          setPagos([{ medio_pago_id: lista[0].id, monto: String(parseFloat(total) || ''), cuenta_destino_id: '' }]);
+          const porDefecto = medioEfectivo(lista) ?? lista[0];
+          setPagos([{ medio_pago_id: porDefecto.id, monto: String(parseFloat(total) || ''), cuenta_destino_id: '' }]);
         }
       })
       .catch(() => {});
-  }, [confirmarOpen]);
+  }, [confirmarOpen, user?.rol]);
 
   useEffect(() => {
     if (!confirmarOpen || cuentasBancarias.length > 0) return;
