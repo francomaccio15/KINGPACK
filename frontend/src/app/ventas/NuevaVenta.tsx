@@ -242,8 +242,14 @@ export default function NuevaVenta({
       .then(data => {
         const list: MedioPago[] = data.medios_pago ?? data ?? [];
         setMediosPago(list);
-        setMedioPagoId(list[0]?.id ?? '');
-        setMedioPagoId2(list[1]?.id ?? list[0]?.id ?? '');
+        // Por defecto siempre Efectivo (el orden alfabético dejaba "Cheque" primero)
+        const seleccionables = list.filter(m => m.id !== SALDO_FAVOR_MP_ID);
+        const efectivo = seleccionables.find(m => m.nombre.toLowerCase().includes('efectivo'));
+        const porDefecto = efectivo ?? seleccionables[0];
+        setMedioPagoId(porDefecto?.id ?? '');
+        setMedioPagoId2(
+          seleccionables.find(m => m.id !== porDefecto?.id)?.id ?? porDefecto?.id ?? ''
+        );
       })
       .catch(() => {});
     apiFetch(`/api/cuentas-bancarias`)
@@ -1362,11 +1368,17 @@ export default function NuevaVenta({
                   )}
 
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
-                  {esTransferencia && cuentasBancarias.length > 0 && saldoAFavorAplicado < totalConExtra - 0.001 && (
+                  {esTransferencia && saldoAFavorAplicado < totalConExtra - 0.001 && (
                     <section>
                       <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
                       </p>
+                      {cuentasBancarias.length === 0 ? (
+                        <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray">
+                          No hay cuentas bancarias cargadas. Cargalas en Cuentas bancarias para poder elegir el destino.
+                        </p>
+                      ) : (
+                      <>
                       <select
                         value={cuentaDestinoId}
                         onChange={e => setCuentaDestinoId(e.target.value)}
@@ -1391,6 +1403,8 @@ export default function NuevaVenta({
                           </div>
                         ) : null;
                       })()}
+                      </>
+                      )}
                     </section>
                   )}
 
