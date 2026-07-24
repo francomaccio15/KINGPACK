@@ -193,6 +193,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Ventas',                href: '/ventas',               icon: <IcoVentas /> },
       { label: 'Presupuestos',          href: '/presupuestos',         icon: <IcoPresupuestos /> },
       { label: 'Clientes',              href: '/clientes',             icon: <IcoClientes /> },
+      { label: 'Cobranzas',             href: '/cobranzas',            icon: <IcoPagoClientes /> },
       { label: 'Pago de Clientes',      href: '/pago-clientes',        icon: <IcoPagoClientes /> },
       { label: 'Egresos',               href: '/gastos',               icon: <IcoGastos /> },
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
