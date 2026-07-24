@@ -412,8 +412,8 @@ export default function NuevaVenta({
       const precio_lista = calcFinalPrice(madre, descuentoLista);
       const descuento    = descuentoCliente;
       const finalPrice   = calcFinalPrice(precio_lista, descuento);
+      // El último agregado va arriba de todo, así queda a la vista sin scrollear.
       return [
-        ...prev,
         {
           articulo_id:           art.id,
           nombre:                art.nombre,
@@ -426,6 +426,7 @@ export default function NuevaVenta({
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
         },
+        ...prev,
       ];
     });
   }, [descuentoCliente, descuentoLista]);
