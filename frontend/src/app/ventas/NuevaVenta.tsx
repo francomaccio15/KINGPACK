@@ -774,9 +774,10 @@ export default function NuevaVenta({
                   </div>
                 </div>
 
-                {/* Search results */}
+                {/* Search results — alto para ~5 resultados sin scrollear
+                    (en celular se deja más bajo para no tapar el carrito) */}
                 {artResults.length > 0 && (
-                  <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 overflow-y-auto">
+                  <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 sm:max-h-[18.5rem] overflow-y-auto">
                     <div className="px-3 py-1.5 bg-kp-surface2 border-b border-kp-border">
                       <span className="text-[10px] text-kp-gray uppercase tracking-widest">
                         Resultados ({artResults.length})
