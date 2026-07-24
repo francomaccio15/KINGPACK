@@ -114,7 +114,7 @@ export default async function PagoClientesPage({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Pago de Clientes</h2>
+            <h2 className="text-2xl font-bold uppercase tracking-wide">Consolidado de Pagos</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3 capitalize">{fechaLarga}</p>
         </div>

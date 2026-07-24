@@ -24,9 +24,11 @@ const norm = (s: string) =>
 export default function CobranzasClient({
   clientes,
   sucursalId,
+  cajaAbierta = true,
 }: {
   clientes: ClienteCobranza[];
   sucursalId?: string;
+  cajaAbierta?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [soloDeuda, setSoloDeuda] = useState(false);
@@ -57,7 +59,7 @@ export default function CobranzasClient({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-1 h-6 bg-green-500 rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Cobranzas</h2>
+            <h2 className="text-2xl font-bold uppercase tracking-wide">Pago de Clientes</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             Buscá al cliente y registrá el pago que trae al mostrador.
@@ -68,6 +70,13 @@ export default function CobranzasClient({
           <p className="text-lg font-bold tabular-nums text-amber-400">{ars.format(totalDeuda)}</p>
         </div>
       </div>
+
+      {!cajaAbierta && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+          No hay caja abierta en esta sucursal. El pago se va a registrar igual en la cuenta
+          corriente del cliente, pero no va a figurar como ingreso de caja.
+        </p>
+      )}
 
       {/* Buscador */}
       <div className="flex flex-col sm:flex-row gap-3">
