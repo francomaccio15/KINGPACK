@@ -281,6 +281,7 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
+    const usuario_id = req.user?.id ?? null;
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, egreso_id, sucursal_id, stock_acreditado
@@ -298,6 +299,7 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
     }
 
     await client.query('BEGIN');
+    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
 
     // Obtener ítems con la sucursal de imputación correcta
     let itemsToProcess = [];
@@ -329,9 +331,9 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
       `, [item.articulo_id, item.sucursal_id, item.cantidad]);
 
       await client.query(`
-        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
-        VALUES ($1, $2, $3, $4)
-      `, [item.articulo_id, item.sucursal_id, item.cantidad, `Recepción — pedido ${id}`]);
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [item.articulo_id, item.sucursal_id, item.cantidad, `Recepción — pedido ${id}`, usuario_id]);
     }
 
     await client.query(`
@@ -361,12 +363,14 @@ router.patch('/:id/recibir', async (req, res, next) => {
   try {
     const { id }    = req.params;
     const { items } = req.body;
+    const usuario_id = req.user?.id ?? null;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem con cantidad recibida' });
     }
 
     await client.query('BEGIN');
+    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, sucursal_id, egreso_id FROM pedidos_compra WHERE id = $1`,
@@ -431,9 +435,9 @@ router.patch('/:id/recibir', async (req, res, next) => {
       `, [articulo_id, itemPedido.sucursal_id, cantRec]);
 
       await client.query(`
-        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
-        VALUES ($1, $2, $3, $4)
-      `, [articulo_id, itemPedido.sucursal_id, cantRec, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`]);
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [articulo_id, itemPedido.sucursal_id, cantRec, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`, usuario_id]);
 
       // Actualizar cantidad_recibida en pedido_items
       if (itemPedido.item_exists) {
