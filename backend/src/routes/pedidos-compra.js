@@ -508,6 +508,154 @@ router.patch('/:id/recibir', async (req, res, next) => {
   }
 });
 
+// ─── PATCH /api/pedidos-compra/:id/corregir-recepcion ────────────────────────
+// Corrige cantidades ya recibidas (ej. error de tipeo). Fija cantidad_recibida
+// al valor corregido por ítem y ajusta el stock por la diferencia (delta negativo
+// revierte lo cargado de más). Recalcula el estado del pedido.
+// Body: { items: [{ articulo_id, cantidad_recibida }] }  (cantidad_recibida = total corregido)
+router.patch('/:id/corregir-recepcion', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id }    = req.params;
+    const { items } = req.body;
+    const usuario_id = req.user?.id ?? null;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Se requiere al menos un ítem a corregir' });
+    }
+
+    await client.query('BEGIN');
+    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+
+    const { rows: pedidoRows } = await client.query(
+      `SELECT id, estado, sucursal_id, egreso_id FROM pedidos_compra WHERE id = $1`,
+      [id]
+    );
+    if (!pedidoRows[0])                       { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pedido no encontrado' }); }
+    if (pedidoRows[0].estado === 'cancelado') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede corregir un pedido cancelado' }); }
+    const pedido = pedidoRows[0];
+
+    // Ítems del pedido con su sucursal de imputación y cantidad ya recibida
+    let pedidoItems = [];
+    if (pedido.egreso_id) {
+      const { rows } = await client.query(
+        `SELECT ei.articulo_id, ei.cantidad,
+                COALESCE(pi.cantidad_recibida, 0)::float AS ya_recibida,
+                (pi.articulo_id IS NOT NULL) AS item_exists,
+                ei.sucursal_imputacion_id AS sucursal_id
+         FROM egreso_items ei
+         LEFT JOIN pedido_items pi ON pi.pedido_id = $1 AND pi.articulo_id = ei.articulo_id
+         WHERE ei.egreso_id = $2 AND ei.articulo_id IS NOT NULL`,
+        [id, pedido.egreso_id]
+      );
+      pedidoItems = rows;
+    } else {
+      const { rows } = await client.query(
+        `SELECT articulo_id, cantidad::float,
+                cantidad_recibida::float AS ya_recibida,
+                TRUE AS item_exists, $2::uuid AS sucursal_id
+         FROM pedido_items WHERE pedido_id = $1`,
+        [id, pedido.sucursal_id]
+      );
+      pedidoItems = rows;
+    }
+    const itemMap = Object.fromEntries(pedidoItems.map(i => [i.articulo_id, i]));
+
+    for (const corr of items) {
+      const { articulo_id } = corr;
+      const nueva = parseFloat(corr.cantidad_recibida);
+      if (isNaN(nueva) || nueva < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Cantidad corregida inválida' });
+      }
+      const ip = itemMap[articulo_id];
+      if (!ip) continue;
+
+      const pedida = parseFloat(ip.cantidad);
+      if (nueva > pedida + 0.001) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `La cantidad corregida (${nueva}) supera lo pedido (${pedida})` });
+      }
+
+      const actual = parseFloat(ip.ya_recibida) || 0;
+      const delta  = nueva - actual; // negativo = revertir stock cargado de más
+      if (Math.abs(delta) < 0.0001) continue;
+
+      // Ajustar stock por la diferencia
+      await client.query(`
+        INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
+        VALUES ($1, $2, $3, 0)
+        ON CONFLICT (articulo_id, sucursal_id)
+        DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
+      `, [articulo_id, ip.sucursal_id, delta]);
+
+      await client.query(`
+        INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [articulo_id, ip.sucursal_id, delta, `Corrección de recepción — pedido ${id} (recibido ${actual} → ${nueva})`, usuario_id]);
+
+      // Fijar la cantidad recibida corregida en pedido_items
+      if (ip.item_exists) {
+        await client.query(
+          `UPDATE pedido_items SET cantidad_recibida = $1 WHERE pedido_id = $2 AND articulo_id = $3`,
+          [nueva, id, articulo_id]
+        );
+      } else if (nueva > 0) {
+        await client.query(
+          `INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, cantidad_recibida, precio_compra)
+           SELECT $1, $2, ei.cantidad, $3, COALESCE(ei.precio_unitario, 0)
+           FROM egreso_items ei WHERE ei.egreso_id = $4 AND ei.articulo_id = $2
+           ON CONFLICT DO NOTHING`,
+          [id, articulo_id, nueva, pedido.egreso_id]
+        );
+      }
+    }
+
+    // Recalcular estado según totales resultantes
+    let totalPedido = 0, totalRecibidoDB = 0;
+    if (pedido.egreso_id) {
+      const { rows } = await client.query(
+        `SELECT SUM(ei.cantidad)::float AS tp,
+                SUM(COALESCE(pi.cantidad_recibida, 0))::float AS tr
+         FROM egreso_items ei
+         LEFT JOIN pedido_items pi ON pi.pedido_id = $1 AND pi.articulo_id = ei.articulo_id
+         WHERE ei.egreso_id = $2 AND ei.articulo_id IS NOT NULL`,
+        [id, pedido.egreso_id]
+      );
+      totalPedido     = parseFloat(rows[0]?.tp ?? '0');
+      totalRecibidoDB = parseFloat(rows[0]?.tr ?? '0');
+    } else {
+      const { rows } = await client.query(
+        `SELECT SUM(cantidad)::float AS tp, SUM(cantidad_recibida)::float AS tr
+         FROM pedido_items WHERE pedido_id = $1`,
+        [id]
+      );
+      totalPedido     = parseFloat(rows[0]?.tp ?? '0');
+      totalRecibidoDB = parseFloat(rows[0]?.tr ?? '0');
+    }
+    const completo      = totalRecibidoDB >= totalPedido - 0.001;
+    const algoRecibido  = totalRecibidoDB > 0.001;
+    const nuevoEstado   = completo ? 'recibido' : (algoRecibido ? 'recibido_parcial' : 'pendiente');
+
+    await client.query(`
+      UPDATE pedidos_compra
+      SET estado = $1,
+          stock_acreditado = $2,
+          fecha_recepcion = CASE WHEN $2 THEN COALESCE(fecha_recepcion, NOW()) ELSE fecha_recepcion END,
+          updated_at = NOW()
+      WHERE id = $3
+    `, [nuevoEstado, completo, id]);
+
+    await client.query('COMMIT');
+    res.json({ ok: true, estado: nuevoEstado });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── DELETE /api/pedidos-compra/:id ──────────────────────────────────────────
 router.delete('/:id', async (req, res, next) => {
   const client = await pool.connect();

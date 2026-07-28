@@ -39,9 +39,12 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
   const [error, setError]                   = useState<string | null>(null);
   const [confirmEliminar, setConfirmEliminar] = useState(false);
   const [recibirOpen, setRecibirOpen]       = useState(false);
+  const [corregirOpen, setCorregirOpen]     = useState(false);
 
   // Cantidades recibidas en el modal (inicializa con pendiente por recibir)
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  // Cantidades corregidas (total recibido corregido por artículo)
+  const [correcciones, setCorrecciones] = useState<Record<string, string>>({});
 
   const abrirRecibir = () => {
     const init: Record<string, string> = {};
@@ -86,6 +89,46 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
     finally { setLoading(false); }
   };
 
+  const abrirCorregir = () => {
+    const init: Record<string, string> = {};
+    items.forEach(i => { init[i.articulo_id] = String(parseFloat(i.cantidad_recibida) || 0); });
+    setCorrecciones(init);
+    setError(null);
+    setCorregirOpen(true);
+  };
+
+  // ¿Hay alguna corrección distinta de lo ya recibido?
+  const hayCorreccion = items.some(i => {
+    const actual = parseFloat(i.cantidad_recibida) || 0;
+    const nueva  = parseFloat(correcciones[i.articulo_id]);
+    return !isNaN(nueva) && Math.abs(nueva - actual) > 0.0001;
+  });
+
+  const confirmarCorreccion = async () => {
+    const itemsACorregir = items
+      .map(i => ({ articulo_id: i.articulo_id, cantidad_recibida: parseFloat(correcciones[i.articulo_id]) }))
+      .filter((i, idx) => {
+        const actual = parseFloat(items[idx].cantidad_recibida) || 0;
+        return !isNaN(i.cantidad_recibida) && Math.abs(i.cantidad_recibida - actual) > 0.0001;
+      });
+
+    if (itemsACorregir.length === 0) { setError('No cambiaste ninguna cantidad'); return; }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/pedidos-compra/${pedido.id}/corregir-recepcion`, {
+        method: 'PATCH',
+        body: JSON.stringify({ items: itemsACorregir }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Error al corregir recepción'); return; }
+      setCorregirOpen(false);
+      router.refresh();
+    } catch { setError('Error de conexión'); }
+    finally { setLoading(false); }
+  };
+
   const cancelar = async () => {
     if (!confirm('¿Cancelar este pedido?')) return;
     setLoading(true);
@@ -113,6 +156,8 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
   };
 
   const puedeRecibir = pedido.estado !== 'cancelado' && pedido.estado !== 'recibido';
+  const hayRecibido  = items.some(i => (parseFloat(i.cantidad_recibida) || 0) > 0);
+  const puedeCorregir = !esCajero && pedido.estado !== 'cancelado' && hayRecibido;
 
   return (
     <>
@@ -142,6 +187,19 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
               </svg>
               <span className="text-xs font-semibold text-green-400">Pedido completamente recibido</span>
             </div>
+          )}
+
+          {puedeCorregir && (
+            <button onClick={abrirCorregir} disabled={loading}
+              className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/5 text-amber-400
+                hover:bg-amber-500/15 text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              title="Corregir cantidades ya recibidas (ej. error de tipeo)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Corregir recepción
+            </button>
           )}
 
           {!esCajero && pedido.estado !== 'cancelado' && pedido.estado !== 'recibido' && (
@@ -279,6 +337,101 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                   {loading
                     ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
                     : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg>Confirmar recepción</>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Corregir Recepción ── */}
+      {corregirOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => !loading && setCorregirOpen(false)} />
+          <div className="relative w-full max-w-2xl bg-kp-surface border border-kp-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
+              <div>
+                <h3 className="font-bold text-kp-white">Corregir Recepción</h3>
+                <p className="text-xs text-kp-gray mt-0.5">
+                  Ajustá el total recibido de cada artículo. El stock se corrige por la diferencia.
+                </p>
+              </div>
+              <button onClick={() => setCorregirOpen(false)} className="text-kp-gray hover:text-kp-white text-xl leading-none">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-kp-border">
+                    <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
+                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-20">Pedido</th>
+                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Recibido actual</th>
+                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-28">Recibido corregido</th>
+                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Ajuste stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-kp-border">
+                  {items.map(item => {
+                    const pedida   = parseFloat(item.cantidad) || 0;
+                    const actual   = parseFloat(item.cantidad_recibida) || 0;
+                    const nuevaRaw = correcciones[item.articulo_id];
+                    const nueva    = parseFloat(nuevaRaw);
+                    const delta    = !isNaN(nueva) ? nueva - actual : 0;
+
+                    return (
+                      <tr key={item.articulo_id} className="py-3">
+                        <td className="py-3 pr-3">
+                          <p className="font-medium text-kp-white">{item.articulo_nombre}</p>
+                          <p className="text-xs text-kp-gray font-mono">{item.articulo_codigo}</p>
+                        </td>
+                        <td className="py-3 text-right tabular-nums text-kp-gray">{pedida}</td>
+                        <td className="py-3 text-right tabular-nums text-kp-gray-lt">{actual}</td>
+                        <td className="py-3 pl-3 text-right">
+                          <input
+                            type="number" min="0" max={pedida} step="1"
+                            value={nuevaRaw ?? ''}
+                            onChange={e => setCorrecciones(prev => ({ ...prev, [item.articulo_id]: e.target.value }))}
+                            className="w-24 text-right bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5
+                              text-sm text-kp-white focus:outline-none focus:border-amber-500 tabular-nums"
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="py-3 text-right tabular-nums">
+                          {delta === 0
+                            ? <span className="text-kp-border text-xs">—</span>
+                            : <span className={`text-xs font-bold ${delta < 0 ? 'text-kp-red' : 'text-emerald-400'}`}>
+                                {delta > 0 ? '+' : ''}{delta}
+                              </span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
+              <p className="text-xs text-kp-gray bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+                Un ajuste negativo revierte del stock las unidades cargadas de más. Si el stock físico quedó
+                distinto (mermas, ventas), reconcilialo aparte desde el artículo.
+              </p>
+
+              {error && (
+                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={() => setCorregirOpen(false)} disabled={loading}
+                  className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={confirmarCorreccion} disabled={loading || !hayCorreccion}
+                  className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
+                  {loading
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
+                    : <>Guardar corrección</>
                   }
                 </button>
               </div>
