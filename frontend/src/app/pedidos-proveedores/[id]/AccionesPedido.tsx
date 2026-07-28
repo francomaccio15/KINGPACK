@@ -157,7 +157,7 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
 
   const puedeRecibir = pedido.estado !== 'cancelado' && pedido.estado !== 'recibido';
   const hayRecibido  = items.some(i => (parseFloat(i.cantidad_recibida) || 0) > 0);
-  const puedeCorregir = !esCajero && pedido.estado !== 'cancelado' && hayRecibido;
+  const puedeCorregir = pedido.estado !== 'cancelado' && hayRecibido;
 
   return (
     <>
