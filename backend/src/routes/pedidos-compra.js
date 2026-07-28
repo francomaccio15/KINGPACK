@@ -236,7 +236,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const [{ rows: pedidoRows }, { rows: itemRows }] = await Promise.all([
+    const [{ rows: pedidoRows }, { rows: itemRows }, { rows: recepcionRows }] = await Promise.all([
       pool.query(`
         SELECT
           p.id, p.fecha_pedido, p.estado, p.monto_total,
@@ -266,11 +266,30 @@ router.get('/:id', async (req, res, next) => {
         WHERE pi.pedido_id = $1
         ORDER BY a.nombre
       `, [id]),
+      // Historial de recepciones y correcciones (agrupado por evento/timestamp).
+      // Se reconstruye desde ajustes_stock, que registra cada movimiento con el
+      // id del pedido en el motivo y (desde ahora) el usuario que lo hizo.
+      pool.query(`
+        SELECT
+          aj.fecha,
+          bool_or(aj.motivo ILIKE 'correc%')      AS es_correccion,
+          SUM(aj.cantidad_delta)::float           AS total_delta,
+          u.nombre                                AS usuario_nombre,
+          json_agg(json_build_object(
+            'codigo', a.codigo, 'nombre', a.nombre, 'delta', aj.cantidad_delta
+          ) ORDER BY a.codigo)                     AS detalle
+        FROM ajustes_stock aj
+        JOIN articulos a ON a.id = aj.articulo_id
+        LEFT JOIN usuarios u ON u.id = aj.usuario_id
+        WHERE aj.motivo LIKE '%pedido ' || $1 || '%'
+        GROUP BY aj.fecha, u.nombre
+        ORDER BY aj.fecha ASC
+      `, [id]),
     ]);
 
     if (pedidoRows.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
 
-    res.json({ pedido: pedidoRows[0], items: itemRows });
+    res.json({ pedido: pedidoRows[0], items: itemRows, recepciones: recepcionRows });
   } catch (err) { next(err); }
 });
 

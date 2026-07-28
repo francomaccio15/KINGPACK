@@ -11,6 +11,9 @@ const fmt = (v: string | number | null) => {
 };
 const fmtDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
+const fmtDateTime = (s: string | null) =>
+  s ? new Date(s).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmtNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
 
 const ESTADO_STYLE: Record<string, string> = {
   pendiente:        'bg-amber-500/10 text-amber-400 border-amber-500/30',
@@ -34,6 +37,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
   const esAdmin = user.rol === 'administrador';
   let pedido: any = null;
   let items: any[] = [];
+  let recepciones: any[] = [];
 
   try {
     const res = await serverFetch(`/api/pedidos-compra/${params.id}`, { cache: 'no-store' });
@@ -41,6 +45,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
       const data = await res.json();
       pedido = data.pedido;
       items  = data.items ?? [];
+      recepciones = data.recepciones ?? [];
     }
   } catch { /* handled below */ }
 
@@ -60,6 +65,31 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
   const totalMerc = items.reduce((s: number, i: any) =>
     s + parseFloat(i.precio_compra) * parseFloat(i.cantidad), 0
   );
+
+  // Historial de recepciones: reconstruyo el estado (parcial/completo) recorriendo
+  // los eventos en orden y acumulando el total recibido vs lo pedido.
+  const totalPedido = items.reduce((s: number, i: any) => s + (parseFloat(i.cantidad) || 0), 0);
+  let acumulado = 0;
+  const eventos = recepciones.map((ev: any) => {
+    const delta = parseFloat(ev.total_delta) || 0;
+    acumulado += delta;
+    const esCorreccion = !!ev.es_correccion;
+    const completo = acumulado >= totalPedido - 0.001;
+    let tipo: 'correccion' | 'parcial' | 'completa' =
+      esCorreccion ? 'correccion' : (completo ? 'completa' : 'parcial');
+    return { ...ev, delta, tipo, acumulado };
+  });
+
+  const TIPO_BADGE: Record<string, string> = {
+    correccion: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    parcial:    'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    completa:   'bg-green-500/10 text-green-400 border-green-500/30',
+  };
+  const TIPO_LABEL: Record<string, string> = {
+    correccion: 'Corrección',
+    parcial:    'Recepción parcial',
+    completa:   'Recepción — completó el pedido',
+  };
 
   return (
     <section className="space-y-6 max-w-4xl">
@@ -191,6 +221,51 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Historial de recepciones — visible para todos (sin montos) */}
+      <div className="rounded-xl border border-kp-border overflow-hidden">
+        <div className="bg-kp-surface2 border-b border-kp-border px-4 py-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-kp-gray">Historial de Recepciones</h3>
+          <span className="text-xs text-kp-gray/60">{eventos.length} movimiento{eventos.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {eventos.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-kp-gray">
+            Todavía no se registró ninguna recepción para este pedido.
+          </div>
+        ) : (
+          <ul className="divide-y divide-kp-border bg-kp-surface">
+            {eventos.map((ev: any, idx: number) => (
+              <li key={idx} className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                <div className="sm:w-52 shrink-0">
+                  <p className="text-sm font-medium text-kp-white tabular-nums">{fmtDateTime(ev.fecha)}</p>
+                  <p className="text-xs text-kp-gray mt-0.5">
+                    {ev.usuario_nombre
+                      ? <>por {ev.usuario_nombre}</>
+                      : <span className="italic text-kp-gray/60">usuario no registrado</span>}
+                  </p>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${TIPO_BADGE[ev.tipo]}`}>
+                    {TIPO_LABEL[ev.tipo]}
+                  </span>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                    {(ev.detalle ?? []).map((d: any, j: number) => (
+                      <span key={j} className="text-xs text-kp-gray-lt">
+                        <span className="font-mono text-kp-gray">{d.codigo}</span>{' '}
+                        <span className={`tabular-nums font-semibold ${parseFloat(d.delta) < 0 ? 'text-kp-red' : 'text-emerald-400'}`}>
+                          {parseFloat(d.delta) > 0 ? '+' : ''}{fmtNum(parseFloat(d.delta))}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Totales — solo administrador */}
