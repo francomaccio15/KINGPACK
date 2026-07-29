@@ -51,7 +51,15 @@ echo "[5/6] Nginx reload..."
 nginx -t && systemctl reload nginx
 
 echo "[6/6] Health check..."
-curl -fsS http://127.0.0.1:3001/api/health && echo
+# El backend recién recargado tarda ~1-2s en aceptar conexiones; sin retry el
+# curl corre con el proceso a 0s de uptime y da "connection refused" (falso
+# negativo). Reintentar hasta 30s antes de dar el deploy por fallido.
+for i in $(seq 1 15); do
+  code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/api/health || true)
+  if [ "$code" = "200" ]; then echo "Backend /api/health 200 (listo en ${i}x2s)"; break; fi
+  if [ "$i" = "15" ]; then echo "✗ Backend no respondió 200 (último: $code)"; exit 1; fi
+  sleep 2
+done
 # El frontend (next start) tarda unos segundos en quedar listo tras el restart;
 # reintentar hasta 30s antes de dar el deploy por fallido.
 for i in $(seq 1 15); do
