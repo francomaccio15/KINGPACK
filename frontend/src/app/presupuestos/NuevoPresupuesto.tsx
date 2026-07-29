@@ -129,8 +129,11 @@ export default function NuevoPresupuesto({
   // Lista de precios
   const [listaId, setListaId] = useState<string>('');
 
-  const descuentoLista   = listas.find(l => l.id === listaId)?.descuento_lista ?? 0;
-  const descuentoCliente = selectedClient?.descuento_adicional ?? 0;
+  // La API devuelve las columnas numeric como string ("10.00"), por eso se
+  // coaccionan a número: si no, descuento_pct queda string y rompe .toFixed()
+  // y las sumas (descuento_pct + extra) terminan concatenando texto.
+  const descuentoLista   = Number(listas.find(l => l.id === listaId)?.descuento_lista ?? 0);
+  const descuentoCliente = Number(selectedClient?.descuento_adicional ?? 0);
 
   // ── Descuento extra manual sobre el total (ad-hoc, NO ligado a lista ni cliente)
   const [descExtraModo, setDescExtraModo] = useState<'pct' | 'monto'>('pct');
