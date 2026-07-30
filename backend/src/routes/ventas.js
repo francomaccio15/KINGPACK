@@ -556,7 +556,7 @@ router.get('/:id', async (req, res, next) => {
       `, [id]),
       pool.query(`
         SELECT
-          vp.monto, vp.cuenta_destino, mp.nombre AS medio_pago,
+          vp.monto, vp.cuenta_destino, vp.cuenta_bancaria_id, mp.nombre AS medio_pago,
           json_agg(
             json_build_object(
               'id',               vc.id,
@@ -572,7 +572,7 @@ router.get('/:id', async (req, res, next) => {
         LEFT JOIN venta_cheques vc
           ON vc.venta_id = vp.venta_id AND vc.medio_pago_id = vp.medio_pago_id
         WHERE vp.venta_id = $1
-        GROUP BY vp.monto, vp.cuenta_destino, mp.nombre
+        GROUP BY vp.monto, vp.cuenta_destino, vp.cuenta_bancaria_id, mp.nombre
       `, [id]),
       pool.query(`
         SELECT f.id, f.cae, f.cae_vencimiento, f.numero AS factura_numero,

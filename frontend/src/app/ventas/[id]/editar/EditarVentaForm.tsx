@@ -46,7 +46,12 @@ interface CartItem {
 }
 
 interface MedioPago { id: string; nombre: string; }
-interface PagoItem { medio_pago_id: string; monto: string; }
+interface CuentaBancaria { id: string; nombre: string; banco: string | null; titular: string | null; alias: string | null; cbu: string | null; sucursal_id: string | null; }
+interface PagoItem { medio_pago_id: string; monto: string; cuenta_bancaria_id: string; }
+
+// Un medio es "bancario" (necesita elegir cuenta destino) si es transferencia, MP o QR.
+const esMedioBancario = (nombre?: string) =>
+  !!nombre && ['transferencia', 'mercado pago', 'qr'].some(k => nombre.toLowerCase().includes(k));
 
 export default function EditarVentaForm({
   ventaId,
@@ -55,15 +60,17 @@ export default function EditarVentaForm({
   ventaEstado,
   listaPrecioId,
   observacionesActuales,
+  sucursalId,
   descuentoExtraPctInicial = 0,
   descuentoExtraMontoInicial = 0,
 }: {
   ventaId: string;
   itemsIniciales: ItemVenta[];
-  pagosIniciales?: { medio_pago: string; monto: string; }[];
+  pagosIniciales?: { medio_pago: string; monto: string; cuenta_bancaria_id?: string | null; }[];
   ventaEstado?: string;
   listaPrecioId: string | null;
   observacionesActuales: string;
+  sucursalId: string;
   descuentoExtraPctInicial?: number;
   descuentoExtraMontoInicial?: number;
 }) {
@@ -112,9 +119,11 @@ export default function EditarVentaForm({
   // Medios de pago (solo para ventas confirmadas)
   const esConfirmada = ventaEstado === 'confirmada' || ventaEstado === 'facturada';
   const [mediosPago, setMediosPago]   = useState<MedioPago[]>([]);
+  // Cuentas bancarias de la sucursal de la venta (destino de transferencia/MP/QR).
+  const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [pagos, setPagos]             = useState<PagoItem[]>(
     pagosIniciales.length > 0
-      ? pagosIniciales.map(p => ({ medio_pago_id: '', monto: String(parseFloat(p.monto) || '') }))
+      ? pagosIniciales.map(p => ({ medio_pago_id: '', monto: String(parseFloat(p.monto) || ''), cuenta_bancaria_id: p.cuenta_bancaria_id ?? '' }))
       : []
   );
   const [editarPagos, setEditarPagos] = useState(false);
@@ -130,20 +139,43 @@ export default function EditarVentaForm({
         if (pagosIniciales.length > 0) {
           setPagos(pagosIniciales.map(p => {
             const mp = lista.find(m => m.nombre === p.medio_pago);
-            return { medio_pago_id: mp?.id ?? '', monto: String(parseFloat(p.monto) || '') };
+            return { medio_pago_id: mp?.id ?? '', monto: String(parseFloat(p.monto) || ''), cuenta_bancaria_id: p.cuenta_bancaria_id ?? '' };
           }));
         }
       })
       .catch(() => {});
-  }, [esConfirmada]);
+    // Cuentas bancarias filtradas por la sucursal de la venta.
+    apiFetch('/api/cuentas-bancarias')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const todas: CuentaBancaria[] = d.cuentas ?? [];
+        setCuentasBancarias(todas.filter(c => c.sucursal_id === sucursalId));
+      })
+      .catch(() => {});
+  }, [esConfirmada, sucursalId]);
 
   const agregarPago = () => {
     const primero = mediosPago[0]?.id ?? '';
-    setPagos(prev => [...prev, { medio_pago_id: primero, monto: '' }]);
+    const banco = esMedioBancario(mediosPago.find(m => m.id === primero)?.nombre)
+      ? (cuentasBancarias[0]?.id ?? '')
+      : '';
+    setPagos(prev => [...prev, { medio_pago_id: primero, monto: '', cuenta_bancaria_id: banco }]);
   };
 
   const actualizarPago = (idx: number, field: keyof PagoItem, val: string) => {
-    setPagos(prev => prev.map((p, i) => i === idx ? { ...p, [field]: val } : p));
+    setPagos(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const next = { ...p, [field]: val };
+      // Al cambiar el medio: si pasa a bancario y no tiene cuenta, asignar la primera;
+      // si deja de ser bancario, limpiar la cuenta.
+      if (field === 'medio_pago_id') {
+        const nombre = mediosPago.find(m => m.id === val)?.nombre;
+        next.cuenta_bancaria_id = esMedioBancario(nombre)
+          ? (p.cuenta_bancaria_id || cuentasBancarias[0]?.id || '')
+          : '';
+      }
+      return next;
+    }));
   };
 
   const eliminarPago = (idx: number) => {
@@ -252,6 +284,11 @@ export default function EditarVentaForm({
     if (editarPagos && pagos.length > 0) {
       const invalido = pagos.some(p => !p.medio_pago_id || !parseFloat(p.monto));
       if (invalido) { setError('Completá todos los métodos de pago y montos.'); return; }
+      // Los medios bancarios (transferencia/MP/QR) requieren cuenta destino.
+      const faltaBanco = pagos.some(p =>
+        esMedioBancario(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre) && !p.cuenta_bancaria_id
+      );
+      if (faltaBanco) { setError('Elegí la cuenta destino para los pagos por transferencia.'); return; }
     }
 
     setSaving(true);
@@ -264,7 +301,16 @@ export default function EditarVentaForm({
         descuento_extra_monto: descExtraModo === 'monto' ? extraMontoFijo : descExtraMonto,
       };
       if (editarPagos && pagos.length > 0) {
-        body.pagos = pagos.map(p => ({ medio_pago_id: p.medio_pago_id, monto: parseFloat(p.monto) }));
+        body.pagos = pagos.map(p => {
+          const esBanc = esMedioBancario(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre);
+          const cuenta = esBanc ? (p.cuenta_bancaria_id || null) : null;
+          return {
+            medio_pago_id: p.medio_pago_id,
+            monto: parseFloat(p.monto),
+            cuenta_bancaria_id: cuenta,
+            cuenta_destino: cuenta ? (cuentasBancarias.find(c => c.id === cuenta)?.nombre ?? null) : null,
+          };
+        });
       }
       const res = await apiFetch(`/api/ventas/${ventaId}/items`, {
         method: 'PUT',
@@ -515,8 +561,13 @@ export default function EditarVentaForm({
 
           {editarPagos && (
             <div className="p-5 space-y-3">
-              {pagos.map((pago, idx) => (
-                <div key={idx} className="flex items-center gap-3">
+              {pagos.map((pago, idx) => {
+                const nombreMedio = mediosPago.find(m => m.id === pago.medio_pago_id)?.nombre;
+                const bancario = esMedioBancario(nombreMedio);
+                const cc = cuentasBancarias.find(c => c.id === pago.cuenta_bancaria_id);
+                return (
+                <div key={idx} className="space-y-2">
+                <div className="flex items-center gap-3">
                   <select
                     value={pago.medio_pago_id}
                     onChange={e => actualizarPago(idx, 'medio_pago_id', e.target.value)}
@@ -549,7 +600,45 @@ export default function EditarVentaForm({
                     </svg>
                   </button>
                 </div>
-              ))}
+
+                {/* Cuenta destino — solo para medios bancarios (transferencia/MP/QR),
+                    filtrada por la sucursal de la venta. */}
+                {bancario && (
+                  <div className="pl-1 pr-11">
+                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Cuenta destino</p>
+                    {cuentasBancarias.length === 0 ? (
+                      <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-amber-500/30 text-[11px] text-amber-400">
+                        No hay cuentas bancarias en esta sucursal. Cargalas en Cuentas bancarias.
+                      </p>
+                    ) : (
+                      <>
+                        <select
+                          value={pago.cuenta_bancaria_id}
+                          onChange={e => actualizarPago(idx, 'cuenta_bancaria_id', e.target.value)}
+                          className="w-full bg-kp-surface2 border border-kp-red/60 rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                        >
+                          <option value="">— Seleccionar cuenta —</option>
+                          {cuentasBancarias.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.nombre}{c.banco ? ` · ${c.banco}` : ''}{c.alias ? ` · ${c.alias}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {cc && (
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                            {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
+                            {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
+                            {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}
+                            {cc.alias   && <p><span className="text-kp-gray-lt font-medium">Alias:</span> {cc.alias}</p>}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                </div>
+                );
+              })}
 
               <div className="flex items-center justify-between pt-1">
                 <button
