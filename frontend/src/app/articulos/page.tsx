@@ -145,7 +145,10 @@ export default async function ArticulosPage({
   // sin alta, sin columna de precio base, sin acciones de edición.
   const esCajero = user.rol === 'cajero' || user.rol === 'vendedor';
   const esAdmin  = user.rol === 'administrador';
-  const sucursalActivaId = getSucursalActivaId();
+  // El cajero está fijado a su sucursal por cookie, pero en artículos debe ver
+  // el stock de AMBAS sucursales (vista "Todas"): ignoramos su sucursal activa
+  // para las consultas de stock de esta página.
+  const sucursalActivaId = esCajero ? '' : getSucursalActivaId();
 
   const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
 
