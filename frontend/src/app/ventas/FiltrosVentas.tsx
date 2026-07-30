@@ -11,7 +11,7 @@ const ESTADOS = [
   { value: 'anulada',    label: 'Anulada' },
 ];
 
-export default function FiltrosVentas() {
+export default function FiltrosVentas({ hoy }: { hoy: string }) {
   const router      = useRouter();
   const pathname    = usePathname();
   const searchParams = useSearchParams();
@@ -28,8 +28,14 @@ export default function FiltrosVentas() {
   const fecha_desde = searchParams.get('fecha_desde') ?? '';
   const fecha_hasta = searchParams.get('fecha_hasta') ?? '';
 
-  const limpiar = () => router.replace(pathname);
   const hayFiltros = !!(q || estado || fecha_desde || fecha_hasta);
+
+  // Sin filtros explícitos, la vista muestra por defecto las ventas de hoy:
+  // reflejamos esa fecha en los inputs para que quede claro.
+  const desdeVal = hayFiltros ? fecha_desde : hoy;
+  const hastaVal = hayFiltros ? fecha_hasta : hoy;
+
+  const limpiar = () => router.replace(pathname);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -73,7 +79,7 @@ export default function FiltrosVentas() {
       {/* Rango de fechas */}
       <input
         type="date"
-        value={fecha_desde}
+        value={desdeVal}
         onChange={e => update('fecha_desde', e.target.value)}
         className="px-3 py-2 rounded-lg text-sm bg-kp-surface2 border border-kp-border
           focus:border-kp-red text-kp-white outline-none transition-colors"
@@ -82,7 +88,7 @@ export default function FiltrosVentas() {
       <span className="text-kp-gray text-xs">—</span>
       <input
         type="date"
-        value={fecha_hasta}
+        value={hastaVal}
         onChange={e => update('fecha_hasta', e.target.value)}
         className="px-3 py-2 rounded-lg text-sm bg-kp-surface2 border border-kp-border
           focus:border-kp-red text-kp-white outline-none transition-colors"

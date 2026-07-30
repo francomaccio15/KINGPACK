@@ -55,14 +55,31 @@ async function fetchData(params: Record<string, string | undefined>) {
 
 export const dynamic = 'force-dynamic';
 
+// Fecha de hoy (zona horaria Argentina) en formato YYYY-MM-DD
+function hoyISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
 export default async function VentasPage({
   searchParams,
 }: {
   searchParams: { q?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
   const user = requireAuth('/ventas');
-  const { ventas, count, sucursales: todasSucursales, listas } = await fetchData(searchParams);
+
+  // Filtros explícitos que el usuario haya seteado
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.fecha_desde || searchParams.fecha_hasta);
+
+  const hoy = hoyISO();
+  // Por defecto (sin ningún filtro) mostramos solo las ventas del día
+  const effectiveParams = hayFiltros
+    ? searchParams
+    : { ...searchParams, fecha_desde: hoy, fecha_hasta: hoy };
+
+  const { ventas, count, sucursales: todasSucursales, listas } = await fetchData(effectiveParams);
 
   const esCajero = user.rol === 'cajero';
   const sucursalId = user.sucursal_default_id ?? null;
@@ -107,7 +124,7 @@ export default async function VentasPage({
 
       {/* Filtros */}
       <Suspense>
-        <FiltrosVentas />
+        <FiltrosVentas hoy={hoy} />
       </Suspense>
 
       {/* Tabla con detalle expandible */}
