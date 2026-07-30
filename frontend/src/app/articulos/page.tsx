@@ -93,7 +93,8 @@ async function fetchRanking(sucursal_id: string): Promise<RankingData | null> {
 async function fetchStockBajoCount(sucursal_id: string): Promise<number> {
   try {
     const qs = new URLSearchParams({ stock_bajo: 'true', activo: 'true', limit: '1' });
-    if (sucursal_id) qs.set('sucursal_id', sucursal_id);
+    // Siempre presente ('' = Todas) para que serverFetch no inyecte la cookie.
+    qs.set('sucursal_id', sucursal_id);
     const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
     if (!r.ok) return 0;
     return (await r.json()).count ?? 0;
@@ -110,7 +111,9 @@ async function fetchArticulos(
   if (sp.categoria_id)  qs.set('categoria_id', sp.categoria_id);
   if (sp.lista_id)      qs.set('lista_id', sp.lista_id);
   if (sp.stock_bajo)    qs.set('stock_bajo', sp.stock_bajo);
-  if (sucursal_id)      qs.set('sucursal_id', sucursal_id);
+  // Siempre presente ('' = Todas). Así serverFetch no inyecta la sucursal de la
+  // cookie: el cajero está fijado a su sucursal por cookie pero acá ve ambas.
+  qs.set('sucursal_id', sucursal_id);
   qs.set('activo', sp.activo || 'true');
   qs.set('limit',  String(PAGE_SIZE));
   qs.set('offset', String((page - 1) * PAGE_SIZE));
