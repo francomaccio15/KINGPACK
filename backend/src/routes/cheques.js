@@ -226,10 +226,12 @@ router.post('/', async (req, res, next) => {
         observaciones?.trim() || null,
       ]);
 
-      // Un cheque RECIBIDO acredita apenas se carga (decisión del usuario,
-      // 21/07/2026). Los emitidos no: recién descuentan al pasar a 'debitado'.
-      // Si nace rechazado o anulado no acredita nada.
-      if (tipo === 'recibido' && !['rechazado', 'anulado'].includes(estadoInicial)) {
+      // Un cheque RECIBIDO impacta el banco recién cuando efectivamente se cobra:
+      // solo si nace ya 'acreditado' (plata que ya está en la cuenta) se registra el
+      // ingreso ahora. En 'en_cartera'/'depositado'/'endosado' NO toca el saldo — lo
+      // hará al pasar a 'acreditado' (por el PATCH, cuya guarda evita duplicar, o por
+      // el cron al vencer). Los emitidos recién descuentan al pasar a 'debitado'.
+      if (tipo === 'recibido' && estadoInicial === 'acreditado') {
         const cuenta = await cuentaChequesId(client);
         if (cuenta) {
           await registrarMovimientoBancario(client, {
@@ -322,12 +324,24 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
       esPagoProveedor = ppcRows.length > 0;
     }
 
+    // ¿Es un cheque recibido en un movimiento de caja manual? (origen 'movimiento_caja'
+    // en vw_cheques). Sin esta rama caería a venta_cheques y devolvería 404.
+    let esMovCaja = false;
+    if (!esManual && !esPagoProveedor) {
+      const { rows: mccRows } = await client.query(
+        `SELECT id FROM movimiento_caja_cheques WHERE id = $1`, [id]
+      );
+      esMovCaja = mccRows.length > 0;
+    }
+
     // Obtener estado actual
     const tabla = esManual
       ? 'cheques_manuales'
       : esPagoProveedor
         ? 'pago_proveedor_cheques'
-        : (tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques');
+        : esMovCaja
+          ? 'movimiento_caja_cheques'
+          : (tipo === 'recibido' ? 'venta_cheques' : 'egreso_cheques');
     const { rows: actual } = await client.query(
       `SELECT id, estado FROM ${tabla} WHERE id = $1`,
       [id]
@@ -454,49 +468,11 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
       }
     }
 
-    // Cheque RECIBIDO acreditado → confirmar ingreso en caja (en caso de no haber sido registrado al crear la venta)
-    if (tipo === 'recibido' && estado_nuevo === 'acreditado') {
-      const { rows: chequeInfo } = await client.query(`
-        SELECT vc.banco, vc.numero_cheque, vc.importe,
-               v.numero AS venta_numero, v.sucursal_id,
-               cl.razon_social AS cliente_nombre
-          FROM venta_cheques vc
-          JOIN ventas v    ON v.id  = vc.venta_id
-          LEFT JOIN clientes cl ON cl.id = v.cliente_id
-         WHERE vc.id = $1
-      `, [id]);
-
-      if (chequeInfo[0]) {
-        const ch = chequeInfo[0];
-        // Solo registrar si hay caja abierta Y no existe ya un movimiento positivo para esta venta
-        const { rows: cajaRows } = await client.query(
-          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
-          [ch.sucursal_id]
-        );
-        if (cajaRows[0]) {
-          const conceptoVenta = `Venta #${ch.venta_numero}`;
-          const { rows: yaExiste } = await client.query(
-            `SELECT id FROM movimientos_caja
-              WHERE caja_id = $1 AND tipo = 'venta' AND concepto = $2 LIMIT 1`,
-            [cajaRows[0].id, conceptoVenta]
-          );
-          // Registrar movimiento de acreditación del cheque (separado de la venta)
-          await client.query(`
-            INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
-            SELECT $1, 'ingreso',
-                   $2,
-                   $3,
-                   mp.id
-              FROM medios_pago mp
-             WHERE LOWER(mp.nombre) LIKE '%cheque%' LIMIT 1
-          `, [
-            cajaRows[0].id,
-            `Cheque acreditado — ${ch.banco} #${ch.numero_cheque} — ${ch.cliente_nombre ?? 'Cliente'} [Venta #${ch.venta_numero}]`,
-            parseFloat(ch.importe),
-          ]);
-        }
-      }
-    }
+    // Cheque RECIBIDO acreditado → NO se registra nada extra en caja: la venta ya
+    // dejó su movimiento (`Venta #N`) al momento de la venta, y la acreditación se
+    // refleja en el banco (bloque `impactaBanco` de arriba). Volver a insertarlo acá
+    // duplicaba el cheque en caja. La plata entra al banco recién al acreditarse, que
+    // es cuando el cheque efectivamente impacta.
 
     await client.query('COMMIT');
 

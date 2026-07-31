@@ -18,7 +18,7 @@ router.get('/', async (req, res, next) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT id, nombre, banco, titular, alias, cbu, activo, saldo::float, sucursal_id FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
+      `SELECT id, nombre, banco, titular, alias, cbu, activo, saldo::float, sucursal_id, es_cuenta_cheques FROM cuentas_bancarias_empresa ${where} ORDER BY nombre`,
       params
     );
     res.json({ cuentas: rows });
@@ -69,6 +69,33 @@ router.put('/:id', async (req, res, next) => {
     }
 
     await client.query('BEGIN');
+
+    // Blindaje: no dejar inhabilitar en silencio la cuenta por la que se cobran y
+    // pagan TODOS los cheques (mig 049). Si se está desactivando esa cuenta y no
+    // vino confirmación explícita, se corta con 409 + código para que la UI avise.
+    // Los cheques pendientes seguirían impactando esta cuenta y quedarían sin reflejo
+    // visible si la cuenta desaparece del listado (que filtra por activo).
+    if (req.body.activo === false && req.body.confirmar_cheques !== true) {
+      const { rows: flagRows } = await client.query(
+        `SELECT es_cuenta_cheques FROM cuentas_bancarias_empresa WHERE id = $1`,
+        [req.params.id]
+      );
+      if (flagRows[0]?.es_cuenta_cheques) {
+        const { rows: pend } = await client.query(`
+          SELECT COUNT(*)::int AS pendientes
+            FROM vw_cheques
+           WHERE (tipo = 'recibido' AND estado IN ('en_cartera','depositado'))
+              OR (tipo = 'emitido'  AND estado IN ('emitido','presentado'))
+        `);
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'CUENTA_CHEQUES',
+          mensaje: 'Es la cuenta por la que se cobran y pagan todos los cheques. '
+            + 'Inhabilitarla puede causar que futuros cheques no impacten correctamente.',
+          cheques_pendientes: pend[0].pendientes,
+        });
+      }
+    }
 
     let existe = true;
     if (updates.length) {

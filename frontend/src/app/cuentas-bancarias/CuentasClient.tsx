@@ -13,6 +13,7 @@ interface Cuenta {
   activo: boolean;
   saldo: number;
   sucursal_id: string | null;
+  es_cuenta_cheques?: boolean;
 }
 
 interface Sucursal { id: string; nombre: string }
@@ -207,11 +208,31 @@ export default function CuentasClient() {
   useEffect(() => { cargar(); }, [cargar]);
 
   const toggleActivo = async (c: Cuenta) => {
+    const desactivando = c.activo;
     setTogglingId(c.id);
     try {
-      await apiFetch(`/api/cuentas-bancarias/${c.id}`, {
-        method: 'PUT', body: JSON.stringify({ activo: !c.activo }),
-      });
+      const put = (confirmarCheques: boolean) =>
+        apiFetch(`/api/cuentas-bancarias/${c.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            activo: !c.activo,
+            ...(confirmarCheques ? { confirmar_cheques: true } : {}),
+          }),
+        });
+
+      let res = await put(false);
+      // El backend corta con 409 si se está inhabilitando la cuenta de cheques.
+      if (desactivando && res.status === 409) {
+        const data = await res.json().catch(() => ({} as any));
+        if (data?.error === 'CUENTA_CHEQUES') {
+          const pend = data.cheques_pendientes ?? 0;
+          const aviso = (data.mensaje ?? 'Es la cuenta de cheques.')
+            + (pend > 0 ? `\n\nHay ${pend} cheque(s) pendiente(s) que impactarán esta cuenta.` : '')
+            + '\n\n¿Inhabilitarla igual?';
+          if (!window.confirm(aviso)) return;
+          res = await put(true);
+        }
+      }
       await cargar();
     } finally {
       setTogglingId(null);
@@ -265,7 +286,14 @@ export default function CuentasClient() {
             <tbody className="divide-y divide-kp-border">
               {cuentas.map(c => (
                 <tr key={c.id} className={`bg-kp-surface hover:bg-kp-surface2 transition-colors ${!c.activo ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-kp-white">{c.nombre}</td>
+                  <td className="px-4 py-3 font-medium text-kp-white">
+                    {c.nombre}
+                    {c.es_cuenta_cheques && (
+                      <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide text-kp-red bg-kp-red/10 border border-kp-red/20 rounded px-1.5 py-0.5">
+                        Cheques
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-xs text-kp-gray-lt">
                     {c.banco || '—'}
                     {c.titular && <span className="block text-kp-gray">{c.titular}</span>}
