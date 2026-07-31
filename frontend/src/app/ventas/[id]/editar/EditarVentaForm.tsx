@@ -60,7 +60,6 @@ export default function EditarVentaForm({
   ventaEstado,
   listaPrecioId,
   observacionesActuales,
-  sucursalId,
   descuentoExtraPctInicial = 0,
   descuentoExtraMontoInicial = 0,
 }: {
@@ -70,7 +69,6 @@ export default function EditarVentaForm({
   ventaEstado?: string;
   listaPrecioId: string | null;
   observacionesActuales: string;
-  sucursalId: string;
   descuentoExtraPctInicial?: number;
   descuentoExtraMontoInicial?: number;
 }) {
@@ -119,7 +117,7 @@ export default function EditarVentaForm({
   // Medios de pago (solo para ventas confirmadas)
   const esConfirmada = ventaEstado === 'confirmada' || ventaEstado === 'facturada';
   const [mediosPago, setMediosPago]   = useState<MedioPago[]>([]);
-  // Cuentas bancarias de la sucursal de la venta (destino de transferencia/MP/QR).
+  // Cuentas bancarias donde puede caer la transferencia/MP/QR (destino del pago).
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [pagos, setPagos]             = useState<PagoItem[]>(
     pagosIniciales.length > 0
@@ -144,15 +142,14 @@ export default function EditarVentaForm({
         }
       })
       .catch(() => {});
-    // Cuentas bancarias filtradas por la sucursal de la venta.
+    // Todas las cuentas bancarias activas (igual que en la venta nueva): la
+    // cuenta destino no se restringe por sucursal, así en cualquier sucursal se
+    // puede elegir cuentas como GALICIA DISTRIBUIDORA.
     apiFetch('/api/cuentas-bancarias')
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const todas: CuentaBancaria[] = d.cuentas ?? [];
-        setCuentasBancarias(todas.filter(c => c.sucursal_id === sucursalId));
-      })
+      .then(d => setCuentasBancarias(d.cuentas ?? []))
       .catch(() => {});
-  }, [esConfirmada, sucursalId]);
+  }, [esConfirmada]);
 
   const agregarPago = () => {
     const primero = mediosPago[0]?.id ?? '';
@@ -601,14 +598,13 @@ export default function EditarVentaForm({
                   </button>
                 </div>
 
-                {/* Cuenta destino — solo para medios bancarios (transferencia/MP/QR),
-                    filtrada por la sucursal de la venta. */}
+                {/* Cuenta destino — solo para medios bancarios (transferencia/MP/QR). */}
                 {bancario && (
                   <div className="pl-1 pr-11">
                     <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Cuenta destino</p>
                     {cuentasBancarias.length === 0 ? (
                       <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-amber-500/30 text-[11px] text-amber-400">
-                        No hay cuentas bancarias en esta sucursal. Cargalas en Cuentas bancarias.
+                        No hay cuentas bancarias cargadas. Cargalas en Cuentas bancarias.
                       </p>
                     ) : (
                       <>
