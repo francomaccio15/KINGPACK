@@ -862,20 +862,21 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
       // Si algún pago entró a una cuenta bancaria, sacarlo de ahí.
       await revertirMovimientosBancarios(client, 'venta', id);
 
-      // Revertir el ingreso de caja que generó la venta. Al confirmarse, cada
-      // pago que NO fue cuenta corriente ni saldo a favor (efectivo, tarjeta,
-      // transferencia, cheque, etc.) se registró como ingreso en la caja. Al
-      // anular se descuenta ese total con un egreso compensatorio en la caja
-      // abierta de la sucursal (best-effort: si no hay caja abierta, se omite).
+      // Revertir el ingreso de caja que generó la venta. El arqueo de caja SOLO
+      // cuenta efectivo físico: los pagos por transferencia/tarjeta/MP/QR/cheque
+      // se registran en la caja pero NO engrosan el efectivo (y ya se revierten
+      // por su propio ledger: transferencia/MP/QR por el banco, cheques por su
+      // circuito). Por eso el egreso compensatorio debe cubrir SOLO la porción
+      // en efectivo; si sumáramos la transferencia, restaríamos efectivo que
+      // nunca entró al cajón (egreso fantasma en el arqueo). Best-effort: si no
+      // hay caja abierta, se omite.
       const { rows: [pagoCaja] } = await client.query(
         `SELECT COALESCE(SUM(vp.monto), 0) AS total_caja
            FROM venta_pagos vp
            JOIN medios_pago mp ON mp.id = vp.medio_pago_id
           WHERE vp.venta_id = $1
-            AND mp.nombre <> 'Saldo a favor'
-            AND lower(mp.nombre) NOT LIKE '%cuenta corriente%'
-            AND lower(mp.nombre) NOT LIKE '%cta. cte%'
-            AND lower(mp.nombre) NOT LIKE '%cta cte%'`,
+            AND lower(mp.nombre) LIKE '%efectivo%'
+            AND mp.caja_fuerte_sucursal_id IS NULL`,
         [id]
       );
       const totalCaja = parseFloat(pagoCaja.total_caja) || 0;
