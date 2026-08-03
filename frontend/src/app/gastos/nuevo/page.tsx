@@ -109,6 +109,11 @@ export default function NuevoEgresoPage() {
   const [otrosImpuestos, setOtrosImpuestos] = useState('');
   const [totalComprobante, setTotalComprobante] = useState('');
 
+  // Flete como % que se traspasa al artículo: al guardar, cada artículo de la
+  // compra toma este % como su costo_flete y su margen se ajusta para NO mover el
+  // precio de venta final. No genera egreso aparte.
+  const [fletePct, setFletePct] = useState('');
+
   // Pago (uno o varios medios: pago dividido)
   const [estadoPago, setEstadoPago] = useState<'pendiente' | 'pagado'>('pendiente');
   const [fechaVenc, setFechaVenc] = useState('');
@@ -175,6 +180,7 @@ export default function NuevoEgresoPage() {
     setPercepcionesIb('');
     setOtrosImpuestos('');
     setTotalComprobante('');
+    setFletePct('');
     setSaveError(null);
     if (TIPOS_CON_COMPROBANTE.includes(tipoOp)) {
       setTipoComp('factura_a');
@@ -249,6 +255,8 @@ export default function NuevoEgresoPage() {
     const t = esFacturaEnBlanco(tipoComp) ? sumaFiscal : totalItems;
     setTotalComprobante(t > 0 ? t.toFixed(2) : '');
   }, [sumaFiscal, totalItems, tipoOp, tipoComp]);
+
+  const fletePctNum = parseFloat(fletePct) || 0;
 
   // ── Búsqueda de artículos ─────────────────────────────────────────────────
   const searchArticulos = useCallback((q: string) => {
@@ -376,6 +384,7 @@ export default function NuevoEgresoPage() {
       percepciones_ib: parseFloat(percepcionesIb) || 0,
       otros_impuestos: parseFloat(otrosImpuestos) || 0,
       total: parseFloat(totalComprobante),
+      costo_flete_pct: fletePctNum,
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
       anticipo_id: vincularAnticipo && anticipoId ? anticipoId : null,
@@ -987,6 +996,34 @@ export default function NuevoEgresoPage() {
           )}
         </div>
       </div>
+
+      {/* ── Costo de flete al artículo (solo Compra de Mercadería) ── */}
+      {tipoOp === 'compra_mercaderia' && (
+      <div className={sectionCls}>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Costo de flete — artículo</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Flete % (se traspasa al artículo)</label>
+            <div className="relative">
+              <NumericInput
+                placeholder="0.00"
+                value={fletePct}
+                onChange={e => setFletePct(e.target.value)}
+                className={`${inputCls} pr-7`}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">%</span>
+            </div>
+          </div>
+          <div className="flex items-end pb-1">
+            <p className="text-xs text-kp-gray/70">
+              Al guardar, cada artículo de la compra toma este % como su flete y su
+              margen se ajusta para <span className="text-kp-gray">no cambiar el precio de venta final</span>.
+              No genera un egreso aparte.
+            </p>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* ── Sección 7: Forma de pago ─── */}
       <div className={sectionCls}>
