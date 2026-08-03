@@ -10,7 +10,7 @@ cd "$APP_DIR"
 echo "═══ KINGPACK Deploy — $(date -u +'%Y-%m-%d %H:%M:%S UTC') ═══"
 
 echo "[1/6] git pull..."
-git pull --ff-only
+git pull --ff-only origin master
 
 echo "[2/6] Backend: npm install + migraciones..."
 (cd backend && npm install --omit=dev --no-audit --no-fund)
