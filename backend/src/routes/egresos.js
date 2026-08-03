@@ -251,13 +251,8 @@ router.post('/', async (req, res, next) => {
       anticipo_id,
       items = [],
       pago,
-      costo_flete = 0,
-      costo_flete_pct = 0,
       bonificaciones = [],
     } = req.body;
-
-    // Flete de la factura como % (para traspasarlo al costo_flete del artículo).
-    const fletePctNum = Math.max(0, parseFloat(costo_flete_pct) || 0);
 
     // Bonificaciones (descuento extra en cascada sobre el subtotal de la lista).
     // Lista flexible; el neto_gravado que llega ya refleja su resultado.
@@ -428,35 +423,10 @@ router.post('/', async (req, res, next) => {
         const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
         const costoEfectivo = +(precio * (1 - descPct / 100) * factorBonif).toFixed(2);
         if (costoEfectivo > 0) {
-          if (fletePctNum > 0) {
-            // Traspaso del flete de la factura al artículo. El flete se absorbe en
-            // el MARGEN para no mover el precio de venta final: se preserva el
-            // producto (1+flete)(1+margen), de modo que precio_madre sólo cambia por
-            // el nuevo costo. margen_nuevo = ((1+flete_viejo)(1+margen_viejo)/(1+flete_nuevo) − 1).
-            const { rows: aRows } = await client.query(
-              `SELECT a.costo_flete::float AS flete_viejo,
-                      COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_viejo
-                 FROM articulos a
-                 JOIN categorias c ON c.id = a.categoria_id
-                WHERE a.id = $1`,
-              [it.articulo_id]
-            );
-            const fleteViejo  = parseFloat(aRows[0]?.flete_viejo)  || 0;
-            const margenViejo = parseFloat(aRows[0]?.margen_viejo) || 0;
-            const factorViejo = (1 + fleteViejo / 100) * (1 + margenViejo / 100);
-            const margenNuevo = +(((factorViejo / (1 + fletePctNum / 100)) - 1) * 100).toFixed(2);
-            await client.query(
-              `UPDATE articulos
-                  SET costo_base = $1, costo_flete = $2, margen_aplicado = $3, updated_at = NOW()
-                WHERE id = $4`,
-              [costoEfectivo, fletePctNum, margenNuevo, it.articulo_id]
-            );
-          } else {
-            await client.query(
-              `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
-              [costoEfectivo, it.articulo_id]
-            );
-          }
+          await client.query(
+            `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
+            [costoEfectivo, it.articulo_id]
+          );
         }
       }
     }
@@ -594,37 +564,11 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    // --- Costo de flete: egreso aparte en el subrubro "Transporte de carga" ---
-    // No se suma al total del comprobante; queda como gasto independiente.
-    let fleteEgreso = null;
-    const fleteNum = parseFloat(costo_flete) || 0;
-    if (fleteNum > 0) {
-      const { rows: subRows } = await client.query(
-        `SELECT id FROM subrubro_gastos WHERE nombre = 'Transporte de carga' LIMIT 1`
-      );
-      const subId = subRows[0]?.id || null;
-      const { rows: fRows } = await client.query(`
-        INSERT INTO egresos (
-          tipo_operacion, fecha_emision, sucursal_id, subrubro_gasto_id, descripcion,
-          total, estado_pago
-        ) VALUES ('gasto_manual', $1, $2, $3, $4, $5, $6)
-        RETURNING id, total
-      `, [
-        fecha_emision || new Date().toISOString().split('T')[0],
-        sucursal_id, subId,
-        `Flete${descripcion ? ' — ' + descripcion.trim() : ''}`.substring(0, 200),
-        // Queda pendiente: el pago del formulario aplica al comprobante, no al flete.
-        fleteNum.toFixed(2), 'pendiente',
-      ]);
-      fleteEgreso = fRows[0];
-    }
-
     await client.query('COMMIT');
     res.status(201).json({
       egreso: { ...egreso, estado_pago: estadoFinal },
       anticipo_creado: anticipoNuevo,
       pedido_creado: pedidoCreado,
-      flete_egreso: fleteEgreso,
     });
   } catch (err) {
     await client.query('ROLLBACK');
