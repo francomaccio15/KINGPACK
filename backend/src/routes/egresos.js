@@ -400,6 +400,11 @@ router.post('/', async (req, res, next) => {
       `, [proveedor_id, sucursal_id, egreso.id, montoMercaderia.toFixed(2)]);
       pedidoCreado = pedidoRows[0];
 
+      // Factor de las bonificaciones sobre el subtotal (descuento extra en
+      // cascada). Es uniforme para todas las líneas porque se aplica sobre el
+      // subtotal completo, así que impacta a cada artículo en la misma proporción.
+      const factorBonif = bonificacionesLimpias.reduce((f, b) => f * (1 - b.pct / 100), 1);
+
       for (const it of items) {
         if (!it.articulo_id) continue;
         const cant = parseFloat(it.cantidad) || 1;
@@ -410,6 +415,20 @@ router.post('/', async (req, res, next) => {
           ON CONFLICT (pedido_id, articulo_id)
           DO UPDATE SET cantidad = pedido_items.cantidad + EXCLUDED.cantidad
         `, [pedidoCreado.id, it.articulo_id, cant, precio]);
+
+        // El costo de compra pasa a ser el costo del artículo: precio unitario
+        // (neto) menos el descuento de la línea y menos las bonificaciones sobre
+        // el subtotal. Al pisar costo_base, el trigger recalcula precio_madre y
+        // las listas de venta según el margen del artículo. Sólo se actualiza si
+        // el costo efectivo es > 0 para no pisar el costo con un cero accidental.
+        const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+        const costoEfectivo = +(precio * (1 - descPct / 100) * factorBonif).toFixed(2);
+        if (costoEfectivo > 0) {
+          await client.query(
+            `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
+            [costoEfectivo, it.articulo_id]
+          );
+        }
       }
     }
 
