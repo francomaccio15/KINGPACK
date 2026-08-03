@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 
 type Proveedor = { id: string; razon_social: string };
-type Rubro = { id: string; nombre: string };
+type Subrubro = { id: string; nombre: string };
+type Rubro = { id: string; nombre: string; subrubros?: Subrubro[] };
 
 const TIPOS = [
   { value: '',                     label: 'Todos los tipos' },
@@ -34,9 +35,21 @@ export default function FiltrosGastos({ proveedores, rubros = [] }: { proveedore
     router.push(`/gastos?${params.toString()}`);
   }, [router, sp]);
 
+  // Al cambiar de rubro se limpia el subrubro (los subrubros dependen del rubro).
+  const pushRubro = useCallback((value: string) => {
+    const params = new URLSearchParams(sp.toString());
+    params.delete('subrubro_gasto_id');
+    if (value) params.set('rubro_id', value);
+    else params.delete('rubro_id');
+    router.push(`/gastos?${params.toString()}`);
+  }, [router, sp]);
+
   const limpiar = () => router.push('/gastos');
   const hayFiltros = !!(sp.get('q') || sp.get('tipo_operacion') || sp.get('proveedor_id')
-    || sp.get('rubro_id') || sp.get('fecha_desde') || sp.get('fecha_hasta') || sp.get('estado_pago'));
+    || sp.get('rubro_id') || sp.get('subrubro_gasto_id') || sp.get('fecha_desde') || sp.get('fecha_hasta') || sp.get('estado_pago'));
+
+  const rubroSel = sp.get('rubro_id') ?? '';
+  const subrubros = rubros.find(r => r.id === rubroSel)?.subrubros ?? [];
 
   const inputCls = 'bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
 
@@ -70,8 +83,8 @@ export default function FiltrosGastos({ proveedores, rubros = [] }: { proveedore
       </select>
 
       <select
-        value={sp.get('rubro_id') ?? ''}
-        onChange={e => push('rubro_id', e.target.value)}
+        value={rubroSel}
+        onChange={e => pushRubro(e.target.value)}
         className={`${inputCls} w-52`}
       >
         <option value="">Todos los rubros</option>
@@ -79,6 +92,19 @@ export default function FiltrosGastos({ proveedores, rubros = [] }: { proveedore
           <option key={r.id} value={r.id}>{r.nombre}</option>
         ))}
       </select>
+
+      {subrubros.length > 0 && (
+        <select
+          value={sp.get('subrubro_gasto_id') ?? ''}
+          onChange={e => push('subrubro_gasto_id', e.target.value)}
+          className={`${inputCls} w-52`}
+        >
+          <option value="">Todos los subrubros</option>
+          {subrubros.map(s => (
+            <option key={s.id} value={s.id}>{s.nombre}</option>
+          ))}
+        </select>
+      )}
 
       <select
         value={sp.get('estado_pago') ?? ''}

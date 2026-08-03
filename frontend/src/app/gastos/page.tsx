@@ -73,6 +73,7 @@ async function fetchData(params: Record<string, string | undefined>) {
   if (params.tipo_operacion) q.set('tipo_operacion', params.tipo_operacion);
   if (params.proveedor_id)   q.set('proveedor_id', params.proveedor_id);
   if (params.rubro_id)       q.set('rubro_id', params.rubro_id);
+  if (params.subrubro_gasto_id) q.set('subrubro_gasto_id', params.subrubro_gasto_id);
   if (params.estado_pago)    q.set('estado_pago', params.estado_pago);
   if (params.fecha_desde)    q.set('fecha_desde', params.fecha_desde);
   if (params.fecha_hasta)    q.set('fecha_hasta', params.fecha_hasta);
@@ -99,11 +100,11 @@ export const dynamic = 'force-dynamic';
 export default async function GastosPage({
   searchParams,
 }: {
-  searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; rubro_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
+  searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; rubro_id?: string; subrubro_gasto_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
   requireAuth('/gastos');
   const { egresos, count, proveedores, rubros, alertas } = await fetchData(searchParams);
-  const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.rubro_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
+  const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.rubro_id || searchParams.subrubro_gasto_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
 
   const totalOblig = alertas?.obligaciones_pendientes?.length ?? 0;
   const totalVenc = (alertas?.vencimientos_egresos?.length ?? 0) + (alertas?.vencimientos_cheques?.length ?? 0);
