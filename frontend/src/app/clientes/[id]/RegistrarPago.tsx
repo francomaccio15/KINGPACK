@@ -14,6 +14,16 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
+// En el cobro a clientes no se usan estos medios: las cajas fuertes son
+// movimientos internos, y Mercado Pago / Tarjeta de Crédito no se cobran por
+// este circuito. Se ocultan del selector para todos los roles.
+const MEDIOS_OCULTOS_PAGO = ['efectivo caja fuerte', 'mercado pago', 'tarjeta de crédito', 'tarjeta de credito'];
+
+// Medios que van contra el banco: hay que elegir a qué cuenta entra la plata y,
+// al confirmar, se acredita el saldo de esa cuenta. Transferencia ya lo pide por
+// su flag en la base; QR y Tarjeta de Débito se suman por nombre.
+const MEDIOS_REQUIEREN_CUENTA = ['qr', 'tarjeta de débito', 'tarjeta de debito'];
+
 interface MedioPago { id: string; nombre: string; requiere_cuenta?: boolean }
 interface CuentaBancaria { id: string; nombre: string; banco?: string | null }
 
@@ -47,7 +57,10 @@ export default function RegistrarPago({
 
   const medioElegido = mediosPago.find(m => m.id === medioPagoId);
   const esCheque      = /cheque/i.test(medioElegido?.nombre ?? '');
-  const requiereCuenta = !!medioElegido?.requiere_cuenta;
+  const requiereCuenta = !!medioElegido && (
+    medioElegido.requiere_cuenta === true ||
+    MEDIOS_REQUIEREN_CUENTA.includes(medioElegido.nombre.trim().toLowerCase())
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +69,9 @@ export default function RegistrarPago({
       .then(d => {
         const lista = filtrarMediosPorRol(
           (d.medios_pago ?? []).filter((m: MedioPago) =>
-            m.nombre !== 'Saldo a favor' && m.nombre !== 'Cuenta Corriente'
+            m.nombre !== 'Saldo a favor' &&
+            m.nombre !== 'Cuenta Corriente' &&
+            !MEDIOS_OCULTOS_PAGO.includes(m.nombre.trim().toLowerCase())
           ) as MedioPago[],
           user?.rol,
         );
