@@ -108,7 +108,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
   const promises: Promise<void>[] = [];
 
   promises.push(
-    serverFetch(`/api/ventas/medios-pago`, { cache: 'no-store' })
+    serverFetch(`/api/ventas/medios-pago?contexto=egreso`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { medios_pago: [] })
       .then(d => { mediosPago = d.medios_pago ?? d.medios ?? []; })
       .catch(() => {})

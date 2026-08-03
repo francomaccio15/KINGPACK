@@ -533,8 +533,15 @@ router.post('/', async (req, res, next) => {
         );
         const nombreOf = Object.fromEntries(mpRows.map(r => [r.id, r.nombre]));
 
+        // "ERROR REDONDEO" es un medio ficticio: cuenta para marcar el
+        // comprobante como pagado, pero no deja rastro (ni egreso_pagos, ni CC
+        // del proveedor, ni movimiento de caja/banco/caja fuerte).
+        const esFicticio = (mid) => /^error\s*redondeo$/i.test((nombreOf[mid] || '').trim());
+        const mediosReales = mediosValidos.filter(m => !esFicticio(m.medio_pago_id));
+        const totalReal = mediosReales.reduce((s, m) => s + m.monto, 0);
+
         let chequePagoId = null;
-        for (const m of mediosValidos) {
+        for (const m of mediosReales) {
           const { rows: pagoRows } = await client.query(`
             INSERT INTO egreso_pagos
               (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones)
@@ -557,19 +564,20 @@ router.post('/', async (req, res, next) => {
           }
         }
 
-        // Haber en cuenta corriente del proveedor por el total pagado
-        if (proveedor_id) {
+        // Haber en cuenta corriente del proveedor por el total realmente pagado
+        // (el redondeo ficticio no reduce la deuda con el proveedor).
+        if (proveedor_id && totalReal > 0) {
           const saldo = await calcularSaldoProveedor(client, proveedor_id);
           await client.query(`
             INSERT INTO cuentas_corrientes_proveedor
               (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
             VALUES ($1, 0, $2, $3, 'pago', $4, 'Pago', $5)
-          `, [proveedor_id, totalPago, +(saldo - totalPago).toFixed(2), egreso.id, esFacturado]);
+          `, [proveedor_id, totalReal, +(saldo - totalReal).toFixed(2), egreso.id, esFacturado]);
         }
 
         // Si se pagó con "Efectivo Caja Fuerte", descontar de la caja fuerte
         // del medio (fallback: la sucursal del egreso) y asentarlo en el ledger.
-        await registrarEgresosCajaFuerteDeMedios(client, mediosValidos, {
+        await registrarEgresosCajaFuerteDeMedios(client, mediosReales, {
           concepto: `Pago de egreso — ${descripcion.trim()}`,
           origen_tipo: 'egreso',
           origen_id: egreso.id,
@@ -578,7 +586,7 @@ router.post('/', async (req, res, next) => {
 
         // Si alguna línea salió de una cuenta bancaria (Transferencia),
         // descontarla de esa cuenta y dejarlo asentado en el ledger.
-        await registrarMovimientosDeMedios(client, mediosValidos, {
+        await registrarMovimientosDeMedios(client, mediosReales, {
           tipo: 'egreso',
           concepto: `Pago de egreso — ${descripcion.trim()}`,
           origen_tipo: 'egreso',
@@ -707,6 +715,27 @@ router.post('/:id/pago', async (req, res, next) => {
     }
 
     await client.query('BEGIN');
+
+    // "ERROR REDONDEO": medio ficticio. No deja rastro (ni egreso_pagos, ni CC
+    // del proveedor, ni caja/banco/caja fuerte). Solo empuja el estado a pagado
+    // si con él se completa el total del comprobante.
+    const { rows: mpNombre } = await client.query(
+      `SELECT nombre FROM medios_pago WHERE id = $1`, [medio_pago_id]
+    );
+    if (/^error\s*redondeo$/i.test((mpNombre[0]?.nombre || '').trim())) {
+      const { rows: tp } = await client.query(
+        `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [id]
+      );
+      const totalPagado = parseFloat(tp[0].pagado) + montoPago;
+      const totalEgreso = parseFloat(egresoRows[0].total);
+      const nuevoEstado = Math.abs(totalPagado - totalEgreso) <= 0.01 ? 'pagado' : 'parcial';
+      await client.query(
+        `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
+        [nuevoEstado, id]
+      );
+      await client.query('COMMIT');
+      return res.json({ ok: true, estado_pago: nuevoEstado, pago_id: null });
+    }
 
     const { rows: pagoRows } = await client.query(`
       INSERT INTO egreso_pagos

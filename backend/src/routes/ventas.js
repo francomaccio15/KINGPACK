@@ -42,8 +42,14 @@ async function recomputarSaldosCliente(client, cliente_id) {
 // ─── GET /api/ventas/medios-pago ─────────────────────────────────────────────
 router.get('/medios-pago', async (req, res, next) => {
   try {
+    // "ERROR REDONDEO" es un medio ficticio para saldar diferencias de redondeo
+    // en egresos: no mueve caja/banco/CC. Solo se ofrece en el contexto egreso;
+    // en ventas y caja queda oculto para no usarlo por error.
+    const incluirFicticios = req.query.contexto === 'egreso';
     const { rows } = await pool.query(
-      'SELECT id, nombre, requiere_cuenta FROM medios_pago WHERE activo = true ORDER BY nombre'
+      `SELECT id, nombre, requiere_cuenta FROM medios_pago
+        WHERE activo = true ${incluirFicticios ? '' : `AND nombre <> 'ERROR REDONDEO'`}
+        ORDER BY nombre`
     );
     res.json({ medios_pago: rows });
   } catch (err) { next(err); }

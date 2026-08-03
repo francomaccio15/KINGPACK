@@ -140,7 +140,7 @@ export default function NuevoEgresoPage() {
       apiFetch(`/api/sucursales`).then(r => r.json()),
       apiFetch(`/api/proveedores?limit=500`).then(r => r.json()),
       apiFetch(`/api/rubros-gastos`).then(r => r.json()),
-      apiFetch(`/api/ventas/medios-pago`).then(r => r.json()).catch(() => ({ medios: [] })),
+      apiFetch(`/api/ventas/medios-pago?contexto=egreso`).then(r => r.json()).catch(() => ({ medios: [] })),
       apiFetch(`/api/cuentas-bancarias`).then(r => r.json()),
     ]).then(([suc, prov, rub, mp, cb]) => {
       const sArr = suc.sucursales ?? [];
@@ -152,7 +152,9 @@ export default function NuevoEgresoPage() {
       setRubros(rub.rubros ?? []);
       const mediosArr = mp.medios ?? mp.medios_pago ?? [];
       setMediosPago(mediosArr);
-      if (mediosArr.length > 0) setPagoMedios([{ medio_pago_id: mediosArr[0].id, monto: '', cuenta_bancaria_id: '' }]);
+      // Default: primer medio real (nunca ERROR REDONDEO, que es de ajuste).
+      const medioDefault = mediosArr.find((m: { nombre: string }) => !/^error\s*redondeo$/i.test(m.nombre)) ?? mediosArr[0];
+      if (mediosArr.length > 0) setPagoMedios([{ medio_pago_id: medioDefault.id, monto: '', cuenta_bancaria_id: '' }]);
       setCuentasBancarias(cb.cuentas ?? []);
     }).catch(() => {});
   }, []);

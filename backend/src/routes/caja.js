@@ -171,6 +171,7 @@ router.get('/:id', async (req, res, next) => {
         `SELECT id, nombre FROM medios_pago
           WHERE activo = true AND caja_fuerte_sucursal_id IS NULL
             AND nombre NOT ILIKE '%caja fuerte%'
+            AND nombre <> 'ERROR REDONDEO'
           ORDER BY nombre`
       ),
     ]);
