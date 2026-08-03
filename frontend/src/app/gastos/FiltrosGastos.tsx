@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 
 type Proveedor = { id: string; razon_social: string };
+type Rubro = { id: string; nombre: string };
 
 const TIPOS = [
   { value: '',                     label: 'Todos los tipos' },
@@ -22,7 +23,7 @@ const ESTADOS_PAGO = [
   { value: 'pagado',    label: 'Pagado' },
 ];
 
-export default function FiltrosGastos({ proveedores }: { proveedores: Proveedor[] }) {
+export default function FiltrosGastos({ proveedores, rubros = [] }: { proveedores: Proveedor[]; rubros?: Rubro[] }) {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -35,7 +36,7 @@ export default function FiltrosGastos({ proveedores }: { proveedores: Proveedor[
 
   const limpiar = () => router.push('/gastos');
   const hayFiltros = !!(sp.get('q') || sp.get('tipo_operacion') || sp.get('proveedor_id')
-    || sp.get('fecha_desde') || sp.get('fecha_hasta') || sp.get('estado_pago'));
+    || sp.get('rubro_id') || sp.get('fecha_desde') || sp.get('fecha_hasta') || sp.get('estado_pago'));
 
   const inputCls = 'bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
 
@@ -65,6 +66,17 @@ export default function FiltrosGastos({ proveedores }: { proveedores: Proveedor[
         <option value="">Todos los proveedores</option>
         {proveedores.map(p => (
           <option key={p.id} value={p.id}>{p.razon_social}</option>
+        ))}
+      </select>
+
+      <select
+        value={sp.get('rubro_id') ?? ''}
+        onChange={e => push('rubro_id', e.target.value)}
+        className={`${inputCls} w-52`}
+      >
+        <option value="">Todos los rubros</option>
+        {rubros.map(r => (
+          <option key={r.id} value={r.id}>{r.nombre}</option>
         ))}
       </select>
 

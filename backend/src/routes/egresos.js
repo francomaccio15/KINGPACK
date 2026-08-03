@@ -146,7 +146,7 @@ router.get('/', async (req, res, next) => {
   try {
     const {
       tipo_operacion, proveedor_id, sucursal_id,
-      fecha_desde, fecha_hasta, estado_pago, q,
+      fecha_desde, fecha_hasta, estado_pago, q, rubro_id,
       limit = 100, offset = 0,
     } = req.query;
 
@@ -162,6 +162,10 @@ router.get('/', async (req, res, next) => {
       }
     }
     if (proveedor_id) { conditions.push(`e.proveedor_id = $${idx++}`); params.push(proveedor_id); }
+    if (rubro_id) {
+      conditions.push(`e.subrubro_gasto_id IN (SELECT id FROM subrubro_gastos WHERE rubro_id = $${idx++})`);
+      params.push(rubro_id);
+    }
     if (sucursal_id)  { conditions.push(`e.sucursal_id = $${idx++}`);  params.push(sucursal_id); }
     if (estado_pago)  { conditions.push(`e.estado_pago = $${idx++}`);  params.push(estado_pago); }
     if (fecha_desde)  {

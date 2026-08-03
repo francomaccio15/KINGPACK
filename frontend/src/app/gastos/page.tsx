@@ -72,14 +72,16 @@ async function fetchData(params: Record<string, string | undefined>) {
   if (params.q)              q.set('q', params.q);
   if (params.tipo_operacion) q.set('tipo_operacion', params.tipo_operacion);
   if (params.proveedor_id)   q.set('proveedor_id', params.proveedor_id);
+  if (params.rubro_id)       q.set('rubro_id', params.rubro_id);
   if (params.estado_pago)    q.set('estado_pago', params.estado_pago);
   if (params.fecha_desde)    q.set('fecha_desde', params.fecha_desde);
   if (params.fecha_hasta)    q.set('fecha_hasta', params.fecha_hasta);
   q.set('limit', '100');
 
-  const [egresosRes, proveedoresRes, alertasRes] = await Promise.all([
+  const [egresosRes, proveedoresRes, rubrosRes, alertasRes] = await Promise.all([
     serverFetch(`/api/egresos?${q}`,           { cache: 'no-store' }).then(r => r.json()).catch(() => ({ egresos: [], count: 0 })),
     serverFetch('/api/proveedores?limit=500',   { cache: 'no-store' }).then(r => r.json()).catch(() => ({ proveedores: [] })),
+    serverFetch('/api/egresos/rubros',          { cache: 'no-store' }).then(r => r.json()).catch(() => []),
     serverFetch('/api/egresos/alertas',         { cache: 'no-store' }).then(r => r.json()).catch(() => null),
   ]);
 
@@ -87,6 +89,7 @@ async function fetchData(params: Record<string, string | undefined>) {
     egresos:     egresosRes.egresos    ?? [],
     count:       egresosRes.count      ?? 0,
     proveedores: proveedoresRes.proveedores ?? [],
+    rubros:      Array.isArray(rubrosRes) ? rubrosRes : [],
     alertas:     alertasRes as Alerta | null,
   };
 }
@@ -96,11 +99,11 @@ export const dynamic = 'force-dynamic';
 export default async function GastosPage({
   searchParams,
 }: {
-  searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
+  searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; rubro_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
   requireAuth('/gastos');
-  const { egresos, count, proveedores, alertas } = await fetchData(searchParams);
-  const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
+  const { egresos, count, proveedores, rubros, alertas } = await fetchData(searchParams);
+  const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.rubro_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
 
   const totalOblig = alertas?.obligaciones_pendientes?.length ?? 0;
   const totalVenc = (alertas?.vencimientos_egresos?.length ?? 0) + (alertas?.vencimientos_cheques?.length ?? 0);
@@ -177,7 +180,7 @@ export default async function GastosPage({
 
       {/* Filtros */}
       <Suspense>
-        <FiltrosGastos proveedores={proveedores} />
+        <FiltrosGastos proveedores={proveedores} rubros={rubros} />
       </Suspense>
 
       {/* Tabla */}
