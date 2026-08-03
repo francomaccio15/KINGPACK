@@ -386,6 +386,7 @@ export default function NuevoEgresoPage() {
       otros_impuestos: parseFloat(otrosImpuestos) || 0,
       total: parseFloat(totalComprobante),
       costo_flete: fleteMonto,
+      costo_flete_pct: fletePctNum,
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
       anticipo_id: vincularAnticipo && anticipoId ? anticipoId : null,
