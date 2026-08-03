@@ -219,7 +219,11 @@ router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
     const itemsCalc = items.map(it => {
       const precio   = parseFloat(it.precio_licitacion);
       const cantidad = parseFloat(it.cantidad);
-      const iva_monto = parseFloat((precio * parseFloat(it.iva_pct) / 100).toFixed(2));
+      // IVA embebido de la línea: el precio ya incluye el IVA (bruto − bruto/(1+iva/100)),
+      // a nivel línea (× cantidad). Igual criterio que en ventas.js.
+      const ivaPct    = parseFloat(it.iva_pct) || 0;
+      const lineaBruta = precio * cantidad;
+      const iva_monto = parseFloat((lineaBruta - lineaBruta / (1 + ivaPct / 100)).toFixed(2));
       subtotalVenta += precio * cantidad;
       return { ...it, precio, cantidad, iva_monto };
     });

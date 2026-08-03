@@ -53,21 +53,21 @@ router.get('/libro-iva-ventas', async (req, res, next) => {
         f.numero                                     AS factura_numero,
         f.cae,
 
-        -- Neto gravado 21%
-        COALESCE(SUM(vi.precio_unitario_final * vi.cantidad)
+        -- Neto gravado 21% (el precio incluye IVA → neto = bruto − IVA contenido)
+        COALESCE(SUM((vi.precio_unitario_final * vi.cantidad) - vi.iva_monto)
           FILTER (WHERE ai.porcentaje = 21), 0)      AS neto_21,
         -- IVA 21%
         COALESCE(SUM(vi.iva_monto)
           FILTER (WHERE ai.porcentaje = 21), 0)      AS iva_21,
 
         -- Neto gravado 10.5%
-        COALESCE(SUM(vi.precio_unitario_final * vi.cantidad)
+        COALESCE(SUM((vi.precio_unitario_final * vi.cantidad) - vi.iva_monto)
           FILTER (WHERE ai.porcentaje = 10.5), 0)    AS neto_105,
         -- IVA 10.5%
         COALESCE(SUM(vi.iva_monto)
           FILTER (WHERE ai.porcentaje = 10.5), 0)    AS iva_105,
 
-        -- Exento / No gravado (IVA 0%)
+        -- Exento / No gravado (IVA 0%): neto = bruto (no hay IVA que extraer)
         COALESCE(SUM(vi.precio_unitario_final * vi.cantidad)
           FILTER (WHERE ai.porcentaje = 0 OR ai.porcentaje IS NULL), 0) AS neto_exento,
 
@@ -206,7 +206,7 @@ router.get('/posicion-iva', async (req, res, next) => {
         COALESCE(SUM(vi.iva_monto), 0)       AS debito_total,
         COALESCE(SUM(vi.iva_monto) FILTER (WHERE ai.porcentaje = 21),   0) AS debito_21,
         COALESCE(SUM(vi.iva_monto) FILTER (WHERE ai.porcentaje = 10.5), 0) AS debito_105,
-        COALESCE(SUM(vi.precio_unitario_final * vi.cantidad), 0) AS neto_ventas,
+        COALESCE(SUM((vi.precio_unitario_final * vi.cantidad) - vi.iva_monto), 0) AS neto_ventas,
         COUNT(DISTINCT v.id)                 AS cant_ventas
       FROM ventas v
       LEFT JOIN venta_items  vi ON vi.venta_id = v.id

@@ -87,6 +87,9 @@ export default function NuevoArticulo({
   const costoConFlete = costo * (1 + flete / 100);
   const precioNum     = parseFloat(precioInput) || 0;
   const gananciaUnit  = precioNum > 0 ? precioNum / (1 + ivaReal / 100) - costoConFlete : 0;
+  // Desglose del precio (IVA incluido): neto e IVA contenido, por unidad.
+  const netoUnit = precioNum > 0 ? precioNum / (1 + ivaReal / 100) : 0;
+  const ivaUnit  = precioNum - netoUnit;
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
   // precio = costo × (1+flete%) × (1+iva%) × (1+margen%), redondeado a entero (igual que el backend)
@@ -135,11 +138,19 @@ export default function NuevoArticulo({
       setPrecioInput(String(precioDesde(costo, flete, parseFloat(cat?.margen_default ?? '0') || 0, ivaReal)));
     }
   };
+  // Al cambiar el IVA, si ya hay un precio cargado se mantiene (se recalcula el
+  // margen); si todavía no hay precio, se deriva del costo/margen con la nueva
+  // alícuota. Así el precio de venta no salta solo por cambiar el IVA.
   const onIva = (e: { target: { value: string } }) => {
     const v = e.target.value;
-    setForm(f => ({ ...f, alicuota_iva_id: v }));
     const nuevaIva = parseFloat(alicuotas.find(a => a.id === v)?.porcentaje ?? '0') || 0;
-    setPrecioInput(String(precioDesde(costo, flete, margenReal, nuevaIva)));
+    if (precioNum > 0) {
+      const m = margenDesde(costo, flete, precioNum, nuevaIva);
+      setForm(f => ({ ...f, alicuota_iva_id: v, margen_aplicado: String(m) }));
+    } else {
+      setForm(f => ({ ...f, alicuota_iva_id: v }));
+      setPrecioInput(String(precioDesde(costo, flete, margenReal, nuevaIva)));
+    }
   };
 
   const cerrar = () => {
@@ -399,7 +410,7 @@ export default function NuevoArticulo({
                   <div>
                     <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta final</span>
                     <span className="block text-[10px] text-kp-gray mt-0.5">
-                      IVA {ivaReal.toFixed(0)}% incluido · editable
+                      IVA incluido · al cambiar el IVA el precio no cambia
                     </span>
                   </div>
                   <div className="relative w-40">
@@ -413,6 +424,16 @@ export default function NuevoArticulo({
                     />
                   </div>
                 </div>
+                {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
+                {precioNum > 0 && (
+                  <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
+                    <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
+                    <div className="flex items-center gap-4 text-kp-gray">
+                      <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
+                      <span>IVA ({ivaReal.toFixed(ivaReal % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
+                    </div>
+                  </div>
+                )}
                 {costo > 0 && (
                   <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
                     <span>

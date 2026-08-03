@@ -49,6 +49,7 @@ export default function EditarArticulo({
     costo_base:      articulo.costo_base     ?? '',
     costo_flete:     articulo.costo_flete    ?? '',
     margen_aplicado: articulo.margen_aplicado ?? '',
+    alicuota_iva_id: articulo.alicuota_iva_id ?? '',
   });
 
   const [stockMin, setStockMin] = useState(String(articulo.stock_minimo ?? 0));
@@ -65,22 +66,27 @@ export default function EditarArticulo({
     : parseFloat(catActiva?.margen_default ?? '0');
   const costo      = parseFloat(form.costo_base)  || 0;
   const flete      = parseFloat(form.costo_flete) || 0;
-  const ivaPct     = parseFloat(articulo.alicuota_porcentaje ?? '21');
+  // IVA según la alícuota elegida (el precio de venta lo incluye).
+  const ivaActiva  = alicuotas.find(a => a.id === form.alicuota_iva_id);
+  const ivaPct     = parseFloat(ivaActiva?.porcentaje ?? articulo.alicuota_porcentaje ?? '21');
 
   // Costo con flete (neto, sin IVA) y ganancia por unidad según el precio cargado.
   const costoConFlete = costo * (1 + flete / 100);
   const precioNum     = parseFloat(precioInput) || 0;
   const gananciaUnit  = precioNum > 0 ? precioNum / (1 + ivaPct / 100) - costoConFlete : 0;
+  // Desglose del precio (IVA incluido): neto e IVA contenido, por unidad.
+  const netoUnit = precioNum > 0 ? precioNum / (1 + ivaPct / 100) : 0;
+  const ivaUnit  = precioNum - netoUnit;
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
   // precio = costo × (1+flete%) × (1+margen%) × (1+iva%), redondeado a entero (igual que el backend)
-  const precioDesde = (c: number, fl: number, m: number) => {
-    const b = c * (1 + fl / 100) * (1 + ivaPct / 100);
+  const precioDesde = (c: number, fl: number, m: number, iva: number) => {
+    const b = c * (1 + fl / 100) * (1 + iva / 100);
     return b > 0 ? Math.round(b * (1 + m / 100)) : 0;
   };
   // margen implícito en un precio de venta dado (costo y flete fijos)
-  const margenDesde = (c: number, fl: number, p: number) => {
-    const b = c * (1 + fl / 100) * (1 + ivaPct / 100);
+  const margenDesde = (c: number, fl: number, p: number, iva: number) => {
+    const b = c * (1 + fl / 100) * (1 + iva / 100);
     return b > 0 ? round2((p / b - 1) * 100) : 0;
   };
 
@@ -92,31 +98,39 @@ export default function EditarArticulo({
   const onCosto = (e: { target: { value: string } }) => {
     const v = e.target.value;
     setForm(f => ({ ...f, costo_base: v }));
-    setPrecioInput(String(precioDesde(parseFloat(v) || 0, flete, margenReal)));
+    setPrecioInput(String(precioDesde(parseFloat(v) || 0, flete, margenReal, ivaPct)));
   };
   const onFlete = (e: { target: { value: string } }) => {
     const v = e.target.value;
     setForm(f => ({ ...f, costo_flete: v }));
-    setPrecioInput(String(precioDesde(costo, parseFloat(v) || 0, margenReal)));
+    setPrecioInput(String(precioDesde(costo, parseFloat(v) || 0, margenReal, ivaPct)));
   };
   const onMargen = (e: { target: { value: string } }) => {
     const v = e.target.value;
     setForm(f => ({ ...f, margen_aplicado: v }));
     const m = v !== '' ? (parseFloat(v) || 0) : (parseFloat(catActiva?.margen_default ?? '0') || 0);
-    setPrecioInput(String(precioDesde(costo, flete, m)));
+    setPrecioInput(String(precioDesde(costo, flete, m, ivaPct)));
   };
   const onPrecio = (e: { target: { value: string } }) => {
     const v = e.target.value;
     setPrecioInput(v);
-    const m = margenDesde(costo, flete, parseFloat(v) || 0);
+    const m = margenDesde(costo, flete, parseFloat(v) || 0, ivaPct);
     setForm(f => ({ ...f, margen_aplicado: String(m) }));
+  };
+  // Al cambiar el IVA el precio final NO cambia: se recalcula el margen para que
+  // el precio (que ya incluye el IVA) quede igual. Solo cambia el desglose neto/IVA.
+  const onIva = (e: { target: { value: string } }) => {
+    const v = e.target.value;
+    const nuevaIva = parseFloat(alicuotas.find(a => a.id === v)?.porcentaje ?? '0') || 0;
+    const m = margenDesde(costo, flete, precioNum, nuevaIva);
+    setForm(f => ({ ...f, alicuota_iva_id: v, margen_aplicado: String(m) }));
   };
   const onCategoria = (e: { target: { value: string } }) => {
     const v = e.target.value;
     setForm(f => ({ ...f, categoria_id: v }));
     if (form.margen_aplicado === '' || form.margen_aplicado === null) {
       const cat = categorias.find(c => c.id === v);
-      setPrecioInput(String(precioDesde(costo, flete, parseFloat(cat?.margen_default ?? '0') || 0)));
+      setPrecioInput(String(precioDesde(costo, flete, parseFloat(cat?.margen_default ?? '0') || 0, ivaPct)));
     }
   };
 
@@ -133,6 +147,7 @@ export default function EditarArticulo({
         body: JSON.stringify({
           nombre:          form.nombre.trim(),
           categoria_id:    form.categoria_id,
+          alicuota_iva_id: form.alicuota_iva_id,
           costo_base:      parseFloat(form.costo_base)  || 0,
           costo_flete:     parseFloat(form.costo_flete) || 0,
           margen_aplicado: form.margen_aplicado !== '' ? parseFloat(String(form.margen_aplicado)) : null,
@@ -229,18 +244,32 @@ export default function EditarArticulo({
                 />
               </div>
 
-              {/* Categoría */}
-              <div>
-                <label className={labelCls}>Categoría</label>
-                <select
-                  value={form.categoria_id} onChange={onCategoria}
-                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                    focus:outline-none focus:border-kp-red transition-colors"
-                >
-                  {categorias.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
+              {/* Categoría + IVA */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Categoría</label>
+                  <select
+                    value={form.categoria_id} onChange={onCategoria}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                      focus:outline-none focus:border-kp-red transition-colors"
+                  >
+                    {categorias.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>IVA</label>
+                  <select
+                    value={form.alicuota_iva_id} onChange={onIva}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                      focus:outline-none focus:border-kp-red transition-colors"
+                  >
+                    {alicuotas.map(a => (
+                      <option key={a.id} value={a.id}>{a.descripcion}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Costo + Flete + Margen */}
@@ -298,7 +327,7 @@ export default function EditarArticulo({
                   <div>
                     <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta</span>
                     <span className="block text-[10px] text-kp-gray mt-0.5">
-                      IVA {ivaPct.toFixed(0)}% incluido · editable
+                      IVA incluido · al cambiar el IVA el precio no cambia
                     </span>
                   </div>
                   <div className="relative w-40">
@@ -312,6 +341,16 @@ export default function EditarArticulo({
                     />
                   </div>
                 </div>
+                {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
+                {precioNum > 0 && (
+                  <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
+                    <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
+                    <div className="flex items-center gap-4 text-kp-gray">
+                      <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
+                      <span>IVA ({ivaPct.toFixed(ivaPct % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
+                    </div>
+                  </div>
+                )}
                 {costo > 0 && (
                   <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
                     <span>

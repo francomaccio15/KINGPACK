@@ -254,7 +254,11 @@ router.post('/', async (req, res, next) => {
       const precio_final  = parseFloat((precio_lista * (1 - descuento_pct / 100)).toFixed(3));
       const cantidad      = Math.max(0, parseFloat(item.cantidad) || 1);
       const iva_pct       = parseFloat(art.iva_pct) || 0;
-      const iva_monto     = parseFloat((precio_final * (iva_pct / 100)).toFixed(2));
+      // El precio de venta YA incluye el IVA, así que el IVA contenido en la
+      // línea se extrae: bruto − bruto/(1+iva/100). NO es bruto × iva/100 (eso
+      // sobreestimaba). Se guarda a nivel línea (× cantidad).
+      const lineaBruta    = precio_final * cantidad;
+      const iva_monto     = parseFloat((lineaBruta - lineaBruta / (1 + iva_pct / 100)).toFixed(2));
 
       subtotal        += precio_lista * cantidad;
       descuento_total += (precio_lista - precio_final) * cantidad;
@@ -1409,7 +1413,10 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       const descPct     = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
       const precioFinal = +(precioLista * (1 - descPct / 100)).toFixed(4);
       const cantidad    = parseFloat(item.cantidad) || 1;
-      const ivaMonto    = +(precioFinal * cantidad * ((art.iva_pct || 0) / 100)).toFixed(4);
+      // IVA embebido de la línea (el precio incluye IVA): bruto − bruto/(1+iva/100).
+      const ivaPct      = art.iva_pct || 0;
+      const lineaBruta  = precioFinal * cantidad;
+      const ivaMonto    = +(lineaBruta - lineaBruta / (1 + ivaPct / 100)).toFixed(4);
       return { ...item, cantidad, precioLista, descPct, precioFinal, ivaMonto, art };
     });
 
