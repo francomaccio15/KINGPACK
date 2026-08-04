@@ -62,6 +62,12 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 const fmtFecha = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-AR'); };
+// Fecha "solo día" (vencimientos) a DD/MM/AAAA, sin pasar por Date para no correrse
+// un día por zona horaria: toma la parte YYYY-MM-DD del string y la reordena.
+const fmtVenc = (s: string | null) => {
+  const p = String(s ?? '').slice(0, 10).split('-');
+  return p.length === 3 && p[0] ? `${p[2]}/${p[1]}/${p[0]}` : 's/f';
+};
 const hoyAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
 // Reparte `disponible` entre las líneas en proporción a su monto (pago parcial).
@@ -790,7 +796,7 @@ export default function PagosProveedorClient() {
                                   {(c.banco || 's/banco')} #{c.numero_cheque || 's/nº'}
                                   {c.origen_nombre ? ` · ${c.origen_nombre}` : ''}
                                 </span>
-                                <span className="block text-[10px] text-kp-gray">Vence {c.fecha_vencimiento || 's/f'}</span>
+                                <span className="block text-[10px] text-kp-gray">Vence {fmtVenc(c.fecha_vencimiento)}</span>
                               </span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-kp-white">{fmt(parseFloat(c.importe) || 0)}</span>
                             </button>
