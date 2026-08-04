@@ -151,6 +151,9 @@ export default function EditarArticulo({
           costo_base:      parseFloat(form.costo_base)  || 0,
           costo_flete:     parseFloat(form.costo_flete) || 0,
           margen_aplicado: form.margen_aplicado !== '' ? parseFloat(String(form.margen_aplicado)) : null,
+          // Precio de venta objetivo: el backend deriva el margen exacto a partir de
+          // este valor para que el precio quede clavado (aunque cambie de pocos pesos).
+          precio_madre:    parseFloat(precioInput) || 0,
         }),
       });
       const data = await res.json();

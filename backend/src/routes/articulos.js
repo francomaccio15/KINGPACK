@@ -8,7 +8,37 @@ const router = express.Router();
 router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { costo_base, costo_flete, margen_aplicado, nombre, categoria_id, alicuota_iva_id } = req.body;
+    let { costo_base, costo_flete, margen_aplicado, nombre, categoria_id, alicuota_iva_id, precio_madre } = req.body;
+
+    // Si el cliente manda un precio_madre objetivo, derivar el margen con precisión
+    // completa para que el trigger reproduzca exactamente ese precio. Guardar el precio
+    // vía margen a 2 decimales perdía los cambios de pocos pesos en artículos caros.
+    if (precio_madre !== undefined && precio_madre !== null && precio_madre !== '') {
+      const precioObjetivo = parseFloat(precio_madre) || 0;
+
+      // Completar con los valores actuales lo que no venga en el body.
+      const { rows: actual } = await pool.query(
+        `SELECT costo_base, costo_flete, alicuota_iva_id FROM articulos WHERE id = $1 AND deleted_at IS NULL`,
+        [id]
+      );
+      if (actual.length === 0) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+      const cb    = costo_base  !== undefined ? (parseFloat(costo_base)  || 0) : (parseFloat(actual[0].costo_base)  || 0);
+      const fl    = costo_flete !== undefined ? (parseFloat(costo_flete) || 0) : (parseFloat(actual[0].costo_flete) || 0);
+      const ivaId = alicuota_iva_id !== undefined ? alicuota_iva_id : actual[0].alicuota_iva_id;
+
+      const { rows: ivaRows } = await pool.query(
+        `SELECT porcentaje FROM alicuotas_iva WHERE id = $1`, [ivaId]
+      );
+      const ivaPct = ivaRows.length ? (parseFloat(ivaRows[0].porcentaje) || 0) : 0;
+
+      // base = costo × (1+flete%) × (1+IVA%); margen tal que ROUND(base×(1+m/100),0) = precioObjetivo
+      const base = cb * (1 + fl / 100) * (1 + ivaPct / 100);
+      if (base > 0 && precioObjetivo > 0) {
+        // 6 decimales: sobra para clavar el precio al peso incluso en artículos caros.
+        margen_aplicado = Math.round(((precioObjetivo / base) - 1) * 100 * 1e6) / 1e6;
+      }
+    }
 
     const updates = [];
     const params  = [];
