@@ -192,15 +192,34 @@ router.get('/next-codigo', async (req, res, next) => {
 // ─── POST /api/articulos ──────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
-    const {
+    let {
       codigo, nombre, categoria_id, alicuota_iva_id,
-      costo_base, costo_flete = 0, margen_aplicado,
+      costo_base, costo_flete = 0, margen_aplicado, precio_madre,
     } = req.body;
 
     if (!codigo || !nombre || !categoria_id || !alicuota_iva_id || costo_base === undefined) {
       return res.status(400).json({
         error: 'codigo, nombre, categoria_id, alicuota_iva_id y costo_base son requeridos',
       });
+    }
+
+    // Si viene un precio_madre objetivo, derivar el margen con precisión completa
+    // para que el trigger de INSERT reproduzca exactamente ese precio (mismo criterio
+    // que en el PUT). Evita que el precio se corra por el redondeo del margen.
+    if (precio_madre !== undefined && precio_madre !== null && precio_madre !== '') {
+      const precioObjetivo = parseFloat(precio_madre) || 0;
+      const cb = parseFloat(costo_base)  || 0;
+      const fl = parseFloat(costo_flete) || 0;
+
+      const { rows: ivaRows } = await pool.query(
+        `SELECT porcentaje FROM alicuotas_iva WHERE id = $1`, [alicuota_iva_id]
+      );
+      const ivaPct = ivaRows.length ? (parseFloat(ivaRows[0].porcentaje) || 0) : 0;
+
+      const base = cb * (1 + fl / 100) * (1 + ivaPct / 100);
+      if (base > 0 && precioObjetivo > 0) {
+        margen_aplicado = Math.round(((precioObjetivo / base) - 1) * 100 * 1e6) / 1e6;
+      }
     }
 
     const { rows } = await pool.query(`

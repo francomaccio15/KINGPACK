@@ -203,6 +203,9 @@ export default function NuevoArticulo({
           costo_base:      parseFloat(form.costo_base)  || 0,
           costo_flete:     parseFloat(form.costo_flete) || 0,
           margen_aplicado: form.margen_aplicado !== '' ? parseFloat(form.margen_aplicado) : null,
+          // Precio de venta objetivo: el backend deriva el margen exacto para que
+          // el precio quede clavado (igual que al editar).
+          precio_madre:    parseFloat(precioInput) || 0,
         }),
       });
       const data = await res.json();
