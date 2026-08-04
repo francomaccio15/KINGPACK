@@ -15,6 +15,14 @@ const router = express.Router();
 // Todo el módulo es exclusivo del administrador.
 router.use(requireRol('administrador'));
 
+// Endoso de cheques recibidos: origen (de vw_cheques) → tabla concreta donde vive
+// el cheque. Mismo criterio que el cron de acreditación (acreditar-cheques-vencidos.js).
+const TABLA_POR_ORIGEN_ENDOSO = {
+  venta:           'venta_cheques',
+  manual:          'cheques_manuales',
+  movimiento_caja: 'movimiento_caja_cheques',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Saldo de movimientos (Σ debe − Σ haber) SIN el saldo inicial del proveedor,
@@ -78,7 +86,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [{ rows: cab }, { rows: aplic }, { rows: cheques }] = await Promise.all([
+    const [{ rows: cab }, { rows: aplic }, { rows: cheques }, { rows: endosos }] = await Promise.all([
       pool.query(`
         SELECT pp.*, p.razon_social AS proveedor_nombre,
                mp.nombre AS medio_pago_nombre, s.nombre AS sucursal_nombre
@@ -95,6 +103,19 @@ router.get('/:id', async (req, res, next) => {
           JOIN egresos e ON e.id = a.egreso_id
          WHERE a.pago_proveedor_id = $1`, [id]),
       pool.query(`SELECT * FROM pago_proveedor_cheques WHERE pago_proveedor_id = $1`, [id]),
+      // Cheques recibidos endosados en este pago (traspaso). Se resuelve el detalle
+      // desde la tabla origen de cada cheque.
+      pool.query(`
+        SELECT e.cheque_origen, e.cheque_id, e.importe,
+               COALESCE(vc.banco, cm.banco, mcc.banco)                               AS banco,
+               COALESCE(vc.numero_cheque, cm.numero_cheque, mcc.numero_cheque)       AS numero_cheque,
+               COALESCE(vc.fecha_vencimiento, cm.fecha_vencimiento, mcc.fecha_vencimiento) AS fecha_vencimiento,
+               COALESCE(vc.estado, cm.estado, mcc.estado)                            AS estado
+          FROM pago_proveedor_endosos e
+          LEFT JOIN venta_cheques           vc  ON e.cheque_origen = 'venta'           AND vc.id  = e.cheque_id
+          LEFT JOIN cheques_manuales        cm  ON e.cheque_origen = 'manual'          AND cm.id  = e.cheque_id
+          LEFT JOIN movimiento_caja_cheques mcc ON e.cheque_origen = 'movimiento_caja' AND mcc.id = e.cheque_id
+         WHERE e.pago_proveedor_id = $1`, [id]),
     ]);
 
     if (!cab[0]) return res.status(404).json({ error: 'Pago no encontrado' });
@@ -104,7 +125,7 @@ router.get('/:id', async (req, res, next) => {
         FROM pago_proveedor_medios m JOIN medios_pago mp ON mp.id = m.medio_pago_id
        WHERE m.pago_proveedor_id = $1`, [id]);
 
-    res.json({ pago: cab[0], aplicaciones: aplic, cheques, medios });
+    res.json({ pago: cab[0], aplicaciones: aplic, cheques, endosos, medios });
   } catch (err) { next(err); }
 });
 
@@ -120,7 +141,7 @@ router.post('/', async (req, res, next) => {
     const {
       proveedor_id, medio_pago_id, monto, fecha,
       cuenta_bancaria_id, sucursal_id, observaciones, facturado = false,
-      aplicaciones = [], cheques = [], medios,
+      aplicaciones = [], cheques = [], endosos = [], medios,
     } = req.body;
 
     if (!proveedor_id)  return res.status(400).json({ error: 'proveedor_id es requerido' });
@@ -128,9 +149,10 @@ router.post('/', async (req, res, next) => {
     if (!montoTotal || montoTotal <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
     const { rows: provRows } = await client.query(
-      `SELECT id FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [proveedor_id]
+      `SELECT id, razon_social FROM proveedores WHERE id = $1 AND deleted_at IS NULL`, [proveedor_id]
     );
     if (!provRows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+    const provNombre = provRows[0].razon_social;
 
     // ── Medios de pago (uno o varios: pago dividido) ────────────────────────────
     // Compatibilidad: si no viene `medios`, se arma con el medio único clásico.
@@ -176,13 +198,19 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    // El detalle de cheques debe igualar el importe abonado en cheque.
+    // El importe abonado en cheque puede cubrirse emitiendo cheques nuevos
+    // (`cheques`) y/o endosando cheques recibidos en cartera (`endosos`). El detalle
+    // (emitidos + endosados) debe igualar lo abonado en la/s línea/s de medio cheque.
     const sumaChequeMedios = mediosLista.filter(m => esChq(m.medio_pago_id)).reduce((s, m) => s + m.monto, 0);
     const sumaCheques = (cheques || []).reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
-    if (sumaChequeMedios > 0 && Math.abs(sumaCheques - sumaChequeMedios) > 0.01) {
+    const sumaEndosos = (endosos || []).reduce((s, e) => s + (parseFloat(e.importe) || 0), 0);
+    if (sumaChequeMedios > 0 && Math.abs((sumaCheques + sumaEndosos) - sumaChequeMedios) > 0.01) {
       return res.status(400).json({
-        error: `El detalle de cheques (${sumaCheques.toFixed(2)}) no coincide con el importe abonado en cheque (${sumaChequeMedios.toFixed(2)})`,
+        error: `El detalle de cheques (${(sumaCheques + sumaEndosos).toFixed(2)}) no coincide con el importe abonado en cheque (${sumaChequeMedios.toFixed(2)})`,
       });
+    }
+    if ((endosos || []).length > 0 && sumaChequeMedios <= 0) {
+      return res.status(400).json({ error: 'Para endosar cheques agregá una línea de pago con medio Cheque' });
     }
 
     const primaryMedioId = mediosLista[0].medio_pago_id;
@@ -305,7 +333,7 @@ router.post('/', async (req, res, next) => {
           `Pago a cuenta${observaciones ? ' — ' + observaciones.trim() : ''}`.substring(0, 200), !!facturado]);
     }
 
-    // 3) Cheques del pago
+    // 3) Cheques EMITIDOS nuevos del pago
     for (const ch of cheques) {
       if (!ch.banco || !ch.numero_cheque || !ch.fecha_vencimiento || !ch.importe) continue;
       await client.query(`
@@ -313,6 +341,39 @@ router.post('/', async (req, res, next) => {
           (pago_proveedor_id, banco, numero_cheque, fecha_vencimiento, importe)
         VALUES ($1, $2, $3, $4, $5)
       `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+    }
+
+    // 4) Cheques ENDOSADOS (recibidos en cartera que se traspasan al proveedor).
+    //    Cambian de estado a 'endosado' y se vinculan al pago. NO tocan el banco de
+    //    KingPack ni la cuenta corriente del cliente (ya saldada al recibir el cheque).
+    for (const en of (endosos || [])) {
+      const tabla = TABLA_POR_ORIGEN_ENDOSO[en.cheque_origen];
+      if (!tabla) throw Object.assign(new Error('Origen de cheque a endosar inválido'), { status: 400 });
+
+      // Solo cheques_manuales mezcla recibido/emitido; ahí exigimos tipo recibido.
+      const tipoCond = tabla === 'cheques_manuales' ? " AND tipo = 'recibido'" : '';
+      // Marcar endosado de forma atómica: si otro pago ya lo usó, no devuelve fila.
+      const { rows: upd } = await client.query(
+        `UPDATE ${tabla} SET estado = 'endosado', fecha_estado = CURRENT_DATE
+          WHERE id = $1 AND estado = 'en_cartera'${tipoCond}
+        RETURNING importe`,
+        [en.cheque_id]
+      );
+      if (!upd[0]) throw Object.assign(new Error('Un cheque elegido ya no está disponible en cartera'), { status: 409 });
+      if (Math.abs(parseFloat(upd[0].importe) - parseFloat(en.importe)) > 0.01) {
+        throw Object.assign(new Error('El importe de un cheque a endosar no coincide con el registrado'), { status: 400 });
+      }
+
+      await client.query(`
+        INSERT INTO cheque_historial_estados
+          (cheque_tipo, cheque_id, estado_anterior, estado_nuevo, observacion, usuario_id)
+        VALUES ('recibido', $1, 'en_cartera', 'endosado', $2, $3)
+      `, [en.cheque_id, `Endosado a ${provNombre} — pago ${pago.id}`, usuarioId]);
+
+      await client.query(`
+        INSERT INTO pago_proveedor_endosos (pago_proveedor_id, cheque_origen, cheque_id, importe)
+        VALUES ($1, $2, $3, $4)
+      `, [pago.id, en.cheque_origen, en.cheque_id, parseFloat(en.importe)]);
     }
 
     await client.query('COMMIT');
@@ -357,6 +418,25 @@ router.post('/:id/anular', async (req, res, next) => {
 
     // 1c) Devolver a las cuentas bancarias lo que este pago descontó.
     await revertirMovimientosBancarios(client, 'pago_proveedor', id);
+
+    // 1d) Devolver a cartera los cheques que se hubieran endosado en este pago.
+    const { rows: endososRows } = await client.query(
+      `SELECT cheque_origen, cheque_id FROM pago_proveedor_endosos WHERE pago_proveedor_id = $1`, [id]
+    );
+    for (const e of endososRows) {
+      const tabla = TABLA_POR_ORIGEN_ENDOSO[e.cheque_origen];
+      if (!tabla) continue;
+      await client.query(
+        `UPDATE ${tabla} SET estado = 'en_cartera', fecha_estado = NULL
+          WHERE id = $1 AND estado = 'endosado'`, [e.cheque_id]
+      );
+      await client.query(`
+        INSERT INTO cheque_historial_estados
+          (cheque_tipo, cheque_id, estado_anterior, estado_nuevo, observacion, usuario_id)
+        VALUES ('recibido', $1, 'endosado', 'en_cartera', 'Anulación de pago a proveedor', $2)
+      `, [e.cheque_id, req.usuario?.id ?? null]);
+    }
+    await client.query(`DELETE FROM pago_proveedor_endosos WHERE pago_proveedor_id = $1`, [id]);
 
     // 2) Revertir imputaciones a egresos
     const { rows: aplic } = await client.query(

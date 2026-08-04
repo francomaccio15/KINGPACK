@@ -28,6 +28,11 @@ interface MedioPago { id: string; nombre: string; requiere_cuenta: boolean }
 interface Cuenta   { id: string; nombre: string }
 interface Sucursal { id: string; nombre: string }
 interface Cheque   { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string }
+// Cheque recibido en cartera, disponible para endosar a un proveedor.
+interface ChequeCartera {
+  id: string; origen_tipo: string; banco: string | null; numero_cheque: string | null;
+  importe: string; fecha_vencimiento: string | null; origen_nombre: string | null;
+}
 interface MedioLinea { medio_pago_id: string; monto: string; cuenta_bancaria_id: string }
 interface PagoHist {
   id: string;
@@ -138,6 +143,11 @@ export default function PagosProveedorClient() {
   const [fecha, setFecha]                 = useState(hoyAR());
   const [observaciones, setObs]           = useState('');
   const [cheques, setCheques]             = useState<Cheque[]>([]);
+  // Cheque como pago: emitir uno nuevo ('nuevo') o endosar uno en cartera ('endoso').
+  const [chequeModo, setChequeModo]       = useState<'nuevo' | 'endoso'>('nuevo');
+  const [chequesCartera, setChequesCartera] = useState<ChequeCartera[]>([]);
+  const [endososSel, setEndososSel]       = useState<Set<string>>(new Set());
+  const [loadingCartera, setLoadingCartera] = useState(false);
 
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState<string | null>(null);
@@ -248,21 +258,46 @@ export default function PagosProveedorClient() {
   const hayCheque   = medios.some(m => esChequeId(m.medio_pago_id));
 
   const totalCheques = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+  const totalEndosos = chequesCartera
+    .filter(c => endososSel.has(c.id))
+    .reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+  // Importe cubierto por la línea de medio Cheque: emitidos nuevos o endosados.
+  const totalChequePago = chequeModo === 'endoso' ? totalEndosos : totalCheques;
   // Monto efectivo de una línea: si es cheque, lo determina el detalle de cheques.
-  const montoLinea = (m: MedioLinea) => esChequeId(m.medio_pago_id) ? totalCheques : (parseFloat(m.monto) || 0);
+  const montoLinea = (m: MedioLinea) => esChequeId(m.medio_pago_id) ? totalChequePago : (parseFloat(m.monto) || 0);
   const totalMedios = medios.reduce((s, m) => s + montoLinea(m), 0);
 
-  // Al incluir un medio Cheque, mostrar una fila de cheque lista para completar;
-  // al quitarlo, limpiar las filas cargadas.
+  // Al incluir un medio Cheque en modo "nuevo", mostrar una fila lista para completar;
+  // al quitarlo, limpiar filas y selección de endoso.
   useEffect(() => {
-    if (hayCheque) {
+    if (hayCheque && chequeModo === 'nuevo') {
       setCheques(prev => prev.length === 0
         ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]
         : prev);
-    } else {
+    } else if (!hayCheque) {
       setCheques([]);
+      setEndososSel(new Set());
+      setChequeModo('nuevo');
     }
-  }, [hayCheque]);
+  }, [hayCheque, chequeModo]);
+
+  // Traer los cheques recibidos en cartera al entrar al modo endoso.
+  useEffect(() => {
+    if (!hayCheque || chequeModo !== 'endoso' || chequesCartera.length > 0) return;
+    setLoadingCartera(true);
+    apiFetch('/api/cheques?tipo=recibido&estado=en_cartera&limit=500')
+      .then(r => r.json())
+      .then(d => setChequesCartera(d.cheques ?? []))
+      .catch(() => setChequesCartera([]))
+      .finally(() => setLoadingCartera(false));
+  }, [hayCheque, chequeModo, chequesCartera.length]);
+
+  const toggleEndoso = (id: string) =>
+    setEndososSel(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
 
   const totalAplicado = useMemo(() =>
     Object.values(aplic).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0),
@@ -326,8 +361,11 @@ export default function PagosProveedorClient() {
         return setError('Hay un comprobante con un monto mayor a su saldo pendiente');
       }
     }
-    if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) {
+    if (hayCheque && chequeModo === 'nuevo' && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) {
       return setError('Cargá el detalle de los cheques');
+    }
+    if (hayCheque && chequeModo === 'endoso' && endososSel.size === 0) {
+      return setError('Elegí al menos un cheque en cartera para endosar');
     }
 
     // Lo que realmente se paga son los medios cargados. Si alcanza para todo lo
@@ -354,7 +392,14 @@ export default function PagosProveedorClient() {
         monto: montoLinea(m),
         cuenta_bancaria_id: m.cuenta_bancaria_id || null,
       })),
-      cheques: hayCheque ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe) : [],
+      cheques: (hayCheque && chequeModo === 'nuevo')
+        ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
+        : [],
+      endosos: (hayCheque && chequeModo === 'endoso')
+        ? chequesCartera
+            .filter(c => endososSel.has(c.id))
+            .map(c => ({ cheque_origen: c.origen_tipo, cheque_id: c.id, importe: parseFloat(c.importe) }))
+        : [],
     };
 
     setSaving(true);
@@ -367,6 +412,7 @@ export default function PagosProveedorClient() {
         : `Pago de ${ars.format(montoPagado)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
+      setChequeModo('nuevo'); setEndososSel(new Set()); setChequesCartera([]);
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
       await recargarSaldos();
       await cargarProveedor(proveedorId);
@@ -666,49 +712,101 @@ export default function PagosProveedorClient() {
             {/* Cheques */}
             {hayCheque && (
               <div className="space-y-3 pt-3 border-t border-kp-border">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques ({cheques.length})</p>
-                  <button type="button" onClick={addCheque}
-                    className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5">
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    Agregar cheque
-                  </button>
+                {/* Modo: emitir un cheque nuevo o endosar uno recibido en cartera */}
+                <div className="flex items-center gap-2">
+                  {(['nuevo', 'endoso'] as const).map(m => (
+                    <button key={m} type="button" onClick={() => setChequeModo(m)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                        chequeModo === m
+                          ? 'border-kp-red bg-kp-red/10 text-kp-white'
+                          : 'border-kp-border text-kp-gray hover:text-kp-white'}`}>
+                      {m === 'nuevo' ? 'Emitir cheque nuevo' : 'Endosar en cartera'}
+                    </button>
+                  ))}
                 </div>
 
-                {cheques.map((ch, i) => {
-                  const restante = +(totalPago - cheques.reduce((s, c, j) => s + (j === i ? 0 : (parseFloat(c.importe) || 0)), 0)).toFixed(2);
-                  return (
-                    <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-3 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
-                      <div className="sm:col-span-3"><label className={labelCls}>Banco</label>
-                        <input type="text" value={ch.banco} placeholder="Banco" onChange={e => updCheque(i, 'banco', e.target.value)} className={inputCls} /></div>
-                      <div className="sm:col-span-3"><label className={labelCls}>Nº Cheque</label>
-                        <input type="text" value={ch.numero_cheque} placeholder="00000000" onChange={e => updCheque(i, 'numero_cheque', e.target.value)} className={inputCls} /></div>
-                      <div className="sm:col-span-3"><label className={labelCls}>Fecha del cheque *</label>
-                        <input type="date" value={ch.fecha_vencimiento} onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)} className={inputCls} /></div>
-                      <div className="sm:col-span-3">
-                        <div className="flex items-center justify-between">
-                          <label className={labelCls}>Importe *</label>
-                          {restante > 0 && (
-                            <button type="button" onClick={() => updCheque(i, 'importe', String(restante))}
-                              className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(restante)}</button>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <NumericInput value={ch.importe} placeholder="0.00" onChange={e => updCheque(i, 'importe', e.target.value)} className={inputCls} />
-                          <button type="button" onClick={() => delCheque(i)} title="Quitar cheque"
-                            className="self-stretch px-2 text-kp-gray hover:text-kp-red">✕</button>
-                        </div>
-                      </div>
+                {chequeModo === 'nuevo' ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques ({cheques.length})</p>
+                      <button type="button" onClick={addCheque}
+                        className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/90 hover:bg-kp-red transition-colors px-3 py-1.5 rounded-lg shadow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3.5 h-3.5">
+                          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Agregar cheque
+                      </button>
                     </div>
-                  );
-                })}
 
-                {/* Total de cheques (define el importe del medio Cheque) */}
+                    {cheques.map((ch, i) => {
+                      const restante = +(totalPago - cheques.reduce((s, c, j) => s + (j === i ? 0 : (parseFloat(c.importe) || 0)), 0)).toFixed(2);
+                      return (
+                        <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-3 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
+                          <div className="sm:col-span-3"><label className={labelCls}>Banco</label>
+                            <input type="text" value={ch.banco} placeholder="Banco" onChange={e => updCheque(i, 'banco', e.target.value)} className={inputCls} /></div>
+                          <div className="sm:col-span-3"><label className={labelCls}>Nº Cheque</label>
+                            <input type="text" value={ch.numero_cheque} placeholder="00000000" onChange={e => updCheque(i, 'numero_cheque', e.target.value)} className={inputCls} /></div>
+                          <div className="sm:col-span-3"><label className={labelCls}>Fecha del cheque *</label>
+                            <input type="date" value={ch.fecha_vencimiento} onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)} className={inputCls} /></div>
+                          <div className="sm:col-span-3">
+                            <div className="flex items-center justify-between">
+                              <label className={labelCls}>Importe *</label>
+                              {restante > 0 && (
+                                <button type="button" onClick={() => updCheque(i, 'importe', String(restante))}
+                                  className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(restante)}</button>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <NumericInput value={ch.importe} placeholder="0.00" onChange={e => updCheque(i, 'importe', e.target.value)} className={inputCls} />
+                              <button type="button" onClick={() => delCheque(i)} title="Quitar cheque"
+                                className="self-stretch px-2 text-kp-gray hover:text-kp-red">✕</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+                      Cheques en cartera ({endososSel.size} elegido{endososSel.size === 1 ? '' : 's'})
+                    </p>
+                    {loadingCartera ? (
+                      <p className="text-xs text-kp-gray">Cargando cheques…</p>
+                    ) : chequesCartera.length === 0 ? (
+                      <p className="text-xs text-kp-gray">No hay cheques recibidos en cartera para endosar.</p>
+                    ) : (
+                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                        {chequesCartera.map(c => {
+                          const sel = endososSel.has(c.id);
+                          return (
+                            <button key={c.id} type="button" onClick={() => toggleEndoso(c.id)}
+                              className={`w-full flex items-center gap-3 text-left rounded-lg border px-3 py-2 transition-colors ${
+                                sel ? 'border-kp-red bg-kp-red/10' : 'border-kp-border bg-kp-surface2/40 hover:border-kp-gray'}`}>
+                              <span className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                                sel ? 'bg-kp-red border-kp-red text-white' : 'border-kp-gray text-transparent'}`}>✓</span>
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-sm text-kp-white truncate">
+                                  {(c.banco || 's/banco')} #{c.numero_cheque || 's/nº'}
+                                  {c.origen_nombre ? ` · ${c.origen_nombre}` : ''}
+                                </span>
+                                <span className="block text-[10px] text-kp-gray">Vence {c.fecha_vencimiento || 's/f'}</span>
+                              </span>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums text-kp-white">{fmt(parseFloat(c.importe) || 0)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Total (define el importe del medio Cheque) */}
                 <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
-                  <span className="text-xs uppercase tracking-widest text-kp-gray">Total cheques</span>
-                  <span className="text-sm font-bold tabular-nums text-kp-white">{fmt(totalCheques)}</span>
+                  <span className="text-xs uppercase tracking-widest text-kp-gray">
+                    {chequeModo === 'endoso' ? 'Total a endosar' : 'Total cheques'}
+                  </span>
+                  <span className="text-sm font-bold tabular-nums text-kp-white">{fmt(totalChequePago)}</span>
                 </div>
               </div>
             )}
