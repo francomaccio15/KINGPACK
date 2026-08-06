@@ -4,6 +4,7 @@ import RegistrarPago from './RegistrarPago';
 import EditarPago from './EditarPago';
 import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
+import ComprasPorMes from './ComprasPorMes';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -17,13 +18,14 @@ export const dynamic = 'force-dynamic';
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
   const user = requireAuth('/clientes');
   const puedeEditarPago = user.rol === 'cajero' || user.rol === 'administrador';
-  const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes, ventasRes] = await Promise.all([
+  const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes, ventasRes, comprasMensualesRes] = await Promise.all([
     serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
     serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
     serverFetch(`/api/clientes/cond-iva`,                 { cache: 'no-store' }),
     serverFetch(`/api/listas-precios`,                    { cache: 'no-store' }),
     serverFetch(`/api/sucursales`,                        { cache: 'no-store' }),
     serverFetch(`/api/ventas?cliente_id=${params.id}&limit=50`, { cache: 'no-store' }),
+    serverFetch(`/api/clientes/${params.id}/compras-mensuales`, { cache: 'no-store' }),
   ]);
 
   if (!clienteRes.ok) {
@@ -41,6 +43,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
   const listas     = listasRes.ok   ? (await listasRes.json()).listas       ?? [] : [];
   const sucursales = sucursalesRes.ok ? (await sucursalesRes.json()).sucursales ?? [] : [];
   const ventasCliente: any[] = ventasRes.ok ? ((await ventasRes.json()).ventas ?? []) : [];
+  const comprasMensuales: any[] = comprasMensualesRes.ok ? ((await comprasMensualesRes.json()).meses ?? []) : [];
 
   // Sucursal donde entra el pago = la sucursal operativa (selector global), no la
   // del cliente. Para cajeros el backend usa su propia sucursal del JWT igual.
@@ -170,6 +173,9 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           </div>
         ))}
       </div>
+
+      {/* Compras por mes */}
+      <ComprasPorMes meses={comprasMensuales} />
 
       {/* Info del cliente */}
       <div className="rounded-xl bg-kp-surface border border-kp-border p-5">

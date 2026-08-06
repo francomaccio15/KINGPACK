@@ -287,6 +287,39 @@ router.get('/:id/movimientos', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/clientes/:id/compras-mensuales ─────────────────────────────────
+// Total comprado por el cliente en cada uno de los últimos 12 meses. "Comprado"
+// = ventas reales: se excluyen anuladas y preventas (presupuestos). Los meses sin
+// compras vuelven en 0 para que el gráfico quede parejo.
+router.get('/:id/compras-mensuales', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT to_char(m.mes, 'YYYY-MM')      AS mes,
+             COALESCE(v.total, 0)::float    AS total,
+             COALESCE(v.cantidad, 0)::int   AS cantidad
+        FROM generate_series(
+               date_trunc('month', CURRENT_DATE) - INTERVAL '11 months',
+               date_trunc('month', CURRENT_DATE),
+               INTERVAL '1 month'
+             ) AS m(mes)
+        LEFT JOIN (
+          SELECT date_trunc('month', fecha) AS mes,
+                 SUM(total)  AS total,
+                 COUNT(*)    AS cantidad
+            FROM ventas
+           WHERE cliente_id = $1
+             AND deleted_at IS NULL
+             AND estado NOT IN ('anulada', 'preventa')
+             AND fecha >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+           GROUP BY 1
+        ) v ON v.mes = m.mes
+       ORDER BY m.mes ASC
+    `, [req.params.id]);
+
+    res.json({ meses: rows });
+  } catch (err) { next(err); }
+});
+
 // ─── POST /api/clientes/:id/pagos ─────────────────────────────────────────────
 router.post('/:id/pagos', async (req, res, next) => {
   try {
