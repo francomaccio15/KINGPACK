@@ -1094,6 +1094,11 @@ router.get('/:id/pdf', async (req, res, next) => {
     const venta = ventaRows[0];
     const fact  = factRows[0] || null;
     const tieneFactura = !!(fact?.cae);
+    // En el PDF de un PRESUPUESTO (preventa) el dueño no quiere mostrar el precio de
+    // lista ni el % de descuento: solo el precio final de cada artículo y el total.
+    // El descuento extra ya viene foldeado en precio_unitario_final de cada renglón,
+    // así que la suma de los subtotales da exactamente el TOTAL, sin descuadre.
+    const esPresupuesto = venta.estado === 'preventa';
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
@@ -1191,12 +1196,20 @@ router.get('/:id/pdf', async (req, res, next) => {
     // Header de tabla
     doc.rect(ML, curY, CW, 20).fill('#f2f2f2');
     doc.fillColor('#555555').fontSize(7).font('Helvetica-Bold');
-    doc.text('ARTÍCULO',    ML + 6,       curY + 6, { width: 180 });
-    doc.text('CANT.',       ML + 186,     curY + 6, { width: 40, align: 'right' });
-    doc.text('P. LISTA',    ML + 236,     curY + 6, { width: 70, align: 'right' });
-    doc.text('DESC.',       ML + 316,     curY + 6, { width: 40, align: 'right' });
-    doc.text('PRECIO FINAL',ML + 366,     curY + 6, { width: 80, align: 'right' });
-    doc.text('SUBTOTAL',    ML + 456,     curY + 6, { width: CW - 456, align: 'right' });
+    if (esPresupuesto) {
+      // Presupuesto: sin P. LISTA ni DESC. Se reparte el ancho entre las 4 columnas.
+      doc.text('ARTÍCULO',      ML + 6,   curY + 6, { width: 240 });
+      doc.text('CANT.',         ML + 256, curY + 6, { width: 50, align: 'right' });
+      doc.text('PRECIO UNIT.',  ML + 316, curY + 6, { width: 90, align: 'right' });
+      doc.text('SUBTOTAL',      ML + 416, curY + 6, { width: CW - 416, align: 'right' });
+    } else {
+      doc.text('ARTÍCULO',    ML + 6,       curY + 6, { width: 180 });
+      doc.text('CANT.',       ML + 186,     curY + 6, { width: 40, align: 'right' });
+      doc.text('P. LISTA',    ML + 236,     curY + 6, { width: 70, align: 'right' });
+      doc.text('DESC.',       ML + 316,     curY + 6, { width: 40, align: 'right' });
+      doc.text('PRECIO FINAL',ML + 366,     curY + 6, { width: 80, align: 'right' });
+      doc.text('SUBTOTAL',    ML + 456,     curY + 6, { width: CW - 456, align: 'right' });
+    }
     curY += 22;
 
     let rowIdx = 0;
@@ -1215,23 +1228,33 @@ router.get('/:id/pdf', async (req, res, next) => {
         doc.rect(ML, curY, CW, 18).fill('#f9f9f9');
       }
 
-      doc.fillColor('#1a1a1a').fontSize(8).font('Helvetica')
-         .text(item.nombre, ML + 6, curY + 4, { width: 178, lineBreak: false });
-      doc.text(parseFloat(item.cantidad).toFixed(0), ML + 186, curY + 4, { width: 40, align: 'right' });
-
-      doc.fillColor('#888888')
-         .text(ars(baseItem), ML + 236, curY + 4, { width: 70, align: 'right' });
-      if (tieneDesc) {
-        doc.fillColor('#555555')
-           .text(pct(descItem), ML + 316, curY + 4, { width: 40, align: 'right' });
+      if (esPresupuesto) {
+        doc.fillColor('#1a1a1a').fontSize(8).font('Helvetica')
+           .text(item.nombre, ML + 6, curY + 4, { width: 238, lineBreak: false });
+        doc.text(parseFloat(item.cantidad).toFixed(0), ML + 256, curY + 4, { width: 50, align: 'right' });
+        doc.fillColor('#1a1a1a')
+           .text(ars(item.precio_unitario_final), ML + 316, curY + 4, { width: 90, align: 'right' });
+        doc.fillColor('#111111').font('Helvetica-Bold')
+           .text(ars(subtotalItem), ML + 416, curY + 4, { width: CW - 416, align: 'right' });
       } else {
-        doc.fillColor('#888888').text('—', ML + 316, curY + 4, { width: 40, align: 'right' });
-      }
-      doc.fillColor('#1a1a1a')
-         .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
+        doc.fillColor('#1a1a1a').fontSize(8).font('Helvetica')
+           .text(item.nombre, ML + 6, curY + 4, { width: 178, lineBreak: false });
+        doc.text(parseFloat(item.cantidad).toFixed(0), ML + 186, curY + 4, { width: 40, align: 'right' });
 
-      doc.fillColor('#111111').font('Helvetica-Bold')
-         .text(ars(subtotalItem), ML + 456, curY + 4, { width: CW - 456, align: 'right' });
+        doc.fillColor('#888888')
+           .text(ars(baseItem), ML + 236, curY + 4, { width: 70, align: 'right' });
+        if (tieneDesc) {
+          doc.fillColor('#555555')
+             .text(pct(descItem), ML + 316, curY + 4, { width: 40, align: 'right' });
+        } else {
+          doc.fillColor('#888888').text('—', ML + 316, curY + 4, { width: 40, align: 'right' });
+        }
+        doc.fillColor('#1a1a1a')
+           .text(ars(item.precio_unitario_final), ML + 366, curY + 4, { width: 80, align: 'right' });
+
+        doc.fillColor('#111111').font('Helvetica-Bold')
+           .text(ars(subtotalItem), ML + 456, curY + 4, { width: CW - 456, align: 'right' });
+      }
 
       doc.strokeColor('#eeeeee').lineWidth(0.4)
          .moveTo(ML, curY + 18).lineTo(PW - MR, curY + 18).stroke();
@@ -1286,15 +1309,20 @@ router.get('/:id/pdf', async (req, res, next) => {
     }).sort((x, y) => x.alic - y.alic);
     const netoGravadoPdf = +discrim.reduce((s, d) => s + d.neto, 0).toFixed(2);
 
-    drawTotalRow('Subtotal', subtotalBasePdf);
-    if (descuentoBasePdf > 0.01) {
-      drawTotalRow('Descuento', -descuentoBasePdf, false, '#555555');
-    }
-    if (descExtraPdf > 0.01) {
-      const lblExtra = parseFloat(venta.descuento_extra_pct || 0) > 0
-        ? `Descuento extra ${parseFloat(venta.descuento_extra_pct).toFixed(2).replace(/\.?0+$/, '')}%`
-        : 'Descuento extra';
-      drawTotalRow(lblExtra, -descExtraPdf, false, '#555555');
+    // En un presupuesto no se muestran ni el subtotal a precio de lista ni los
+    // renglones de descuento: solo el TOTAL, que ya es la suma de los subtotales
+    // finales de cada renglón.
+    if (!esPresupuesto) {
+      drawTotalRow('Subtotal', subtotalBasePdf);
+      if (descuentoBasePdf > 0.01) {
+        drawTotalRow('Descuento', -descuentoBasePdf, false, '#555555');
+      }
+      if (descExtraPdf > 0.01) {
+        const lblExtra = parseFloat(venta.descuento_extra_pct || 0) > 0
+          ? `Descuento extra ${parseFloat(venta.descuento_extra_pct).toFixed(2).replace(/\.?0+$/, '')}%`
+          : 'Descuento extra';
+        drawTotalRow(lblExtra, -descExtraPdf, false, '#555555');
+      }
     }
     // Factura A: se discrimina el neto gravado + el IVA por alícuota antes del total.
     if (letraFact === 'A') {
