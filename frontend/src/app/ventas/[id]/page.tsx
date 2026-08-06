@@ -82,6 +82,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
     ? `Descuento extra ${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
     : 'Descuento extra';
 
+  // En la impresión de un PRESUPUESTO (preventa) el dueño no quiere que se vea el
+  // precio de lista ni el % de descuento: solo el precio final de cada artículo y
+  // el total. En presupuestos el descuento extra ya viene foldeado en el precio
+  // final de cada renglón, así que la suma de los subtotales da el total exacto.
+  const esPresupuesto = venta.estado === 'preventa';
+  // Desglose Subtotal/Descuento del pie impreso: nunca en presupuestos.
+  const mostrarDesglose = !esPresupuesto && (descuento > 0 || descExtraMonto > 0);
+
   // Discriminación de IVA para la factura fiscal. precio_unitario_final YA incluye
   // IVA y descuento; el IVA se calcula sobre el neto ya descontado, agrupado por
   // alícuota (neto = total_grupo / (1 + alíc); IVA = total_grupo − neto).
@@ -479,9 +487,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             <tr style={{ background: '#111', color: 'white' }}>
               <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', borderRight: '1px solid #555' }}>Artículo</th>
               <th style={{ textAlign: 'center', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '32px', borderRight: '1px solid #555' }}>Cant.</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Lista</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '38px', borderRight: '1px solid #555' }}>Desc.</th>
-              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Final</th>
+              {!esPresupuesto && (
+                <>
+                  <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>P. Lista</th>
+                  <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '38px', borderRight: '1px solid #555' }}>Desc.</th>
+                </>
+              )}
+              <th style={{ textAlign: 'right', padding: '3px 4px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px', borderRight: '1px solid #555' }}>{esPresupuesto ? 'P. Unit.' : 'P. Final'}</th>
               <th style={{ textAlign: 'right', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', width: '72px' }}>Subtotal</th>
             </tr>
           </thead>
@@ -493,10 +505,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 <tr key={item.articulo_id} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
                   <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
                   <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(base)}</td>
-                  <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
-                    {tieneDesc ? `${descPct.toFixed(1)}%` : '—'}
-                  </td>
+                  {!esPresupuesto && (
+                    <>
+                      <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(base)}</td>
+                      <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: tieneDesc ? '#dc2626' : '#999', borderRight: '1px solid #ccc' }}>
+                        {tieneDesc ? `${descPct.toFixed(1)}%` : '—'}
+                      </td>
+                    </>
+                  )}
                   <td style={{ padding: '2px 4px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{fmt(item.precio_unitario_final)}</td>
                   <td style={{ padding: '2px 5px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '700' }}>{fmt(subtotalItem)}</td>
                 </tr>
@@ -531,7 +547,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             )}
           </div>
           <div style={{ border: '2px solid #111', padding: '4px 8px', textAlign: 'right', minWidth: '115px' }}>
-            {(descuento > 0 || descExtraMonto > 0) && (
+            {mostrarDesglose && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '7.5px', color: '#555', marginBottom: '1px' }}>
                   <span>Subtotal</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotalBase)}</span>
@@ -548,7 +564,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                 )}
               </>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: (descuento > 0 || descExtraMonto > 0) ? '2px solid #111' : undefined, paddingTop: (descuento > 0 || descExtraMonto > 0) ? '3px' : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '11px', fontWeight: '900', borderTop: mostrarDesglose ? '2px solid #111' : undefined, paddingTop: mostrarDesglose ? '3px' : undefined }}>
               <span>TOTAL</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(venta.total)}</span>
             </div>
           </div>
