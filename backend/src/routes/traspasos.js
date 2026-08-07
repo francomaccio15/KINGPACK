@@ -90,22 +90,52 @@ router.get('/resumen-mensual', requireRol('administrador'), async (req, res, nex
     }
 
     const { rows } = await pool.query(`
+      WITH base AS (
+        SELECT
+          to_char(COALESCE(t.fecha_envio, t.created_at), 'YYYY-MM') AS mes,
+          so.nombre AS origen,
+          sd.nombre AS destino,
+          t.id      AS traspaso_id,
+          a.nombre  AS articulo_nombre,
+          a.codigo  AS articulo_codigo,
+          ti.cantidad::float                 AS cantidad,
+          (ti.cantidad * a.costo_base)::float AS costo
+        FROM traspasos t
+        JOIN sucursales so     ON so.id = t.sucursal_origen_id
+        JOIN sucursales sd     ON sd.id = t.sucursal_destino_id
+        JOIN traspaso_items ti ON ti.traspaso_id = t.id
+        JOIN articulos a       ON a.id = ti.articulo_id
+        WHERE t.estado IN ('en_transito', 'recibido')
+        ${filtroAnio}
+      ),
+      por_articulo AS (
+        SELECT mes, origen, destino, articulo_nombre, articulo_codigo,
+               SUM(cantidad) AS unidades, SUM(costo) AS costo_total
+        FROM base
+        GROUP BY mes, origen, destino, articulo_nombre, articulo_codigo
+      )
       SELECT
-        to_char(COALESCE(t.fecha_envio, t.created_at), 'YYYY-MM') AS mes,
-        so.nombre AS sucursal_origen_nombre,
-        sd.nombre AS sucursal_destino_nombre,
-        COUNT(DISTINCT t.id)                            AS traspasos_count,
-        COALESCE(SUM(ti.cantidad), 0)::float            AS unidades,
-        COALESCE(SUM(ti.cantidad * a.costo_base), 0)::float AS costo_total
-      FROM traspasos t
-      JOIN sucursales so     ON so.id = t.sucursal_origen_id
-      JOIN sucursales sd     ON sd.id = t.sucursal_destino_id
-      JOIN traspaso_items ti ON ti.traspaso_id = t.id
-      JOIN articulos a       ON a.id = ti.articulo_id
-      WHERE t.estado IN ('en_transito', 'recibido')
-      ${filtroAnio}
-      GROUP BY mes, so.nombre, sd.nombre
-      ORDER BY mes DESC, so.nombre, sd.nombre
+        b.mes,
+        b.origen AS sucursal_origen_nombre,
+        b.destino AS sucursal_destino_nombre,
+        COUNT(DISTINCT b.traspaso_id)  AS traspasos_count,
+        COALESCE(SUM(b.cantidad), 0)   AS unidades,
+        COALESCE(SUM(b.costo), 0)      AS costo_total,
+        (
+          SELECT json_agg(
+                   json_build_object(
+                     'nombre',      pa.articulo_nombre,
+                     'codigo',      pa.articulo_codigo,
+                     'unidades',    pa.unidades,
+                     'costo_total', pa.costo_total
+                   ) ORDER BY pa.articulo_nombre
+                 )
+          FROM por_articulo pa
+          WHERE pa.mes = b.mes AND pa.origen = b.origen AND pa.destino = b.destino
+        ) AS articulos
+      FROM base b
+      GROUP BY b.mes, b.origen, b.destino
+      ORDER BY b.mes DESC, b.origen, b.destino
     `, params);
 
     res.json({ resumen: rows });
