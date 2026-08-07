@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -67,6 +68,47 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({ count: parseInt(countRows[0].count), traspasos: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/traspasos/resumen-mensual ──────────────────────────────────────
+// Resumen mensual de mercadería traspasada entre sucursales, VALORIZADA A COSTO
+// (Σ cantidad × costo_base, mismo criterio que el COGS del Estado de Resultados).
+// Agrupa por mes y por par origen → destino (ej: Huaico → Laprida).
+// Solo cuenta traspasos que efectivamente movieron mercadería (en tránsito o
+// recibidos); pendientes y cancelados se excluyen. El mes se toma de la fecha de
+// envío (cuando la mercadería salió del origen).
+// Solo administradores.  ?anio=YYYY (opcional, default: todos)
+// IMPORTANTE: debe declararse ANTES de GET /:id para que no lo capture.
+router.get('/resumen-mensual', requireRol('administrador'), async (req, res, next) => {
+  try {
+    const params = [];
+    let filtroAnio = '';
+    if (req.query.anio) {
+      params.push(parseInt(req.query.anio));
+      filtroAnio = `AND EXTRACT(YEAR FROM COALESCE(t.fecha_envio, t.created_at)) = $${params.length}`;
+    }
+
+    const { rows } = await pool.query(`
+      SELECT
+        to_char(COALESCE(t.fecha_envio, t.created_at), 'YYYY-MM') AS mes,
+        so.nombre AS sucursal_origen_nombre,
+        sd.nombre AS sucursal_destino_nombre,
+        COUNT(DISTINCT t.id)                            AS traspasos_count,
+        COALESCE(SUM(ti.cantidad), 0)::float            AS unidades,
+        COALESCE(SUM(ti.cantidad * a.costo_base), 0)::float AS costo_total
+      FROM traspasos t
+      JOIN sucursales so     ON so.id = t.sucursal_origen_id
+      JOIN sucursales sd     ON sd.id = t.sucursal_destino_id
+      JOIN traspaso_items ti ON ti.traspaso_id = t.id
+      JOIN articulos a       ON a.id = ti.articulo_id
+      WHERE t.estado IN ('en_transito', 'recibido')
+      ${filtroAnio}
+      GROUP BY mes, so.nombre, sd.nombre
+      ORDER BY mes DESC, so.nombre, sd.nombre
+    `, params);
+
+    res.json({ resumen: rows });
   } catch (err) { next(err); }
 });
 

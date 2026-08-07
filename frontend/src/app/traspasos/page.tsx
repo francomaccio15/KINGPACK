@@ -21,6 +21,24 @@ type Traspaso = {
 type Sucursal = { id: string; nombre: string };
 type Articulo = { id: string; nombre: string; codigo: string };
 
+type ResumenRow = {
+  mes: string;                       // 'YYYY-MM'
+  sucursal_origen_nombre: string;
+  sucursal_destino_nombre: string;
+  traspasos_count: number;
+  unidades: number;
+  costo_total: number;
+};
+
+const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// 'YYYY-MM' → 'Agosto 2026'
+const mesLabel = (mes: string) => {
+  const [y, m] = mes.split('-').map(Number);
+  const s = new Date(y, (m || 1) - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
 const ESTADO_STYLE: Record<string, string> = {
   pendiente:   'bg-amber-500/10 text-amber-400 border-amber-500/30',
   en_transito: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
@@ -69,6 +87,21 @@ export default async function TraspasosPage() {
   const pendienteCount   = traspasos.filter((t: Traspaso) => t.estado === 'pendiente').length;
   const enTransitoCount  = traspasos.filter((t: Traspaso) => t.estado === 'en_transito').length;
 
+  // Resumen mensual valorizado a costo — SOLO administradores.
+  const esAdmin = user.rol === 'administrador';
+  let resumen: ResumenRow[] = [];
+  if (esAdmin) {
+    resumen = await serverFetch(`/api/traspasos/resumen-mensual`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { resumen: [] })
+      .then(d => (d.resumen ?? []) as ResumenRow[])
+      .catch(() => []);
+  }
+  // Agrupar filas por mes (ya vienen ordenadas por mes desc).
+  const resumenPorMes = resumen.reduce((acc, r) => {
+    (acc[r.mes] ??= []).push(r);
+    return acc;
+  }, {} as Record<string, ResumenRow[]>);
+
   return (
     <section className="space-y-5">
 
@@ -111,6 +144,55 @@ export default async function TraspasosPage() {
           />
         </div>
       </div>
+
+      {/* Resumen mensual valorizado a costo — solo administradores */}
+      {esAdmin && (
+        <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden shadow-lg shadow-black/40">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-kp-border bg-kp-surface2">
+            <svg className="w-4 h-4 text-kp-red flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+              Mercadería traspasada por mes <span className="text-kp-gray/60 normal-case tracking-normal font-normal">(valorizada a costo)</span>
+            </h3>
+          </div>
+
+          {Object.keys(resumenPorMes).length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-kp-gray">Todavía no hay traspasos enviados o recibidos para valorizar.</p>
+          ) : (
+            <div className="divide-y divide-kp-border">
+              {Object.entries(resumenPorMes).map(([mes, filas]) => {
+                const totalMes = filas.reduce((s, f) => s + f.costo_total, 0);
+                return (
+                  <div key={mes} className="px-5 py-4">
+                    <div className="flex items-baseline justify-between mb-3">
+                      <h4 className="text-sm font-bold text-kp-white">{mesLabel(mes)}</h4>
+                      <span className="text-sm font-bold text-kp-white tabular-nums">{ars.format(totalMes)}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {filas.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-kp-gray-lt truncate">{f.sucursal_origen_nombre}</span>
+                            <svg className="w-3.5 h-3.5 text-kp-red flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                            </svg>
+                            <span className="text-kp-white font-medium truncate">{f.sucursal_destino_nombre}</span>
+                            <span className="text-xs text-kp-gray/70 whitespace-nowrap">
+                              · {f.traspasos_count} {Number(f.traspasos_count) === 1 ? 'traspaso' : 'traspasos'} · {f.unidades} u.
+                            </span>
+                          </div>
+                          <span className="text-kp-gray-lt tabular-nums whitespace-nowrap">{ars.format(f.costo_total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
