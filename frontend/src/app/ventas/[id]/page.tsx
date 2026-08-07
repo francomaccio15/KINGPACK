@@ -82,6 +82,13 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
     ? `Descuento extra ${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
     : 'Descuento extra';
 
+  // Descuento TOTAL efectivamente aplicado = precio base (madre) − total final.
+  // Reúne lista + cliente + extra en un solo número, sin depender de cómo se
+  // haya guardado cada parte. Sirve igual para remitos y presupuestos.
+  const descAplicadoMonto = Math.max(0, subtotalBase - totalVenta);
+  const descAplicadoPct   = subtotalBase > 0 ? (descAplicadoMonto / subtotalBase) * 100 : 0;
+  const hayDescAplicado   = descAplicadoPct > 0.05;
+
   // En la impresión de un PRESUPUESTO (preventa) el dueño no quiere que se vea el
   // precio de lista ni el % de descuento: solo el precio final de cada artículo y
   // el total. En presupuestos el descuento extra ya viene foldeado en el precio
@@ -459,17 +466,16 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
         </div>
 
-        {/* Solapa: descuento autorizado (el elegido por nosotros), ya aplicado.
+        {/* Solapa: descuento total aplicado (lista + cliente + extra), ya aplicado.
             Se muestra también en presupuestos: es un resumen, no el detalle por ítem. */}
-        {(descExtraPct > 0 || descExtraMonto > 0) && (
+        {hayDescAplicado && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#dc2626', color: 'white', padding: '4px 8px', marginBottom: '5px', borderRadius: '2px' }}>
             <span style={{ fontSize: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Descuento autorizado
+              Descuento aplicado
             </span>
             <span style={{ fontSize: '10px', fontWeight: '900', fontVariantNumeric: 'tabular-nums' }}>
-              {descExtraPct > 0
-                ? `${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
-                : `−${fmt(descExtraMonto)}`}
+              {descAplicadoPct.toFixed(1).replace(/\.0$/, '')}%
+              <span style={{ fontSize: '8px', fontWeight: '700', marginLeft: '6px' }}>(−{fmt(descAplicadoMonto)})</span>
               <span style={{ fontSize: '7px', fontWeight: '700', marginLeft: '5px', opacity: 0.85 }}>ya aplicado</span>
             </span>
           </div>
