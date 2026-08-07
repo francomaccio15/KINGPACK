@@ -459,6 +459,21 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
         </div>
 
+        {/* Solapa: descuento autorizado (el elegido por nosotros), ya aplicado */}
+        {(descExtraPct > 0 || descExtraMonto > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#dc2626', color: 'white', padding: '4px 8px', marginBottom: '5px', borderRadius: '2px' }}>
+            <span style={{ fontSize: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Descuento autorizado
+            </span>
+            <span style={{ fontSize: '10px', fontWeight: '900', fontVariantNumeric: 'tabular-nums' }}>
+              {descExtraPct > 0
+                ? `${descExtraPct.toFixed(2).replace(/\.?0+$/, '')}%`
+                : `−${fmt(descExtraMonto)}`}
+              <span style={{ fontSize: '7px', fontWeight: '700', marginLeft: '5px', opacity: 0.85 }}>ya aplicado</span>
+            </span>
+          </div>
+        )}
+
         {/* 2 columnas: Emisor | Cliente */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '2px solid #111', marginBottom: '5px' }}>
           <div style={{ borderRight: '2px solid #111', padding: '4px 6px' }}>
