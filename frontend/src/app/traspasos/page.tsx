@@ -102,6 +102,23 @@ export default async function TraspasosPage() {
     return acc;
   }, {} as Record<string, ResumenRow[]>);
 
+  // Acumulado histórico: suma de TODO el historial por dirección (origen → destino).
+  const acumulado = Object.values(
+    resumen.reduce((acc, r) => {
+      const k = `${r.sucursal_origen_nombre}→${r.sucursal_destino_nombre}`;
+      const a = (acc[k] ??= {
+        sucursal_origen_nombre: r.sucursal_origen_nombre,
+        sucursal_destino_nombre: r.sucursal_destino_nombre,
+        traspasos_count: 0, unidades: 0, costo_total: 0,
+      });
+      a.traspasos_count += Number(r.traspasos_count) || 0;
+      a.unidades        += Number(r.unidades) || 0;
+      a.costo_total     += Number(r.costo_total) || 0;
+      return acc;
+    }, {} as Record<string, Omit<ResumenRow, 'mes'>>)
+  );
+  const acumuladoTotal = acumulado.reduce((s, a) => s + a.costo_total, 0);
+
   return (
     <section className="space-y-5">
 
@@ -160,6 +177,32 @@ export default async function TraspasosPage() {
           {Object.keys(resumenPorMes).length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-kp-gray">Todavía no hay traspasos enviados o recibidos para valorizar.</p>
           ) : (
+            <>
+            {/* Acumulado histórico por dirección (todo el historial) */}
+            <div className="px-5 py-4 bg-kp-surface2/40 border-b border-kp-border">
+              <div className="flex items-baseline justify-between mb-3">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Acumulado histórico</h4>
+                <span className="text-sm font-bold text-kp-white tabular-nums">{ars.format(acumuladoTotal)}</span>
+              </div>
+              <div className="space-y-1.5">
+                {acumulado.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-kp-gray-lt truncate">{a.sucursal_origen_nombre}</span>
+                      <svg className="w-3.5 h-3.5 text-kp-red flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                      </svg>
+                      <span className="text-kp-white font-medium truncate">{a.sucursal_destino_nombre}</span>
+                      <span className="text-xs text-kp-gray/70 whitespace-nowrap">
+                        · {a.traspasos_count} {a.traspasos_count === 1 ? 'traspaso' : 'traspasos'} · {a.unidades} u.
+                      </span>
+                    </div>
+                    <span className="text-kp-white font-semibold tabular-nums whitespace-nowrap">{ars.format(a.costo_total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="divide-y divide-kp-border">
               {Object.entries(resumenPorMes).map(([mes, filas]) => {
                 const totalMes = filas.reduce((s, f) => s + f.costo_total, 0);
@@ -190,6 +233,7 @@ export default async function TraspasosPage() {
                 );
               })}
             </div>
+            </>
           )}
         </div>
       )}
