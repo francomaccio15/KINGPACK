@@ -459,8 +459,9 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           </div>
         </div>
 
-        {/* Solapa: descuento autorizado (el elegido por nosotros), ya aplicado */}
-        {(descExtraPct > 0 || descExtraMonto > 0) && (
+        {/* Solapa: descuento autorizado (el elegido por nosotros), ya aplicado.
+            No se muestra en presupuestos: ahí el descuento va foldeado y oculto. */}
+        {!esPresupuesto && (descExtraPct > 0 || descExtraMonto > 0) && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: '#dc2626', color: 'white', padding: '4px 8px', marginBottom: '5px', borderRadius: '2px' }}>
             <span style={{ fontSize: '8px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Descuento autorizado
