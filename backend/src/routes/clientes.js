@@ -287,6 +287,41 @@ router.get('/:id/movimientos', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── POST /api/clientes/:id/ajuste-saldo ─────────────────────────────────────
+// Ajuste manual del saldo de cuenta corriente del cliente. Registra una
+// corrección firmada en correcciones_saldo_cliente:
+//   tipo 'cargo'   → monto positivo  (aumenta la deuda del cliente)
+//   tipo 'credito' → monto negativo  (baja la deuda / genera saldo a favor)
+// Disponible para cajero y administrador.
+router.post('/:id/ajuste-saldo', requireRol('cajero', 'administrador'), async (req, res, next) => {
+  try {
+    const { monto, tipo = 'cargo', motivo } = req.body;
+    const monN = Math.abs(parseFloat(monto) || 0);
+    if (monN <= 0) return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+    if (tipo !== 'cargo' && tipo !== 'credito') {
+      return res.status(400).json({ error: 'Tipo inválido (cargo | credito)' });
+    }
+    if (!motivo || !String(motivo).trim()) {
+      return res.status(400).json({ error: 'El motivo es requerido' });
+    }
+
+    const { rows: cli } = await pool.query(
+      'SELECT id FROM clientes WHERE id = $1 AND deleted_at IS NULL',
+      [req.params.id]
+    );
+    if (!cli[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const montoFirmado = tipo === 'credito' ? -monN : monN;
+    await pool.query(
+      `INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
+       VALUES ($1, $2, $3)`,
+      [req.params.id, montoFirmado, String(motivo).trim()]
+    );
+
+    res.status(201).json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/clientes/:id/compras-mensuales ─────────────────────────────────
 // Total comprado por el cliente en cada uno de los últimos 12 meses. "Comprado"
 // = ventas reales: se excluyen anuladas y preventas (presupuestos). Los meses sin

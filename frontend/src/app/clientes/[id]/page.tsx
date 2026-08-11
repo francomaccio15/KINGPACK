@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import RegistrarPago from './RegistrarPago';
+import AjustarSaldo from './AjustarSaldo';
 import EditarPago from './EditarPago';
 import EditarCliente from './EditarCliente';
 import EstadoCuentaPDF from './EstadoCuentaPDF';
@@ -99,6 +100,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
         <div className="flex items-center gap-2">
           <EstadoCuentaPDF clienteId={cliente.id} />
           <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
+          {puedeEditarPago && <AjustarSaldo clienteId={cliente.id} saldoActual={saldoActual} />}
           <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa} />
         </div>
       </div>
