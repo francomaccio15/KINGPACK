@@ -949,6 +949,32 @@ router.post('/:id/facturar', async (req, res, next) => {
     if (ventaRows.length === 0) return res.status(404).json({ error: 'Venta no encontrada' });
     const v = ventaRows[0];
 
+    // Sin esta guarda, un doble click o un reintento tras un error de red emite
+    // un SEGUNDO comprobante fiscal real por la misma venta, y anularlo exige una
+    // nota de crédito. Ya pasó: la venta #598 del 20/07 generó la 0004-00000732 y
+    // la 0004-00000733 por los mismos $11.600.
+    const { rows: yaFacturada } = await pool.query(`
+      SELECT punto_venta, numero, cae, cae_vencimiento, total
+        FROM facturaciones
+       WHERE venta_id = $1 AND ok AND deleted_at IS NULL
+       ORDER BY created_at
+       LIMIT 1
+    `, [id]);
+
+    if (yaFacturada.length) {
+      const f = yaFacturada[0];
+      console.warn(`[ventas] intento de refacturar la venta #${v.numero} (${id}), ` +
+        `ya tiene ${f.punto_venta}-${String(f.numero).padStart(8,'0')}`);
+      return res.status(409).json({
+        error: `La venta ya está facturada: comprobante ${f.punto_venta}-${String(f.numero).padStart(8,'0')} ` +
+               `(CAE ${f.cae}). Para anularla hay que emitir una nota de crédito.`,
+        yaFacturada: true,
+        puntoVenta: f.punto_venta,
+        nroComprobante: f.numero,
+        CAE: f.cae,
+      });
+    }
+
     const total = parseFloat(v.total);
 
     // Ítems reales para discriminar el IVA POR ALÍCUOTA. precio_unitario_final YA
