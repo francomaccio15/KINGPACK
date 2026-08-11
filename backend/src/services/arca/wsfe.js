@@ -8,6 +8,8 @@ const https = require('https');
 const config = require('./config');
 const wsaa   = require('./wsaa');
 
+const TIMEOUT_MS = parseInt(process.env.AFIP_TIMEOUT_MS || '60000', 10);
+
 /**
  * Solicita un CAE para un comprobante nuevo.
  * @param {object} comprobante — Estructura del comprobante (ver index.js para el formato).
@@ -16,8 +18,88 @@ const wsaa   = require('./wsaa');
 async function solicitarCAE(comprobante) {
   const { token, sign } = await wsaa.getToken();
   const xml = _buildFECAESolicitar(comprobante, token, sign);
-  const respXml = await _soapPost('FECAESolicitar', xml);
+
+  let respXml;
+  try {
+    respXml = await _soapPost('FECAESolicitar', xml);
+  } catch (err) {
+    // Un timeout o corte de red acá es AMBIGUO: ARCA pudo haber autorizado el
+    // comprobante y perderse la respuesta. Reintentar emitiría un duplicado, así
+    // que preguntamos si el comprobante quedó emitido y, si sí, lo recuperamos.
+    // (2026-08-11: así se perdió la 0006-00000207, emitida en ARCA e inexistente
+    // en KingPack, que devolvió 500 al cajero.)
+    const recuperado = await _recuperarTrasFalla(comprobante);
+    if (recuperado) return recuperado;
+    throw err;
+  }
+
   return _parsearRespuestaCAE(respXml);
+}
+
+/**
+ * Tras una falla ambigua de FECAESolicitar, consulta a ARCA si el comprobante
+ * que intentábamos emitir quedó realmente autorizado. Devuelve el mismo shape
+ * que _parsearRespuestaCAE, o null si no se emitió (y entonces el error es real).
+ */
+async function _recuperarTrasFalla(comprobante) {
+  const { puntoVenta, tipoCbte, nroComprobante } = comprobante;
+  try {
+    const ultimo = await ultimoNroComprobante(puntoVenta, tipoCbte);
+    if (ultimo < nroComprobante) {
+      console.warn(
+        `[arca] falla de red en PV ${puntoVenta} tipo ${tipoCbte} nro ${nroComprobante}: ` +
+        `ARCA sigue en ${ultimo}, el comprobante no se emitió. Se puede reintentar.`
+      );
+      return null;
+    }
+
+    const cbte = await consultarComprobante(puntoVenta, tipoCbte, nroComprobante);
+    if (!cbte || !cbte.CAE) {
+      console.warn(`[arca] ${puntoVenta}-${nroComprobante} figura emitido pero sin CAE consultable`);
+      return null;
+    }
+
+    console.warn(
+      `[arca] CAE recuperado tras falla de red: PV ${puntoVenta} tipo ${tipoCbte} ` +
+      `nro ${nroComprobante} CAE ${cbte.CAE}`
+    );
+    return cbte;
+  } catch (e) {
+    // Si la recuperación también falla, dejamos que el error original se propague.
+    console.error(`[arca] no se pudo verificar si ${puntoVenta}-${nroComprobante} se emitió: ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Consulta un comprobante ya emitido (FECompConsultar).
+ * @returns {{ CAE, CAEFchVto, nroComprobante, resultado, total, fecha, docTipo, docNro } | null}
+ */
+async function consultarComprobante(puntoVenta, tipoComprobante, nro) {
+  const { token, sign } = await wsaa.getToken();
+  const xml = _buildFECompConsultar(puntoVenta, tipoComprobante, nro, token, sign);
+  const respXml = await _soapPost('FECompConsultar', xml);
+
+  const fault = respXml.match(/<faultstring>([\s\S]+?)<\/faultstring>/i);
+  if (fault) throw new Error(`WSFE error: ${fault[1].trim()}`);
+
+  const get = campo => (respXml.match(new RegExp(`<${campo}>([^<]*)</${campo}>`)) || [])[1];
+
+  const cae = get('CodAutorizacion');
+  if (!cae) return null;   // no existe / no autorizado
+
+  const vto = get('FchVto');
+  return {
+    CAE:            cae,
+    CAEFchVto:      vto ? `${vto.slice(0,4)}-${vto.slice(4,6)}-${vto.slice(6,8)}` : null,
+    nroComprobante: parseInt(get('CbteDesde'), 10),
+    resultado:      get('Resultado') || 'A',
+    total:          parseFloat(get('ImpTotal')),
+    fecha:          get('CbteFch'),
+    docTipo:        parseInt(get('DocTipo'), 10),
+    docNro:         get('DocNro'),
+    recuperado:     true,
+  };
 }
 
 /**
@@ -90,6 +172,7 @@ function _buildFECAESolicitar(c, token, sign) {
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>${c.moneda || 'PES'}</ar:MonId>
             <ar:MonCotiz>${c.cotizacion || 1}</ar:MonCotiz>
+            <ar:CondicionIVAReceptorId>${c.condicionIvaReceptor}</ar:CondicionIVAReceptorId>
             ${cbtesAsocXml}
             <ar:Iva>${iva}</ar:Iva>
           </ar:FECAEDetRequest>
@@ -115,6 +198,28 @@ function _buildFECompUltimoAutorizado(pv, tipo, token, sign) {
       <ar:PtoVta>${pv}</ar:PtoVta>
       <ar:CbteTipo>${tipo}</ar:CbteTipo>
     </ar:FECompUltimoAutorizado>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+}
+
+function _buildFECompConsultar(pv, tipo, nro, token, sign) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECompConsultar>
+      <ar:Auth>
+        <ar:Token>${token}</ar:Token>
+        <ar:Sign>${sign}</ar:Sign>
+        <ar:Cuit>${config.cuit}</ar:Cuit>
+      </ar:Auth>
+      <ar:FeCompConsReq>
+        <ar:CbteTipo>${tipo}</ar:CbteTipo>
+        <ar:CbteNro>${nro}</ar:CbteNro>
+        <ar:PtoVta>${pv}</ar:PtoVta>
+      </ar:FeCompConsReq>
+    </ar:FECompConsultar>
   </soapenv:Body>
 </soapenv:Envelope>`;
 }
@@ -177,7 +282,10 @@ function _singlePost(action, body) {
     });
 
     req.on('error', reject);
-    req.setTimeout(20000, () => req.destroy(new Error(`WSFE timeout en ${action}`)));
+    // ARCA producción responde habitualmente en <2s, pero en días de saturación
+    // demora 25-40s. Con el timeout viejo de 20s la facturación se caía entera
+    // (2026-08-11). Configurable por si hace falta ajustarlo sin redeploy.
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error(`WSFE timeout en ${action}`)));
     req.write(body);
     req.end();
   });
@@ -205,4 +313,4 @@ async function _soapPost(action, body, maxIntentos = 4) {
   );
 }
 
-module.exports = { solicitarCAE, ultimoNroComprobante };
+module.exports = { solicitarCAE, ultimoNroComprobante, consultarComprobante };

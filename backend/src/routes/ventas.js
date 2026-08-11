@@ -936,7 +936,7 @@ router.post('/:id/facturar', async (req, res, next) => {
     const { id } = req.params;
 
     const { rows: ventaRows } = await pool.query(`
-      SELECT v.total, c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit,
+      SELECT v.total, v.numero, c.razon_social AS cliente_nombre, c.cuit AS cliente_cuit,
              ci.nombre AS cond_iva, ci.codigo_afip AS cond_iva_afip,
              su.nombre AS sucursal_nombre
       FROM ventas v
@@ -986,16 +986,28 @@ router.post('/:id/facturar', async (req, res, next) => {
     // Tipo de comprobante según la condición de IVA del cliente (emisor = RI).
     const comp = arca.comprobanteParaCliente(v.cond_iva_afip, v.cliente_cuit);
 
-    const resultado = await arca.generarFactura({
-      puntoVenta:      arca.puntoVentaPara(v.sucursal_nombre), // PV por sucursal (Laprida→4, Huaico→6 en prod)
-      tipoComprobante: comp.tipoComprobante,
-      concepto:        arca.CONCEPTO.PRODUCTOS,
-      cliente: {
-        tipoDoc: comp.docTipo,
-        nroDoc:  comp.docNro,
-      },
-      items: itemsFactura,
-    });
+    const puntoVenta = arca.puntoVentaPara(v.sucursal_nombre); // Laprida→4, Huaico→6 en prod
+
+    let resultado;
+    try {
+      resultado = await arca.generarFactura({
+        puntoVenta,
+        tipoComprobante: comp.tipoComprobante,
+        concepto:        arca.CONCEPTO.PRODUCTOS,
+        cliente: {
+          tipoDoc: comp.docTipo,
+          nroDoc:  comp.docNro,
+        },
+        condicionIvaReceptor: comp.condicionIva,   // RG 5616
+        items: itemsFactura,
+      });
+    } catch (arcaErr) {
+      // Sin esto el log solo dice "WSFE timeout" y no hay forma de saber qué venta
+      // quedó sin facturar ni si hay que auditar un comprobante huérfano.
+      console.error(`[ventas] fallo al facturar venta #${v.numero} (${id}): ` +
+        `PV ${puntoVenta} Factura ${comp.letra} $${total} — ${arcaErr.message}`);
+      throw arcaErr;
+    }
 
     // Guardar en facturaciones si OK (best-effort — no falla la respuesta si hay un error de BD)
     if (resultado.CAE) {

@@ -33,12 +33,21 @@ function _persist() {
 
 _load();
 
+// El TA es distinto en homologación y en producción, pero el CUIT es el mismo:
+// sin el modo en la clave, un TA de homo se usaría contra producción (y al revés),
+// y ARCA responde error 600 "ValidacionDeToken: Error al verificar hash".
+const _key = (cuit, servicio) => `${cuit}:${config.modo}:${servicio}`;
+
 function get(cuit, servicio = 'wsfe') {
-  const key = `${cuit}:${servicio}`;
-  const entry = _cache[key];
+  const key = _key(cuit, servicio);
+  // Fallback al formato viejo (sin modo) para no descartar el TA vigente en el
+  // deploy que introduce este cambio: pedir uno nuevo antes de tiempo falla con
+  // "El CEE ya posee un TA valido" y dejaría de facturar hasta que expire.
+  const entry = _cache[key] || _cache[`${cuit}:${servicio}`];
   if (!entry) return null;
   if (Date.now() >= entry.expira) {
     delete _cache[key];
+    delete _cache[`${cuit}:${servicio}`];
     _persist();
     return null;
   }
@@ -46,11 +55,12 @@ function get(cuit, servicio = 'wsfe') {
 }
 
 function set(cuit, servicio, token, sign, ttlMs) {
-  _cache[`${cuit}:${servicio}`] = { token, sign, expira: Date.now() + ttlMs };
+  _cache[_key(cuit, servicio)] = { token, sign, expira: Date.now() + ttlMs };
   _persist();
 }
 
 function clear(cuit, servicio = 'wsfe') {
+  delete _cache[_key(cuit, servicio)];
   delete _cache[`${cuit}:${servicio}`];
   _persist();
 }

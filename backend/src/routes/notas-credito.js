@@ -271,6 +271,10 @@ router.post('/', async (req, res, next) => {
         cliente: tipoComp.letra === 'A'
           ? { tipoDoc: arca.TIPO_DOC.CUIT, nroDoc: cuitDigits }
           : { tipoDoc: arca.TIPO_DOC.SIN_IDENTIFICAR, nroDoc: 0 },
+        // RG 5616: la NC lleva la misma condición que el comprobante que corrige.
+        condicionIvaReceptor: tipoComp.letra === 'A'
+          ? arca.COND_IVA_RECEPTOR.RESPONSABLE_INSCRIPTO
+          : arca.COND_IVA_RECEPTOR.CONSUMIDOR_FINAL,
         items: itemsArca,
         cbtesAsoc,
       });

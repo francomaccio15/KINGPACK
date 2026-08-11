@@ -38,6 +38,24 @@ const ALICUOTA_IVA = {
   IVA_2_5:     9, // id AFIP = 9 → 2.5%
 };
 
+// Condición frente al IVA del RECEPTOR (RG 5616). Obligatorio en FECAESolicitar:
+// homologación ya lo rechaza con error 10246 y producción lo viene observando.
+// Fuente: FEParamGetCondicionIvaReceptor. La clase indica con qué comprobantes
+// es válida cada condición.
+const COND_IVA_RECEPTOR = {
+  RESPONSABLE_INSCRIPTO:  1,   // clase A/ALEY/C
+  MONOTRIBUTO:            6,   // clase A/ALEY/C
+  MONOTRIBUTISTA_SOCIAL: 13,   // clase A/ALEY/C
+  MONOTRIBUTO_PROMOVIDO: 16,   // clase A/ALEY/C
+  EXENTO:                 4,   // clase B/C
+  NO_CATEGORIZADO:        7,   // clase B/C
+  PROVEEDOR_EXTERIOR:     8,   // clase B/C
+  CLIENTE_EXTERIOR:       9,   // clase B/C
+  IVA_LIBERADO:          10,   // clase B/C
+  NO_ALCANZADO:          15,   // clase B/C
+  CONSUMIDOR_FINAL:       5,
+};
+
 const MONEDA = {
   PESOS:   'PES',
   DOLARES: 'DOL',
@@ -58,6 +76,7 @@ module.exports = {
   TIPO_DOC,
   CONCEPTO,
   ALICUOTA_IVA,
+  COND_IVA_RECEPTOR,
   MONEDA,
   COMPROBANTE_POR_CONDICION,
 };

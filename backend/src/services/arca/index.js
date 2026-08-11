@@ -92,6 +92,19 @@ async function probarAuth() {
 }
 
 /**
+ * Consulta un comprobante ya emitido en ARCA (FECompConsultar).
+ * Se usa para auditar/recuperar comprobantes que ARCA autorizó pero que no
+ * quedaron registrados en KingPack (ver scripts/auditar-comprobantes.js).
+ */
+async function consultarComprobante(puntoVenta, tipoComprobante, nro) {
+  if (config.esDemo) {
+    throw new Error('consultarComprobante no está disponible en modo demo.');
+  }
+  const wsfe = require('./wsfe');
+  return wsfe.consultarComprobante(puntoVenta, tipoComprobante, nro);
+}
+
+/**
  * Consulta el último número de comprobante autorizado.
  */
 async function ultimoComprobante(puntoVenta, tipoComprobante) {
@@ -206,6 +219,10 @@ function comprobanteParaCliente(condIvaAfipCliente, cuitCliente) {
       docTipo:         tipos.TIPO_DOC.CUIT,
       docNro:          cuit,
       letra:           'A',
+      // Para Factura A el receptor es RI o Monotributo, según su propia condición.
+      condicionIva:    condIvaAfipCliente === 6
+        ? tipos.COND_IVA_RECEPTOR.MONOTRIBUTO
+        : tipos.COND_IVA_RECEPTOR.RESPONSABLE_INSCRIPTO,
     };
   }
   return {
@@ -213,6 +230,8 @@ function comprobanteParaCliente(condIvaAfipCliente, cuitCliente) {
     docTipo:         tipos.TIPO_DOC.SIN_IDENTIFICAR,
     docNro:          0,
     letra:           'B',
+    // La B se emite siempre a consumidor final anónimo (sin identificar).
+    condicionIva:    tipos.COND_IVA_RECEPTOR.CONSUMIDOR_FINAL,
   };
 }
 
@@ -260,6 +279,11 @@ function _buildComprobante(params) {
     concepto,
     docTipo:    cliente.tipoDoc,
     docNro:     cliente.nroDoc,
+    // RG 5616: obligatorio. Si el llamador no lo pasa, se deduce del tipo de doc.
+    condicionIvaReceptor: params.condicionIvaReceptor
+      ?? (cliente.tipoDoc === tipos.TIPO_DOC.SIN_IDENTIFICAR
+            ? tipos.COND_IVA_RECEPTOR.CONSUMIDOR_FINAL
+            : tipos.COND_IVA_RECEPTOR.RESPONSABLE_INSCRIPTO),
     fecha:      fechaStr,
     neto:       +neto.toFixed(2),
     iva:        ivaList.map(i => ({ ...i, baseImp: +i.baseImp.toFixed(2), importe: +i.importe.toFixed(2) })),
@@ -299,6 +323,7 @@ function _alicuotaAfipId(pct) {
 module.exports = {
   generarFactura,
   ultimoComprobante,
+  consultarComprobante,
   probarAuth,
   comprobanteParaCliente,
   puntoVentaPara: (nombre) => config.puntoVentaPara(nombre),
@@ -308,6 +333,7 @@ module.exports = {
   TIPO_DOC:               tipos.TIPO_DOC,
   CONCEPTO:               tipos.CONCEPTO,
   ALICUOTA_IVA:           tipos.ALICUOTA_IVA,
+  COND_IVA_RECEPTOR:      tipos.COND_IVA_RECEPTOR,
   COMPROBANTE_POR_CONDICION: tipos.COMPROBANTE_POR_CONDICION,
 
   // Config legible para health checks y logs

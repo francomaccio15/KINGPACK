@@ -67,6 +67,7 @@ router.post('/test-factura', async (req, res, next) => {
       tipoComprobante: comp.tipoComprobante,
       concepto:        arca.CONCEPTO.PRODUCTOS,
       cliente: { tipoDoc: comp.docTipo, nroDoc: comp.docNro },
+      condicionIvaReceptor: comp.condicionIva,   // RG 5616
       items: [
         { descripcion: `Venta de prueba — ${nombre}`, cantidad: 1, precioUnitario: neto, alicuotaIva: 21 },
       ],
