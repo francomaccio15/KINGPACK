@@ -17,12 +17,18 @@
  *
  * Es idempotente: los ya registrados no aparecen en la corrida siguiente.
  *
- * Uso:
- *   node -r dotenv/config scripts/auditar-comprobantes.js              # solo informa
- *   node -r dotenv/config scripts/auditar-comprobantes.js --aplicar    # registra
+ * Uso (desde backend/):
+ *   node scripts/auditar-comprobantes.js              # solo informa
+ *   node scripts/auditar-comprobantes.js --aplicar    # registra
  *
  * Sin --aplicar no escribe absolutamente nada: es el modo por defecto a propósito.
  */
+
+// El .env vive en la raíz del proyecto, no en backend/. Se carga igual que en
+// src/index.js: con `-r dotenv/config` se tomaría el backend/.env residual, que
+// no tiene las claves AFIP, y la auditoría correría en modo demo sin avisar.
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { pool } = require('../src/config/db');
 const arca     = require('../src/services/arca');
@@ -66,8 +72,11 @@ function construirQR(cbte, pv, tipo, docTipo, docNro) {
 async function main() {
   const aplicar = process.argv.includes('--aplicar');
 
+  // En demo no hay nada real que auditar, pero salir con un "todo bien" sería un
+  // falso negativo: quien audita necesita saber que NO se verificó nada.
   if (config.esDemo) {
-    log('Modo demo: no hay comprobantes reales que auditar.');
+    log('✗ AFIP_MODO=demo — no se auditó nada. Revisá que el .env de la raíz se haya cargado.');
+    process.exitCode = 1;
     return;
   }
   log(`Auditoría de comprobantes ARCA — modo ${config.modo}${aplicar ? ' — APLICANDO CAMBIOS' : ' (solo lectura)'}\n`);
