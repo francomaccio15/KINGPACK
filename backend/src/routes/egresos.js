@@ -8,6 +8,7 @@ const {
   registrarEgresosCajaFuerteDeMedios,
   revertirMovimientosCajaFuerte,
 } = require('../services/movimientos-caja-fuerte');
+const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -808,6 +809,244 @@ router.post('/:id/pago', async (req, res, next) => {
 });
 
 // ─── DELETE /api/egresos/:id ──────────────────────────────────────────────────
+// ─── PUT /api/egresos/:id ─────────────────────────────────────────────────────
+// Edición completa de un egreso. Solo administrador y sólo mientras el egreso
+// esté SIN pagos registrados y (para compra de mercadería) SIN stock acreditado.
+// Rehace ítems, pedido, costos de artículos y la deuda del proveedor de forma
+// consistente. No admite tipo anticipo ni egresos con anticipo vinculado.
+router.put('/:id', requireRol('administrador'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const {
+      tipo_operacion, tipo_comprobante, punto_venta, numero_comprobante,
+      fecha_emision, proveedor_id, sucursal_id, subrubro_gasto_id,
+      descripcion,
+      neto_gravado = 0, neto_no_gravado = 0,
+      iva_21 = 0, iva_105 = 0, percepciones_ib = 0, otros_impuestos = 0,
+      total, fecha_vencimiento_pago,
+      items = [],
+      costo_flete_pct = 0,
+      bonificaciones = [],
+    } = req.body;
+
+    const fletePctNum = Math.max(0, parseFloat(costo_flete_pct) || 0);
+    const bonificacionesLimpias = Array.isArray(bonificaciones)
+      ? bonificaciones
+          .map(b => ({
+            pct:   Math.max(0, Math.min(100, parseFloat(b?.pct) || 0)),
+            monto: Math.max(0, parseFloat(b?.monto) || 0),
+          }))
+          .filter(b => b.pct > 0)
+      : [];
+
+    // --- Validaciones (mismo criterio que el alta) ---
+    const TIPOS_VALIDOS = ['compra_mercaderia', 'compra_gasto'];
+    if (!tipo_operacion || !TIPOS_VALIDOS.includes(tipo_operacion)) {
+      return res.status(400).json({ error: 'Solo se pueden editar egresos de Compra de Mercadería o Gasto Varios' });
+    }
+    if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es requerido' });
+    if (!descripcion?.trim()) return res.status(400).json({ error: 'descripcion es requerida' });
+
+    const TIPOS_CON_COMPROBANTE = ['compra_mercaderia'];
+    const esInformal = !tipo_comprobante || tipo_comprobante === 'informal';
+    let totalNum;
+    let netoNoGravadoFinal = parseFloat(neto_no_gravado) || 0;
+    if (TIPOS_CON_COMPROBANTE.includes(tipo_operacion)) {
+      const sumaFiscal = parseFloat(
+        [neto_gravado, neto_no_gravado, iva_21, iva_105, percepciones_ib, otros_impuestos]
+          .reduce((acc, v) => acc + (parseFloat(v) || 0), 0)
+          .toFixed(2)
+      );
+      if (esInformal && sumaFiscal === 0) {
+        totalNum = parseFloat(total) || 0;
+        netoNoGravadoFinal = totalNum;
+      } else {
+        totalNum = sumaFiscal;
+      }
+      if (totalNum <= 0) return res.status(400).json({ error: 'La suma de importes debe ser mayor a 0' });
+    } else {
+      totalNum = parseFloat(total);
+      if (!totalNum || totalNum <= 0) return res.status(400).json({ error: 'total debe ser mayor a 0' });
+    }
+
+    if (tipo_operacion === 'compra_mercaderia') {
+      if (!proveedor_id) return res.status(400).json({ error: 'proveedor_id es requerido' });
+      if (items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem' });
+      for (const it of items) {
+        if (!it.articulo_id) return res.status(400).json({ error: 'Cada ítem de compra de mercadería requiere articulo_id' });
+      }
+    }
+    if (tipo_comprobante && tipo_comprobante !== 'informal') {
+      if (parseFloat(neto_gravado) === 0 && parseFloat(neto_no_gravado) === 0) {
+        return res.status(400).json({ error: 'Las facturas en blanco requieren neto gravado o neto no gravado' });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    // --- Cargar el egreso y validar que se puede editar ---
+    const { rows: egRows } = await client.query(
+      `SELECT id, tipo_operacion, proveedor_id, anticipo_id
+         FROM egresos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [id]
+    );
+    if (egRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Egreso no encontrado' });
+    }
+    const actual = egRows[0];
+
+    if (actual.anticipo_id || actual.tipo_operacion === 'anticipo_proveedor') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'No se puede editar un egreso vinculado a un anticipo' });
+    }
+
+    // No debe tener pagos registrados (editar movería caja/banco ya asentados).
+    const { rows: pagoRows } = await client.query(
+      `SELECT 1 FROM egreso_pagos WHERE egreso_id = $1 LIMIT 1`, [id]
+    );
+    if (pagoRows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'No se puede editar un egreso con pagos registrados. Anulá los pagos primero.' });
+    }
+
+    // Compra de mercadería: el pedido no puede tener el stock acreditado.
+    const { rows: pedRows } = await client.query(
+      `SELECT id, stock_acreditado FROM pedidos_compra WHERE egreso_id = $1 LIMIT 1`, [id]
+    );
+    if (pedRows[0]?.stock_acreditado) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'No se puede editar: el stock de este pedido ya fue recibido. Revertí la recepción primero.' });
+    }
+
+    const esFacturado = !!(tipo_comprobante && tipo_comprobante !== 'informal');
+
+    // --- Actualizar la cabecera del egreso ---
+    await client.query(`
+      UPDATE egresos SET
+        tipo_operacion = $1, tipo_comprobante = $2, punto_venta = $3, numero_comprobante = $4,
+        fecha_emision = $5, proveedor_id = $6, sucursal_id = $7, subrubro_gasto_id = $8,
+        descripcion = $9, neto_gravado = $10, neto_no_gravado = $11, iva_21 = $12,
+        iva_105 = $13, percepciones_ib = $14, otros_impuestos = $15, total = $16,
+        fecha_vencimiento_pago = $17, bonificaciones = $18, updated_at = NOW()
+      WHERE id = $19
+    `, [
+      tipo_operacion, tipo_comprobante || null, punto_venta?.trim() || null, numero_comprobante?.trim() || null,
+      fecha_emision || new Date().toISOString().split('T')[0], proveedor_id || null, sucursal_id, subrubro_gasto_id || null,
+      descripcion.trim(), parseFloat(neto_gravado) || 0, netoNoGravadoFinal, parseFloat(iva_21) || 0,
+      parseFloat(iva_105) || 0, parseFloat(percepciones_ib) || 0, parseFloat(otros_impuestos) || 0, totalNum,
+      fecha_vencimiento_pago || null, JSON.stringify(bonificacionesLimpias), id,
+    ]);
+
+    // --- Rehacer ítems ---
+    await client.query('DELETE FROM egreso_items WHERE egreso_id = $1', [id]);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const cant = parseFloat(it.cantidad) || 1;
+      const precio = parseFloat(it.precio_unitario) || 0;
+      const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+      const neto = parseFloat((cant * precio * (1 - descPct / 100)).toFixed(2));
+      const sucImp = it.sucursal_imputacion_id || sucursal_id;
+      await client.query(`
+        INSERT INTO egreso_items
+          (egreso_id, articulo_id, descripcion, cantidad, precio_unitario, descuento_pct,
+           neto_linea, sucursal_imputacion_id, orden)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `, [id, it.articulo_id || null, (it.descripcion || '').trim(), cant, precio, descPct, neto, sucImp, i]);
+    }
+
+    // --- Rehacer pedido + costos de artículos (solo compra de mercadería) ---
+    await client.query('DELETE FROM pedido_items WHERE pedido_id IN (SELECT id FROM pedidos_compra WHERE egreso_id = $1)', [id]);
+    await client.query('DELETE FROM pedidos_compra WHERE egreso_id = $1', [id]);
+
+    if (tipo_operacion === 'compra_mercaderia') {
+      const montoMercaderia = items.reduce((s, it) => {
+        const cant = parseFloat(it.cantidad) || 1;
+        const precio = parseFloat(it.precio_unitario) || 0;
+        const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+        return s + cant * precio * (1 - descPct / 100);
+      }, 0);
+
+      const { rows: pedidoRows } = await client.query(`
+        INSERT INTO pedidos_compra (proveedor_id, sucursal_id, egreso_id, monto_total)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `, [proveedor_id, sucursal_id, id, montoMercaderia.toFixed(2)]);
+      const pedidoId = pedidoRows[0].id;
+
+      const factorBonif = bonificacionesLimpias.reduce((f, b) => f * (1 - b.pct / 100), 1);
+
+      for (const it of items) {
+        if (!it.articulo_id) continue;
+        const cant = parseFloat(it.cantidad) || 1;
+        const precio = parseFloat(it.precio_unitario) || 0;
+        await client.query(`
+          INSERT INTO pedido_items (pedido_id, articulo_id, cantidad, precio_compra)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (pedido_id, articulo_id)
+          DO UPDATE SET cantidad = pedido_items.cantidad + EXCLUDED.cantidad
+        `, [pedidoId, it.articulo_id, cant, precio]);
+
+        const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
+        const costoEfectivo = +(precio * (1 - descPct / 100) * factorBonif).toFixed(2);
+        if (costoEfectivo > 0) {
+          if (fletePctNum > 0) {
+            const { rows: aRows } = await client.query(
+              `SELECT a.costo_flete::float AS flete_viejo,
+                      COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_viejo
+                 FROM articulos a JOIN categorias c ON c.id = a.categoria_id
+                WHERE a.id = $1`,
+              [it.articulo_id]
+            );
+            const fleteViejo  = parseFloat(aRows[0]?.flete_viejo)  || 0;
+            const margenViejo = parseFloat(aRows[0]?.margen_viejo) || 0;
+            const factorViejo = (1 + fleteViejo / 100) * (1 + margenViejo / 100);
+            const margenNuevo = +(((factorViejo / (1 + fletePctNum / 100)) - 1) * 100).toFixed(2);
+            await client.query(
+              `UPDATE articulos SET costo_base = $1, costo_flete = $2, margen_aplicado = $3, updated_at = NOW() WHERE id = $4`,
+              [costoEfectivo, fletePctNum, margenNuevo, it.articulo_id]
+            );
+          } else {
+            await client.query(
+              `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
+              [costoEfectivo, it.articulo_id]
+            );
+          }
+        }
+      }
+    }
+
+    // --- Rehacer la deuda del proveedor en la cuenta corriente ---
+    // Se borra el asiento anterior de este egreso y se inserta uno nuevo con el
+    // total y proveedor actuales. Al no haber pagos, no hay asientos 'pago' propios.
+    await client.query(
+      `DELETE FROM cuentas_corrientes_proveedor WHERE origen_tipo = 'egreso' AND origen_id = $1`,
+      [id]
+    );
+    if (proveedor_id) {
+      const saldo = await calcularSaldoProveedor(client, proveedor_id);
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, 0, $3, 'egreso', $4, $5, $6)
+      `, [proveedor_id, totalNum, +(saldo + totalNum).toFixed(2),
+          id, descripcion.trim().substring(0, 200), esFacturado]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, egreso: { id } });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe un comprobante con ese número para este proveedor.' });
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 router.delete('/:id', async (req, res, next) => {
   const client = await pool.connect();
   try {

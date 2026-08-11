@@ -73,8 +73,10 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export const dynamic = 'force-dynamic';
 
+const TIPOS_EDITABLES = ['compra_mercaderia', 'compra_gasto'];
+
 export default async function DetalleEgresoPage({ params }: { params: { id: string } }) {
-  requireAuth('/gastos');
+  const user = requireAuth('/gastos');
   let egreso: any = null;
   let items: any[]  = [];
   let pagos: any[]  = [];
@@ -141,6 +143,14 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
   const totalPendiente = Math.max(0, totalEgreso - totalPagado);
   const puedeRegistrarPago = egreso.estado_pago !== 'pagado';
 
+  // Editable: solo admin, tipos con formulario, sin pagos, sin anticipo y sin
+  // stock ya acreditado (misma condición que valida el backend).
+  const puedeEditar = user.rol === 'administrador'
+    && TIPOS_EDITABLES.includes(egreso.tipo_operacion)
+    && !egreso.anticipo_id
+    && pagos.length === 0
+    && !pedido?.stock_acreditado;
+
   // Tiene desglose fiscal
   const tieneMontosFiscales = parseFloat(egreso.neto_gravado ?? 0) > 0
     || parseFloat(egreso.iva_21 ?? 0) > 0
@@ -179,6 +189,18 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
         </div>
 
         <div className="flex items-center gap-3">
+          {puedeEditar && (
+            <Link
+              href={`/gastos/${egreso.id}/editar`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray text-sm font-medium transition-colors"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Editar
+            </Link>
+          )}
           {puedeRegistrarPago && (
             <RegistrarPago
               egresoId={egreso.id}
