@@ -68,6 +68,23 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
+// ─── DELETE /api/articulos/:id ───────────────────────────────────────────────
+// Soft-delete: marca deleted_at. No borra físicamente para preservar el historial
+// de ventas/compras que referencian el artículo. Solo administrador/supervisor.
+router.delete('/:id', requireRol('administrador', 'supervisor'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `UPDATE articulos SET deleted_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL
+      RETURNING id`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Artículo no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ─── PATCH /api/articulos/:id/stock-minimo ───────────────────────────────────
 router.patch('/:id/stock-minimo', async (req, res, next) => {
   try {

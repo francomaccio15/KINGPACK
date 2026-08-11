@@ -129,6 +129,27 @@ export default function ArticulosTabla({
     refetchArticulo(updated.id);
   }, [listaActiva, refetchArticulo]);
 
+  // Eliminar (soft-delete). Solo administrador. Confirma y saca la fila.
+  const [borrando, setBorrando] = useState<string | null>(null);
+  const handleDelete = useCallback(async (a: ArticuloRow) => {
+    if (!window.confirm(`¿Eliminar el artículo "${a.nombre}"? Esta acción lo saca del listado.`)) return;
+    setBorrando(a.id);
+    try {
+      const r = await apiFetch(`/api/articulos/${a.id}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        alert(data.error || 'No se pudo eliminar el artículo.');
+        return;
+      }
+      editedIds.current.add(a.id); // evita que el refresh del server lo reponga
+      setArticulos(prev => prev.filter(x => x.id !== a.id));
+    } catch {
+      alert('Error de conexión al eliminar el artículo.');
+    } finally {
+      setBorrando(null);
+    }
+  }, []);
+
   const esBase   = listaActiva?.tipo === 'madre';
 
   return (
@@ -232,12 +253,27 @@ export default function ArticulosTabla({
                 el botón siempre quede visible sin scroll horizontal */}
             <td className="sticky right-0 z-10 px-3 py-3 text-center bg-kp-surface group-hover:bg-kp-surface2 border-l border-kp-border">
               {!esCajero && (
-                <EditarArticulo
-                  articulo={a}
-                  categorias={categorias}
-                  alicuotas={alicuotas}
-                  onSave={handleSave}
-                />
+                <div className="flex items-center justify-center gap-1">
+                  <EditarArticulo
+                    articulo={a}
+                    categorias={categorias}
+                    alicuotas={alicuotas}
+                    onSave={handleSave}
+                  />
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(a)}
+                      disabled={borrando === a.id}
+                      title="Eliminar artículo"
+                      className="p-1.5 rounded text-kp-gray hover:text-kp-red hover:bg-kp-surface2 transition-colors disabled:opacity-40"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               )}
             </td>
           </tr>
