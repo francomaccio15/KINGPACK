@@ -438,6 +438,11 @@ export default function ProveedoresClient() {
 
   const esAdmin = getStoredUser()?.rol === 'administrador';
 
+  // Total adeudado de un proveedor = facturado + no facturado
+  const totalProv = (p: Proveedor) =>
+    (parseFloat(String(p.saldo_facturado ?? '0')) || 0) +
+    (parseFloat(String(p.saldo_no_facturado ?? '0')) || 0);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
@@ -490,6 +495,30 @@ export default function ProveedoresClient() {
         </button>
       </div>
 
+      {/* Resumen de deuda total (solo lo que le debemos, saldos positivos) */}
+      {(() => {
+        const totFact = proveedores.reduce((a, p) => a + (parseFloat(String(p.saldo_facturado ?? '0')) || 0), 0);
+        const totNoFact = proveedores.reduce((a, p) => a + (parseFloat(String(p.saldo_no_facturado ?? '0')) || 0), 0);
+        const totGeneral = totFact + totNoFact;
+        const conDeuda = proveedores.filter(p => totalProv(p) > 0.005).length;
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-kp-surface2 border border-kp-border rounded-xl px-4 py-3">
+              <span className="block text-xs uppercase tracking-widest text-kp-gray">Deuda facturada</span>
+              <span className="text-lg font-bold tabular-nums text-kp-red">{fmt(totFact)}</span>
+            </div>
+            <div className="bg-kp-surface2 border border-kp-border rounded-xl px-4 py-3">
+              <span className="block text-xs uppercase tracking-widest text-kp-gray">Deuda no facturada</span>
+              <span className="text-lg font-bold tabular-nums text-kp-red">{fmt(totNoFact)}</span>
+            </div>
+            <div className="bg-kp-red/10 border border-kp-red/30 rounded-xl px-4 py-3">
+              <span className="block text-xs uppercase tracking-widest text-kp-gray">Total adeudado {conDeuda > 0 ? `· ${conDeuda} prov.` : ''}</span>
+              <span className="text-lg font-bold tabular-nums text-kp-red">{fmt(totGeneral)}</span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
@@ -534,6 +563,7 @@ export default function ProveedoresClient() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Cond. Pago</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo facturado</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo no facturado</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-white uppercase tracking-widest whitespace-nowrap">Total adeudado</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activo</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -554,6 +584,9 @@ export default function ProveedoresClient() {
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <SaldoCell valor={p.saldo_no_facturado} onClick={() => setModalCC(p)} />
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <SaldoCell valor={String(totalProv(p))} onClick={() => setModalCC(p)} />
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
@@ -596,6 +629,16 @@ export default function ProveedoresClient() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Leyenda de colores */}
+      {!loading && proveedores.length > 0 && (
+        <p className="text-xs text-kp-gray flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-kp-red inline-block" /> Le debés al proveedor</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> Saldo a favor</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-kp-gray inline-block" /> Sin deuda</span>
+          <span className="text-kp-gray/70">· Tocá un saldo para ver el detalle de la cuenta corriente.</span>
+        </p>
       )}
 
       {/* Modal Crear */}
