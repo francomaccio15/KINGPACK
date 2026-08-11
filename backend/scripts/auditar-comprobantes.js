@@ -10,10 +10,13 @@
  * Ocurrió el 11/08/2026 con la Factura B 0006-00000207: ese día ARCA producción
  * respondía en 25-40s contra un timeout de cliente de 20s.
  *
- * Cómo detecta: por cada (punto de venta, tipo) compara el último número
- * autorizado en ARCA contra el máximo registrado en `facturaciones`. Todo número
- * en el medio es un huérfano. Después lo consulta con FECompConsultar y busca la
- * venta que le corresponde por sucursal + importe + fecha.
+ * Cómo detecta: por cada (punto de venta, tipo) recorre la numeración desde la
+ * primera factura registrada hasta el último número autorizado en ARCA, y marca
+ * todo número que ARCA tenga y `facturaciones` no. Busca huecos intercalados, no
+ * solo los que quedaron por encima del máximo: apenas se emite un comprobante
+ * nuevo, el huérfano deja de ser el último y comparar contra MAX ya no lo ve.
+ * Después consulta cada uno con FECompConsultar y busca la venta que le
+ * corresponde por sucursal + importe + fecha.
  *
  * Es idempotente: los ya registrados no aparecen en la corrida siguiente.
  *
@@ -84,7 +87,7 @@ async function main() {
   // Puntos de venta y tipos efectivamente usados, según lo ya facturado.
   const { rows: combos } = await pool.query(`
     SELECT f.punto_venta, t.codigo_afip, t.id AS tipo_id, t.letra,
-           MAX(f.numero) AS ultimo_db
+           MIN(f.numero) AS primero_db, MAX(f.numero) AS ultimo_db
       FROM facturaciones f
       JOIN tipos_comprobante t ON t.id = f.tipo_comprobante_id
      WHERE f.ok AND f.deleted_at IS NULL
@@ -111,15 +114,27 @@ async function main() {
       continue;
     }
 
-    if (ultimoArca <= c.ultimo_db) {
-      log(`  ✓ PV ${pv} ${c.letra} (tipo ${tipo}): ARCA ${ultimoArca} = KingPack ${c.ultimo_db}`);
+    // Todo número que ARCA autorizó y no está en facturaciones, incluidos los
+    // huecos intercalados entre comprobantes ya registrados.
+    const { rows: faltantes } = await pool.query(`
+      SELECT s.n
+        FROM generate_series($1::int, $2::int) AS s(n)
+        LEFT JOIN facturaciones f
+               ON f.punto_venta = $3 AND f.tipo_comprobante_id = $4
+              AND f.numero = s.n AND f.ok AND f.deleted_at IS NULL
+       WHERE f.id IS NULL
+       ORDER BY s.n
+    `, [c.primero_db, ultimoArca, pv, c.tipo_id]);
+
+    if (faltantes.length === 0) {
+      log(`  ✓ PV ${pv} ${c.letra} (tipo ${tipo}): ARCA ${ultimoArca}, sin faltantes desde ${c.primero_db}`);
       continue;
     }
 
-    log(`  ✗ PV ${pv} ${c.letra} (tipo ${tipo}): ARCA ${ultimoArca} vs KingPack ${c.ultimo_db} ` +
-        `→ ${ultimoArca - c.ultimo_db} huérfano(s)`);
+    log(`  ✗ PV ${pv} ${c.letra} (tipo ${tipo}): ARCA ${ultimoArca} → ${faltantes.length} faltante(s): ` +
+        faltantes.map(f => f.n).join(', '));
 
-    for (let nro = c.ultimo_db + 1; nro <= ultimoArca; nro++) {
+    for (const { n: nro } of faltantes) {
       huerfanos++;
       const res = await procesarHuerfano({ pv, tipo, nro, tipoId: c.tipo_id, letra: c.letra,
                                            sucursal: sucursalPorPV[pv], aplicar });
