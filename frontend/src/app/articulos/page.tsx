@@ -9,6 +9,7 @@ import RankingArticulos from './RankingArticulos';
 import Paginador from './Paginador';
 import VistaTabs from './VistaTabs';
 import StockEditor from './StockEditor';
+import StockValorizado from './StockValorizado';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -126,6 +127,18 @@ async function fetchArticulos(
   }
 }
 
+async function fetchArticulosValorizado(): Promise<Articulo[]> {
+  const qs = new URLSearchParams();
+  qs.set('sucursal_id', '');   // '' = ambas sucursales (stock agregado + detalle)
+  qs.set('activo', 'true');
+  qs.set('limit', '1000');
+  try {
+    const r = await serverFetch(`/api/articulos?${qs}`, { cache: 'no-store' });
+    if (!r.ok) return [];
+    return (await r.json()).articulos ?? [];
+  } catch { return []; }
+}
+
 // ─── Utils ───────────────────────────────────────────────────────────────────
 const TIPO_LABEL: Record<string, string> = {
   madre:            'Precio Base',
@@ -166,9 +179,29 @@ export default async function ArticulosPage({
 
   const sucursalActiva = sucursales.find(s => s.id === sucursalActivaId) ?? null;
 
-  // ── Vista Stock (sub-pestaña) — solo administrador / supervisor ──
+  // ── Sub-pestañas: Stock (admin/supervisor) y Stock Valorizado (solo admin) ──
   const puedeEditarStock = user.rol === 'administrador' || user.rol === 'supervisor';
-  const vista = searchParams.vista === 'stock' && puedeEditarStock ? 'stock' : 'precios';
+  const vista =
+    searchParams.vista === 'stock' && puedeEditarStock ? 'stock'
+    : searchParams.vista === 'valorizado' && esAdmin    ? 'valorizado'
+    : 'precios';
+
+  if (vista === 'valorizado') {
+    const articulosVal = await fetchArticulosValorizado();
+    return (
+      <section className="space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+        </div>
+        <VistaTabs vista="valorizado" puedeEditarStock={puedeEditarStock} esAdmin={esAdmin} />
+        <p className="text-sm text-kp-gray pl-1 -mt-1">
+          Valor del inventario a costo (costo + flete) × stock de ambas sucursales.
+        </p>
+        <StockValorizado articulos={articulosVal} sucursales={sucursales} />
+      </section>
+    );
+  }
 
   if (vista === 'stock') {
     return (
@@ -184,7 +217,7 @@ export default async function ArticulosPage({
             </span>
           )}
         </div>
-        <VistaTabs vista="stock" puedeEditarStock={puedeEditarStock} />
+        <VistaTabs vista="stock" puedeEditarStock={puedeEditarStock} esAdmin={esAdmin} />
         <StockEditor sucursales={sucursales} sucursalActivaId={sucursalActivaId} />
       </section>
     );
@@ -268,7 +301,7 @@ export default async function ArticulosPage({
       </div>
 
       {/* ── Conmutador de vista (Precios / Stock) ── */}
-      <VistaTabs vista="precios" puedeEditarStock={puedeEditarStock} />
+      <VistaTabs vista="precios" puedeEditarStock={puedeEditarStock} esAdmin={esAdmin} />
 
       {/* ── Tabs por lista ── */}
       <Suspense fallback={null}>
