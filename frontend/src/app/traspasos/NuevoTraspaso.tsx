@@ -162,7 +162,7 @@ export default function NuevoTraspaso({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-4xl max-h-[92vh] flex flex-col bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="w-full max-w-6xl h-[90vh] max-h-[90vh] flex flex-col bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2">
@@ -177,9 +177,9 @@ export default function NuevoTraspaso({
               </button>
             </div>
 
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0">
               {/* Columna izquierda */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-5 border-r border-kp-border">
+              <div className="flex-1 overflow-y-auto p-6 space-y-5 border-b md:border-b-0 md:border-r border-kp-border">
 
                 {/* Sucursales */}
                 <div className="grid grid-cols-2 gap-4">
@@ -237,7 +237,7 @@ export default function NuevoTraspaso({
                       autoComplete="off"
                     />
                     {dropOpen && (
-                      <div className="absolute z-20 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-2xl flex flex-col" style={{ maxHeight: '220px' }}>
+                      <div className="absolute z-20 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-2xl flex flex-col" style={{ maxHeight: '360px' }}>
                         <ul className="overflow-y-auto flex-1">
                           {artFiltrados.length === 0 ? (
                             <li className="px-4 py-6 text-center text-xs text-kp-gray">Sin resultados</li>
@@ -308,7 +308,7 @@ export default function NuevoTraspaso({
               </div>
 
               {/* Columna derecha — resumen */}
-              <div className="w-64 flex-shrink-0 flex flex-col p-6 bg-kp-surface2 space-y-4">
+              <div className="w-full md:w-80 flex-shrink-0 flex flex-col p-6 bg-kp-surface2 space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Resumen</h4>
 
                 <div className="space-y-3 flex-1">
