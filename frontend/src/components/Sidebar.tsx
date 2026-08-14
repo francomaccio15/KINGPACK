@@ -176,6 +176,12 @@ const IcoLicitaciones = () => (
     <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   </svg>
 );
+const IcoTransporte = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-shrink-0">
+    <rect x="1" y="3" width="15" height="13" /><path d="M16 8h4l3 3v5h-7V8z" />
+    <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+  </svg>
+);
 // ─── Datos de navegación ──────────────────────────────────────────────────────
 type NavItem  = { label: string; href: string; icon: React.ReactNode; disabled?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -199,6 +205,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Pedidos Proveedores',   href: '/pedidos-proveedores',  icon: <IcoPedidos /> },
       { label: 'Proveedores',           href: '/proveedores',          icon: <IcoProveedores /> },
       { label: 'Pago a Proveedores',    href: '/pagos-proveedor',      icon: <IcoPagoProveedores /> },
+      { label: 'Transporte',            href: '/transporte',           icon: <IcoTransporte /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
       { label: 'Cheques',               href: '/cheques',              icon: <IcoCheques /> },
