@@ -319,7 +319,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-5">
           {NAV_GROUPS.map(group => {
             const visibles = group.items.filter(item =>
-              !user || puedeAcceder(user.rol, item.href)
+              !user || puedeAcceder(user.rol, item.href, user.sucursal_default_nombre)
             );
             if (visibles.length === 0) return null;
             return (

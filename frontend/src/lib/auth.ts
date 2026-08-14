@@ -4,6 +4,7 @@ export interface AuthUser {
   nombre: string;
   rol: 'administrador' | 'supervisor' | 'cajero' | 'vendedor';
   sucursal_default_id: string | null;
+  sucursal_default_nombre?: string | null;
 }
 
 const TOKEN_KEY = 'kp_token';

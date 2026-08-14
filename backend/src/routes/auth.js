@@ -27,9 +27,12 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT id, email, password_hash, nombre, rol, sucursal_default_id, activo
-         FROM usuarios
-        WHERE email = $1 AND deleted_at IS NULL`,
+      `SELECT u.id, u.email, u.password_hash, u.nombre, u.rol,
+              u.sucursal_default_id, u.activo,
+              s.nombre AS sucursal_default_nombre
+         FROM usuarios u
+         LEFT JOIN sucursales s ON s.id = u.sucursal_default_id
+        WHERE u.email = $1 AND u.deleted_at IS NULL`,
       [email.toLowerCase().trim()]
     );
 
@@ -51,6 +54,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       nombre:               usuario.nombre,
       rol:                  usuario.rol,
       sucursal_default_id:  usuario.sucursal_default_id,
+      // Nombre de la sucursal: lo usa el control de acceso para reglas que
+      // dependen de la sucursal (ej: solo el cajero de Laprida ve Licitaciones).
+      sucursal_default_nombre: usuario.sucursal_default_nombre ?? null,
     };
 
     // Sucursal con la que arranca la sesión (setea la cookie kp_sucursal_id):
