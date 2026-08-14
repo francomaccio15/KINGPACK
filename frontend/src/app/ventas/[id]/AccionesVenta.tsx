@@ -137,6 +137,21 @@ export default function AccionesVenta({
     setResultFactura(null);
     try {
       const res  = await apiFetch(`/api/ventas/${ventaId}/facturar`, { method: 'POST' });
+
+      // La emisión llama a AFIP y puede tardar; si nginx/el proxy corta por timeout
+      // devuelve una página HTML (no JSON) y res.json() reventaría con un críptico
+      // "Unexpected token '<'". Detectamos ese caso y damos un mensaje accionable:
+      // la factura pudo haberse emitido igual, así que hay que recargar y verificar
+      // ANTES de reintentar (para no generar un comprobante huérfano/duplicado).
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new Error(
+          'La factura tardó demasiado o se cortó la conexión con AFIP. ' +
+          'Puede que se haya emitido igual: recargá la página para verificar ' +
+          'antes de volver a intentar.'
+        );
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error al facturar');
       setResultFactura(data);
