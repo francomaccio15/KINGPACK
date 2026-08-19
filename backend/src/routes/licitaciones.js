@@ -307,6 +307,35 @@ router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
       [venta.id, lic.id]
     );
 
+    // Registrar la deuda en la cuenta corriente del cliente. La licitación se
+    // adjudica a cuenta corriente (no hay cobro en el momento), así que el total
+    // impacta como débito en el saldo del cliente. Sin esto, la venta queda
+    // confirmada/facturada pero el saldo del cliente nunca refleja la deuda.
+    if (lic.cliente_id) {
+      const { rows: [saldoRow] } = await client.query(`
+        SELECT COALESCE(c.saldo_inicial, 0)
+               + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+               + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+          FROM clientes c
+          LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+          LEFT JOIN (
+            SELECT cliente_id, SUM(monto) AS total_correcciones
+              FROM correcciones_saldo_cliente GROUP BY cliente_id
+          ) cs ON cs.cliente_id = c.id
+         WHERE c.id = $1
+         GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+      `, [lic.cliente_id]);
+
+      const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+      const nuevoSaldo  = parseFloat((saldoActual + total).toFixed(2));
+
+      await client.query(`
+        INSERT INTO cuentas_corrientes_cliente
+          (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+        VALUES ($1, $2, 0, $3, 'venta', $4)
+      `, [lic.cliente_id, total.toFixed(2), nuevoSaldo, venta.id]);
+    }
+
     await client.query('COMMIT');
     res.status(201).json({ venta_id: venta.id, venta_numero: venta.numero });
   } catch (err) {
