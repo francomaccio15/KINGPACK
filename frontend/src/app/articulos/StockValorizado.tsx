@@ -1,3 +1,7 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
 
 type ArticuloVal = {
@@ -16,11 +20,15 @@ const ars = new Intl.NumberFormat('es-AR', {
 });
 const num = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
 
+// Cuántos artículos se muestran en la tabla cuando no hay búsqueda activa. Los
+// totales por sucursal y el general siempre se calculan sobre TODO el inventario.
+const LIMITE_SIN_BUSQUEDA = 12;
+
 /**
  * Stock Valorizado — cuánto le costó a King Pack tener el inventario en depósito.
- * Para cada artículo muestra el costo base, el flete, el stock de cada sucursal y
- * el valor del stock = costo unitario (base + flete) × cantidad total. Al final,
- * el total valorizado de todo el inventario. Solo visible para administradores.
+ * Los totales (por sucursal y general) se calculan sobre todo el inventario. La
+ * tabla de detalle, en cambio, muestra solo algunos artículos y un buscador para
+ * encontrar un producto puntual, así la lista no queda tan larga. Solo admin.
  */
 export default function StockValorizado({
   articulos, sucursales,
@@ -28,6 +36,8 @@ export default function StockValorizado({
   articulos: ArticuloVal[];
   sucursales: { id: string; nombre: string }[];
 }) {
+  const [query, setQuery] = useState('');
+
   // Orden estable de columnas de sucursal según las sucursales activas.
   const nombresSuc = sucursales.map(s => s.nombre);
 
@@ -36,7 +46,8 @@ export default function StockValorizado({
     return sd ? Number(sd.cantidad) : 0;
   };
 
-  const filas = articulos.map(a => {
+  // Todas las filas valorizadas (base para los totales, no depende de la búsqueda).
+  const filas = useMemo(() => articulos.map(a => {
     const costoBase   = parseFloat(a.costo_base)  || 0;
     const fletePct    = parseFloat(a.costo_flete) || 0;
     const costoUnit   = costoBase * (1 + fletePct / 100);
@@ -47,7 +58,8 @@ export default function StockValorizado({
     const valorPorSuc: Record<string, number> = {};
     for (const n of nombresSuc) valorPorSuc[n] = costoUnit * cantEnSuc(a, n);
     return { a, costoBase, fletePct, costoUnit, stockTotal, valor, valorPorSuc };
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [articulos, sucursales]);
 
   const totalValor  = filas.reduce((acc, f) => acc + f.valor, 0);
   const totalUnid   = filas.reduce((acc, f) => acc + f.stockTotal, 0);
@@ -58,6 +70,18 @@ export default function StockValorizado({
   const totalUnidSuc = Object.fromEntries(
     nombresSuc.map(n => [n, filas.reduce((acc, f) => acc + cantEnSuc(f.a, n), 0)])
   ) as Record<string, number>;
+
+  // Filas que se muestran en la tabla: filtradas por la búsqueda o, sin búsqueda,
+  // solo las primeras LIMITE_SIN_BUSQUEDA.
+  const q = query.trim().toLowerCase();
+  const filasMatch = q
+    ? filas.filter(({ a }) =>
+        a.nombre.toLowerCase().includes(q) ||
+        a.codigo.toLowerCase().includes(q) ||
+        (a.categoria ?? '').toLowerCase().includes(q))
+    : filas;
+  const filasVisibles = q ? filasMatch : filasMatch.slice(0, LIMITE_SIN_BUSQUEDA);
+  const ocultas = filasMatch.length - filasVisibles.length;
 
   return (
     <div className="space-y-4">
@@ -89,6 +113,32 @@ export default function StockValorizado({
         </div>
       </div>
 
+      {/* Buscador de artículos */}
+      <div className="relative">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+          className="w-4 h-4 text-kp-gray absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Buscar artículo por nombre, código o categoría…"
+          className="w-full rounded-lg bg-kp-surface border border-kp-border pl-9 pr-9 py-2.5 text-sm
+            text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red/50"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Limpiar búsqueda"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-kp-gray hover:text-kp-white px-1.5"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
@@ -115,7 +165,13 @@ export default function StockValorizado({
                   No hay artículos para valorizar.
                 </td>
               </tr>
-            ) : filas.map(({ a, costoBase, fletePct, costoUnit, stockTotal, valor, valorPorSuc }) => (
+            ) : filasVisibles.length === 0 ? (
+              <tr>
+                <td colSpan={7 + nombresSuc.length} className="px-3 py-10 text-center text-kp-gray">
+                  No se encontraron artículos para “{query}”.
+                </td>
+              </tr>
+            ) : filasVisibles.map(({ a, costoBase, fletePct, costoUnit, stockTotal, valor, valorPorSuc }) => (
               <tr key={a.id} className="border-b border-kp-border/60 hover:bg-kp-surface2/50">
                 <td className="px-3 py-2 text-kp-gray-lt whitespace-nowrap">{a.codigo}</td>
                 <td className="px-3 py-2">
@@ -157,6 +213,15 @@ export default function StockValorizado({
           </tfoot>
         </table>
       </div>
+
+      {/* Nota de resultados: cuántos se muestran y cómo ver el resto */}
+      <p className="text-xs text-kp-gray text-center">
+        {q
+          ? `Mostrando ${filasVisibles.length} de ${filas.length} artículo(s) que coinciden con la búsqueda.`
+          : ocultas > 0
+            ? `Mostrando ${filasVisibles.length} de ${filas.length} artículos. Usá el buscador para encontrar el resto.`
+            : `Mostrando ${filasVisibles.length} artículo(s).`}
+      </p>
     </div>
   );
 }
