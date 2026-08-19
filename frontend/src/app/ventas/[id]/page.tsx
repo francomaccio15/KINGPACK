@@ -558,9 +558,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                       <span>{p.medio_pago}</span>
                       <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(p.monto)}</strong>
                     </div>
-                    {p.cuenta_destino && (
-                      <div style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>Cuenta: {p.cuenta_destino}</div>
-                    )}
+                    {/* La cuenta de destino es dato interno: no se imprime en el remito del cliente. */}
                     {Array.isArray(p.cheques) && p.cheques.map((ch: any) => (
                       <div key={ch.id} style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>
                         {ch.banco} · N° {ch.numero_cheque} · Vence {new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')} · <strong>{fmt(ch.importe)}</strong>
@@ -713,9 +711,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                     <span>{p.medio_pago}</span>
                     <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(p.monto)}</strong>
                   </div>
-                  {p.cuenta_destino && (
-                    <div style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>Cuenta: {p.cuenta_destino}</div>
-                  )}
+                  {/* La cuenta de destino es dato interno: no se imprime en la factura del cliente. */}
                   {Array.isArray(p.cheques) && p.cheques.map((ch: any) => (
                     <div key={ch.id} style={{ fontSize: '7px', color: '#555', paddingLeft: '6px' }}>
                       {ch.banco} · N° {ch.numero_cheque} · Vence {new Date(ch.fecha_vencimiento).toLocaleDateString('es-AR')} · <strong>{fmt(ch.importe)}</strong>
