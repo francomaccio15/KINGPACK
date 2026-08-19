@@ -42,16 +42,27 @@ export default function StockValorizado({
     const costoUnit   = costoBase * (1 + fletePct / 100);
     const stockTotal  = parseFloat(a.stock_total) || 0;
     const valor       = costoUnit * stockTotal;
-    return { a, costoBase, fletePct, costoUnit, stockTotal, valor };
+    // Valor del stock discriminado por sucursal: costo unitario × cantidad en esa
+    // sucursal. Permite ver el capital inmovilizado en Huaico y en Laprida por separado.
+    const valorPorSuc: Record<string, number> = {};
+    for (const n of nombresSuc) valorPorSuc[n] = costoUnit * cantEnSuc(a, n);
+    return { a, costoBase, fletePct, costoUnit, stockTotal, valor, valorPorSuc };
   });
 
   const totalValor  = filas.reduce((acc, f) => acc + f.valor, 0);
   const totalUnid   = filas.reduce((acc, f) => acc + f.stockTotal, 0);
+  // Totales por sucursal (unidades y valor) para el resumen y el pie de tabla.
+  const totalValorSuc = Object.fromEntries(
+    nombresSuc.map(n => [n, filas.reduce((acc, f) => acc + f.valorPorSuc[n], 0)])
+  ) as Record<string, number>;
+  const totalUnidSuc = Object.fromEntries(
+    nombresSuc.map(n => [n, filas.reduce((acc, f) => acc + cantEnSuc(f.a, n), 0)])
+  ) as Record<string, number>;
 
   return (
     <div className="space-y-4">
       {/* Resumen */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="rounded-xl bg-kp-surface border border-kp-border p-4">
           <p className="text-[11px] uppercase tracking-widest text-kp-gray font-semibold">Artículos</p>
           <p className="text-2xl font-bold mt-1">{filas.length}</p>
@@ -60,9 +71,21 @@ export default function StockValorizado({
           <p className="text-[11px] uppercase tracking-widest text-kp-gray font-semibold">Unidades en depósito</p>
           <p className="text-2xl font-bold mt-1">{num.format(totalUnid)}</p>
         </div>
-        <div className="rounded-xl bg-kp-surface border border-kp-red/40 p-4">
+      </div>
+
+      {/* Valor del stock (a costo): una tarjeta por sucursal + total general */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {nombresSuc.map(n => (
+          <div key={n} className="rounded-xl bg-kp-surface border border-kp-red/30 p-4">
+            <p className="text-[11px] uppercase tracking-widest text-kp-red/90 font-semibold">Valor stock · {n} (a costo)</p>
+            <p className="text-2xl font-bold mt-1 text-kp-red">{ars.format(totalValorSuc[n] ?? 0)}</p>
+            <p className="text-[11px] text-kp-gray mt-1">{num.format(totalUnidSuc[n] ?? 0)} unidades</p>
+          </div>
+        ))}
+        <div className="rounded-xl bg-kp-red/10 border border-kp-red/50 p-4">
           <p className="text-[11px] uppercase tracking-widest text-kp-red font-semibold">Valor total del stock (a costo)</p>
           <p className="text-2xl font-bold mt-1 text-kp-red">{ars.format(totalValor)}</p>
+          <p className="text-[11px] text-kp-gray mt-1">{num.format(totalUnid)} unidades</p>
         </div>
       </div>
 
@@ -92,7 +115,7 @@ export default function StockValorizado({
                   No hay artículos para valorizar.
                 </td>
               </tr>
-            ) : filas.map(({ a, costoBase, fletePct, costoUnit, stockTotal, valor }) => (
+            ) : filas.map(({ a, costoBase, fletePct, costoUnit, stockTotal, valor, valorPorSuc }) => (
               <tr key={a.id} className="border-b border-kp-border/60 hover:bg-kp-surface2/50">
                 <td className="px-3 py-2 text-kp-gray-lt whitespace-nowrap">{a.codigo}</td>
                 <td className="px-3 py-2">
@@ -107,7 +130,10 @@ export default function StockValorizado({
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap font-medium">{ars.format(costoUnit)}</td>
                 {nombresSuc.map(n => (
-                  <td key={n} className="px-3 py-2 text-center whitespace-nowrap">{num.format(cantEnSuc(a, n))}</td>
+                  <td key={n} className="px-3 py-2 text-center whitespace-nowrap">
+                    <span className="font-medium">{num.format(cantEnSuc(a, n))}</span>
+                    <span className="block text-[11px] text-kp-red/80">{ars.format(valorPorSuc[n])}</span>
+                  </td>
                 ))}
                 <td className="px-3 py-2 text-center whitespace-nowrap font-semibold">{num.format(stockTotal)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-kp-red">{ars.format(valor)}</td>
@@ -116,9 +142,15 @@ export default function StockValorizado({
           </tbody>
           <tfoot>
             <tr className="bg-kp-surface2 border-t-2 border-kp-red/40">
-              <td colSpan={5 + nombresSuc.length} className="px-3 py-3 text-right uppercase tracking-widest text-xs font-bold text-kp-gray">
-                Total valorizado del inventario
+              <td colSpan={5} className="px-3 py-3 text-right uppercase tracking-widest text-xs font-bold text-kp-gray">
+                Total valorizado por sucursal
               </td>
+              {nombresSuc.map(n => (
+                <td key={n} className="px-3 py-3 text-center whitespace-nowrap">
+                  <span className="block font-bold">{num.format(totalUnidSuc[n] ?? 0)}</span>
+                  <span className="block text-[11px] font-bold text-kp-red">{ars.format(totalValorSuc[n] ?? 0)}</span>
+                </td>
+              ))}
               <td className="px-3 py-3 text-center whitespace-nowrap font-bold">{num.format(totalUnid)}</td>
               <td className="px-3 py-3 text-right whitespace-nowrap text-lg font-extrabold text-kp-red">{ars.format(totalValor)}</td>
             </tr>
