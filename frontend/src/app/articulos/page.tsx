@@ -12,6 +12,7 @@ import StockEditor from './StockEditor';
 import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { TableScrollHint } from '@/components/ui/ResponsiveTable';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
@@ -307,12 +308,16 @@ export default async function ArticulosPage({
         />
       )}
 
-      {/* ── Tabla ── */}
+      {/* ── Tabla ──
+          Se mantiene como tabla tambien en mobile (con scroll lateral y la
+          columna de codigo fija): las filas se editan en linea, asi que el
+          patron de tarjetas no aplica aca. */}
+      <TableScrollHint />
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
-              <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
+              <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap sticky left-0 bg-kp-surface2 z-10">Código</th>
               <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
               <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Categoría</th>
               <th className="text-right px-3 py-3 uppercase tracking-widest text-xs font-semibold whitespace-nowrap">

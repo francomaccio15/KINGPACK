@@ -5,6 +5,8 @@ import Link from 'next/link';
 import type { NotaCredito } from './page';
 import NuevaNotaCredito from './NuevaNotaCredito';
 import { useAuth } from '@/contexts/AuthContext';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -167,8 +169,8 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
       </div>
 
       {/* ── Tabla ── */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Tipo / N°</th>
@@ -284,7 +286,34 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      <MobileCards>
+        {filtered.map(n => (
+          <RecordCard
+            key={n.id}
+            title={n.cliente_razon_social ?? 'Consumidor final'}
+            subtitle={[
+              `NC ${n.tipo_letra ?? ''} ${n.numero ? String(n.numero).padStart(6, '0') : ''}`.trim(),
+              new Date(n.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            ].filter(Boolean).join(' · ')}
+            badge={{ label: n.estado, tone: n.estado === 'anulada' ? 'neutral' : 'ok' }}
+            fields={[{ label: 'Total', value: ars.format(n.total), strong: true }]}
+            actions={
+              <Link href={`/notas-credito/${n.id}`} target="_blank" className={cn(btnSecondary, 'flex-1')}>
+                Ver e imprimir
+              </Link>
+            }
+          >
+            {n.motivo}
+          </RecordCard>
+        ))}
+        {filtered.length === 0 && (
+          <EmptyState title={q || filtroEstado
+            ? 'No se encontraron notas de crédito con esos filtros.'
+            : 'No hay notas de crédito registradas todavía.'} />
+        )}
+      </MobileCards>
 
       {/* ── Modal nueva NC ── */}
       {showForm && (

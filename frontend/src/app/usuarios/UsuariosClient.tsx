@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Modal from '@/components/ui/Modal';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Rol = 'administrador' | 'supervisor' | 'cajero' | 'vendedor';
@@ -363,7 +365,8 @@ export default function UsuariosClient() {
           No hay usuarios{q ? ` que coincidan con "${q}"` : ''}.
         </div>
       ) : (
-        <div className="rounded-xl border border-kp-border overflow-hidden">
+        <div>
+          <TableWrap>
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -433,6 +436,30 @@ export default function UsuariosClient() {
               ))}
             </tbody>
           </table>
+          </TableWrap>
+
+          <MobileCards>
+            {usuarios.map(u => (
+              <RecordCard
+                key={`card-${u.id}`}
+                title={u.nombre}
+                subtitle={[u.email, u.sucursal_nombre].filter(Boolean).join(' · ')}
+                badge={{ label: ROL_LABELS[u.rol], tone: u.activo ? 'info' : 'neutral' }}
+                className={u.activo ? undefined : 'opacity-60'}
+                actions={
+                  <>
+                    <button onClick={() => setModalEditar(u)} className={cn(btnSecondary, 'flex-1')}>Editar</button>
+                    <button onClick={() => setModalPassword(u)} className={cn(btnSecondary, 'flex-1')}>Clave</button>
+                    <button onClick={() => toggleActivo(u)} disabled={togglingId === u.id}
+                      className={cn(btnSecondary, 'flex-1')}>
+                      {u.activo ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </>
+                }
+              />
+            ))}
+            {usuarios.length === 0 && <EmptyState title="No hay usuarios cargados." />}
+          </MobileCards>
         </div>
       )}
 

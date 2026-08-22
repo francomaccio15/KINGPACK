@@ -1,6 +1,7 @@
 'use client';
 
 import CambiarEstado from './CambiarEstado';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 interface Cheque {
   tipo:              'recibido' | 'emitido';
@@ -65,7 +66,8 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-kp-border overflow-hidden">
+    <div>
+      <TableWrap>
       <table className="w-full text-sm">
         <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
           <tr>
@@ -141,6 +143,33 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
           ))}
         </tbody>
       </table>
+      </TableWrap>
+
+      {/* Mobile: importe y vencimiento son lo que se consulta; el cambio de
+          estado queda al pie de la tarjeta, a ancho completo. */}
+      <MobileCards>
+        {cheques.map(c => (
+          <RecordCard
+            key={`card-${c.tipo}-${c.id}`}
+            title={c.banco}
+            subtitle={`N° ${c.numero_cheque}${c.origen_nombre ? ' · ' + c.origen_nombre : ''}`}
+            badge={{
+              label: LABEL_ESTADO[c.estado] ?? c.estado,
+              tone: c.vencido ? 'danger' : c.estado === 'acreditado' ? 'ok' : 'neutral',
+            }}
+            fields={[
+              { label: 'Importe', value: fmt(c.importe), strong: true },
+              { label: c.vencido ? 'Vencido el' : 'Vence', value: fmtFecha(c.fecha_vencimiento), align: 'right' },
+            ]}
+            actions={
+              <div className="flex-1 [&>button]:w-full">
+                <CambiarEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
+              </div>
+            }
+          />
+        ))}
+        {cheques.length === 0 && <EmptyState title="No hay cheques para mostrar." />}
+      </MobileCards>
     </div>
   );
 }

@@ -3,6 +3,9 @@ import Link from 'next/link';
 import FiltrosGastos from './FiltrosGastos';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import PageHeader from '@/components/ui/PageHeader';
+import { btnPrimary, cn } from '@/lib/ui';
 
 type Egreso = {
   id: string;
@@ -157,27 +160,23 @@ export default async function GastosPage({
       )}
 
       {/* Encabezado */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
-            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Egresos</h2>
-          </div>
-          <p className="text-sm text-kp-gray pl-3">
+      <PageHeader
+        title="Egresos"
+        subtitle={
+          <>
             {count} {count === 1 ? 'registro' : 'registros'}
             {hayFiltros && <span className="ml-1 text-kp-gray/60">(filtrado)</span>}
-          </p>
-        </div>
-        <Link
-          href="/gastos/nuevo"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Nuevo Egreso
-        </Link>
-      </div>
+          </>
+        }
+        action={
+          <Link href="/gastos/nuevo" className={cn(btnPrimary, 'w-full sm:w-auto')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nuevo Egreso
+          </Link>
+        }
+      />
 
       {/* Filtros */}
       <Suspense>
@@ -185,8 +184,8 @@ export default async function GastosPage({
       </Suspense>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Fecha</th>
@@ -269,7 +268,42 @@ export default async function GastosPage({
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      {/* Mobile: proveedor y total mandan; el comprobante y el rubro quedan
+          como contexto y el resto se ve en el detalle. */}
+      <MobileCards>
+        {egresos.map((e: Egreso) => {
+          const fecha = new Date(e.fecha_emision).toLocaleDateString('es-AR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+          });
+          const comprobante = e.tipo_comprobante
+            ? `${e.tipo_comprobante.replace('_', ' ').toUpperCase()} ${e.punto_venta ? e.punto_venta + '-' : ''}${e.numero_comprobante ?? ''}`
+            : null;
+          return (
+            <RecordCard
+              key={e.id}
+              href={`/gastos/${e.id}`}
+              title={e.proveedor_nombre ?? (TIPO_LABEL[e.tipo_operacion] ?? e.tipo_operacion)}
+              subtitle={[fecha, comprobante, e.subrubro_nombre].filter(Boolean).join(' · ')}
+              badge={{
+                label: PAGO_LABEL[e.estado_pago] ?? e.estado_pago,
+                tone: e.estado_pago === 'pagado' ? 'ok' : e.estado_pago === 'parcial' ? 'info' : 'warn',
+              }}
+              fields={[
+                { label: 'Total', value: fmt(e.total), strong: true },
+                { label: 'Tipo', value: TIPO_LABEL[e.tipo_operacion] ?? e.tipo_operacion, align: 'right' },
+              ]}
+            />
+          );
+        })}
+        {egresos.length === 0 && (
+          <EmptyState
+            title={hayFiltros ? 'No hay egresos que coincidan con los filtros.' : 'No hay egresos registrados todavía.'}
+            hint={hayFiltros ? undefined : 'Usá el botón "Nuevo Egreso" para registrar el primero.'}
+          />
+        )}
+      </MobileCards>
 
     </section>
   );

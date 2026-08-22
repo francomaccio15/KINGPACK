@@ -2,6 +2,8 @@
 
 import { useState, useCallback, Fragment } from 'react';
 import Link from 'next/link';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
@@ -79,7 +81,8 @@ export default function PresupuestosTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+    <>
+    <TableWrap className="shadow-lg shadow-black/40">
       <table data-rt="1" className="min-w-full text-sm">
         <thead>
           <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -194,6 +197,50 @@ export default function PresupuestosTable({
           })}
         </tbody>
       </table>
-    </div>
+      </TableWrap>
+
+      {/* Mobile: el detalle de items se abre dentro de la propia tarjeta. */}
+      <MobileCards>
+        {presupuestos.map(p => {
+          const abierto = expanded === p.id;
+          const items   = itemsCache[p.id] ?? [];
+          return (
+            <RecordCard
+              key={p.id}
+              title={`#${p.numero} · ${p.cliente_nombre ?? 'Público general'}`}
+              subtitle={[fechaFmt(p.fecha), esRepartidor ? null : p.vendedor_nombre].filter(Boolean).join(' · ')}
+              fields={[
+                { label: 'Total', value: ars.format(parseFloat(p.total) || 0), strong: true },
+                { label: 'Ítems', value: p.items_count, align: 'right' },
+              ]}
+              expandable
+              expanded={abierto}
+              onToggle={() => toggle(p.id)}
+              actions={
+                <Link href={`/ventas/${p.id}`} className={cn(btnSecondary, 'flex-1')}>
+                  Ver presupuesto
+                </Link>
+              }
+            >
+              {items.length === 0 ? (
+                <p className="text-2xs text-kp-gray">Sin ítems.</p>
+              ) : (
+                items.map(it => (
+                  <div key={it.articulo_id} className="flex items-start justify-between gap-3 py-1">
+                    <div className="min-w-0">
+                      <p className="text-xs text-kp-white truncate">{it.nombre}</p>
+                      <p className="text-2xs text-kp-gray font-mono">{it.codigo}</p>
+                    </div>
+                    <p className="text-xs text-kp-white font-semibold tabular-nums shrink-0">
+                      {(parseFloat(it.cantidad) || 0).toFixed(0)} u
+                    </p>
+                  </div>
+                ))
+              )}
+            </RecordCard>
+          );
+        })}
+      </MobileCards>
+    </>
   );
 }

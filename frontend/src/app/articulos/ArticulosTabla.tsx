@@ -165,7 +165,7 @@ export default function ArticulosTabla({
         return (
           <tr key={a.id} className="hover:bg-kp-surface2 transition-colors duration-100 group">
 
-            <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">
+            <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap sticky left-0 bg-kp-surface group-hover:bg-kp-surface2 z-10">
               {a.codigo}
             </td>
 

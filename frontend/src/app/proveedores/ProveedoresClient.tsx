@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getStoredUser } from '@/lib/auth';
 import Modal from '@/components/ui/Modal';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -536,8 +538,9 @@ export default function ProveedoresClient() {
           No hay proveedores{q ? ` que coincidan con "${q}"` : ''}.
         </div>
       ) : (
-        <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table data-rt="1" className="min-w-full text-sm">
+        <div>
+          <TableWrap>
+          <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Razón Social</th>
@@ -611,6 +614,30 @@ export default function ProveedoresClient() {
               ))}
             </tbody>
           </table>
+          </TableWrap>
+
+          {/* Mobile: el total adeudado manda; los dos saldos parciales se ven
+              al abrir la cuenta corriente. */}
+          <MobileCards>
+            {proveedores.map(p => (
+              <RecordCard
+                key={`card-${p.id}`}
+                title={p.razon_social}
+                subtitle={[p.cuit, p.telefono || p.email, p.cond_pago].filter(Boolean).join(' · ')}
+                badge={p.activo ? undefined : { label: 'Inactivo', tone: 'neutral' }}
+                className={p.activo ? undefined : 'opacity-60'}
+                fields={[{ label: 'Total adeudado', value: fmt(String(totalProv(p))), strong: true }]}
+                actions={
+                  <>
+                    <button onClick={() => setModalCC(p)} className={cn(btnSecondary, 'flex-1')}>Cta. corriente</button>
+                    <button onClick={() => setModalHist(p)} className={cn(btnSecondary, 'flex-1')}>Pedidos</button>
+                    <button onClick={() => setModalEditar(p)} className={cn(btnSecondary, 'flex-1')}>Editar</button>
+                  </>
+                }
+              />
+            ))}
+            {proveedores.length === 0 && <EmptyState title="No hay proveedores cargados." />}
+          </MobileCards>
         </div>
       )}
 

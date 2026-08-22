@@ -5,6 +5,8 @@ import Link from 'next/link';
 import type { Devolucion, FormaDevolucion } from './page';
 import NuevaDevolucion from './NuevaDevolucion';
 import { useAuth } from '@/contexts/AuthContext';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -166,8 +168,8 @@ export default function DevolucionesView({ devolucionesIniciales, totalCount, cl
       </div>
 
       {/* ── Tabla ── */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">N°</th>
@@ -279,7 +281,37 @@ export default function DevolucionesView({ devolucionesIniciales, totalCount, cl
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      <MobileCards>
+        {filtered.map(d => (
+          <RecordCard
+            key={d.id}
+            title={d.cliente_razon_social ?? 'Consumidor final'}
+            subtitle={[
+              d.numero ? `N° ${String(d.numero).padStart(6, '0')}` : null,
+              new Date(d.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            ].filter(Boolean).join(' · ')}
+            badge={{ label: d.estado, tone: d.estado === 'anulada' ? 'neutral' : 'ok' }}
+            fields={[
+              { label: 'Total', value: ars.format(d.total), strong: true },
+              { label: 'Forma', value: FORMA_LABEL[d.forma_devolucion] ?? d.forma_devolucion, align: 'right' },
+            ]}
+            actions={
+              <Link href={`/devoluciones/${d.id}`} target="_blank" className={cn(btnSecondary, 'flex-1')}>
+                Ver e imprimir
+              </Link>
+            }
+          >
+            {d.motivo}
+          </RecordCard>
+        ))}
+        {filtered.length === 0 && (
+          <EmptyState title={q || filtroEstado
+            ? 'No se encontraron devoluciones con esos filtros.'
+            : 'No hay devoluciones registradas todavía.'} />
+        )}
+      </MobileCards>
 
       {/* ── Modal nueva devolución ── */}
       {showForm && (

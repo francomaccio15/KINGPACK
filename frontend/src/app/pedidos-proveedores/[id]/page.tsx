@@ -4,6 +4,7 @@ import HistorialRecepciones from './HistorialRecepciones';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => {
@@ -156,6 +157,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
           <h3 className="text-sm font-bold uppercase tracking-wide text-kp-gray">Artículos del Pedido</h3>
           <span className="text-xs text-kp-gray/60">{items.length} línea{items.length !== 1 ? 's' : ''}</span>
         </div>
+        <TableWrap className="border-0 rounded-none">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2/50 border-b border-kp-border">
@@ -208,6 +210,37 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
             })}
           </tbody>
         </table>
+        </TableWrap>
+
+        <div className="md:hidden print:hidden divide-y divide-kp-border">
+          {items.map((item: any) => {
+            const pedida   = parseFloat(item.cantidad) || 0;
+            const recibida = parseFloat(item.cantidad_recibida) || 0;
+            const completo = recibida >= pedida;
+            return (
+              <div key={`card-${item.articulo_id}`} className="px-4 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-kp-white font-medium">{item.articulo_nombre}</p>
+                    <p className="text-2xs text-kp-gray font-mono">{item.articulo_codigo}</p>
+                  </div>
+                  {esAdmin && (
+                    <p className="text-sm font-bold text-kp-white tabular-nums shrink-0">
+                      {fmt(parseFloat(item.precio_compra) * pedida)}
+                    </p>
+                  )}
+                </div>
+                <p className="text-2xs text-kp-gray mt-1 tabular-nums">
+                  Pedido {pedida.toLocaleString('es-AR')} · Recibido{' '}
+                  <span className={recibida === 0 ? 'text-kp-gray' : completo ? 'text-emerald-400' : 'text-amber-400'}>
+                    {recibida.toLocaleString('es-AR')}
+                  </span>
+                  {esAdmin && ` · ${fmt(item.precio_compra)} c/u`}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Historial de recepciones — visible para todos (sin montos) */}

@@ -5,6 +5,7 @@ import NuevoPedido from './NuevoPedido';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 type Pedido = {
   id: string;
@@ -129,8 +130,8 @@ export default async function PedidosProveedoresPage({
       </Suspense>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Fecha</th>
@@ -231,7 +232,38 @@ export default async function PedidosProveedoresPage({
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      <MobileCards>
+        {pedidos.map((p: Pedido) => {
+          const fecha = new Date(p.fecha_pedido).toLocaleDateString('es-AR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+          });
+          return (
+            <RecordCard
+              key={p.id}
+              href={`/pedidos-proveedores/${p.id}`}
+              title={p.proveedor_nombre}
+              subtitle={[fecha, p.sucursal_nombre].filter(Boolean).join(' · ')}
+              badge={{
+                label: ESTADO_LABEL[p.estado] ?? p.estado,
+                tone: p.estado === 'recibido' ? 'ok'
+                  : p.estado === 'recibido_parcial' ? 'info'
+                  : p.estado === 'cancelado' ? 'neutral' : 'warn',
+              }}
+              fields={[
+                ...(esAdmin ? [{ label: 'Total', value: fmt(p.monto_total), strong: true } as const] : []),
+                { label: 'Ítems', value: p.items_count, align: 'right' as const },
+              ]}
+            />
+          );
+        })}
+        {pedidos.length === 0 && (
+          <EmptyState title={hayFiltros
+            ? 'No hay pedidos que coincidan con los filtros.'
+            : 'No hay pedidos registrados todavía.'} />
+        )}
+      </MobileCards>
 
     </section>
   );

@@ -4,6 +4,7 @@ import NuevoEmpleado from './NuevoEmpleado';
 import EmpleadosFiltros from './EmpleadosFiltros';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,8 +103,8 @@ export default async function EmpleadosPage({
       </Suspense>
 
       {/* ── Tabla ── */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Nombre</th>
@@ -190,7 +191,21 @@ export default async function EmpleadosPage({
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      <MobileCards>
+        {empleados.map(e => (
+          <RecordCard
+            key={e.id}
+            href={`/empleados/${e.id}`}
+            title={e.nombre}
+            subtitle={[e.dni, e.cargo, e.sucursal_nombre].filter(Boolean).join(' · ')}
+            badge={e.activo ? { label: 'Activo', tone: 'ok' } : { label: 'Inactivo', tone: 'neutral' }}
+            fields={e.telefono ? [{ label: 'Teléfono', value: e.telefono }] : undefined}
+          />
+        ))}
+        {empleados.length === 0 && <EmptyState title="No hay empleados cargados todavía." />}
+      </MobileCards>
     </section>
   );
 }

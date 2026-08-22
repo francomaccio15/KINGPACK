@@ -25,10 +25,15 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 
 // ─── Fila editable ─────────────────────────────────────────────────────────────
 function FilaStock({
-  art, sucursalId, onSaved,
+  art, sucursalId, onSaved, modo = 'fila',
 }: {
   art: Art; sucursalId: string;
   onSaved: (id: string, cantidad: number, adelante: number, deposito: number) => void;
+  /**
+   * `fila` para la tabla de escritorio y `card` para mobile. Los dos comparten
+   * el mismo estado y el mismo guardar: cambia solo como se dibuja.
+   */
+  modo?: 'fila' | 'card';
 }) {
   const adeActual = parseFloat(art.stock_adelante) || 0;
   const depActual = parseFloat(art.stock_deposito) || 0;
@@ -73,6 +78,56 @@ function FilaStock({
 
   const inputCls = 'w-24 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-right text-kp-white ' +
     'placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+
+  if (modo === 'card') {
+    return (
+      <div className="rounded-xl border border-kp-border bg-kp-surface p-3">
+        <p className="text-sm font-medium text-kp-white leading-tight">{art.nombre}</p>
+        <p className="text-2xs text-kp-gray font-mono mt-0.5">{art.codigo}</p>
+
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <div>
+            <label className="block text-2xs text-kp-gray uppercase tracking-widest mb-1">Adelante</label>
+            <NumericInput
+              decimals={0}
+              value={ade}
+              onChange={e => { setAde(e.target.value); setEstado('idle'); }}
+              placeholder="0"
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 min-h-touch text-base text-right text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-2xs text-kp-gray uppercase tracking-widest mb-1">Depósito</label>
+            <NumericInput
+              decimals={0}
+              value={dep}
+              onChange={e => { setDep(e.target.value); setEstado('idle'); }}
+              placeholder="0"
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 min-h-touch text-base text-right text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <p className="text-2xs text-kp-gray">
+            Stock actual{' '}
+            <span className="text-sm font-bold text-kp-white tabular-nums">
+              {Number.isFinite(total) ? total : '—'}
+            </span>
+          </p>
+          <button
+            onClick={guardar}
+            disabled={!cambio || saving}
+            className="flex-1 max-w-[50%] min-h-touch rounded-lg text-sm font-semibold transition-colors disabled:opacity-40
+              bg-kp-red text-white hover:bg-kp-red-dark disabled:hover:bg-kp-red"
+          >
+            {saving ? 'Guardando…' : estado === 'ok' && !cambio ? '✓ Guardado' : 'Guardar'}
+          </button>
+        </div>
+        {estado === 'err' && <p className="text-2xs text-kp-red mt-1">{msg}</p>}
+      </div>
+    );
+  }
 
   return (
     <tr className="border-b border-kp-border/40 hover:bg-kp-surface2/30 transition-colors">
@@ -211,7 +266,7 @@ export default function StockEditor({
             {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </div>
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 w-full md:min-w-[200px]">
           <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Buscar artículo</label>
           <input
             value={q}
@@ -240,8 +295,8 @@ export default function StockEditor({
         <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>
       )}
 
-      {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+      {/* Tabla (escritorio) */}
+      <div className="hidden md:block print:block overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
         <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -267,6 +322,22 @@ export default function StockEditor({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Tarjetas (mobile): contar stock se hace con el telefono en la mano,
+          asi que cada articulo va con sus dos campos y su propio guardar. */}
+      <div className="md:hidden print:hidden space-y-2">
+        {loading ? (
+          <p className="py-10 text-center text-kp-gray text-sm">Cargando…</p>
+        ) : arts.length === 0 ? (
+          <p className="py-10 text-center text-kp-gray text-sm">
+            {sucursalId ? 'No hay artículos para mostrar.' : 'Elegí una sucursal.'}
+          </p>
+        ) : (
+          arts.map(a => (
+            <FilaStock key={`card-${sucursalId}-${a.id}`} modo="card" art={a} sucursalId={sucursalId} onSaved={onSaved} />
+          ))
+        )}
       </div>
 
       {/* ── Modal: exportar planilla de conteo ── */}

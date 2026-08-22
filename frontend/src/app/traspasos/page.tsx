@@ -5,6 +5,7 @@ import NuevoTraspaso from './NuevoTraspaso';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
 import ResumenMensual, { type ResumenRow } from './ResumenMensual';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 type Traspaso = {
   id: string;
@@ -127,8 +128,8 @@ export default async function TraspasosPage() {
       {esAdmin && <ResumenMensual resumen={resumen} />}
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table data-rt="1" className="min-w-full text-sm">
+      <TableWrap className="shadow-lg shadow-black/40">
+        <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Fecha</th>
@@ -185,7 +186,31 @@ export default async function TraspasosPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      <MobileCards>
+        {traspasos.map((t: Traspaso) => {
+          const fecha = new Date(t.created_at).toLocaleDateString('es-AR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+          });
+          return (
+            <RecordCard
+              key={t.id}
+              href={`/traspasos/${t.id}`}
+              title={`${t.sucursal_origen_nombre} → ${t.sucursal_destino_nombre}`}
+              subtitle={fecha}
+              badge={{ label: ESTADO_LABEL[t.estado] ?? t.estado, tone: 'neutral' }}
+              fields={[
+                { label: 'Artículos', value: t.items_count },
+                { label: 'Unidades', value: t.unidades_total, align: 'right' },
+              ]}
+            />
+          );
+        })}
+        {traspasos.length === 0 && (
+          <EmptyState title="No hay traspasos registrados." />
+        )}
+      </MobileCards>
 
     </section>
   );
