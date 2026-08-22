@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
@@ -234,255 +235,244 @@ export default function NuevoArticulo({
       </button>
 
       {/* ── Modal ── */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget) cerrar(); }}
-        >
-          <div className="w-full max-w-lg bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+      <Modal
+        open={open}
+        onClose={cerrar}
+        title="Nuevo Artículo"
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="font-bold text-base uppercase tracking-wide">Nuevo Artículo</h3>
-              </div>
-              <button onClick={cerrar} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">✕</button>
+          {/* Código + Nombre */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Código *</label>
+              <input
+                required value={form.codigo}
+                onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); setCodigoAuto(false); }}
+                placeholder="ej: 001"
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                  placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+              />
             </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-
-              {/* Código + Nombre */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Código *</label>
-                  <input
-                    required value={form.codigo}
-                    onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); setCodigoAuto(false); }}
-                    placeholder="ej: 001"
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                      placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Nombre *</label>
-                  <input
-                    required value={form.nombre} onChange={set('nombre')}
-                    placeholder="Descripción del producto"
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                      placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Categoría + IVA */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-kp-gray uppercase tracking-widest">Categoría *</label>
-                    <button
-                      type="button"
-                      onClick={() => { setShowCat(v => !v); setCatError(''); }}
-                      className="text-[10px] text-kp-red hover:text-white transition-colors font-semibold uppercase tracking-wide"
-                    >
-                      {showCat ? '— Cancelar' : '+ Nueva'}
-                    </button>
-                  </div>
-                  <select
-                    required value={form.categoria_id}
-                    onChange={e => { onCategoria(e); if (codigoAuto) generarCodigo(); }}
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                      focus:outline-none focus:border-kp-red transition-colors"
-                  >
-                    {categorias.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">IVA *</label>
-                  <select
-                    required value={form.alicuota_iva_id} onChange={onIva}
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                      focus:outline-none focus:border-kp-red transition-colors"
-                  >
-                    {alicuotas.map(a => (
-                      <option key={a.id} value={a.id}>{a.descripcion} ({a.porcentaje}%)</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Panel nueva categoría (inline) */}
-              {showCat && (
-                <div className="rounded-xl border border-kp-red/30 bg-kp-surface2 p-4 space-y-3">
-                  <p className="text-xs text-kp-red font-semibold uppercase tracking-widest">Nueva categoría</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <label className="block text-xs text-kp-gray mb-1">Nombre *</label>
-                      <input
-                        value={catForm.nombre}
-                        onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
-                        placeholder="ej: Vasos descartables"
-                        className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                          placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-kp-gray mb-1">Margen %</label>
-                      <div className="relative">
-                        <NumericInput
-                          value={catForm.margen_default}
-                          onChange={e => setCatForm(f => ({ ...f, margen_default: e.target.value }))}
-                          placeholder="0"
-                          className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
-                            placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
-                      </div>
-                    </div>
-                  </div>
-                  {catError && (
-                    <p className="text-xs text-kp-red">{catError}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleCrearCategoria}
-                    disabled={catLoading || !catForm.nombre.trim()}
-                    className="w-full py-2 rounded-lg bg-kp-surface border border-kp-red/50 text-kp-red text-sm font-semibold
-                      hover:bg-kp-red hover:text-white disabled:opacity-40 transition-colors"
-                  >
-                    {catLoading ? 'Creando…' : 'Crear categoría'}
-                  </button>
-                </div>
-              )}
-
-              {/* Costo + Flete + Margen */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Costo *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                    <NumericInput
-                      required
-                      decimals={3}
-                      value={form.costo_base} onChange={onCosto}
-                      placeholder="0.00"
-                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
-                        placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
-                  <div className="relative">
-                    <NumericInput
-                      value={form.costo_flete} onChange={onFlete}
-                      placeholder="0.0"
-                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
-                        placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">
-                    Margen %
-                    {form.margen_aplicado === '' && catActiva?.margen_default && (
-                      <span className="ml-1 text-kp-gray normal-case tracking-normal">
-                        (cat: {catActiva.margen_default}%)
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative">
-                    <NumericInput
-                      value={form.margen_aplicado} onChange={onMargen}
-                      placeholder={catActiva?.margen_default ?? '—'}
-                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
-                        placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Precio de venta — editable. Al cambiarlo se ajusta el margen
-                  (el costo y el flete no se modifican). */}
-              <div className="rounded-xl bg-kp-surface2 border border-kp-border px-5 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta final</span>
-                    <span className="block text-[10px] text-kp-gray mt-0.5">
-                      IVA incluido · al cambiar el IVA el precio no cambia
-                    </span>
-                  </div>
-                  <div className="relative w-40">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
-                    <NumericInput
-                      value={precioInput} onChange={onPrecio}
-                      placeholder="0"
-                      className="w-full bg-kp-surface border border-kp-border rounded-lg pl-7 pr-3 py-2
-                        text-right text-xl font-bold tabular-nums text-kp-white
-                        focus:outline-none focus:border-kp-red transition-colors"
-                    />
-                  </div>
-                </div>
-                {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
-                {precioNum > 0 && (
-                  <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
-                    <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
-                    <div className="flex items-center gap-4 text-kp-gray">
-                      <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
-                      <span>IVA ({ivaReal.toFixed(ivaReal % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
-                    </div>
-                  </div>
-                )}
-                {costo > 0 && (
-                  <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
-                    <span>
-                      Margen:{' '}
-                      <span className="font-semibold text-kp-white tabular-nums">
-                        {isNaN(margenReal) ? '—' : `${round2(margenReal)}%`}
-                      </span>
-                    </span>
-                    <span>
-                      Ganancia x u.:{' '}
-                      <span className={`font-semibold tabular-nums ${gananciaUnit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {ars.format(gananciaUnit)}
-                      </span>
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">
-                  {error}
-                </p>
-              )}
-
-              {/* Acciones */}
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button" onClick={cerrar}
-                  className="flex-1 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-white
-                    hover:border-kp-gray transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit" disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark disabled:opacity-50
-                    text-white text-sm font-semibold transition-colors"
-                >
-                  {loading ? 'Guardando…' : 'Guardar Artículo'}
-                </button>
-              </div>
-
-            </form>
+            <div className="col-span-2">
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Nombre *</label>
+              <input
+                required value={form.nombre} onChange={set('nombre')}
+                placeholder="Descripción del producto"
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                  placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Categoría + IVA */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-kp-gray uppercase tracking-widest">Categoría *</label>
+                <button
+                  type="button"
+                  onClick={() => { setShowCat(v => !v); setCatError(''); }}
+                  className="text-[10px] text-kp-red hover:text-white transition-colors font-semibold uppercase tracking-wide"
+                >
+                  {showCat ? '— Cancelar' : '+ Nueva'}
+                </button>
+              </div>
+              <select
+                required value={form.categoria_id}
+                onChange={e => { onCategoria(e); if (codigoAuto) generarCodigo(); }}
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                  focus:outline-none focus:border-kp-red transition-colors"
+              >
+                {categorias.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">IVA *</label>
+              <select
+                required value={form.alicuota_iva_id} onChange={onIva}
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                  focus:outline-none focus:border-kp-red transition-colors"
+              >
+                {alicuotas.map(a => (
+                  <option key={a.id} value={a.id}>{a.descripcion} ({a.porcentaje}%)</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Panel nueva categoría (inline) */}
+          {showCat && (
+            <div className="rounded-xl border border-kp-red/30 bg-kp-surface2 p-4 space-y-3">
+              <p className="text-xs text-kp-red font-semibold uppercase tracking-widest">Nueva categoría</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs text-kp-gray mb-1">Nombre *</label>
+                  <input
+                    value={catForm.nombre}
+                    onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
+                    placeholder="ej: Vasos descartables"
+                    className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                      placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-kp-gray mb-1">Margen %</label>
+                  <div className="relative">
+                    <NumericInput
+                      value={catForm.margen_default}
+                      onChange={e => setCatForm(f => ({ ...f, margen_default: e.target.value }))}
+                      placeholder="0"
+                      className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
+                        placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+                  </div>
+                </div>
+              </div>
+              {catError && (
+                <p className="text-xs text-kp-red">{catError}</p>
+              )}
+              <button
+                type="button"
+                onClick={handleCrearCategoria}
+                disabled={catLoading || !catForm.nombre.trim()}
+                className="w-full py-2 rounded-lg bg-kp-surface border border-kp-red/50 text-kp-red text-sm font-semibold
+                  hover:bg-kp-red hover:text-white disabled:opacity-40 transition-colors"
+              >
+                {catLoading ? 'Creando…' : 'Crear categoría'}
+              </button>
+            </div>
+          )}
+
+          {/* Costo + Flete + Margen */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Costo *</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+                <NumericInput
+                  required
+                  decimals={3}
+                  value={form.costo_base} onChange={onCosto}
+                  placeholder="0.00"
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
+                    placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Flete %</label>
+              <div className="relative">
+                <NumericInput
+                  value={form.costo_flete} onChange={onFlete}
+                  placeholder="0.0"
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
+                    placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">
+                Margen %
+                {form.margen_aplicado === '' && catActiva?.margen_default && (
+                  <span className="ml-1 text-kp-gray normal-case tracking-normal">
+                    (cat: {catActiva.margen_default}%)
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <NumericInput
+                  value={form.margen_aplicado} onChange={onMargen}
+                  placeholder={catActiva?.margen_default ?? '—'}
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 pr-6 py-2 text-sm text-kp-white
+                    placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Precio de venta — editable. Al cambiarlo se ajusta el margen
+              (el costo y el flete no se modifican). */}
+          <div className="rounded-xl bg-kp-surface2 border border-kp-border px-5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta final</span>
+                <span className="block text-[10px] text-kp-gray mt-0.5">
+                  IVA incluido · al cambiar el IVA el precio no cambia
+                </span>
+              </div>
+              <div className="relative w-40">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
+                <NumericInput
+                  value={precioInput} onChange={onPrecio}
+                  placeholder="0"
+                  className="w-full bg-kp-surface border border-kp-border rounded-lg pl-7 pr-3 py-2
+                    text-right text-xl font-bold tabular-nums text-kp-white
+                    focus:outline-none focus:border-kp-red transition-colors"
+                />
+              </div>
+            </div>
+            {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
+            {precioNum > 0 && (
+              <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
+                <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
+                <div className="flex items-center gap-4 text-kp-gray">
+                  <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
+                  <span>IVA ({ivaReal.toFixed(ivaReal % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
+                </div>
+              </div>
+            )}
+            {costo > 0 && (
+              <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
+                <span>
+                  Margen:{' '}
+                  <span className="font-semibold text-kp-white tabular-nums">
+                    {isNaN(margenReal) ? '—' : `${round2(margenReal)}%`}
+                  </span>
+                </span>
+                <span>
+                  Ganancia x u.:{' '}
+                  <span className={`font-semibold tabular-nums ${gananciaUnit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {ars.format(gananciaUnit)}
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">
+              {error}
+            </p>
+          )}
+
+          {/* Acciones */}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button" onClick={cerrar}
+              className="flex-1 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-white
+                hover:border-kp-gray transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit" disabled={loading}
+              className="flex-1 py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark disabled:opacity-50
+                text-white text-sm font-semibold transition-colors"
+            >
+              {loading ? 'Guardando…' : 'Guardar Artículo'}
+            </button>
+          </div>
+
+        </form>
+          
+      </Modal>
     </>
   );
 }

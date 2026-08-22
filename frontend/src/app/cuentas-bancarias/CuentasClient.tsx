@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Cuenta {
@@ -44,24 +45,6 @@ function Spinner() {
   );
 }
 
-// ─── Modal genérico ───────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">{title}</h3>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Formulario de cuenta (crear / editar) ────────────────────────────────────
 function FormCuenta({
@@ -337,7 +320,7 @@ export default function CuentasClient() {
 
       {/* Modal Crear */}
       {modalCrear && (
-        <Modal title="Nueva cuenta bancaria" onClose={() => setModalCrear(false)}>
+        <Modal open title="Nueva cuenta bancaria" onClose={() => setModalCrear(false)}>
           <FormCuenta
             sucursales={sucursales}
             onGuardar={() => { setModalCrear(false); cargar(); }}
@@ -348,7 +331,7 @@ export default function CuentasClient() {
 
       {/* Modal Editar */}
       {modalEditar && (
-        <Modal title="Editar cuenta bancaria" onClose={() => setModalEditar(null)}>
+        <Modal open title="Editar cuenta bancaria" onClose={() => setModalEditar(null)}>
           <FormCuenta
             inicial={modalEditar}
             sucursales={sucursales}

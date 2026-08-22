@@ -160,12 +160,14 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           {/* Columna principal — Items */}
           <div className="lg:col-span-2 space-y-5">
             <div className="rounded-xl border border-kp-border overflow-hidden">
-              <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border">
+              <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
                   Artículos ({items.length})
                 </h3>
               </div>
-              <table className="min-w-full text-sm">
+              {/* Escritorio: tabla completa. Mobile: una fila por articulo con
+                  el subtotal destacado (las columnas intermedias se derivan). */}
+              <table data-rt="1" className="min-w-full text-sm hidden md:table print:table">
                 <thead>
                   <tr className="border-b border-kp-border">
                     <th className="text-left px-5 py-2.5 text-xs text-kp-gray font-semibold uppercase tracking-widest">Artículo</th>
@@ -210,6 +212,35 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   })}
                 </tbody>
               </table>
+
+              <div className="md:hidden print:hidden divide-y divide-kp-border bg-kp-surface">
+                {items.map((item: any) => {
+                  const { base, descPct, tieneDesc } = desglosePrecio(item);
+                  const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
+                  return (
+                    <div key={item.articulo_id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-kp-white">{item.nombre}</p>
+                          <p className="text-2xs text-kp-gray font-mono">{item.codigo}</p>
+                        </div>
+                        <p className="text-sm font-bold text-kp-white tabular-nums shrink-0">{fmt(subtotalItem)}</p>
+                      </div>
+                      <p className="text-2xs text-kp-gray mt-1 tabular-nums">
+                        {parseFloat(item.cantidad).toFixed(0)} u × {fmt(item.precio_unitario_final)}
+                        {tieneDesc && (
+                          <>
+                            {' · '}
+                            <span className="line-through">{fmt(base)}</span>
+                            {' '}
+                            <span className="text-kp-red font-semibold">−{descPct.toFixed(1)}%</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {venta.observaciones && (
@@ -224,10 +255,10 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
           <div className="space-y-4">
 
             <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
-              <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border">
+              <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Resumen</h3>
               </div>
-              <div className="px-5 py-4 space-y-3">
+              <div className="px-4 md:px-5 py-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-kp-gray">Subtotal</span>
                   <span className="text-kp-white tabular-nums">{fmt(subtotalBase)}</span>
@@ -252,7 +283,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
             </div>
 
             <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
-              <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border">
+              <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cliente</h3>
               </div>
               <div className="px-5 py-4 space-y-1.5">
@@ -287,10 +318,10 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
 
             {pagos.length > 0 && (
               <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
-                <div className="bg-kp-surface2 px-5 py-3 border-b border-kp-border">
+                <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Formas de Pago</h3>
                 </div>
-                <div className="px-5 py-4 space-y-3">
+                <div className="px-4 md:px-5 py-4 space-y-3">
                   {pagos.map((p: any, i: number) => (
                     <div key={i} className="space-y-1.5">
                       <div className="flex justify-between text-sm">
@@ -379,7 +410,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               });
 
               return (
-                <div key={ed.id} className="px-5 py-4 space-y-3">
+                <div key={ed.id} className="px-4 md:px-5 py-4 space-y-3">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs font-bold text-amber-300">{fecha}</p>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -231,236 +232,216 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
       </div>
 
       {/* ── Modal: Registrar Recepción ── */}
-      {recibirOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => !loading && setRecibirOpen(false)} />
-          <div className="relative w-full max-w-2xl bg-kp-surface border border-kp-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <Modal
+          open={recibirOpen}
+          onClose={() => !loading && setRecibirOpen(false)}
+          title="Registrar Recepción"
+          size="lg"
+        >
+          {/* Tabla de ítems */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-kp-border">
+                  <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Pedido</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Ya recibido</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Pendiente</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-32">Recibir ahora</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-kp-border">
+                {items.map(item => {
+                  const pedida    = parseFloat(item.cantidad) || 0;
+                  const recibida  = parseFloat(item.cantidad_recibida) || 0;
+                  const pendiente = Math.max(0, pedida - recibida);
+                  const aRecibir  = parseFloat(cantidades[item.articulo_id]) || 0;
+                  const completo  = recibida >= pedida;
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
-              <div>
-                <h3 className="font-bold text-kp-white">Registrar Recepción</h3>
-                <p className="text-xs text-kp-gray mt-0.5">
-                  Ingresá las cantidades que llegaron hoy. Podés recibir parcialmente.
-                </p>
-              </div>
-              <button onClick={() => setRecibirOpen(false)} className="text-kp-gray hover:text-kp-white text-xl leading-none">✕</button>
-            </div>
-
-            {/* Tabla de ítems */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-kp-border">
-                    <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Pedido</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Ya recibido</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Pendiente</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-32">Recibir ahora</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kp-border">
-                  {items.map(item => {
-                    const pedida    = parseFloat(item.cantidad) || 0;
-                    const recibida  = parseFloat(item.cantidad_recibida) || 0;
-                    const pendiente = Math.max(0, pedida - recibida);
-                    const aRecibir  = parseFloat(cantidades[item.articulo_id]) || 0;
-                    const completo  = recibida >= pedida;
-
-                    return (
-                      <tr key={item.articulo_id} className={`py-3 ${completo ? 'opacity-50' : ''}`}>
-                        <td className="py-3 pr-3">
-                          <p className="font-medium text-kp-white">{item.articulo_nombre}</p>
-                          <p className="text-xs text-kp-gray font-mono">{item.articulo_codigo}</p>
-                        </td>
-                        <td className="py-3 text-right tabular-nums text-kp-gray">{pedida}</td>
-                        <td className="py-3 text-right tabular-nums">
-                          {recibida > 0
-                            ? <span className="text-emerald-400 font-semibold">{recibida}</span>
-                            : <span className="text-kp-border">—</span>}
-                        </td>
-                        <td className="py-3 text-right tabular-nums">
-                          {completo
-                            ? <span className="text-emerald-400 text-xs font-bold">✓ Completo</span>
-                            : <span className="text-amber-400 font-semibold">{pendiente}</span>}
-                        </td>
-                        <td className="py-3 pl-3 text-right">
-                          {completo ? (
-                            <span className="text-kp-border text-xs">—</span>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max={pendiente}
-                                step="1"
-                                value={cantidades[item.articulo_id] ?? ''}
-                                onChange={e => setCantidades(prev => ({ ...prev, [item.articulo_id]: e.target.value }))}
-                                className="w-20 text-right bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5
-                                  text-sm text-kp-white focus:outline-none focus:border-kp-red tabular-nums"
-                                placeholder="0"
-                              />
-                              {aRecibir > 0 && aRecibir < pendiente && (
-                                <span className="text-[10px] text-amber-400 font-bold whitespace-nowrap">parcial</span>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Footer con total y botones */}
-            <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
-              {/* Total a pagar — solo administrador */}
-              {mostrarMontos && totalAPagar > 0 && (
-                <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2.5">
-                  <span className="text-sm text-kp-gray font-medium">Total a pagar por esta entrega</span>
-                  <span className="text-lg font-bold text-kp-white tabular-nums">{ars.format(totalAPagar)}</span>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-3">
-                <button onClick={() => setRecibirOpen(false)} disabled={loading}
-                  className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={confirmarRecepcion} disabled={loading || !hayAlgo}
-                  className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {loading
-                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
-                    : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg>Confirmar recepción</>
-                  }
-                </button>
-              </div>
-            </div>
+                  return (
+                    <tr key={item.articulo_id} className={`py-3 ${completo ? 'opacity-50' : ''}`}>
+                      <td className="py-3 pr-3">
+                        <p className="font-medium text-kp-white">{item.articulo_nombre}</p>
+                        <p className="text-xs text-kp-gray font-mono">{item.articulo_codigo}</p>
+                      </td>
+                      <td className="py-3 text-right tabular-nums text-kp-gray">{pedida}</td>
+                      <td className="py-3 text-right tabular-nums">
+                        {recibida > 0
+                          ? <span className="text-emerald-400 font-semibold">{recibida}</span>
+                          : <span className="text-kp-border">—</span>}
+                      </td>
+                      <td className="py-3 text-right tabular-nums">
+                        {completo
+                          ? <span className="text-emerald-400 text-xs font-bold">✓ Completo</span>
+                          : <span className="text-amber-400 font-semibold">{pendiente}</span>}
+                      </td>
+                      <td className="py-3 pl-3 text-right">
+                        {completo ? (
+                          <span className="text-kp-border text-xs">—</span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max={pendiente}
+                              step="1"
+                              value={cantidades[item.articulo_id] ?? ''}
+                              onChange={e => setCantidades(prev => ({ ...prev, [item.articulo_id]: e.target.value }))}
+                              className="w-20 text-right bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5
+                                text-sm text-kp-white focus:outline-none focus:border-kp-red tabular-nums"
+                              placeholder="0"
+                            />
+                            {aRecibir > 0 && aRecibir < pendiente && (
+                              <span className="text-[10px] text-amber-400 font-bold whitespace-nowrap">parcial</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
 
-      {/* ── Modal: Corregir Recepción ── */}
-      {corregirOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => !loading && setCorregirOpen(false)} />
-          <div className="relative w-full max-w-2xl bg-kp-surface border border-kp-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
-              <div>
-                <h3 className="font-bold text-kp-white">Corregir Recepción</h3>
-                <p className="text-xs text-kp-gray mt-0.5">
-                  Ajustá el total recibido de cada artículo. El stock se corrige por la diferencia.
-                </p>
+          {/* Footer con total y botones */}
+          <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
+            {/* Total a pagar — solo administrador */}
+            {mostrarMontos && totalAPagar > 0 && (
+              <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2.5">
+                <span className="text-sm text-kp-gray font-medium">Total a pagar por esta entrega</span>
+                <span className="text-lg font-bold text-kp-white tabular-nums">{ars.format(totalAPagar)}</span>
               </div>
-              <button onClick={() => setCorregirOpen(false)} className="text-kp-gray hover:text-kp-white text-xl leading-none">✕</button>
-            </div>
+            )}
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-kp-border">
-                    <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-20">Pedido</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Recibido actual</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-28">Recibido corregido</th>
-                    <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Ajuste stock</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kp-border">
-                  {items.map(item => {
-                    const pedida   = parseFloat(item.cantidad) || 0;
-                    const actual   = parseFloat(item.cantidad_recibida) || 0;
-                    const nuevaRaw = correcciones[item.articulo_id];
-                    const nueva    = parseFloat(nuevaRaw);
-                    const delta    = !isNaN(nueva) ? nueva - actual : 0;
+            {error && (
+              <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+            )}
 
-                    return (
-                      <tr key={item.articulo_id} className="py-3">
-                        <td className="py-3 pr-3">
-                          <p className="font-medium text-kp-white">{item.articulo_nombre}</p>
-                          <p className="text-xs text-kp-gray font-mono">{item.articulo_codigo}</p>
-                        </td>
-                        <td className="py-3 text-right tabular-nums text-kp-gray">{pedida}</td>
-                        <td className="py-3 text-right tabular-nums text-kp-gray-lt">{actual}</td>
-                        <td className="py-3 pl-3 text-right">
-                          <input
-                            type="number" min="0" max={pedida} step="1"
-                            value={nuevaRaw ?? ''}
-                            onChange={e => setCorrecciones(prev => ({ ...prev, [item.articulo_id]: e.target.value }))}
-                            className="w-24 text-right bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5
-                              text-sm text-kp-white focus:outline-none focus:border-amber-500 tabular-nums"
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="py-3 text-right tabular-nums">
-                          {delta === 0
-                            ? <span className="text-kp-border text-xs">—</span>
-                            : <span className={`text-xs font-bold ${delta < 0 ? 'text-kp-red' : 'text-emerald-400'}`}>
-                                {delta > 0 ? '+' : ''}{delta}
-                              </span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
-              <p className="text-xs text-kp-gray bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
-                Un ajuste negativo revierte del stock las unidades cargadas de más. Si el stock físico quedó
-                distinto (mermas, ventas), reconcilialo aparte desde el artículo.
-              </p>
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-3">
-                <button onClick={() => setCorregirOpen(false)} disabled={loading}
-                  className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={confirmarCorreccion} disabled={loading || !hayCorreccion}
-                  className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {loading
-                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
-                    : <>Guardar corrección</>
-                  }
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal confirmación eliminar */}
-      {confirmEliminar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !loading && setConfirmEliminar(false)} />
-          <div className="relative w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-kp-red">Eliminar Pedido</h3>
-            <p className="text-sm text-kp-gray">Esta acción eliminará el pedido permanentemente. No se puede deshacer.</p>
-            {error && <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>}
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => setConfirmEliminar(false)} disabled={loading}
+            <div className="flex gap-3">
+              <button onClick={() => setRecibirOpen(false)} disabled={loading}
                 className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
                 Cancelar
               </button>
-              <button onClick={eliminar} disabled={loading}
-                className="flex-1 px-4 py-2.5 bg-kp-red hover:bg-kp-red/80 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors">
-                {loading ? 'Eliminando…' : 'Confirmar eliminación'}
+              <button onClick={confirmarRecepcion} disabled={loading || !hayAlgo}
+                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loading
+                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
+                  : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="20 6 9 17 4 12"/></svg>Confirmar recepción</>
+                }
               </button>
             </div>
           </div>
-        </div>
-      )}
+
+        </Modal>
+
+      {/* ── Modal: Corregir Recepción ── */}
+      <Modal
+          open={corregirOpen}
+          onClose={() => !loading && setCorregirOpen(false)}
+          title="Corregir Recepción"
+          size="lg"
+        >
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-kp-border">
+                  <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-20">Pedido</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Recibido actual</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-28">Recibido corregido</th>
+                  <th className="text-right pb-2 text-xs text-kp-gray uppercase tracking-widest w-24">Ajuste stock</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-kp-border">
+                {items.map(item => {
+                  const pedida   = parseFloat(item.cantidad) || 0;
+                  const actual   = parseFloat(item.cantidad_recibida) || 0;
+                  const nuevaRaw = correcciones[item.articulo_id];
+                  const nueva    = parseFloat(nuevaRaw);
+                  const delta    = !isNaN(nueva) ? nueva - actual : 0;
+
+                  return (
+                    <tr key={item.articulo_id} className="py-3">
+                      <td className="py-3 pr-3">
+                        <p className="font-medium text-kp-white">{item.articulo_nombre}</p>
+                        <p className="text-xs text-kp-gray font-mono">{item.articulo_codigo}</p>
+                      </td>
+                      <td className="py-3 text-right tabular-nums text-kp-gray">{pedida}</td>
+                      <td className="py-3 text-right tabular-nums text-kp-gray-lt">{actual}</td>
+                      <td className="py-3 pl-3 text-right">
+                        <input
+                          type="number" min="0" max={pedida} step="1"
+                          value={nuevaRaw ?? ''}
+                          onChange={e => setCorrecciones(prev => ({ ...prev, [item.articulo_id]: e.target.value }))}
+                          className="w-24 text-right bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5
+                            text-sm text-kp-white focus:outline-none focus:border-amber-500 tabular-nums"
+                          placeholder="0"
+                        />
+                      </td>
+                      <td className="py-3 text-right tabular-nums">
+                        {delta === 0
+                          ? <span className="text-kp-border text-xs">—</span>
+                          : <span className={`text-xs font-bold ${delta < 0 ? 'text-kp-red' : 'text-emerald-400'}`}>
+                              {delta > 0 ? '+' : ''}{delta}
+                            </span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">
+            <p className="text-xs text-kp-gray bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+              Un ajuste negativo revierte del stock las unidades cargadas de más. Si el stock físico quedó
+              distinto (mermas, ventas), reconcilialo aparte desde el artículo.
+            </p>
+
+            {error && (
+              <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setCorregirOpen(false)} disabled={loading}
+                className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
+                Cancelar
+              </button>
+              <button onClick={confirmarCorreccion} disabled={loading || !hayCorreccion}
+                className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loading
+                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Guardando…</>
+                  : <>Guardar corrección</>
+                }
+              </button>
+            </div>
+          </div>
+
+        </Modal>
+
+      {/* Modal confirmación eliminar */}
+      <Modal
+          open={confirmEliminar}
+          onClose={() => !loading && setConfirmEliminar(false)}
+          title="Eliminar Pedido"
+          size="sm"
+        >
+
+          <p className="text-sm text-kp-gray">Esta acción eliminará el pedido permanentemente. No se puede deshacer.</p>
+          {error && <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setConfirmEliminar(false)} disabled={loading}
+              className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white transition-colors">
+              Cancelar
+            </button>
+            <button onClick={eliminar} disabled={loading}
+              className="flex-1 px-4 py-2.5 bg-kp-red hover:bg-kp-red/80 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors">
+              {loading ? 'Eliminando…' : 'Confirmar eliminación'}
+            </button>
+          </div>
+
+        </Modal>
     </>
   );
 }

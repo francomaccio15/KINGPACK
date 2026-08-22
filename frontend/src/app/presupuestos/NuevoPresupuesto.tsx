@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -403,556 +404,513 @@ export default function NuevoPresupuesto({
       </button>
 
       {/* ── Full-screen modal ──────────────────────────────────────────────── */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Nuevo Presupuesto"
-        >
-          <div className="max-w-7xl w-full mx-4 h-[90vh] bg-kp-surface border border-kp-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <Modal
+        open={open}
+        onClose={cerrar}
+        title="Nuevo Presupuesto"
+        size="full"
+      >
+        {/* ── Body: two panels ───────────────────────────────────────── */}
+        <div className="flex flex-1 overflow-hidden">
 
-            {/* ── Header ─────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-1 h-6 bg-kp-red rounded-full block shrink-0" />
-                  <h2 className="font-bold text-base uppercase tracking-wide text-kp-white">
-                    Nuevo Presupuesto
-                  </h2>
-                </div>
+          {/* ══ LEFT PANEL — Artículos + Carrito ══════════════════════ */}
+          <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4">
 
-                {sucursales.length > 0 ? (
-                  <select
-                    value={sucursalId}
-                    onChange={e => setSucursalId(e.target.value)}
-                    className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-xs text-kp-gray-lt
-                      focus:outline-none focus:border-kp-red transition-colors"
-                    aria-label="Sucursal"
-                  >
-                    {sucursales.map(s => (
-                      <option key={s.id} value={s.id}>{s.nombre}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-xs text-kp-gray bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5">
-                    Sin sucursales
+            {/* Article search */}
+            <div>
+              <label className="block text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+                Buscar artículo
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={artQuery}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setArtQuery(e.target.value)}
+                  placeholder="Nombre o código de producto…"
+                  className="bg-kp-surface2 border border-kp-border focus:border-kp-red rounded-lg px-3 py-2 text-sm w-full text-kp-white placeholder:text-kp-gray outline-none transition-colors pr-8"
+                  autoComplete="off"
+                />
+                {artLoading && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Spinner />
                   </span>
                 )}
               </div>
-
-              <button
-                onClick={cerrar}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-kp-gray
-                  hover:text-kp-white hover:bg-kp-surface2 transition-colors text-lg leading-none"
-                aria-label="Cerrar"
-              >
-                ✕
-              </button>
             </div>
 
-            {/* ── Body: two panels ───────────────────────────────────────── */}
-            <div className="flex flex-1 overflow-hidden">
+            {/* Search results */}
+            {artResults.length > 0 && (
+              <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 overflow-y-auto">
+                <div className="px-3 py-1.5 bg-kp-surface2 border-b border-kp-border">
+                  <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                    Resultados ({artResults.length})
+                  </span>
+                </div>
+                {artResults.map(art => {
+                  const displayPrice = art.precio_lista ?? art.precio_madre;
+                  const sinStock   = art.stock_total === 0;
+                  const stockBadge = sinStock
+                    ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/20',  label: 'Sin stock' }
+                    : art.stock_bajo
+                      ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` }
+                      : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` };
+                  return (
+                    <div
+                      key={art.id}
+                      className="flex items-center gap-3 px-3 py-2.5 border-b border-kp-border last:border-0
+                        hover:bg-kp-surface2 transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-kp-gray">{art.codigo}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
+                            {stockBadge.label}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold text-kp-white tabular-nums">
+                          {ars.format(displayPrice)}
+                        </p>
+                        {listaId && art.precio_lista !== art.precio_madre && (
+                          <p className="text-[10px] text-kp-gray line-through tabular-nums">
+                            {ars.format(art.precio_madre)}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => addToCart(art)}
+                        className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg
+                          border border-kp-red text-kp-red hover:bg-kp-red hover:text-white
+                          transition-colors"
+                      >
+                        + Agregar
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-              {/* ══ LEFT PANEL — Artículos + Carrito ══════════════════════ */}
-              <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4">
+            {artQuery.trim() && !artLoading && artResults.length === 0 && (
+              <p className="text-xs text-kp-gray text-center py-3">
+                Sin resultados para &ldquo;{artQuery}&rdquo;
+              </p>
+            )}
 
-                {/* Article search */}
-                <div>
-                  <label className="block text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
-                    Buscar artículo
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={artQuery}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setArtQuery(e.target.value)}
-                      placeholder="Nombre o código de producto…"
-                      className="bg-kp-surface2 border border-kp-border focus:border-kp-red rounded-lg px-3 py-2 text-sm w-full text-kp-white placeholder:text-kp-gray outline-none transition-colors pr-8"
-                      autoComplete="off"
-                    />
-                    {artLoading && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Spinner />
-                      </span>
-                    )}
+            {/* Cart section header */}
+            <div className="flex items-center justify-between shrink-0">
+              <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                Carrito
+              </span>
+              {cart.length > 0 && (
+                <span className="text-[10px] text-kp-gray">
+                  {cart.reduce((acc, i) => acc + i.cantidad, 0)} unidades
+                </span>
+              )}
+            </div>
+
+            {/* Cart items */}
+            <div className="flex-1 overflow-y-auto -mr-1 pr-1">
+              {cartEmpty ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3 py-12">
+                  <div className="w-14 h-14 rounded-2xl bg-kp-surface2 border border-kp-border
+                    flex items-center justify-center text-2xl text-kp-gray">
+                    🛒
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-kp-gray">Carrito vacío</p>
+                    <p className="text-xs text-kp-gray/60 mt-0.5">
+                      Buscá artículos para agregar
+                    </p>
                   </div>
                 </div>
-
-                {/* Search results */}
-                {artResults.length > 0 && (
-                  <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 overflow-y-auto">
-                    <div className="px-3 py-1.5 bg-kp-surface2 border-b border-kp-border">
-                      <span className="text-[10px] text-kp-gray uppercase tracking-widest">
-                        Resultados ({artResults.length})
-                      </span>
-                    </div>
-                    {artResults.map(art => {
-                      const displayPrice = art.precio_lista ?? art.precio_madre;
-                      const sinStock   = art.stock_total === 0;
-                      const stockBadge = sinStock
-                        ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/20',  label: 'Sin stock' }
-                        : art.stock_bajo
-                          ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` }
-                          : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` };
-                      return (
-                        <div
-                          key={art.id}
-                          className="flex items-center gap-3 px-3 py-2.5 border-b border-kp-border last:border-0
-                            hover:bg-kp-surface2 transition-colors group"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-kp-gray">{art.codigo}</span>
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
-                                {stockBadge.label}
+              ) : (
+                <div className="space-y-0.5">
+                  {cart.map((item, idx) => {
+                    const hasDiscount = item.descuento_pct > 0;
+                    const subtotalLine = item.precio_unitario_final * item.cantidad;
+                    return (
+                      <div
+                        key={item.articulo_id}
+                        className={`relative flex items-center gap-2 py-2.5 ${
+                          idx < cart.length - 1 ? 'border-b border-kp-border' : ''
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-kp-white truncate leading-tight">
+                            {item.nombre}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-kp-gray">{item.codigo}</span>
+                            {hasDiscount && (
+                              <>
+                                <span className="text-[10px] text-kp-gray line-through tabular-nums">
+                                  {ars.format(item.precio_lista)}
+                                </span>
+                                <span className="text-[10px] font-semibold text-kp-red bg-kp-red/10
+                                  border border-kp-red/20 rounded px-1 py-0.5 leading-none">
+                                  -{item.descuento_pct.toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] text-kp-white tabular-nums">
+                                  {ars.format(item.precio_unitario_final)}
+                                </span>
+                              </>
+                            )}
+                            {!hasDiscount && (
+                              <span className="text-[10px] text-kp-gray tabular-nums">
+                                {ars.format(item.precio_unitario_final)} c/u
                               </span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-semibold text-kp-white tabular-nums">
-                              {ars.format(displayPrice)}
-                            </p>
-                            {listaId && art.precio_lista !== art.precio_madre && (
-                              <p className="text-[10px] text-kp-gray line-through tabular-nums">
-                                {ars.format(art.precio_madre)}
-                              </p>
                             )}
                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
-                            onClick={() => addToCart(art)}
-                            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg
-                              border border-kp-red text-kp-red hover:bg-kp-red hover:text-white
+                            onClick={() => updateQty(item.articulo_id, -1)}
+                            className="w-7 h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
+                              hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
                               transition-colors"
+                            aria-label="Reducir cantidad"
                           >
-                            + Agregar
+                            −
+                          </button>
+                          <NumericInput
+                            decimals={0}
+                            value={item.cantidad === 0 ? '' : item.cantidad}
+                            onChange={e => setQty(item.articulo_id, e.target.value)}
+                            onBlur={() => commitQty(item.articulo_id)}
+                            className={[
+                              'w-14 text-center text-sm font-semibold tabular-nums',
+                              'bg-kp-surface2 border-y border-kp-border outline-none py-1',
+                              'focus:border-kp-red focus:bg-kp-surface transition-colors',
+                              item.stock_disponible > 0 && item.cantidad > item.stock_disponible
+                                ? 'text-amber-400'
+                                : 'text-kp-white',
+                            ].join(' ')}
+                            aria-label="Cantidad"
+                          />
+                          <button
+                            onClick={() => updateQty(item.articulo_id, 1)}
+                            className="w-7 h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
+                              hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
+                              transition-colors"
+                            aria-label="Aumentar cantidad"
+                          >
+                            +
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
+                          <span className="text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
+                            Stock: {item.stock_disponible}
+                          </span>
+                        )}
 
-                {artQuery.trim() && !artLoading && artResults.length === 0 && (
-                  <p className="text-xs text-kp-gray text-center py-3">
-                    Sin resultados para &ldquo;{artQuery}&rdquo;
-                  </p>
-                )}
+                        <div className="w-24 text-right shrink-0">
+                          <span className="text-sm font-semibold text-kp-white tabular-nums">
+                            {ars.format(subtotalLine)}
+                          </span>
+                        </div>
 
-                {/* Cart section header */}
-                <div className="flex items-center justify-between shrink-0">
-                  <span className="text-[10px] text-kp-gray uppercase tracking-widest">
-                    Carrito
-                  </span>
-                  {cart.length > 0 && (
-                    <span className="text-[10px] text-kp-gray">
-                      {cart.reduce((acc, i) => acc + i.cantidad, 0)} unidades
-                    </span>
-                  )}
-                </div>
-
-                {/* Cart items */}
-                <div className="flex-1 overflow-y-auto -mr-1 pr-1">
-                  {cartEmpty ? (
-                    <div className="h-full flex flex-col items-center justify-center gap-3 py-12">
-                      <div className="w-14 h-14 rounded-2xl bg-kp-surface2 border border-kp-border
-                        flex items-center justify-center text-2xl text-kp-gray">
-                        🛒
+                        <button
+                          onClick={() => removeFromCart(item.articulo_id)}
+                          className="w-7 h-7 flex items-center justify-center rounded text-kp-gray
+                            hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+                          aria-label={`Eliminar ${item.nombre}`}
+                          title="Quitar artículo"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            <path d="M10 11v6"/><path d="M14 11v6"/>
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
+                        </button>
                       </div>
-                      <div className="text-center">
-                        <p className="text-sm text-kp-gray">Carrito vacío</p>
-                        <p className="text-xs text-kp-gray/60 mt-0.5">
-                          Buscá artículos para agregar
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {cart.map((item, idx) => {
-                        const hasDiscount = item.descuento_pct > 0;
-                        const subtotalLine = item.precio_unitario_final * item.cantidad;
-                        return (
-                          <div
-                            key={item.articulo_id}
-                            className={`relative flex items-center gap-2 py-2.5 ${
-                              idx < cart.length - 1 ? 'border-b border-kp-border' : ''
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-kp-white truncate leading-tight">
-                                {item.nombre}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-kp-gray">{item.codigo}</span>
-                                {hasDiscount && (
-                                  <>
-                                    <span className="text-[10px] text-kp-gray line-through tabular-nums">
-                                      {ars.format(item.precio_lista)}
-                                    </span>
-                                    <span className="text-[10px] font-semibold text-kp-red bg-kp-red/10
-                                      border border-kp-red/20 rounded px-1 py-0.5 leading-none">
-                                      -{item.descuento_pct.toFixed(1)}%
-                                    </span>
-                                    <span className="text-[10px] text-kp-white tabular-nums">
-                                      {ars.format(item.precio_unitario_final)}
-                                    </span>
-                                  </>
-                                )}
-                                {!hasDiscount && (
-                                  <span className="text-[10px] text-kp-gray tabular-nums">
-                                    {ars.format(item.precio_unitario_final)} c/u
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <button
-                                onClick={() => updateQty(item.articulo_id, -1)}
-                                className="w-7 h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
-                                  transition-colors"
-                                aria-label="Reducir cantidad"
-                              >
-                                −
-                              </button>
-                              <NumericInput
-                                decimals={0}
-                                value={item.cantidad === 0 ? '' : item.cantidad}
-                                onChange={e => setQty(item.articulo_id, e.target.value)}
-                                onBlur={() => commitQty(item.articulo_id)}
-                                className={[
-                                  'w-14 text-center text-sm font-semibold tabular-nums',
-                                  'bg-kp-surface2 border-y border-kp-border outline-none py-1',
-                                  'focus:border-kp-red focus:bg-kp-surface transition-colors',
-                                  item.stock_disponible > 0 && item.cantidad > item.stock_disponible
-                                    ? 'text-amber-400'
-                                    : 'text-kp-white',
-                                ].join(' ')}
-                                aria-label="Cantidad"
-                              />
-                              <button
-                                onClick={() => updateQty(item.articulo_id, 1)}
-                                className="w-7 h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
-                                  transition-colors"
-                                aria-label="Aumentar cantidad"
-                              >
-                                +
-                              </button>
-                            </div>
-                            {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
-                              <span className="text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
-                                Stock: {item.stock_disponible}
-                              </span>
-                            )}
-
-                            <div className="w-24 text-right shrink-0">
-                              <span className="text-sm font-semibold text-kp-white tabular-nums">
-                                {ars.format(subtotalLine)}
-                              </span>
-                            </div>
-
-                            <button
-                              onClick={() => removeFromCart(item.articulo_id)}
-                              className="w-7 h-7 flex items-center justify-center rounded text-kp-gray
-                                hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
-                              aria-label={`Eliminar ${item.nombre}`}
-                              title="Quitar artículo"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                <path d="M10 11v6"/><path d="M14 11v6"/>
-                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                              </svg>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* ══ RIGHT PANEL — Resumen ════════════════════════════════ */}
+          <div className="w-80 shrink-0 border-l border-kp-border bg-kp-surface2 flex flex-col overflow-hidden">
+
+            {selectedClient && (
+              <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-kp-surface border-b border-kp-border">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-amber-400 flex-shrink-0">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                <span className="text-xs font-semibold text-amber-400 truncate">{selectedClient.razon_social}</span>
+                {descuentoCliente > 0 && (
+                  <span className="ml-auto text-xs text-kp-red font-bold flex-shrink-0">−{descuentoCliente}%</span>
+                )}
               </div>
+            )}
 
-              {/* ══ RIGHT PANEL — Resumen ════════════════════════════════ */}
-              <div className="w-80 shrink-0 border-l border-kp-border bg-kp-surface2 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-                {selectedClient && (
-                  <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-kp-surface border-b border-kp-border">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 text-amber-400 flex-shrink-0">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    <span className="text-xs font-semibold text-amber-400 truncate">{selectedClient.razon_social}</span>
-                    {descuentoCliente > 0 && (
-                      <span className="ml-auto text-xs text-kp-red font-bold flex-shrink-0">−{descuentoCliente}%</span>
+              {/* ── Cliente ─────────────────────────────────────────── */}
+              <section>
+                <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
+                  Cliente
+                </p>
+
+                <div className="flex rounded-lg border border-kp-border overflow-hidden mb-3">
+                  {(['publico', 'especifico'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        setClientMode(mode);
+                        if (mode === 'publico') {
+                          setSelectedClient(null);
+                          setClientQuery('');
+                          setClientResults([]);
+                          setClientDropOpen(false);
+                        }
+                      }}
+                      className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${
+                        clientMode === mode
+                          ? 'bg-kp-red text-white'
+                          : 'text-kp-gray hover:text-kp-white hover:bg-kp-surface'
+                      }`}
+                    >
+                      {mode === 'publico' ? 'Público General' : 'Cliente Específico'}
+                    </button>
+                  ))}
+                </div>
+
+                {clientMode === 'especifico' && (
+                  <div className="relative" ref={clientDropRef}>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={clientQuery}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setClientQuery(e.target.value);
+                          setSelectedClient(null);
+                        }}
+                        placeholder="Buscar cliente…"
+                        className="bg-kp-surface border border-kp-border focus:border-kp-red rounded-lg
+                          px-3 py-2 text-sm w-full text-kp-white placeholder:text-kp-gray
+                          outline-none transition-colors pr-8"
+                        autoComplete="off"
+                      />
+                      {clientLoading && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Spinner />
+                        </span>
+                      )}
+                    </div>
+
+                    {clientDropOpen && clientResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 z-10
+                        bg-kp-surface border border-kp-border rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                        {clientResults.map(cli => (
+                          <button
+                            key={cli.id}
+                            onClick={() => {
+                              setSelectedClient(cli);
+                              setClientQuery(cli.razon_social);
+                              setClientDropOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-kp-surface2 transition-colors border-b border-kp-border last:border-0"
+                          >
+                            <p className="text-sm text-kp-white font-medium truncate">
+                              {cli.razon_social}
+                            </p>
+                            {cli.lista_precio && (
+                              <p className="text-[10px] text-kp-gray mt-0.5">
+                                Lista: {cli.lista_precio}
+                                {cli.descuento_adicional > 0 && ` · Dto. ${cli.descuento_adicional}%`}
+                              </p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {clientQuery.trim() && !clientLoading && clientResults.length === 0 && (
+                      <p className="text-xs text-kp-gray mt-1.5 px-1">
+                        Sin resultados
+                      </p>
+                    )}
+
+                    {selectedClient && (
+                      <div className="mt-2 rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5">
+                        <p className="text-xs font-semibold text-kp-white truncate">
+                          {selectedClient.razon_social}
+                        </p>
+                        {selectedClient.lista_precio && (
+                          <p className="text-[10px] text-kp-gray mt-0.5">
+                            Lista: {selectedClient.lista_precio}
+                          </p>
+                        )}
+                        {selectedClient.descuento_adicional > 0 && (
+                          <p className="text-[10px] text-kp-red font-semibold mt-0.5">
+                            Dto. adicional: {selectedClient.descuento_adicional}%
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
+              </section>
 
-                <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* ── Lista de precios ────────────────────────────────── */}
+              <section>
+                <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                  Lista de precios
+                </p>
+                <select
+                  value={listaId}
+                  onChange={e => setListaId(e.target.value)}
+                  className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                    focus:outline-none focus:border-kp-red transition-colors"
+                >
+                  <option value="">— Precio madre (sin lista)</option>
+                  {listas.map(l => (
+                    <option key={l.id} value={l.id}>
+                      {l.nombre}{l.descuento_lista > 0 ? ` (${l.descuento_lista}% dto.)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </section>
 
-                  {/* ── Cliente ─────────────────────────────────────────── */}
-                  <section>
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
-                      Cliente
-                    </p>
+              {/* ── Discount breakdown ──────────────────────────────── */}
+              {(descuentoLista > 0 || descuentoCliente > 0) && (
+                <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
+                  <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">
+                    Descuentos aplicados
+                  </p>
+                  {descuentoLista > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-kp-gray">Lista de precios</span>
+                      <span className="text-xs text-kp-red font-semibold">−{descuentoLista}%</span>
+                    </div>
+                  )}
+                  {descuentoCliente > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-kp-gray">Dto. adicional</span>
+                      <span className="text-xs text-kp-red font-semibold">−{descuentoCliente}%</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1 border-t border-kp-border">
+                    <span className="text-xs font-semibold text-kp-white">Total descuento</span>
+                    <span className="text-xs text-kp-red font-bold">
+                      −{calcCombinedDiscount(descuentoLista, descuentoCliente).toFixed(2)}%
+                    </span>
+                  </div>
+                </section>
+              )}
 
-                    <div className="flex rounded-lg border border-kp-border overflow-hidden mb-3">
-                      {(['publico', 'especifico'] as const).map(mode => (
+              {/* ── Totals ─────────────────────────────────────────────── */}
+              <section className="rounded-xl bg-kp-surface border border-kp-border overflow-hidden">
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-kp-gray">Subtotal</span>
+                    <span className="text-xs text-kp-gray-lt tabular-nums font-medium">
+                      {ars.format(subtotalBruto)}
+                    </span>
+                  </div>
+                  {descuentoTotal > 0.001 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-kp-red">Descuento</span>
+                      <span className="text-xs text-kp-red tabular-nums font-semibold">
+                        −{ars.format(descuentoTotal)}
+                      </span>
+                    </div>
+                  )}
+                  {descExtraMonto > 0.001 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-kp-red">Descuento extra</span>
+                      <span className="text-xs text-kp-red tabular-nums font-semibold">
+                        −{ars.format(descExtraMonto)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between px-4 py-3.5 bg-kp-surface2 border-t border-kp-border">
+                  <span className="text-sm font-bold uppercase tracking-wide text-kp-white">
+                    Total
+                  </span>
+                  <span className="text-xl font-bold text-kp-white tabular-nums">
+                    {ars.format(totalConExtra)}
+                  </span>
+                </div>
+
+                {/* ── Descuento extra manual (sobre el total) ─────────── */}
+                <div className="px-4 py-3 border-t border-kp-border space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                      Descuento extra
+                    </span>
+                    <div className="flex rounded-md border border-kp-border overflow-hidden">
+                      {(['pct', 'monto'] as const).map(m => (
                         <button
-                          key={mode}
-                          onClick={() => {
-                            setClientMode(mode);
-                            if (mode === 'publico') {
-                              setSelectedClient(null);
-                              setClientQuery('');
-                              setClientResults([]);
-                              setClientDropOpen(false);
-                            }
-                          }}
-                          className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${
-                            clientMode === mode
+                          key={m}
+                          type="button"
+                          onClick={() => setDescExtraModo(m)}
+                          className={`px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+                            descExtraModo === m
                               ? 'bg-kp-red text-white'
-                              : 'text-kp-gray hover:text-kp-white hover:bg-kp-surface'
+                              : 'text-kp-gray hover:text-kp-white'
                           }`}
+                          aria-label={m === 'pct' ? 'Descuento en porcentaje' : 'Descuento en pesos'}
                         >
-                          {mode === 'publico' ? 'Público General' : 'Cliente Específico'}
+                          {m === 'pct' ? '%' : '$'}
                         </button>
                       ))}
                     </div>
-
-                    {clientMode === 'especifico' && (
-                      <div className="relative" ref={clientDropRef}>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={clientQuery}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              setClientQuery(e.target.value);
-                              setSelectedClient(null);
-                            }}
-                            placeholder="Buscar cliente…"
-                            className="bg-kp-surface border border-kp-border focus:border-kp-red rounded-lg
-                              px-3 py-2 text-sm w-full text-kp-white placeholder:text-kp-gray
-                              outline-none transition-colors pr-8"
-                            autoComplete="off"
-                          />
-                          {clientLoading && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <Spinner />
-                            </span>
-                          )}
-                        </div>
-
-                        {clientDropOpen && clientResults.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 mt-1 z-10
-                            bg-kp-surface border border-kp-border rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
-                            {clientResults.map(cli => (
-                              <button
-                                key={cli.id}
-                                onClick={() => {
-                                  setSelectedClient(cli);
-                                  setClientQuery(cli.razon_social);
-                                  setClientDropOpen(false);
-                                }}
-                                className="w-full text-left px-3 py-2.5 hover:bg-kp-surface2 transition-colors border-b border-kp-border last:border-0"
-                              >
-                                <p className="text-sm text-kp-white font-medium truncate">
-                                  {cli.razon_social}
-                                </p>
-                                {cli.lista_precio && (
-                                  <p className="text-[10px] text-kp-gray mt-0.5">
-                                    Lista: {cli.lista_precio}
-                                    {cli.descuento_adicional > 0 && ` · Dto. ${cli.descuento_adicional}%`}
-                                  </p>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {clientQuery.trim() && !clientLoading && clientResults.length === 0 && (
-                          <p className="text-xs text-kp-gray mt-1.5 px-1">
-                            Sin resultados
-                          </p>
-                        )}
-
-                        {selectedClient && (
-                          <div className="mt-2 rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5">
-                            <p className="text-xs font-semibold text-kp-white truncate">
-                              {selectedClient.razon_social}
-                            </p>
-                            {selectedClient.lista_precio && (
-                              <p className="text-[10px] text-kp-gray mt-0.5">
-                                Lista: {selectedClient.lista_precio}
-                              </p>
-                            )}
-                            {selectedClient.descuento_adicional > 0 && (
-                              <p className="text-[10px] text-kp-red font-semibold mt-0.5">
-                                Dto. adicional: {selectedClient.descuento_adicional}%
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </section>
-
-                  {/* ── Lista de precios ────────────────────────────────── */}
-                  <section>
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
-                      Lista de precios
-                    </p>
-                    <select
-                      value={listaId}
-                      onChange={e => setListaId(e.target.value)}
-                      className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                        focus:outline-none focus:border-kp-red transition-colors"
-                    >
-                      <option value="">— Precio madre (sin lista)</option>
-                      {listas.map(l => (
-                        <option key={l.id} value={l.id}>
-                          {l.nombre}{l.descuento_lista > 0 ? ` (${l.descuento_lista}% dto.)` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </section>
-
-                  {/* ── Discount breakdown ──────────────────────────────── */}
-                  {(descuentoLista > 0 || descuentoCliente > 0) && (
-                    <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">
-                        Descuentos aplicados
-                      </p>
-                      {descuentoLista > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-gray">Lista de precios</span>
-                          <span className="text-xs text-kp-red font-semibold">−{descuentoLista}%</span>
-                        </div>
-                      )}
-                      {descuentoCliente > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-gray">Dto. adicional</span>
-                          <span className="text-xs text-kp-red font-semibold">−{descuentoCliente}%</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between pt-1 border-t border-kp-border">
-                        <span className="text-xs font-semibold text-kp-white">Total descuento</span>
-                        <span className="text-xs text-kp-red font-bold">
-                          −{calcCombinedDiscount(descuentoLista, descuentoCliente).toFixed(2)}%
-                        </span>
-                      </div>
-                    </section>
-                  )}
-
-                  {/* ── Totals ─────────────────────────────────────────────── */}
-                  <section className="rounded-xl bg-kp-surface border border-kp-border overflow-hidden">
-                    <div className="px-4 py-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-kp-gray">Subtotal</span>
-                        <span className="text-xs text-kp-gray-lt tabular-nums font-medium">
-                          {ars.format(subtotalBruto)}
-                        </span>
-                      </div>
-                      {descuentoTotal > 0.001 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-red">Descuento</span>
-                          <span className="text-xs text-kp-red tabular-nums font-semibold">
-                            −{ars.format(descuentoTotal)}
-                          </span>
-                        </div>
-                      )}
-                      {descExtraMonto > 0.001 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-kp-red">Descuento extra</span>
-                          <span className="text-xs text-kp-red tabular-nums font-semibold">
-                            −{ars.format(descExtraMonto)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3.5 bg-kp-surface2 border-t border-kp-border">
-                      <span className="text-sm font-bold uppercase tracking-wide text-kp-white">
-                        Total
-                      </span>
-                      <span className="text-xl font-bold text-kp-white tabular-nums">
-                        {ars.format(totalConExtra)}
-                      </span>
-                    </div>
-
-                    {/* ── Descuento extra manual (sobre el total) ─────────── */}
-                    <div className="px-4 py-3 border-t border-kp-border space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-kp-gray uppercase tracking-widest">
-                          Descuento extra
-                        </span>
-                        <div className="flex rounded-md border border-kp-border overflow-hidden">
-                          {(['pct', 'monto'] as const).map(m => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => setDescExtraModo(m)}
-                              className={`px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
-                                descExtraModo === m
-                                  ? 'bg-kp-red text-white'
-                                  : 'text-kp-gray hover:text-kp-white'
-                              }`}
-                              aria-label={m === 'pct' ? 'Descuento en porcentaje' : 'Descuento en pesos'}
-                            >
-                              {m === 'pct' ? '%' : '$'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="relative">
-                        <NumericInput
-                          decimals={2}
-                          value={descExtraStr}
-                          onChange={e => setDescExtraStr(e.target.value)}
-                          placeholder={descExtraModo === 'pct' ? '0' : '0,00'}
-                          className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 pr-8 text-sm
-                            text-kp-white tabular-nums placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                          aria-label="Descuento extra"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-kp-gray">
-                          {descExtraModo === 'pct' ? '%' : '$'}
-                        </span>
-                      </div>
-                    </div>
-                  </section>
+                  </div>
+                  <div className="relative">
+                    <NumericInput
+                      decimals={2}
+                      value={descExtraStr}
+                      onChange={e => setDescExtraStr(e.target.value)}
+                      placeholder={descExtraModo === 'pct' ? '0' : '0,00'}
+                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 pr-8 text-sm
+                        text-kp-white tabular-nums placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                      aria-label="Descuento extra"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-kp-gray">
+                      {descExtraModo === 'pct' ? '%' : '$'}
+                    </span>
+                  </div>
                 </div>
+              </section>
+            </div>
 
-                {/* ── Action button ──────────────────────────────────────── */}
-                <div className="p-5 space-y-2.5 border-t border-kp-border shrink-0">
-                  {saveError && (
-                    <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/20 rounded-lg px-3 py-2">
-                      {saveError}
-                    </p>
-                  )}
+            {/* ── Action button ──────────────────────────────────────── */}
+            <div className="p-5 space-y-2.5 border-t border-kp-border shrink-0">
+              {saveError && (
+                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/20 rounded-lg px-3 py-2">
+                  {saveError}
+                </p>
+              )}
 
-                  <button
-                    onClick={handleSave}
-                    disabled={cartEmpty || saving}
-                    className="w-full bg-kp-red hover:bg-kp-red-dark text-white font-semibold px-4 py-2.5 rounded-lg
-                      transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed
-                      shadow-lg shadow-kp-red/20"
-                  >
-                    {saving ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Spinner /> Guardando…
-                      </span>
-                    ) : (
-                      'Guardar Presupuesto'
-                    )}
-                  </button>
-                </div>
-              </div>
+              <button
+                onClick={handleSave}
+                disabled={cartEmpty || saving}
+                className="w-full bg-kp-red hover:bg-kp-red-dark text-white font-semibold px-4 py-2.5 rounded-lg
+                  transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed
+                  shadow-lg shadow-kp-red/20"
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Spinner /> Guardando…
+                  </span>
+                ) : (
+                  'Guardar Presupuesto'
+                )}
+              </button>
             </div>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </>
   );
 }

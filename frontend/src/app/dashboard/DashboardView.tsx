@@ -141,7 +141,7 @@ function TrendBadge({ ahora, antes, label }: { ahora: number; antes: number; lab
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <span className={[
-        'inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full',
+        'inline-flex items-center gap-0.5 text-2xs md:text-[11px] font-bold px-2 py-0.5 rounded-full',
         up ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400',
       ].join(' ')}>
         {up ? '↑' : '↓'} {Math.abs(pct).toFixed(0)}%
@@ -173,8 +173,8 @@ function KpiCard({
         )}
       </div>
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">{label}</p>
-        <p className={`text-2xl font-bold leading-none ${negative ? 'text-rose-400' : 'text-kp-white'}`}>{value}</p>
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">{label}</p>
+        <p className={`text-xl md:text-2xl font-bold leading-none ${negative ? 'text-rose-400' : 'text-kp-white'}`}>{value}</p>
         {sub && <p className="text-xs text-kp-gray mt-1.5">{sub}</p>}
       </div>
     </div>
@@ -201,27 +201,27 @@ function QuickAction({ href, label, sub, iconBg, iconColor, icon }: {
 function VencimientoBadge({ dias }: { dias: number }) {
   if (dias < 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 whitespace-nowrap">
         Vencido {Math.abs(dias)}d
       </span>
     );
   }
   if (dias === 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 whitespace-nowrap">
         Vence hoy
       </span>
     );
   }
   if (dias <= 7) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 whitespace-nowrap">
         {dias}d
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 whitespace-nowrap">
+    <span className="inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 whitespace-nowrap">
       {dias}d
     </span>
   );
@@ -247,11 +247,11 @@ function ChequesPanel({ titulo, cheques, acento }: {
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${acentoClasses.dot}`} />
           <p className={`text-xs font-bold uppercase tracking-widest ${acentoClasses.label}`}>{titulo}</p>
-          <span className="text-[10px] font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded px-1.5 py-0.5">
+          <span className="text-2xs md:text-[10px] font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded px-1.5 py-0.5">
             {cheques.length}
           </span>
           {vencidos > 0 && (
-            <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 py-0.5">
+            <span className="text-2xs md:text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 py-0.5">
               {vencidos} vencido{vencidos !== 1 ? 's' : ''}
             </span>
           )}
@@ -270,7 +270,7 @@ function ChequesPanel({ titulo, cheques, acento }: {
             {/* Banco + número */}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-kp-white truncate">{c.referencia}</p>
-              <p className="text-[10px] text-kp-gray mt-0.5 truncate">
+              <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5 truncate">
                 {c.banco} · #{c.numero_cheque}
               </p>
             </div>
@@ -278,7 +278,7 @@ function ChequesPanel({ titulo, cheques, acento }: {
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
               <span className="text-xs font-bold text-kp-white">{fmt(c.importe)}</span>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-kp-gray whitespace-nowrap">
+                <span className="text-2xs md:text-[10px] text-kp-gray whitespace-nowrap">
                   {new Date(c.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
                 </span>
                 <VencimientoBadge dias={c.dias} />
@@ -335,7 +335,7 @@ function CobrosDelDia({
     <section className="space-y-4">
       {/* Encabezado de sección */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
           Cobros del día · por método de pago
           <span className="flex-1 h-px bg-kp-border inline-block" />
@@ -357,7 +357,7 @@ function CobrosDelDia({
             const s   = medioStyle(m.nombre);
             const pct = totalMonto > 0 ? (m.monto / totalMonto) * 100 : 0;
             return (
-              <div key={m.nombre} className="rounded-xl border border-kp-border bg-kp-surface p-4 flex flex-col gap-3">
+              <div key={m.nombre} className="rounded-xl border border-kp-border bg-kp-surface p-3 md:p-4 flex flex-col gap-2.5 md:gap-3">
                 {/* Icono + nombre */}
                 <div className="flex items-center gap-2.5">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${s.bg}`}>
@@ -367,8 +367,8 @@ function CobrosDelDia({
                 </div>
                 {/* Monto */}
                 <div>
-                  <p className={`text-lg font-bold leading-none ${s.color}`}>{fmt(m.monto)}</p>
-                  <p className="text-[10px] text-kp-gray mt-1">{m.cantidad} op. · {pct.toFixed(1)}%</p>
+                  <p className={`text-base md:text-lg font-bold leading-none ${s.color}`}>{fmt(m.monto)}</p>
+                  <p className="text-2xs md:text-[10px] text-kp-gray mt-1">{m.cantidad} op. · {pct.toFixed(1)}%</p>
                 </div>
                 {/* Barra proporcional */}
                 <div className="h-1 rounded-full bg-kp-border/50 overflow-hidden">
@@ -403,7 +403,7 @@ function EstadoCuentasPanel({
     <section className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
           Estado de cuentas
           <span className="flex-1 h-px bg-kp-border inline-block" />
@@ -422,12 +422,12 @@ function EstadoCuentasPanel({
                 <span className="text-emerald-400"><IcoVault /></span>
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
+                <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
                   Caja fuerte · {c.sucursal_nombre}
                 </p>
-                <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
+                <p className="text-xl md:text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
                 {c.updated_at && (
-                  <p className="text-[10px] text-kp-gray mt-1.5">
+                  <p className="text-2xs md:text-[10px] text-kp-gray mt-1.5">
                     Últ. movimiento: {new Date(c.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
                 )}
@@ -450,8 +450,8 @@ function EstadoCuentasPanel({
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-kp-white leading-tight truncate">{b.nombre}</p>
-                <p className="text-lg font-bold leading-none text-sky-400 tabular-nums mt-1">{fmt(b.saldo)}</p>
-                {b.banco && <p className="text-[10px] text-kp-gray mt-1 truncate">{b.banco}</p>}
+                <p className="text-base md:text-lg font-bold leading-none text-sky-400 tabular-nums mt-1">{fmt(b.saldo)}</p>
+                {b.banco && <p className="text-2xs md:text-[10px] text-kp-gray mt-1 truncate">{b.banco}</p>}
               </div>
             </div>
           ))}
@@ -477,11 +477,11 @@ function MovimientosCajaFuertePanel({ movimientos }: { movimientos: MovimientoCa
 
   return (
     <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray">
+      <div className="flex items-center justify-between px-2.5 md:px-4 py-2.5 border-b border-kp-border">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray">
           Movimientos de caja fuerte
         </p>
-        <span className="text-[10px] text-kp-gray">últimos {movimientos.length || ''}</span>
+        <span className="text-2xs md:text-[10px] text-kp-gray">últimos {movimientos.length || ''}</span>
       </div>
 
       {movimientos.length === 0 ? (
@@ -493,7 +493,7 @@ function MovimientosCajaFuertePanel({ movimientos }: { movimientos: MovimientoCa
           {movimientos.map(m => {
             const esIngreso = m.tipo === 'ingreso';
             return (
-              <li key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+              <li key={m.id} className="flex items-center gap-3 px-2.5 md:px-4 py-2.5">
                 {/* Flecha: entra o sale */}
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-bold ${
                   esIngreso ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
@@ -505,7 +505,7 @@ function MovimientosCajaFuertePanel({ movimientos }: { movimientos: MovimientoCa
                   <p className="text-xs font-semibold text-kp-white truncate">
                     {m.concepto || ORIGEN_LABEL[m.origen_tipo ?? ''] || 'Movimiento'}
                   </p>
-                  <p className="text-[10px] text-kp-gray truncate">
+                  <p className="text-2xs md:text-[10px] text-kp-gray truncate">
                     {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                     {/* La hora es la de registro: los pagos a proveedor guardan
                         la fecha del comprobante sin hora, y sin esto dos
@@ -561,7 +561,7 @@ function CuentasBancariasPanel({
     <section className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
           Cuentas bancarias · cobros
           <span className="flex-1 h-px bg-kp-border inline-block" />
@@ -587,7 +587,7 @@ function CuentasBancariasPanel({
           const shortName = cuenta.length > 28 ? cuenta.slice(0, 26) + '…' : cuenta;
 
           return (
-            <div key={cuenta} className={`rounded-xl border ${pal.border} bg-kp-surface p-4 flex flex-col gap-3`}>
+            <div key={cuenta} className={`rounded-xl border ${pal.border} bg-kp-surface p-3 md:p-4 flex flex-col gap-2.5 md:gap-3`}>
               {/* Nombre cuenta */}
               <div className="flex items-start gap-2">
                 <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${pal.dot}`} />
@@ -596,18 +596,18 @@ function CuentasBancariasPanel({
 
               {/* HOY */}
               <div>
-                <p className="text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Hoy</p>
+                <p className="text-2xs md:text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Hoy</p>
                 <p className={`text-xl font-bold leading-none ${pal.text}`}>
                   {fmt(montoHoy)}
                 </p>
                 {dataHoy && (
-                  <p className="text-[10px] text-kp-gray mt-1">
+                  <p className="text-2xs md:text-[10px] text-kp-gray mt-1">
                     {dataHoy.cantidad} {dataHoy.cantidad === 1 ? 'operación' : 'operaciones'}
                     {pct > 0 && ` · ${pct.toFixed(1)}%`}
                   </p>
                 )}
                 {montoHoy === 0 && (
-                  <p className="text-[10px] text-kp-gray mt-1">Sin movimientos hoy</p>
+                  <p className="text-2xs md:text-[10px] text-kp-gray mt-1">Sin movimientos hoy</p>
                 )}
               </div>
 
@@ -618,7 +618,7 @@ function CuentasBancariasPanel({
 
               {/* MES */}
               <div className="pt-1 border-t border-kp-border/50">
-                <p className="text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Este mes</p>
+                <p className="text-2xs md:text-[9px] uppercase tracking-widest text-kp-gray mb-0.5">Este mes</p>
                 <p className="text-sm font-semibold text-kp-white tabular-nums">
                   {fmt(montoMes)}
                 </p>
@@ -657,7 +657,7 @@ function VentasMesTabla({ data }: { data: DayData[] }) {
 
   return (
     <section className="rounded-xl border border-kp-border overflow-hidden">
-      <div className="px-4 py-3 border-b border-kp-border bg-kp-surface2 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-kp-border bg-kp-surface2 flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-kp-white">Registro de ventas del mes</p>
           <p className="text-xs text-kp-gray mt-0.5 capitalize">
@@ -670,14 +670,14 @@ function VentasMesTabla({ data }: { data: DayData[] }) {
         </div>
       </div>
       <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-        <table className="w-full text-sm bg-kp-surface">
+        <table data-rt="1" className="w-full text-sm bg-kp-surface">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-kp-border bg-kp-surface2">
-              <th className="px-4 py-2.5 text-left  text-[10px] font-bold uppercase tracking-wider text-kp-gray">Día</th>
-              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Operaciones</th>
-              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray">Ventas del día</th>
-              <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Acumulado mes</th>
-              <th className="px-4 py-2.5 text-left  text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell w-[28%]"></th>
+              <th className="px-2.5 md:px-4 py-2.5 text-left  text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Día</th>
+              <th className="px-2.5 md:px-4 py-2.5 text-right text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Operaciones</th>
+              <th className="px-2.5 md:px-4 py-2.5 text-right text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Ventas del día</th>
+              <th className="px-2.5 md:px-4 py-2.5 text-right text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden sm:table-cell">Acumulado mes</th>
+              <th className="px-2.5 md:px-4 py-2.5 text-left  text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray hidden md:table-cell w-[28%]"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-kp-border">
@@ -685,22 +685,22 @@ function VentasMesTabla({ data }: { data: DayData[] }) {
               const pct = (f.monto / maxMonto) * 100;
               return (
                 <tr key={f.dia} className={`transition-colors ${f.esHoy ? 'bg-kp-red/5' : 'hover:bg-kp-surface2'}`}>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
+                  <td className="px-2.5 md:px-4 py-2.5 whitespace-nowrap">
                     <span className={`text-xs font-semibold ${f.esHoy ? 'text-kp-red' : 'text-kp-white'}`}>
                       {String(f.diaNum).padStart(2, '0')}
                     </span>
-                    <span className="text-[11px] text-kp-gray ml-2">{f.esHoy ? 'Hoy' : f.dayLabel}</span>
+                    <span className="text-2xs md:text-[11px] text-kp-gray ml-2">{f.esHoy ? 'Hoy' : f.dayLabel}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray">
+                  <td className="px-2.5 md:px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray">
                     {f.cantidad > 0 ? f.cantidad : '—'}
                   </td>
-                  <td className={`px-4 py-2.5 text-right text-sm font-bold tabular-nums whitespace-nowrap ${f.monto > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
+                  <td className={`px-2.5 md:px-4 py-2.5 text-right text-sm font-bold tabular-nums whitespace-nowrap ${f.monto > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
                     {f.monto > 0 ? fmt(f.monto) : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray whitespace-nowrap hidden sm:table-cell">
+                  <td className="px-2.5 md:px-4 py-2.5 text-right text-xs tabular-nums text-kp-gray whitespace-nowrap hidden sm:table-cell">
                     {fmt(f.acumulado)}
                   </td>
-                  <td className="px-4 py-2.5 hidden md:table-cell">
+                  <td className="px-2.5 md:px-4 py-2.5 hidden md:table-cell">
                     <div className="h-1.5 rounded-full bg-kp-border/40 overflow-hidden">
                       <div className="h-full rounded-full bg-kp-red opacity-70" style={{ width: `${pct}%` }} />
                     </div>
@@ -711,11 +711,11 @@ function VentasMesTabla({ data }: { data: DayData[] }) {
           </tbody>
           <tfoot>
             <tr className="border-t border-kp-border bg-kp-surface2">
-              <td className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-kp-gray">Total mes</td>
-              <td className="px-4 py-2.5 text-right text-xs font-bold tabular-nums text-kp-white">{totalOps}</td>
-              <td className="px-4 py-2.5 text-right text-sm font-bold tabular-nums text-kp-white whitespace-nowrap">{fmt(totalMonto)}</td>
-              <td className="px-4 py-2.5 hidden sm:table-cell" />
-              <td className="px-4 py-2.5 hidden md:table-cell" />
+              <td className="px-2.5 md:px-4 py-2.5 text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Total mes</td>
+              <td className="px-2.5 md:px-4 py-2.5 text-right text-xs font-bold tabular-nums text-kp-white">{totalOps}</td>
+              <td className="px-2.5 md:px-4 py-2.5 text-right text-sm font-bold tabular-nums text-kp-white whitespace-nowrap">{fmt(totalMonto)}</td>
+              <td className="px-2.5 md:px-4 py-2.5 hidden sm:table-cell" />
+              <td className="px-2.5 md:px-4 py-2.5 hidden md:table-cell" />
             </tr>
           </tfoot>
         </table>
@@ -825,7 +825,7 @@ export default function DashboardView({
 
       {/* ── KPI Hoy ── */}
       <section>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
           Hoy
           <span className="flex-1 h-px bg-kp-border inline-block" />
@@ -883,7 +883,7 @@ export default function DashboardView({
 
       {/* ── KPI Mes ── */}
       <section>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
+        <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
           <span className="w-5 h-px bg-kp-border inline-block" />
           Este mes
           <span className="flex-1 h-px bg-kp-border inline-block" />
@@ -921,7 +921,7 @@ export default function DashboardView({
       {/* ── Cheques próximos — solo administrador ── */}
       {tienesCheques && userRol === 'administrador' && (
         <section>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
+          <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-3 flex items-center gap-2">
             <span className="w-5 h-px bg-kp-border inline-block" />
             Cheques próximos · 30 días
             <span className="flex-1 h-px bg-kp-border inline-block" />

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 type MedioPago = { id: string; nombre: string };
 type CuentaBancaria = { id: string; nombre: string; banco: string | null };
@@ -108,147 +109,138 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
         Registrar Pago
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
-          <div className="relative w-full max-w-lg bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-              <h3 className="text-lg font-bold">Registrar Pago</h3>
-              <button onClick={handleClose} disabled={loading} className="text-kp-gray hover:text-kp-white transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+      <Modal
+          open={open}
+          onClose={handleClose}
+          title="Registrar Pago"
+          size="md"
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex gap-4 p-3 rounded-lg bg-kp-surface2 text-sm">
+              <div>
+                <span className="text-kp-gray">Total: </span>
+                <span className="font-semibold tabular-nums">
+                  {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalEgreso)}
+                </span>
+              </div>
+              <div>
+                <span className="text-kp-gray">Ya pagado: </span>
+                <span className="font-semibold tabular-nums text-green-400">
+                  {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalPagado)}
+                </span>
+              </div>
+              <div>
+                <span className="text-kp-gray">Pendiente: </span>
+                <span className="font-semibold tabular-nums text-amber-400">
+                  {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(pendiente)}
+                </span>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="flex gap-4 p-3 rounded-lg bg-kp-surface2 text-sm">
-                <div>
-                  <span className="text-kp-gray">Total: </span>
-                  <span className="font-semibold tabular-nums">
-                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalEgreso)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-kp-gray">Ya pagado: </span>
-                  <span className="font-semibold tabular-nums text-green-400">
-                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalPagado)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-kp-gray">Pendiente: </span>
-                  <span className="font-semibold tabular-nums text-amber-400">
-                    {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(pendiente)}
-                  </span>
-                </div>
-              </div>
+            <div>
+              <label className={labelCls}>Medio de Pago *</label>
+              <select value={medioPagoId} onChange={e => setMedioPagoId(e.target.value)} className={inputCls} required>
+                <option value="">Seleccioná</option>
+                {mediosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+              </select>
+            </div>
 
+            <div>
+              <label className={labelCls}>Monto *</label>
+              <NumericInput
+                value={monto} onChange={e => setMonto(e.target.value)}
+                className={inputCls} required
+              />
+            </div>
+
+            {cuentasBancarias.length > 0 && (
               <div>
-                <label className={labelCls}>Medio de Pago *</label>
-                <select value={medioPagoId} onChange={e => setMedioPagoId(e.target.value)} className={inputCls} required>
-                  <option value="">Seleccioná</option>
-                  {mediosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                <label className={labelCls}>Cuenta Bancaria (opcional)</label>
+                <select value={cuentaBancariaId} onChange={e => setCuentaBancariaId(e.target.value)} className={inputCls}>
+                  <option value="">Sin imputar a cuenta</option>
+                  {cuentasBancarias.map(c => (
+                    <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
+                  ))}
                 </select>
               </div>
+            )}
 
-              <div>
-                <label className={labelCls}>Monto *</label>
-                <NumericInput
-                  value={monto} onChange={e => setMonto(e.target.value)}
-                  className={inputCls} required
-                />
-              </div>
+            <div>
+              <label className={labelCls}>Observaciones</label>
+              <input
+                type="text" placeholder="Opcional"
+                value={observaciones} onChange={e => setObservaciones(e.target.value)}
+                className={inputCls}
+              />
+            </div>
 
-              {cuentasBancarias.length > 0 && (
-                <div>
-                  <label className={labelCls}>Cuenta Bancaria (opcional)</label>
-                  <select value={cuentaBancariaId} onChange={e => setCuentaBancariaId(e.target.value)} className={inputCls}>
-                    <option value="">Sin imputar a cuenta</option>
-                    {cuentasBancarias.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
-                    ))}
-                  </select>
+            {esCheque && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className={labelCls + ' mb-0'}>Cheques</p>
+                  <button type="button" onClick={addCheque} className="text-xs text-kp-red hover:underline">
+                    + Agregar cheque
+                  </button>
                 </div>
-              )}
-
-              <div>
-                <label className={labelCls}>Observaciones</label>
-                <input
-                  type="text" placeholder="Opcional"
-                  value={observaciones} onChange={e => setObservaciones(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-
-              {esCheque && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className={labelCls + ' mb-0'}>Cheques</p>
-                    <button type="button" onClick={addCheque} className="text-xs text-kp-red hover:underline">
-                      + Agregar cheque
-                    </button>
-                  </div>
-                  {cheques.map((ch, i) => (
-                    <div key={i} className="bg-kp-surface2 border border-kp-border rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-kp-gray">Cheque #{i + 1}</span>
-                        {cheques.length > 1 && (
-                          <button type="button" onClick={() => removeCheque(i)} className="text-xs text-kp-red hover:underline">
-                            Eliminar
-                          </button>
-                        )}
+                {cheques.map((ch, i) => (
+                  <div key={i} className="bg-kp-surface2 border border-kp-border rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-kp-gray">Cheque #{i + 1}</span>
+                      {cheques.length > 1 && (
+                        <button type="button" onClick={() => removeCheque(i)} className="text-xs text-kp-red hover:underline">
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Banco</label>
+                        <input type="text" value={ch.banco} onChange={e => updateCheque(i, 'banco', e.target.value)}
+                          placeholder="Ej: Galicia" className={inputCls} />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className={labelCls}>Banco</label>
-                          <input type="text" value={ch.banco} onChange={e => updateCheque(i, 'banco', e.target.value)}
-                            placeholder="Ej: Galicia" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Nro. Cheque</label>
-                          <input type="text" value={ch.numero_cheque} onChange={e => updateCheque(i, 'numero_cheque', e.target.value)}
-                            placeholder="00001234" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Fecha de Emisión</label>
-                          <input type="date" value={ch.fecha_emision} onChange={e => updateCheque(i, 'fecha_emision', e.target.value)}
-                            className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Fecha de Vencimiento</label>
-                          <input type="date" value={ch.fecha_vencimiento} onChange={e => updateCheque(i, 'fecha_vencimiento', e.target.value)}
-                            className={inputCls} />
-                        </div>
-                        <div className="col-span-2">
-                          <label className={labelCls}>Importe</label>
-                          <NumericInput value={ch.importe} onChange={e => updateCheque(i, 'importe', e.target.value)}
-                            className={inputCls} />
-                        </div>
+                      <div>
+                        <label className={labelCls}>Nro. Cheque</label>
+                        <input type="text" value={ch.numero_cheque} onChange={e => updateCheque(i, 'numero_cheque', e.target.value)}
+                          placeholder="00001234" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Fecha de Emisión</label>
+                        <input type="date" value={ch.fecha_emision} onChange={e => updateCheque(i, 'fecha_emision', e.target.value)}
+                          className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Fecha de Vencimiento</label>
+                        <input type="date" value={ch.fecha_vencimiento} onChange={e => updateCheque(i, 'fecha_vencimiento', e.target.value)}
+                          className={inputCls} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Importe</label>
+                        <NumericInput value={ch.importe} onChange={e => updateCheque(i, 'importe', e.target.value)}
+                          className={inputCls} />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {error && (
-                <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={handleClose} disabled={loading}
-                  className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={loading}
-                  className="flex-1 px-4 py-2.5 bg-kp-red hover:bg-kp-red/80 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors">
-                  {loading ? 'Registrando…' : 'Confirmar Pago'}
-                </button>
+                  </div>
+                ))}
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+
+            {error && (
+              <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={handleClose} disabled={loading}
+                className="flex-1 px-4 py-2.5 border border-kp-border rounded-lg text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
+                Cancelar
+              </button>
+              <button type="submit" disabled={loading}
+                className="flex-1 px-4 py-2.5 bg-kp-red hover:bg-kp-red/80 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors">
+                {loading ? 'Registrando…' : 'Confirmar Pago'}
+              </button>
+            </div>
+          </form>
+
+        </Modal>
     </>
   );
 }

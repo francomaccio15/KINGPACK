@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -168,64 +169,54 @@ export default function AccionesLicitacion({
       </div>
 
       {/* ── Modal adjudicar ────────────────────────────────────────────────── */}
-      {showAdjudicar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-kp-surface border border-kp-border rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-emerald-400">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-bold text-kp-white text-base">Adjudicar licitación</h3>
-                <p className="text-xs text-kp-gray mt-0.5">Se generará una venta confirmada con los precios de la licitación.</p>
-              </div>
+      <Modal
+          open={showAdjudicar}
+          onClose={() => setShowAdjudicar(false)}
+          title="Adjudicar licitación"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-kp-gray mb-1.5">
+                Sucursal
+              </label>
+              <select
+                value={sucursalSeleccionada}
+                onChange={e => setSucursalSeleccionada(e.target.value)}
+                className="w-full bg-kp-surface2 border border-kp-border text-kp-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500/60"
+              >
+                <option value="">— Seleccioná una sucursal —</option>
+                {sucursales.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-kp-gray mb-1.5">
-                  Sucursal
-                </label>
-                <select
-                  value={sucursalSeleccionada}
-                  onChange={e => setSucursalSeleccionada(e.target.value)}
-                  className="w-full bg-kp-surface2 border border-kp-border text-kp-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500/60"
-                >
-                  <option value="">— Seleccioná una sucursal —</option>
-                  {sucursales.map(s => (
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
+            {errorAdj && (
+              <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
+                {errorAdj}
+              </p>
+            )}
 
-              {errorAdj && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
-                  {errorAdj}
-                </p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setShowAdjudicar(false)}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray disabled:opacity-50 text-sm font-medium transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={adjudicar}
-                  disabled={loading || !sucursalSeleccionada}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
-                >
-                  {loading ? 'Procesando…' : 'Confirmar adjudicación'}
-                </button>
-              </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowAdjudicar(false)}
+                disabled={loading}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray disabled:opacity-50 text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={adjudicar}
+                disabled={loading || !sucursalSeleccionada}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+              >
+                {loading ? 'Procesando…' : 'Confirmar adjudicación'}
+              </button>
             </div>
           </div>
-        </div>
-      )}
+
+        </Modal>
     </>
   );
 }

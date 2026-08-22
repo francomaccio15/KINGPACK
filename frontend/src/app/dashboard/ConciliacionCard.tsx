@@ -93,13 +93,13 @@ export default function ConciliacionCard() {
           <span className="w-1 h-5 bg-kp-red rounded-full block" />
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wide text-kp-white">Conciliación bancaria</h3>
-            <p className="text-[11px] text-kp-gray mt-0.5">
+            <p className="text-2xs md:text-[11px] text-kp-gray mt-0.5">
               Acreditado en banco vs facturado en ARCA · {label}
             </p>
           </div>
         </div>
         {data.actualizado_en && (
-          <span className="text-[10px] text-kp-gray/60">
+          <span className="text-2xs md:text-[10px] text-kp-gray/60">
             Actualizado {new Date(data.actualizado_en).toLocaleDateString('es-AR')}
           </span>
         )}
@@ -108,13 +108,13 @@ export default function ConciliacionCard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* Facturado ARCA */}
         <div className="rounded-lg bg-kp-surface2 border border-kp-border px-4 py-3">
-          <p className="text-[11px] uppercase tracking-widest text-kp-gray mb-1">Facturado en ARCA</p>
+          <p className="text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray mb-1">Facturado en ARCA</p>
           <p className="text-xl font-bold tabular-nums text-kp-white">{ars.format(data.facturado_arca)}</p>
         </div>
 
         {/* Acreditado en banco (editable) */}
         <div className="rounded-lg bg-kp-surface2 border border-kp-border px-4 py-3">
-          <label className="block text-[11px] uppercase tracking-widest text-kp-gray mb-1">Acreditado en banco</label>
+          <label className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray mb-1">Acreditado en banco</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
             <NumericInput
@@ -134,14 +134,14 @@ export default function ConciliacionCard() {
             : coincide ? 'bg-emerald-950/30 border-emerald-700/50'
             : 'bg-amber-950/30 border-amber-700/50',
         ].join(' ')}>
-          <p className="text-[11px] uppercase tracking-widest text-kp-gray mb-1">Diferencia</p>
+          <p className="text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray mb-1">Diferencia</p>
           <p className={[
             'text-xl font-bold tabular-nums',
             dif === null ? 'text-kp-gray' : coincide ? 'text-emerald-400' : 'text-amber-300',
           ].join(' ')}>
             {dif === null ? '—' : `${dif > 0 ? '+' : ''}${ars.format(dif)}`}
           </p>
-          <p className="text-[10px] text-kp-gray mt-0.5">
+          <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">
             {dif === null ? 'Cargá el acreditado' : coincide ? 'Coincide con ARCA' : 'Banco − ARCA'}
           </p>
         </div>

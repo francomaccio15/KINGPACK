@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Rol = 'administrador' | 'supervisor' | 'cajero' | 'vendedor';
@@ -56,24 +57,6 @@ function Spinner() {
   );
 }
 
-// ─── Modal genérico ───────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">{title}</h3>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Formulario de usuario (crear / editar) ───────────────────────────────────
 function FormUsuario({
@@ -455,7 +438,7 @@ export default function UsuariosClient() {
 
       {/* Modal Crear */}
       {modalCrear && (
-        <Modal title="Nuevo usuario" onClose={() => setModalCrear(false)}>
+        <Modal open title="Nuevo usuario" onClose={() => setModalCrear(false)}>
           <FormUsuario
             sucursales={sucursales}
             onGuardar={() => { setModalCrear(false); cargar(); }}
@@ -466,7 +449,7 @@ export default function UsuariosClient() {
 
       {/* Modal Editar */}
       {modalEditar && (
-        <Modal title="Editar usuario" onClose={() => setModalEditar(null)}>
+        <Modal open title="Editar usuario" onClose={() => setModalEditar(null)}>
           <FormUsuario
             inicial={modalEditar}
             sucursales={sucursales}
@@ -478,7 +461,7 @@ export default function UsuariosClient() {
 
       {/* Modal Contraseña */}
       {modalPassword && (
-        <Modal title="Cambiar contraseña" onClose={() => setModalPassword(null)}>
+        <Modal open title="Cambiar contraseña" onClose={() => setModalPassword(null)}>
           <ModalPassword
             usuario={modalPassword}
             onGuardar={() => { setModalPassword(null); cargar(); }}
@@ -489,7 +472,7 @@ export default function UsuariosClient() {
 
       {/* Modal Confirmar Eliminar */}
       {modalEliminar && (
-        <Modal title="Eliminar usuario" onClose={() => setModalEliminar(null)}>
+        <Modal open title="Eliminar usuario" onClose={() => setModalEliminar(null)}>
           <div className="space-y-4">
             <p className="text-sm text-kp-gray">
               ¿Eliminar a <span className="text-kp-white font-semibold">{modalEliminar.nombre}</span>?

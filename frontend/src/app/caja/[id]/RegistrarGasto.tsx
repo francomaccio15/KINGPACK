@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 type Subrubro = { id: string; nombre: string };
 type Rubro    = { id: string; nombre: string; subrubros: Subrubro[] };
@@ -113,130 +114,119 @@ export default function RegistrarGasto({ cajaId }: { cajaId: string }) {
         Registrar Gasto
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Registrar Gasto"
+        size="sm"
+      >
+        <div className="space-y-4">
 
-            <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide">Registrar Gasto</h3>
-              </div>
-              <button onClick={() => setOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
+          {/* Tipo fijo - visual */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-kp-red/10 border border-kp-red/30">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-kp-red flex-shrink-0">
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span className="text-xs font-semibold text-kp-red">Egreso de caja</span>
+          </div>
 
-            <div className="p-5 space-y-4">
+          {/* Concepto */}
+          <div>
+            <label className={labelCls}>Concepto *</label>
+            <input
+              type="text"
+              placeholder="Ej: Compra de insumos, delivery, servicio…"
+              value={concepto}
+              onChange={e => setConcepto(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleGuardar()}
+              className={inputCls}
+              autoFocus
+            />
+          </div>
 
-              {/* Tipo fijo - visual */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-kp-red/10 border border-kp-red/30">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-kp-red flex-shrink-0">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span className="text-xs font-semibold text-kp-red">Egreso de caja</span>
-              </div>
-
-              {/* Concepto */}
-              <div>
-                <label className={labelCls}>Concepto *</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Compra de insumos, delivery, servicio…"
-                  value={concepto}
-                  onChange={e => setConcepto(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleGuardar()}
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-
-              {/* Rubro */}
-              {rubros.length > 0 && (
-                <div>
-                  <label className={labelCls}>
-                    Rubro
-                    <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
-                  </label>
-                  <select
-                    value={subrubroId}
-                    onChange={e => setSubrubroId(e.target.value)}
-                    className={`${inputCls} appearance-none`}
-                  >
-                    <option value="">— Sin categoría —</option>
-                    {rubros.map(r => (
-                      <optgroup key={r.id} label={r.nombre}>
-                        {r.subrubros.map(s => (
-                          <option key={s.id} value={s.id}>{s.nombre}</option>
-                        ))}
-                      </optgroup>
+          {/* Rubro */}
+          {rubros.length > 0 && (
+            <div>
+              <label className={labelCls}>
+                Rubro
+                <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
+              </label>
+              <select
+                value={subrubroId}
+                onChange={e => setSubrubroId(e.target.value)}
+                className={`${inputCls} appearance-none`}
+              >
+                <option value="">— Sin categoría —</option>
+                {rubros.map(r => (
+                  <optgroup key={r.id} label={r.nombre}>
+                    {r.subrubros.map(s => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
                     ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Monto */}
-              <div>
-                <label className={labelCls}>Monto *</label>
-                <NumericInput
-                  placeholder="0.00"
-                  value={monto}
-                  onChange={e => setMonto(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Empleado (opcional) */}
-              <div>
-                <label className={labelCls}>
-                  Empleado
-                  <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
-                </label>
-                {loadingEmps ? (
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-kp-gray">
-                    <Spinner /> Cargando empleados…
-                  </div>
-                ) : (
-                  <select
-                    value={empleadoId}
-                    onChange={e => setEmpleadoId(e.target.value)}
-                    className={`${inputCls} appearance-none`}
-                  >
-                    <option value="">— Sin asignar —</option>
-                    {empleados.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.nombre}{emp.cargo ? ` · ${emp.cargo}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={handleGuardar}
-                  disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
-                >
-                  {saving ? <><Spinner /> Guardando…</> : 'Registrar Gasto'}
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
+                  </optgroup>
+                ))}
+              </select>
             </div>
+          )}
+
+          {/* Monto */}
+          <div>
+            <label className={labelCls}>Monto *</label>
+            <NumericInput
+              placeholder="0.00"
+              value={monto}
+              onChange={e => setMonto(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          {/* Empleado (opcional) */}
+          <div>
+            <label className={labelCls}>
+              Empleado
+              <span className="ml-1 normal-case font-normal text-kp-gray/60">(opcional)</span>
+            </label>
+            {loadingEmps ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-kp-gray">
+                <Spinner /> Cargando empleados…
+              </div>
+            ) : (
+              <select
+                value={empleadoId}
+                onChange={e => setEmpleadoId(e.target.value)}
+                className={`${inputCls} appearance-none`}
+              >
+                <option value="">— Sin asignar —</option>
+                {empleados.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nombre}{emp.cargo ? ` · ${emp.cargo}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleGuardar}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
+            >
+              {saving ? <><Spinner /> Guardando…</> : 'Registrar Gasto'}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </>
   );
 }

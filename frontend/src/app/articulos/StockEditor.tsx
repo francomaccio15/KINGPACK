@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 type Sucursal = { id: string; nombre: string };
 type Art = {
@@ -269,71 +270,61 @@ export default function StockEditor({
       </div>
 
       {/* ── Modal: exportar planilla de conteo ── */}
-      {showConteo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget && !conteoLoading) setShowConteo(false); }}
-        >
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide text-kp-white">Planilla de conteo</h3>
-              </div>
-              <button onClick={() => !conteoLoading && setShowConteo(false)}
-                className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">✕</button>
-            </div>
+      <Modal
+        open={showConteo}
+        onClose={() => !conteoLoading && setShowConteo(false)}
+        title="Planilla de conteo"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-kp-gray/80">
+            Se genera un PDF con todos los artículos y una columna en blanco para anotar la cantidad contada.
+          </p>
 
-            <div className="p-6 space-y-4">
-              <p className="text-xs text-kp-gray/80">
-                Se genera un PDF con todos los artículos y una columna en blanco para anotar la cantidad contada.
-              </p>
+          <div>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Sucursal</label>
+            <select value={conteoSuc} onChange={e => setConteoSuc(e.target.value)} className={`${selectCls} w-full`}>
+              {sucursales.length === 0 && <option value="">— sin sucursales —</option>}
+              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
 
-              <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Sucursal</label>
-                <select value={conteoSuc} onChange={e => setConteoSuc(e.target.value)} className={`${selectCls} w-full`}>
-                  {sucursales.length === 0 && <option value="">— sin sucursales —</option>}
-                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Ubicación</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([['deposito', 'Depósito'], ['adelante', 'Frente del local']] as const).map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setConteoUbic(val)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors
-                        ${conteoUbic === val
-                          ? 'bg-kp-red/15 border-kp-red text-kp-white'
-                          : 'bg-kp-surface2 border-kp-border text-kp-gray-lt hover:border-kp-gray'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {conteoError && (
-                <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{conteoError}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowConteo(false)} disabled={conteoLoading}
-                  className="flex-1 text-sm py-2 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white transition-colors disabled:opacity-50">
-                  Cancelar
+          <div>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Ubicación</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([['deposito', 'Depósito'], ['adelante', 'Frente del local']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setConteoUbic(val)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors
+                    ${conteoUbic === val
+                      ? 'bg-kp-red/15 border-kp-red text-kp-white'
+                      : 'bg-kp-surface2 border-kp-border text-kp-gray-lt hover:border-kp-gray'}`}
+                >
+                  {label}
                 </button>
-                <button onClick={generarConteo} disabled={conteoLoading || !conteoSuc}
-                  className="flex-1 text-sm py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark text-kp-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                  {conteoLoading ? 'Generando…' : 'Generar PDF'}
-                </button>
-              </div>
+              ))}
             </div>
           </div>
+
+          {conteoError && (
+            <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{conteoError}</p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={() => setShowConteo(false)} disabled={conteoLoading}
+              className="flex-1 text-sm py-2 rounded-lg border border-kp-border text-kp-gray hover:text-kp-white transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={generarConteo} disabled={conteoLoading || !conteoSuc}
+              className="flex-1 text-sm py-2 rounded-lg bg-kp-red hover:bg-kp-red-dark text-kp-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              {conteoLoading ? 'Generando…' : 'Generar PDF'}
+            </button>
+          </div>
         </div>
-      )}
+          
+      </Modal>
     </div>
   );
 }

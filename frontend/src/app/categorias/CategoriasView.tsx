@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Categoria } from './page';
 import { useAuth } from '@/contexts/AuthContext';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -222,54 +223,48 @@ function FormCategoria({
   const esEdicion = !!inicial;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md mx-4 bg-kp-surface rounded-2xl border border-kp-border shadow-2xl shadow-black/60">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2 rounded-t-2xl">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-6 bg-kp-red rounded-full" />
-            <h2 className="text-sm font-bold uppercase tracking-wide">
-              {esEdicion ? 'Editar categoría' : 'Nueva categoría'}
-            </h2>
-          </div>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white text-xl leading-none">×</button>
+    <Modal
+      open
+      onClose={onClose}
+      title={esEdicion ? 'Editar categoría' : 'Nueva categoría'}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Nombre *</label>
+          <input ref={inputRef} value={nombre} onChange={e => setNombre(e.target.value)}
+            placeholder="Ej: BOLSAS CAMISETAS" className={inputCls} />
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Nombre *</label>
-            <input ref={inputRef} value={nombre} onChange={e => setNombre(e.target.value)}
-              placeholder="Ej: BOLSAS CAMISETAS" className={inputCls} />
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Margen por defecto (%)</label>
+          <div className="relative">
+            <NumericInput
+              value={margen} onChange={e => setMargen(e.target.value)}
+              placeholder="Ej: 40" className={inputCls + ' pr-8'} />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm font-bold">%</span>
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Margen por defecto (%)</label>
-            <div className="relative">
-              <NumericInput
-                value={margen} onChange={e => setMargen(e.target.value)}
-                placeholder="Ej: 40" className={inputCls + ' pr-8'} />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm font-bold">%</span>
-            </div>
-            {esEdicion && (
-              <p className="text-[10px] text-amber-400 mt-1.5">
-                ⚠ Cambiar el margen actualiza automáticamente todos los artículos de esta categoría.
-              </p>
-            )}
-          </div>
-          {error && (
-            <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{error}</p>
+          {esEdicion && (
+            <p className="text-[10px] text-amber-400 mt-1.5">
+              ⚠ Cambiar el margen actualiza automáticamente todos los artículos de esta categoría.
+            </p>
           )}
-          <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white transition-colors">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-5 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 disabled:opacity-50 transition-colors">
-              {saving ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear categoría'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        {error && (
+          <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{error}</p>
+        )}
+        <div className="flex justify-end gap-3 pt-1">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving}
+            className="px-5 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 disabled:opacity-50 transition-colors">
+            {saving ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear categoría'}
+          </button>
+        </div>
+      </form>
+
+    </Modal>
   );
 }
 

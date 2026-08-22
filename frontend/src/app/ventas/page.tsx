@@ -4,6 +4,7 @@ import NuevaVenta from './NuevaVenta';
 import VentasTable from './VentasTable';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import PageHeader from '@/components/ui/PageHeader';
 
 type Venta = {
   id: string;
@@ -88,11 +89,8 @@ export default async function VentasPage({
   if (esCajero && !sucursalId) {
     return (
       <section className="space-y-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Ventas</h2>
-        </div>
-        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-sm text-yellow-400">
+        <PageHeader title="Ventas" />
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 md:p-6 text-sm text-yellow-400">
           No tenés sucursal asignada. Contactá al administrador para que configure tu sucursal de trabajo.
         </div>
       </section>
@@ -108,19 +106,16 @@ export default async function VentasPage({
     <section className="space-y-5">
 
       {/* Encabezado */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Ventas</h2>
-          </div>
-          <p className="text-sm text-kp-gray pl-3">
+      <PageHeader
+        title="Ventas"
+        subtitle={
+          <>
             {count} {count === 1 ? 'registro' : 'registros'}
             {hayFiltros && <span className="ml-1 text-kp-gray/60">(filtrado)</span>}
-          </p>
-        </div>
-        <NuevaVenta sucursales={sucursales} listas={listas} />
-      </div>
+          </>
+        }
+        action={<NuevaVenta sucursales={sucursales} listas={listas} />}
+      />
 
       {/* Filtros */}
       <Suspense>

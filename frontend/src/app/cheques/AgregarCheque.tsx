@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/auth';
+import Modal from '@/components/ui/Modal';
 
 type Tipo = 'recibido' | 'emitido';
 
@@ -142,118 +143,120 @@ export default function AgregarCheque() {
         Agregar cheque
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-kp-surface border border-kp-border rounded-xl shadow-xl p-6 space-y-4 my-8">
-            <h3 className="text-base font-bold text-kp-white">Agregar cheque</h3>
+      <Modal
+          open={open}
+          onClose={() => { setOpen(false); reset(); }}
+          title="Agregar cheque"
+          size="md"
+        >
 
-            {/* Tipo */}
-            <div className="flex gap-2">
-              {(['recibido', 'emitido'] as Tipo[]).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTipo(t)}
-                  className={[
-                    'flex-1 px-3 py-2 text-sm font-semibold rounded-md border transition-colors',
-                    tipo === t
-                      ? 'border-kp-red bg-kp-red/10 text-kp-white'
-                      : 'border-kp-border text-kp-gray hover:text-kp-white',
-                  ].join(' ')}
-                >
-                  {t === 'recibido' ? 'Recibido' : 'Emitido'}
-                </button>
-              ))}
-            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Banco *</label>
-                  <input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Banco" className={inputCls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>N° de cheque *</label>
-                  <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="00000000" className={inputCls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Importe *</label>
-                  <input type="number" min="0" step="0.01" value={importe} onChange={e => setImporte(e.target.value)} placeholder="0.00" className={inputCls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Estado</label>
-                  <select value={estado} onChange={e => setEstado(e.target.value)} className={inputCls}>
-                    {estados.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Fecha de emisión</label>
-                  <input type="date" value={fechaEmision} onChange={e => setFechaEmision(e.target.value)} className={inputCls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Fecha de vencimiento *</label>
-                  <input type="date" value={fechaVenc} onChange={e => setFechaVenc(e.target.value)} className={inputCls} />
-                </div>
-              </div>
+          {/* Tipo */}
+          <div className="flex gap-2">
+            {(['recibido', 'emitido'] as Tipo[]).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTipo(t)}
+                className={[
+                  'flex-1 px-3 py-2 text-sm font-semibold rounded-md border transition-colors',
+                  tipo === t
+                    ? 'border-kp-red bg-kp-red/10 text-kp-white'
+                    : 'border-kp-border text-kp-gray hover:text-kp-white',
+                ].join(' ')}
+              >
+                {t === 'recibido' ? 'Recibido' : 'Emitido'}
+              </button>
+            ))}
+          </div>
 
-              {tipo === 'recibido' ? (
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Cliente (opcional)</label>
-                  <select value={clienteId} onChange={e => setClienteId(e.target.value)} className={inputCls}>
-                    <option value="">— Sin cliente —</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  <label className={labelCls}>Proveedor (opcional)</label>
-                  <select value={proveedorId} onChange={e => setProveedorId(e.target.value)} className={inputCls}>
-                    <option value="">— Sin proveedor —</option>
-                    {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
-                </div>
-              )}
-
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className={labelCls}>Sucursal *</label>
-                <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
-                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                <label className={labelCls}>Banco *</label>
+                <input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Banco" className={inputCls} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>N° de cheque *</label>
+                <input value={numero} onChange={e => setNumero(e.target.value)} placeholder="00000000" className={inputCls} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Importe *</label>
+                <input type="number" min="0" step="0.01" value={importe} onChange={e => setImporte(e.target.value)} placeholder="0.00" className={inputCls} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Estado</label>
+                <select value={estado} onChange={e => setEstado(e.target.value)} className={inputCls}>
+                  {estados.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
-
               <div className="flex flex-col gap-1">
-                <label className={labelCls}>Observaciones</label>
-                <textarea
-                  value={observaciones}
-                  onChange={e => setObservaciones(e.target.value)}
-                  rows={2}
-                  placeholder="Referencia, titular del cheque, etc."
-                  className="px-3 py-2 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red resize-none"
-                />
+                <label className={labelCls}>Fecha de emisión</label>
+                <input type="date" value={fechaEmision} onChange={e => setFechaEmision(e.target.value)} className={inputCls} />
               </div>
-
-              {error && <p className="text-xs text-red-400">{error}</p>}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 h-9 text-sm font-semibold rounded-md bg-kp-red text-white hover:bg-kp-red-dark transition-colors disabled:opacity-50"
-                >
-                  {loading ? 'Guardando…' : 'Guardar cheque'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setOpen(false); reset(); }}
-                  className="px-4 h-9 text-sm font-semibold rounded-md border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-white transition-colors"
-                >
-                  Cancelar
-                </button>
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Fecha de vencimiento *</label>
+                <input type="date" value={fechaVenc} onChange={e => setFechaVenc(e.target.value)} className={inputCls} />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+
+            {tipo === 'recibido' ? (
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Cliente (opcional)</label>
+                <select value={clienteId} onChange={e => setClienteId(e.target.value)} className={inputCls}>
+                  <option value="">— Sin cliente —</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Proveedor (opcional)</label>
+                <select value={proveedorId} onChange={e => setProveedorId(e.target.value)} className={inputCls}>
+                  <option value="">— Sin proveedor —</option>
+                  {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Sucursal *</label>
+              <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={inputCls}>
+                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Observaciones</label>
+              <textarea
+                value={observaciones}
+                onChange={e => setObservaciones(e.target.value)}
+                rows={2}
+                placeholder="Referencia, titular del cheque, etc."
+                className="px-3 py-2 text-sm rounded-md bg-kp-surface2 border border-kp-border text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red resize-none"
+              />
+            </div>
+
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 h-9 text-sm font-semibold rounded-md bg-kp-red text-white hover:bg-kp-red-dark transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Guardando…' : 'Guardar cheque'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); reset(); }}
+                className="px-4 h-9 text-sm font-semibold rounded-md border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-white transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+
+        </Modal>
     </>
   );
 }

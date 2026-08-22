@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Subrubro { id: string; nombre: string; rubro_id: string | null; }
@@ -29,24 +30,6 @@ function Spinner() {
   );
 }
 
-// ─── Modal genérico ───────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">{title}</h3>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Formulario simple de nombre ──────────────────────────────────────────────
 function FormNombre({
@@ -222,7 +205,7 @@ export default function RubrosClient() {
 
       {/* Modal Nuevo rubro */}
       {modalRubro && (
-        <Modal title="Nuevo rubro" onClose={() => setModalRubro(false)}>
+        <Modal open title="Nuevo rubro" onClose={() => setModalRubro(false)}>
           <FormNombre
             label="Nombre del rubro"
             placeholder="Ej: Servicios, Impuestos, Logística…"
@@ -236,7 +219,7 @@ export default function RubrosClient() {
 
       {/* Modal Nuevo subrubro */}
       {modalSubrubro && (
-        <Modal title={`Nuevo subrubro — ${modalSubrubro.nombre}`} onClose={() => setModalSubrubro(null)}>
+        <Modal open title={`Nuevo subrubro — ${modalSubrubro.nombre}`} onClose={() => setModalSubrubro(null)}>
           <FormNombre
             label="Nombre del subrubro"
             placeholder="Ej: Luz, Agua, Combustible…"
@@ -249,7 +232,7 @@ export default function RubrosClient() {
 
       {/* Modal Editar rubro */}
       {editRubro && (
-        <Modal title="Editar rubro" onClose={() => setEditRubro(null)}>
+        <Modal open title="Editar rubro" onClose={() => setEditRubro(null)}>
           <FormNombre
             label="Nombre del rubro"
             placeholder="Ej: Servicios, Impuestos, Logística…"
@@ -266,7 +249,7 @@ export default function RubrosClient() {
 
       {/* Modal Editar subrubro */}
       {editSubrubro && (
-        <Modal title="Editar subrubro" onClose={() => setEditSubrubro(null)}>
+        <Modal open title="Editar subrubro" onClose={() => setEditSubrubro(null)}>
           <FormNombre
             label="Nombre del subrubro"
             placeholder="Ej: Luz, Agua, Combustible…"

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -947,41 +948,38 @@ export default function PagosProveedorClient() {
       </div>
 
       {/* ── Modal de anulación ── */}
-      {anularTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={e => { if (e.target === e.currentTarget && !anulando) setAnularTarget(null); }}>
-          <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">Anular pago</h3>
-              <button onClick={() => !anulando && setAnularTarget(null)} className="text-kp-gray hover:text-kp-white">✕</button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-kp-gray-lt">
-                Vas a anular el pago de <span className="font-bold text-kp-white">{fmt(anularTarget.monto)}</span> del {fmtFecha(anularTarget.fecha)} ({anularTarget.medio_pago_nombre}).
-              </p>
-              <p className="text-xs text-amber-400/80">
-                Se revertirá la cuenta corriente y el estado de los comprobantes imputados.
-              </p>
-              <div>
-                <label className={labelCls}>Motivo *</label>
-                <input type="text" value={motivoAnular} onChange={e => setMotivoAnular(e.target.value)}
-                  placeholder="Ej: cargado por error" className={inputCls} autoFocus />
-              </div>
-              {anularError && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{anularError}</p>}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setAnularTarget(null)} disabled={anulando}
-                  className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors disabled:opacity-50">
-                  Cancelar
-                </button>
-                <button onClick={confirmarAnular} disabled={anulando}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
-                  {anulando ? <><Spinner /> Anulando…</> : 'Anular pago'}
-                </button>
-              </div>
-            </div>
+      <Modal
+        open={!!anularTarget}
+        onClose={() => !anulando && setAnularTarget(null)}
+        title="Anular pago"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-kp-gray-lt">
+            Vas a anular el pago de <span className="font-bold text-kp-white">{fmt(anularTarget?.monto ?? 0)}</span> del {anularTarget ? fmtFecha(anularTarget.fecha) : ""} ({anularTarget?.medio_pago_nombre}).
+          </p>
+          <p className="text-xs text-amber-400/80">
+            Se revertirá la cuenta corriente y el estado de los comprobantes imputados.
+          </p>
+          <div>
+            <label className={labelCls}>Motivo *</label>
+            <input type="text" value={motivoAnular} onChange={e => setMotivoAnular(e.target.value)}
+              placeholder="Ej: cargado por error" className={inputCls} autoFocus />
+          </div>
+          {anularError && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{anularError}</p>}
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setAnularTarget(null)} disabled={anulando}
+              className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={confirmarAnular} disabled={anulando}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
+              {anulando ? <><Spinner /> Anulando…</> : 'Anular pago'}
+            </button>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </section>
   );
 }

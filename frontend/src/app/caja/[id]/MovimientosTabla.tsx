@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Modal from '@/components/ui/Modal';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: string | number | null) => {
@@ -93,81 +94,70 @@ function EditMovimientoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-kp-surface border border-kp-border rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border">
-          <div className="flex items-center gap-2">
-            <span className="w-1 h-5 bg-amber-400 rounded-full block" />
-            <h2 className="text-base font-bold">Editar {tipoLabel}</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-kp-gray hover:text-kp-white transition-colors p-1 rounded-lg hover:bg-kp-surface2"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      open
+      onClose={onClose}
+      title={<>Editar {tipoLabel}</>}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1.5">
+            Concepto
+          </label>
+          <input
+            value={concepto}
+            onChange={e => setConcepto(e.target.value)}
+            className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-amber-400/60 transition-colors"
+            placeholder="Descripción del retiro"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1.5">
-              Concepto
-            </label>
+        <div>
+          <label className="block text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1.5">
+            Monto
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
             <input
-              value={concepto}
-              onChange={e => setConcepto(e.target.value)}
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-amber-400/60 transition-colors"
-              placeholder="Descripción del retiro"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={monto}
+              onChange={e => setMonto(e.target.value)}
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-7 pr-3 py-2.5 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-amber-400/60 transition-colors tabular-nums"
+              placeholder="0.00"
               required
             />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1.5">
-              Monto
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm">$</span>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={monto}
-                onChange={e => setMonto(e.target.value)}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-7 pr-3 py-2.5 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-amber-400/60 transition-colors tabular-nums"
-                placeholder="0.00"
-                required
-              />
-            </div>
-          </div>
+        {error && (
+          <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
 
-          {error && (
-            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-amber-500 text-black text-sm font-bold hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </form>
 
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-amber-500 text-black text-sm font-bold hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Guardando…' : 'Guardar cambios'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

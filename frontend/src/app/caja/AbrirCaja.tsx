@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
@@ -56,63 +57,52 @@ export default function AbrirCaja({
         Abrir Caja
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Abrir Caja"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">Sucursal</p>
+            <p className="text-sm font-medium text-kp-white">{sucursalNombre}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">
+              Saldo inicial (efectivo en caja)
+            </label>
+            <NumericInput
+              placeholder="0.00"
+              value={saldoInicial}
+              onChange={e => setSaldo(e.target.value)}
+              autoFocus
+              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+            />
+          </div>
 
-            <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide">Abrir Caja</h3>
-              </div>
-              <button onClick={() => setOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
+          {error && (
+            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+          )}
 
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-1">Sucursal</p>
-                <p className="text-sm font-medium text-kp-white">{sucursalNombre}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">
-                  Saldo inicial (efectivo en caja)
-                </label>
-                <NumericInput
-                  placeholder="0.00"
-                  value={saldoInicial}
-                  onChange={e => setSaldo(e.target.value)}
-                  autoFocus
-                  className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
-                />
-              </div>
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={handleAbrir}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
-                >
-                  {saving ? 'Abriendo…' : 'Abrir Caja'}
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleAbrir}
+              disabled={saving}
+              className="flex-1 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Abriendo…' : 'Abrir Caja'}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </>
   );
 }

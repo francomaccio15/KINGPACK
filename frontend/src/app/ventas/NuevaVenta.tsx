@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
+import Modal from '@/components/ui/Modal';
+import { btnPrimary, btnSecondary, cn, selectCls } from '@/lib/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +154,9 @@ export default function NuevaVenta({
 
   // ── Modal open state
   const [open, setOpen] = useState(false);
+  // Pestana activa en mobile. En escritorio los dos paneles se ven a la vez y
+  // este estado se ignora (las clases md: los muestran siempre).
+  const [tab, setTab] = useState<'carrito' | 'cobro'>('carrito');
 
   // ── Sucursal
   const [sucursalId, setSucursalId] = useState<string>(sucursales[0]?.id ?? '');
@@ -660,74 +665,109 @@ export default function NuevaVenta({
 
   const cartEmpty = cart.length === 0;
 
+  // Los dos botones de guardado se definen una sola vez y se ubican en dos
+  // lugares distintos (panel derecho en escritorio, barra inferior en mobile).
+  // Se comparte el JSX, no los handlers duplicados.
+  const btnPreventa = (
+    <button
+      type="button"
+      onClick={() => handleSave('preventa')}
+      disabled={cartEmpty || saving !== null}
+      className={cn(btnSecondary, 'w-full')}
+    >
+      {saving === 'preventa'
+        ? <span className="flex items-center justify-center gap-2"><Spinner /> Guardando…</span>
+        : 'Preventa'}
+    </button>
+  );
+
+  const btnConfirmar = (
+    <button
+      type="button"
+      onClick={() => handleSave('confirmada')}
+      disabled={cartEmpty || saving !== null || cajaAbierta !== true}
+      title={cajaAbierta === false ? 'La caja está cerrada' : undefined}
+      className={cn(btnPrimary, 'w-full')}
+    >
+      {saving === 'confirmada'
+        ? <span className="flex items-center justify-center gap-2"><Spinner /> Confirmando…</span>
+        : cajaAbierta === false ? 'Caja cerrada' : 'Confirmar Venta'}
+    </button>
+  );
+
   return (
     <>
       {/* ── Trigger button ─────────────────────────────────────────────────── */}
       <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg
-          bg-kp-red hover:bg-kp-red-dark transition-colors text-white text-sm font-semibold
-          shadow-lg shadow-kp-red/20"
+        onClick={() => { setTab('carrito'); setOpen(true); }}
+        className={cn(btnPrimary, 'w-full sm:w-auto')}
       >
         <span className="text-base leading-none font-bold">+</span>
         Nueva Venta
       </button>
 
-      {/* ── Full-screen modal ──────────────────────────────────────────────── */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Nueva Venta"
-        >
-          <div className="max-w-7xl w-full mx-4 h-[90vh] bg-kp-surface border border-kp-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-
-            {/* ── Header ─────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-1 h-6 bg-kp-red rounded-full block shrink-0" />
-                  <h2 className="font-bold text-base uppercase tracking-wide text-kp-white">
-                    Nueva Venta
-                  </h2>
-                </div>
-
-                {/* Sucursal selector in header */}
-                {sucursales.length > 0 ? (
-                  <select
-                    value={sucursalId}
-                    onChange={e => setSucursalId(e.target.value)}
-                    className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-xs text-kp-gray-lt
-                      focus:outline-none focus:border-kp-red transition-colors"
-                    aria-label="Sucursal"
-                  >
-                    {sucursales.map(s => (
-                      <option key={s.id} value={s.id}>{s.nombre}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-xs text-kp-gray bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5">
-                    Sin sucursales
-                  </span>
-                )}
-              </div>
-
-              <button
-                onClick={cerrar}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-kp-gray
-                  hover:text-kp-white hover:bg-kp-surface2 transition-colors text-lg leading-none"
-                aria-label="Cerrar"
-              >
-                ✕
-              </button>
-            </div>
+      {/* ── Punto de venta ─────────────────────────────────────────────────
+          Escritorio: dialogo ancho con los dos paneles lado a lado.
+          Mobile: pantalla completa con dos pestanas (Carrito / Cobro) y una
+          barra inferior fija con el total, que es el dato que el operador
+          necesita a la vista en todo momento.                                */}
+      <Modal
+        open={open}
+        onClose={cerrar}
+        title="Nueva Venta"
+        size="full"
+        padded={false}
+        closeOnBackdrop={false}
+        headerRight={
+          sucursales.length > 0 ? (
+            <select
+              value={sucursalId}
+              onChange={e => setSucursalId(e.target.value)}
+              className={cn(selectCls, 'w-auto max-w-[130px] md:max-w-none text-xs md:text-xs py-1.5 min-h-0')}
+              aria-label="Sucursal"
+            >
+              {sucursales.map(s => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-2xs text-kp-gray bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5">
+              Sin sucursales
+            </span>
+          )
+        }
+      >
+        {/* ── Pestanas (solo mobile) ── */}
+        <div className="md:hidden shrink-0 grid grid-cols-2 border-b border-kp-border bg-kp-surface" role="tablist">
+          {([
+            ['carrito', `Carrito${cart.length ? ` (${cart.length})` : ''}`],
+            ['cobro',   'Cobro'],
+          ] as [typeof tab, string][]).map(([val, label]) => (
+            <button
+              key={val}
+              type="button"
+              role="tab"
+              aria-selected={tab === val}
+              onClick={() => setTab(val)}
+              className={cn(
+                'min-h-touch text-xs font-bold uppercase tracking-widest transition-colors border-b-2',
+                tab === val ? 'text-kp-white border-kp-red' : 'text-kp-gray border-transparent',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
             {/* ── Body: two panels ───────────────────────────────────────── */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
 
               {/* ══ LEFT PANEL — Artículos + Carrito ══════════════════════ */}
-              <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4">
+              <div className={cn(
+                'flex-1 min-h-0 flex-col overflow-hidden p-4 md:p-5 gap-3 md:gap-4',
+                tab === 'carrito' ? 'flex' : 'hidden',
+                'md:flex',
+              )}>
 
                 {/* Caja cerrada — panel bloqueante */}
                 {cajaAbierta === false && (
@@ -757,7 +797,7 @@ export default function NuevaVenta({
                   <>
                 {/* Article search */}
                 <div>
-                  <label className="block text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+                  <label className="block text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
                     Buscar artículo
                   </label>
                   <div className="relative">
@@ -782,7 +822,7 @@ export default function NuevaVenta({
                 {artResults.length > 0 && (
                   <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 sm:max-h-[21.7rem] overflow-y-auto">
                     <div className="px-3 py-1.5 bg-kp-surface2 border-b border-kp-border">
-                      <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                      <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                         Resultados ({artResults.length})
                       </span>
                     </div>
@@ -797,14 +837,14 @@ export default function NuevaVenta({
                       return (
                         <div
                           key={art.id}
-                          className="flex items-center gap-3 px-3 py-2.5 border-b border-kp-border last:border-0
+                          className="flex items-center gap-2 md:gap-3 px-3 py-3 md:py-2.5 border-b border-kp-border last:border-0
                             hover:bg-kp-surface2 transition-colors group"
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-kp-gray">{art.codigo}</span>
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
+                              <span className={`text-2xs md:text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
                                 {stockBadge.label}
                               </span>
                             </div>
@@ -814,18 +854,22 @@ export default function NuevaVenta({
                               {ars.format(displayPrice)}
                             </p>
                             {listaId && art.precio_lista !== art.precio_madre && (
-                              <p className="text-[10px] text-kp-gray line-through tabular-nums">
+                              <p className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
                                 {ars.format(art.precio_madre)}
                               </p>
                             )}
                           </div>
                           <button
                             onClick={() => addToCart(art)}
-                            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg
+                            aria-label={`Agregar ${art.nombre}`}
+                            className="shrink-0 text-sm md:text-xs font-semibold rounded-lg
+                              w-11 h-11 md:w-auto md:h-auto md:px-3 md:py-1.5
+                              flex items-center justify-center
                               border border-kp-red text-kp-red hover:bg-kp-red hover:text-white
                               transition-colors"
                           >
-                            + Agregar
+                            <span className="md:hidden text-lg leading-none">+</span>
+                            <span className="hidden md:inline">+ Agregar</span>
                           </button>
                         </div>
                       );
@@ -841,11 +885,11 @@ export default function NuevaVenta({
 
                 {/* Cart section header */}
                 <div className="flex items-center justify-between shrink-0">
-                  <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                  <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                     Carrito
                   </span>
                   {cart.length > 0 && (
-                    <span className="text-[10px] text-kp-gray">
+                    <span className="text-2xs md:text-[10px] text-kp-gray">
                       {cart.reduce((acc, i) => acc + i.cantidad, 0)} unidades
                     </span>
                   )}
@@ -879,33 +923,33 @@ export default function NuevaVenta({
                         return (
                           <div
                             key={item.articulo_id}
-                            className={`relative flex items-center gap-2 py-2.5 ${
+                            className={`relative flex flex-wrap md:flex-nowrap items-center gap-2 py-3 md:py-2.5 ${
                               idx < cart.length - 1 ? 'border-b border-kp-border' : ''
                             }`}
                           >
                             {/* Article info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-kp-white truncate leading-tight">
+                            <div className="order-1 flex-1 basis-[calc(100%-3rem)] md:basis-auto min-w-0">
+                              <p className="text-sm font-semibold text-kp-white leading-tight line-clamp-2 md:truncate">
                                 {item.nombre}
                               </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-kp-gray">{item.codigo}</span>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                <span className="text-2xs md:text-[10px] text-kp-gray">{item.codigo}</span>
                                 {hasDiscount && (
                                   <>
-                                    <span className="text-[10px] text-kp-gray line-through tabular-nums">
+                                    <span className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
                                       {ars.format(item.precio_madre)}
                                     </span>
-                                    <span className="text-[10px] font-semibold text-kp-red bg-kp-red/10
+                                    <span className="text-2xs md:text-[10px] font-semibold text-kp-red bg-kp-red/10
                                       border border-kp-red/20 rounded px-1 py-0.5 leading-none">
                                       -{descEfectivo.toFixed(1)}%
                                     </span>
-                                    <span className="text-[10px] text-kp-white tabular-nums">
+                                    <span className="text-2xs md:text-[10px] text-kp-white tabular-nums">
                                       {ars.format(item.precio_unitario_final)}
                                     </span>
                                   </>
                                 )}
                                 {!hasDiscount && (
-                                  <span className="text-[10px] text-kp-gray tabular-nums">
+                                  <span className="text-2xs md:text-[10px] text-kp-gray tabular-nums">
                                     {ars.format(item.precio_unitario_final)} c/u
                                   </span>
                                 )}
@@ -913,11 +957,11 @@ export default function NuevaVenta({
                             </div>
 
                             {/* Qty controls */}
-                            <div className="flex items-center gap-0.5 shrink-0">
+                            <div className="order-3 flex items-center gap-0.5 shrink-0">
                               <button
                                 onClick={() => updateQty(item.articulo_id, -1)}
-                                className="w-7 h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
+                                className="w-10 h-10 md:w-7 md:h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
+                                  hover:bg-kp-surface2 flex items-center justify-center text-base md:text-sm leading-none
                                   transition-colors"
                                 aria-label="Reducir cantidad"
                               >
@@ -929,8 +973,8 @@ export default function NuevaVenta({
                                 onChange={e => setQty(item.articulo_id, e.target.value)}
                                 onBlur={() => commitQty(item.articulo_id)}
                                 className={[
-                                  'w-14 text-center text-sm font-semibold tabular-nums',
-                                  'bg-kp-surface2 border-y border-kp-border outline-none py-1',
+                                  'w-14 text-center text-base md:text-sm font-semibold tabular-nums',
+                                  'bg-kp-surface2 border-y border-kp-border outline-none h-10 md:h-auto md:py-1',
                                   'focus:border-kp-red focus:bg-kp-surface transition-colors',
                                   item.stock_disponible > 0 && item.cantidad > item.stock_disponible
                                     ? 'text-amber-400'
@@ -940,8 +984,8 @@ export default function NuevaVenta({
                               />
                               <button
                                 onClick={() => updateQty(item.articulo_id, 1)}
-                                className="w-7 h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
-                                  hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
+                                className="w-10 h-10 md:w-7 md:h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
+                                  hover:bg-kp-surface2 flex items-center justify-center text-base md:text-sm leading-none
                                   transition-colors"
                                 aria-label="Aumentar cantidad"
                               >
@@ -950,32 +994,32 @@ export default function NuevaVenta({
                             </div>
                             {/* Aviso stock insuficiente inline */}
                             {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
-                              <span className="text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
+                              <span className="text-2xs md:text-[9px] text-amber-400 font-semibold absolute bottom-0.5 md:-bottom-3.5 right-10 whitespace-nowrap">
                                 Stock: {item.stock_disponible}
                               </span>
                             )}
 
                             {/* Descuento por ítem */}
-                            <div className="flex items-center shrink-0" title="Descuento de este artículo (%)">
+                            <div className="order-4 flex items-center shrink-0" title="Descuento de este artículo (%)">
                               <NumericInput
                                 decimals={1}
                                 placeholder={descuentoBase > 0 ? String(descuentoBase) : '0'}
                                 value={item.descuento_manual != null ? item.descuento_manual : ''}
                                 onChange={e => setDescuentoItem(item.articulo_id, e.target.value)}
                                 className={[
-                                  'w-12 text-center text-xs tabular-nums py-1 outline-none rounded-l',
+                                  'w-12 text-center text-sm md:text-xs tabular-nums h-10 md:h-auto md:py-1 outline-none rounded-l',
                                   'bg-kp-surface2 border border-kp-border focus:border-kp-red focus:bg-kp-surface transition-colors',
                                   item.descuento_pct > 0 ? 'text-kp-red font-semibold' : 'text-kp-white',
                                 ].join(' ')}
                                 aria-label={`Descuento de ${item.nombre}`}
                               />
-                              <span className="px-1.5 py-1 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">
+                              <span className="px-1.5 h-10 md:h-auto md:py-1 flex items-center text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">
                                 %
                               </span>
                             </div>
 
                             {/* Line subtotal */}
-                            <div className="w-24 text-right shrink-0">
+                            <div className="order-5 ml-auto md:ml-0 md:w-24 text-right shrink-0">
                               <span className="text-sm font-semibold text-kp-white tabular-nums">
                                 {ars.format(subtotalLine)}
                               </span>
@@ -984,7 +1028,7 @@ export default function NuevaVenta({
                             {/* Remove button */}
                             <button
                               onClick={() => removeFromCart(item.articulo_id)}
-                              className="w-7 h-7 flex items-center justify-center rounded text-kp-gray
+                              className="order-2 md:order-none w-10 h-10 md:w-7 md:h-7 flex items-center justify-center rounded text-kp-gray
                                 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
                               aria-label={`Eliminar ${item.nombre}`}
                               title="Quitar artículo"
@@ -1007,7 +1051,12 @@ export default function NuevaVenta({
               </div>
 
               {/* ══ RIGHT PANEL — Resumen ════════════════════════════════ */}
-              <div className="w-80 shrink-0 border-l border-kp-border bg-kp-surface2 flex flex-col overflow-hidden">
+              <div className={cn(
+                'md:w-80 shrink-0 border-t md:border-t-0 md:border-l border-kp-border bg-kp-surface2',
+                'flex-1 min-h-0 md:flex-none flex-col overflow-hidden',
+                tab === 'cobro' ? 'flex' : 'hidden',
+                'md:flex',
+              )}>
 
                 {/* Banner cliente seleccionado — siempre visible aunque scrollees */}
                 {selectedClient && (
@@ -1026,7 +1075,7 @@ export default function NuevaVenta({
 
                   {/* ── Cliente ─────────────────────────────────────────── */}
                   <section>
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
+                    <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
                       Cliente
                     </p>
 
@@ -1097,7 +1146,7 @@ export default function NuevaVenta({
                                   {cli.razon_social}
                                 </p>
                                 {cli.lista_precio && (
-                                  <p className="text-[10px] text-kp-gray mt-0.5">
+                                  <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">
                                     Lista: {cli.lista_precio}
                                     {cli.descuento_adicional > 0 && ` · Dto. ${cli.descuento_adicional}%`}
                                   </p>
@@ -1120,12 +1169,12 @@ export default function NuevaVenta({
                               {selectedClient.razon_social}
                             </p>
                             {selectedClient.lista_precio && (
-                              <p className="text-[10px] text-kp-gray mt-0.5">
+                              <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">
                                 Lista: {selectedClient.lista_precio}
                               </p>
                             )}
                             {selectedClient.descuento_adicional > 0 && (
-                              <p className="text-[10px] text-kp-red font-semibold mt-0.5">
+                              <p className="text-2xs md:text-[10px] text-kp-red font-semibold mt-0.5">
                                 Dto. adicional: {selectedClient.descuento_adicional}%
                               </p>
                             )}
@@ -1137,13 +1186,13 @@ export default function NuevaVenta({
 
                   {/* ── Lista de precios ────────────────────────────────── */}
                   <section>
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                    <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                       Lista de precios
                     </p>
                     <select
                       value={listaId}
                       onChange={e => setListaId(e.target.value)}
-                      className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                      className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                         focus:outline-none focus:border-kp-red transition-colors"
                     >
                       {listas.map(l => (
@@ -1157,7 +1206,7 @@ export default function NuevaVenta({
                   {/* ── Discount breakdown ──────────────────────────────── */}
                   {(descuentoLista > 0 || descuentoCliente > 0) && (
                     <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">
+                      <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">
                         Descuentos aplicados
                       </p>
                       {descuentoLista > 0 && (
@@ -1171,7 +1220,7 @@ export default function NuevaVenta({
                           <div className="flex flex-col">
                             <span className="text-xs text-kp-gray">Dto. adicional</span>
                             {selectedClient && (
-                              <span className="text-[10px] text-amber-400 font-semibold truncate max-w-[130px]">
+                              <span className="text-2xs md:text-[10px] text-amber-400 font-semibold truncate max-w-[130px]">
                                 {selectedClient.razon_social}
                               </span>
                             )}
@@ -1196,7 +1245,7 @@ export default function NuevaVenta({
                           <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
                           <path d="M9 12l2 2 4-4"/>
                         </svg>
-                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                        <p className="text-2xs md:text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
                           Saldo a favor
                         </p>
                       </div>
@@ -1204,7 +1253,7 @@ export default function NuevaVenta({
                         {ars.format(saldoAFavorDisponible)}
                       </p>
                       <div>
-                        <p className="text-[10px] text-kp-gray mb-1.5">Aplicar en esta venta</p>
+                        <p className="text-2xs md:text-[10px] text-kp-gray mb-1.5">Aplicar en esta venta</p>
                         <div className="flex gap-2">
                           <NumericInput
                             value={saldoAFavorAplicado || ''}
@@ -1220,7 +1269,7 @@ export default function NuevaVenta({
                           <button
                             type="button"
                             onClick={() => setSaldoAFavorAplicado(Math.min(saldoAFavorDisponible, totalConExtra))}
-                            className="text-[10px] font-bold text-emerald-400 border border-emerald-500/40 rounded-lg
+                            className="text-2xs md:text-[10px] font-bold text-emerald-400 border border-emerald-500/40 rounded-lg
                               px-2 py-1 hover:bg-emerald-500/15 transition-colors whitespace-nowrap"
                           >
                             Todo
@@ -1229,7 +1278,7 @@ export default function NuevaVenta({
                       </div>
                       {saldoAFavorAplicado > 0 && (
                         <div className="flex justify-between items-center pt-1 border-t border-emerald-500/20">
-                          <span className="text-[10px] text-kp-gray">Resto a pagar</span>
+                          <span className="text-2xs md:text-[10px] text-kp-gray">Resto a pagar</span>
                           <span className="text-sm font-bold text-kp-white tabular-nums">
                             {ars.format(Math.max(0, totalConExtra - saldoAFavorAplicado))}
                           </span>
@@ -1242,14 +1291,14 @@ export default function NuevaVenta({
                   {(saldoAFavorAplicado < totalConExtra - 0.001 || cartEmpty) && (
                     <section className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">
+                        <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                           {saldoAFavorAplicado > 0 ? 'Medio de pago (resto)' : 'Medio de pago'}
                         </p>
                         {mediosPago.length >= 1 && (
                           <button
                             type="button"
                             onClick={() => { setUsarSegundoMedio(v => !v); setMonto1Str(''); setCuentaDestinoId2(cuentasBancarias[0]?.id ?? ''); }}
-                            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                            className={`flex items-center gap-1 text-2xs md:text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
                               usarSegundoMedio
                                 ? 'bg-kp-red/10 border-kp-red/40 text-kp-red'
                                 : 'border-kp-border text-kp-gray hover:border-kp-gray hover:text-kp-white'
@@ -1268,7 +1317,7 @@ export default function NuevaVenta({
                           <select
                             value={medioPagoId}
                             onChange={e => setMedioPagoId(e.target.value)}
-                            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                               focus:outline-none focus:border-kp-red transition-colors"
                           >
                             {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
@@ -1276,7 +1325,7 @@ export default function NuevaVenta({
                             ))}
                           </select>
                         ) : (
-                          <select className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-gray focus:outline-none transition-colors" disabled>
+                          <select className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-gray focus:outline-none transition-colors" disabled>
                             <option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option>
                           </select>
                         )
@@ -1284,33 +1333,33 @@ export default function NuevaVenta({
                         <div className="rounded-xl border border-kp-border overflow-hidden">
                           {/* Medio 1 */}
                           <div className="p-3 space-y-2 border-b border-kp-border">
-                            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 1</p>
+                            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 1</p>
                             <select
                               value={medioPagoId}
                               onChange={e => setMedioPagoId(e.target.value)}
-                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
                             >
                               {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
                                 <option key={m.id} value={m.id}>{m.nombre}</option>
                               ))}
                             </select>
                             <div>
-                              <p className="text-[10px] text-kp-gray mb-1">Monto</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray mb-1">Monto</p>
                               <NumericInput
                                 value={monto1Str}
                                 onChange={e => setMonto1Str(e.target.value)}
                                 placeholder="0,00"
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm font-bold text-kp-white tabular-nums focus:outline-none focus:border-kp-red transition-colors"
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm font-bold text-kp-white tabular-nums focus:outline-none focus:border-kp-red transition-colors"
                               />
                             </div>
                           </div>
                           {/* Medio 2 */}
                           <div className="p-3 space-y-2 bg-kp-surface2/30">
-                            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 2</p>
+                            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest font-semibold">Medio 2</p>
                             <select
                               value={medioPagoId2}
                               onChange={e => setMedioPagoId2(e.target.value)}
-                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
                             >
                               {mediosPago.filter(m => m.id !== SALDO_FAVOR_MP_ID).map(m => (
                                 <option key={m.id} value={m.id}>{m.nombre}</option>
@@ -1332,12 +1381,12 @@ export default function NuevaVenta({
                   {esEfectivo && !cartEmpty && !usarSegundoMedio && saldoAFavorAplicado < totalConExtra - 0.001 && (
                     <section className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
                       <div className="px-4 py-2.5 bg-kp-surface2 border-b border-kp-border">
-                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">Efectivo</p>
+                        <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Efectivo</p>
                       </div>
                       <div className="px-4 py-3 space-y-3">
                         {/* Importe recibido */}
                         <div>
-                          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+                          <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
                             Importe recibido
                           </p>
                           <NumericInput
@@ -1376,7 +1425,7 @@ export default function NuevaVenta({
                   {/* ── Cuenta destino (Transferencia / MP / QR) ─────────── */}
                   {esTransferencia && (
                     <section>
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                      <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino
                       </p>
                       {cuentasBancarias.length === 0 ? (
@@ -1417,7 +1466,7 @@ export default function NuevaVenta({
                   {/* ── Cuenta destino medio 2 (Transferencia / MP / QR) ── */}
                   {usarSegundoMedio && esTransferencia2 && cuentasBancarias.length > 0 && (
                     <section>
-                      <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                      <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                         Cuenta destino (Medio 2)
                       </p>
                       <select
@@ -1450,7 +1499,7 @@ export default function NuevaVenta({
                   {(usarSegundoMedio ? (esCheque || esCheque2) : esCheque) && saldoAFavorAplicado < totalConExtra - 0.001 && (
                     <section className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
+                        <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
                         <button type="button"
                           onClick={() => setCheques(prev => [...prev, { banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }])}
                           className="text-xs text-kp-red hover:underline">
@@ -1468,34 +1517,34 @@ export default function NuevaVenta({
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Banco</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Banco</p>
                               <input type="text" placeholder="Ej: Galicia" value={ch.banco}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, banco: e.target.value } : c))}
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Nro. Cheque</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Nro. Cheque</p>
                               <input type="text" placeholder="00001234" value={ch.numero_cheque}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, numero_cheque: e.target.value } : c))}
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Emisión</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Emisión</p>
                               <input type="date" value={ch.fecha_emision}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, fecha_emision: e.target.value } : c))}
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Vencimiento</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Vencimiento</p>
                               <input type="date" value={ch.fecha_vencimiento}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, fecha_vencimiento: e.target.value } : c))}
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                             <div className="col-span-2">
-                              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Importe</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Importe</p>
                               <NumericInput placeholder="0.00" value={ch.importe}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, importe: e.target.value } : c))}
-                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
+                                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                           </div>
                         </div>
@@ -1541,7 +1590,7 @@ export default function NuevaVenta({
                     {/* ── Descuento extra manual (sobre el total) ─────────── */}
                     <div className="px-4 py-3 border-t border-kp-border space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                        <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                           Descuento extra
                         </span>
                         <div className="flex rounded-md border border-kp-border overflow-hidden">
@@ -1580,54 +1629,63 @@ export default function NuevaVenta({
                   </section>
                 </div>
 
-                {/* ── Action buttons ──────────────────────────────────────── */}
-                <div className="p-5 space-y-2.5 border-t border-kp-border shrink-0">
+                {/* ── Acciones (escritorio) ───────────────────────────────── */}
+                <div className="hidden md:block p-5 space-y-2.5 border-t border-kp-border shrink-0">
                   {saveError && (
                     <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/20 rounded-lg px-3 py-2">
                       {saveError}
                     </p>
                   )}
-
-                  <button
-                    onClick={() => handleSave('preventa')}
-                    disabled={cartEmpty || saving !== null}
-                    className="w-full border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray
-                      px-4 py-2.5 rounded-lg transition-colors text-sm font-semibold
-                      disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {saving === 'preventa' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Spinner /> Guardando…
-                      </span>
-                    ) : (
-                      'Guardar Preventa'
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => handleSave('confirmada')}
-                    disabled={cartEmpty || saving !== null || cajaAbierta !== true}
-                    title={cajaAbierta === false ? 'La caja está cerrada' : undefined}
-                    className="w-full bg-kp-red hover:bg-kp-red-dark text-white font-semibold px-4 py-2.5 rounded-lg
-                      transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed
-                      shadow-lg shadow-kp-red/20"
-                  >
-                    {saving === 'confirmada' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Spinner /> Confirmando…
-                      </span>
-                    ) : cajaAbierta === false ? (
-                      'Caja cerrada'
-                    ) : (
-                      'Confirmar Venta'
-                    )}
-                  </button>
+                  {btnPreventa}
+                  {btnConfirmar}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+
+            {/* ── Barra inferior fija (solo mobile) ─────────────────────────
+                Muestra el total en las DOS pestanas: es el numero que el
+                operador le canta al cliente. El boton primario es contextual,
+                asi nunca compiten tres acciones en 375px.                    */}
+            <div className="md:hidden shrink-0 border-t border-kp-border bg-kp-surface px-4 py-3 pb-safe space-y-2">
+              {saveError && (
+                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/20 rounded-lg px-3 py-2">
+                  {saveError}
+                </p>
+              )}
+
+              <div className="flex items-baseline justify-between">
+                <span className="text-2xs font-bold uppercase tracking-widest text-kp-gray">Total</span>
+                <span className="text-xl font-bold text-kp-white tabular-nums">{ars.format(totalConExtra)}</span>
+              </div>
+
+              <div className="flex gap-2">
+                {tab === 'carrito' ? (
+                  <>
+                    <div className="[&>button]:w-auto [&>button]:px-4 shrink-0">{btnPreventa}</div>
+                    <button
+                      type="button"
+                      onClick={() => setTab('cobro')}
+                      disabled={cartEmpty}
+                      className={cn(btnPrimary, 'flex-1')}
+                    >
+                      Ir a cobrar{cart.length > 0 ? ` (${cart.length})` : ''}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setTab('carrito')}
+                      className={cn(btnSecondary, 'shrink-0')}
+                    >
+                      Carrito
+                    </button>
+                    <div className="flex-1 [&>button]:w-full">{btnConfirmar}</div>
+                  </>
+                )}
+              </div>
+            </div>
+      </Modal>
     </>
   );
 }

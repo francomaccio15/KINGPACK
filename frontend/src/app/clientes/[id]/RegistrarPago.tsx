@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol } from '@/lib/mediosPago';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -143,156 +144,146 @@ export default function RegistrarPago({
         + Registrar Pago
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget) cerrar(); }}
-        >
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <Modal
+        open={open}
+        onClose={cerrar}
+        title="Registrar Pago"
+        size="sm"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto">
 
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-green-500 rounded-full block" />
-                <h3 className="font-bold text-base uppercase tracking-wide">Registrar Pago</h3>
-              </div>
-              <button onClick={cerrar} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">✕</button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
-
-              {/* Saldo actual */}
-              <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
-                <span className="text-xs text-kp-gray uppercase tracking-widest">Saldo actual</span>
-                <span className={`font-bold tabular-nums ${saldoActual > 0 ? 'text-amber-400' : 'text-green-400'}`}>
-                  {ars.format(saldoActual)}
-                </span>
-              </div>
-
-              {/* Monto */}
-              <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Monto *</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                  <NumericInput
-                    required
-                    value={monto} onChange={e => setMonto(e.target.value)}
-                    placeholder="0.00" autoFocus
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
-                      placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Método de pago */}
-              <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Método de Pago *</label>
-                {mediosPago.length === 0 ? (
-                  <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {mediosPago.map(mp => (
-                      <button
-                        key={mp.id}
-                        type="button"
-                        onClick={() => setMedioPagoId(mp.id)}
-                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-left
-                          ${medioPagoId === mp.id
-                            ? 'border-green-500 bg-green-500/10 text-green-300'
-                            : 'border-kp-border bg-kp-surface2 text-kp-gray hover:border-kp-gray hover:text-kp-white'
-                          }`}
-                      >
-                        {mp.nombre}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Cuenta destino: sólo para medios que van contra el banco */}
-              {requiereCuenta && (
-                <div>
-                  <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Cuenta que recibe *</label>
-                  <select value={cuentaId} onChange={e => setCuentaId(e.target.value)}
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
-                    <option value="">Seleccioná la cuenta</option>
-                    {cuentas.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-[11px] text-kp-gray">Se acredita en el saldo de esa cuenta.</p>
-                </div>
-              )}
-
-              {/* Datos del cheque */}
-              {esCheque && (
-                <div className="space-y-3 rounded-xl border border-kp-border bg-kp-surface2/40 p-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Datos del cheque</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Banco</label>
-                      <input value={chBanco} onChange={e => setChBanco(e.target.value)} placeholder="Banco"
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Nº Cheque</label>
-                      <input value={chNumero} onChange={e => setChNumero(e.target.value)} placeholder="00000000"
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
-                      <input type="date" value={chEmision} onChange={e => setChEmision(e.target.value)}
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha de pago *</label>
-                      <input type="date" value={chVenc} onChange={e => setChVenc(e.target.value)}
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
-                </div>
-              )}
-
-              {/* Concepto */}
-              <div>
-                <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Concepto (opcional)</label>
-                <input
-                  value={concepto} onChange={e => setConcepto(e.target.value)}
-                  placeholder="ej: Pago cuota septiembre..."
-                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
-                    placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
-                />
-              </div>
-
-              {/* Saldo resultante */}
-              {montoNum > 0 && (
-                <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-green-700/40 px-4 py-3">
-                  <span className="text-xs text-kp-gray uppercase tracking-widest">Saldo resultante</span>
-                  <span className={`font-bold tabular-nums ${saldoNuevo > 0 ? 'text-amber-400' : 'text-green-400'}`}>
-                    {ars.format(saldoNuevo)}
-                  </span>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>
-              )}
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={cerrar}
-                  className="flex-1 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-white hover:border-kp-gray transition-colors">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={loading || !monto || !medioPagoId}
-                  className="flex-1 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
-                  {loading ? 'Guardando…' : 'Confirmar Pago'}
-                </button>
-              </div>
-
-            </form>
+          {/* Saldo actual */}
+          <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
+            <span className="text-xs text-kp-gray uppercase tracking-widest">Saldo actual</span>
+            <span className={`font-bold tabular-nums ${saldoActual > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+              {ars.format(saldoActual)}
+            </span>
           </div>
-        </div>
-      )}
+
+          {/* Monto */}
+          <div>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Monto *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+              <NumericInput
+                required
+                value={monto} onChange={e => setMonto(e.target.value)}
+                placeholder="0.00" autoFocus
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-3 py-2 text-sm text-kp-white
+                  placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Método de pago */}
+          <div>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Método de Pago *</label>
+            {mediosPago.length === 0 ? (
+              <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {mediosPago.map(mp => (
+                  <button
+                    key={mp.id}
+                    type="button"
+                    onClick={() => setMedioPagoId(mp.id)}
+                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-left
+                      ${medioPagoId === mp.id
+                        ? 'border-green-500 bg-green-500/10 text-green-300'
+                        : 'border-kp-border bg-kp-surface2 text-kp-gray hover:border-kp-gray hover:text-kp-white'
+                      }`}
+                  >
+                    {mp.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Cuenta destino: sólo para medios que van contra el banco */}
+          {requiereCuenta && (
+            <div>
+              <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Cuenta que recibe *</label>
+              <select value={cuentaId} onChange={e => setCuentaId(e.target.value)}
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
+                <option value="">Seleccioná la cuenta</option>
+                {cuentas.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-kp-gray">Se acredita en el saldo de esa cuenta.</p>
+            </div>
+          )}
+
+          {/* Datos del cheque */}
+          {esCheque && (
+            <div className="space-y-3 rounded-xl border border-kp-border bg-kp-surface2/40 p-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Datos del cheque</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Banco</label>
+                  <input value={chBanco} onChange={e => setChBanco(e.target.value)} placeholder="Banco"
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Nº Cheque</label>
+                  <input value={chNumero} onChange={e => setChNumero(e.target.value)} placeholder="00000000"
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
+                  <input type="date" value={chEmision} onChange={e => setChEmision(e.target.value)}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha de pago *</label>
+                  <input type="date" value={chVenc} onChange={e => setChVenc(e.target.value)}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                </div>
+              </div>
+              <p className="text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
+            </div>
+          )}
+
+          {/* Concepto */}
+          <div>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Concepto (opcional)</label>
+            <input
+              value={concepto} onChange={e => setConcepto(e.target.value)}
+              placeholder="ej: Pago cuota septiembre..."
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
+            />
+          </div>
+
+          {/* Saldo resultante */}
+          {montoNum > 0 && (
+            <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-green-700/40 px-4 py-3">
+              <span className="text-xs text-kp-gray uppercase tracking-widest">Saldo resultante</span>
+              <span className={`font-bold tabular-nums ${saldoNuevo > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                {ars.format(saldoNuevo)}
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={cerrar}
+              className="flex-1 py-2 rounded-lg border border-kp-border text-kp-gray text-sm hover:text-kp-white hover:border-kp-gray transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading || !monto || !medioPagoId}
+              className="flex-1 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+              {loading ? 'Guardando…' : 'Confirmar Pago'}
+            </button>
+          </div>
+
+        </form>
+          
+      </Modal>
     </>
   );
 }

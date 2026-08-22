@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getStoredUser } from '@/lib/auth';
+import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -97,24 +98,6 @@ function Spinner() {
   );
 }
 
-// ─── Modal genérico ───────────────────────────────────────────────────────────
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} bg-kp-surface border border-kp-border rounded-2xl shadow-2xl max-h-[90vh] flex flex-col`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border shrink-0">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-kp-white">{title}</h3>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Formulario de proveedor (crear / editar) ─────────────────────────────────
 function FormProveedor({
@@ -643,7 +626,7 @@ export default function ProveedoresClient() {
 
       {/* Modal Crear */}
       {modalCrear && (
-        <Modal title="Nuevo proveedor" onClose={() => setModalCrear(false)}>
+        <Modal open title="Nuevo proveedor" onClose={() => setModalCrear(false)}>
           <FormProveedor
             onGuardar={() => { setModalCrear(false); cargar(); }}
             onCerrar={() => setModalCrear(false)}
@@ -653,7 +636,7 @@ export default function ProveedoresClient() {
 
       {/* Modal Editar */}
       {modalEditar && (
-        <Modal title="Editar proveedor" onClose={() => setModalEditar(null)}>
+        <Modal open title="Editar proveedor" onClose={() => setModalEditar(null)}>
           <FormProveedor
             inicial={modalEditar}
             onGuardar={() => { setModalEditar(null); cargar(); }}
@@ -664,14 +647,14 @@ export default function ProveedoresClient() {
 
       {/* Modal Cuenta Corriente */}
       {modalCC && (
-        <Modal title={`Cuenta corriente — ${modalCC.razon_social}`} onClose={() => setModalCC(null)} wide>
+        <Modal open title={`Cuenta corriente — ${modalCC.razon_social}`} onClose={() => setModalCC(null)} size="xl">
           <ModalCuentaCorriente proveedor={modalCC} onCerrar={() => setModalCC(null)} />
         </Modal>
       )}
 
       {/* Modal Historial de pedidos */}
       {modalHist && (
-        <Modal title={`Historial de pedidos — ${modalHist.razon_social}`} onClose={() => setModalHist(null)} wide>
+        <Modal open title={`Historial de pedidos — ${modalHist.razon_social}`} onClose={() => setModalHist(null)} size="xl">
           <ModalHistorialPedidos proveedor={modalHist} esAdmin={esAdmin} onCerrar={() => setModalHist(null)} />
         </Modal>
       )}

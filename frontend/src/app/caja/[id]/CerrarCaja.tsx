@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -202,206 +203,193 @@ export default function CerrarCaja({
         Cerrar Caja
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+      <Modal
+        open={open}
+        onClose={handleClose}
+        title={cierre ? 'Caja Cerrada ✓' : 'Cerrar Caja — Arqueo'}
+        size="sm"
+      >
+        {cierre ? (
+          /* ── Success view ── */
+          <div className="p-5 space-y-4">
 
-            <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide">
-                  {cierre ? 'Caja Cerrada ✓' : 'Cerrar Caja — Arqueo'}
-                </h3>
-              </div>
-              <button onClick={handleClose} className="text-kp-gray hover:text-kp-white transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-semibold">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Caja cerrada correctamente
             </div>
 
-            {cierre ? (
-              /* ── Success view ── */
-              <div className="p-5 space-y-4">
+            {/* Saldo sistema */}
+            <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3 flex justify-between items-center">
+              <p className="text-xs text-kp-gray">Saldo sistema</p>
+              <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreSistema)}</p>
+            </div>
 
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-semibold">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Caja cerrada correctamente
-                </div>
-
-                {/* Saldo sistema */}
-                <div className="bg-kp-surface2 border border-kp-border rounded-lg p-3 flex justify-between items-center">
-                  <p className="text-xs text-kp-gray">Saldo sistema</p>
-                  <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreSistema)}</p>
-                </div>
-
-                {/* Desglose retiro + fondo */}
-                <div className="bg-kp-surface2 border border-kp-border rounded-xl overflow-hidden divide-y divide-kp-border">
-                  <div className="flex justify-between items-center px-3 py-2.5">
-                    <p className="text-xs text-kp-gray">Retiro (me llevo)</p>
-                    <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(retiroNum)}</p>
-                  </div>
-                  <div className="flex justify-between items-center px-3 py-2.5">
-                    <p className="text-xs text-kp-gray">Fondo (dejo en caja)</p>
-                    <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(fondoNum)}</p>
-                  </div>
-                  <div className="flex justify-between items-center px-3 py-2.5 bg-kp-border/10">
-                    <p className="text-xs font-bold text-kp-gray uppercase tracking-widest">Total contado</p>
-                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreReal)}</p>
-                  </div>
-                </div>
-
-                {/* Diferencia */}
-                <div className={`border rounded-lg p-3 flex justify-between items-center ${
-                  diffOk
-                    ? 'bg-green-500/10 border-green-500/30'
-                    : cierreDiff > 0
-                      ? 'bg-kp-red/10 border-kp-red/30'
-                      : 'bg-amber-500/10 border-amber-500/30'
-                }`}>
-                  <p className={`text-xs font-bold uppercase tracking-widest ${
-                    diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
-                  }`}>
-                    {diffOk ? '✓ Cuadrada' : cierreDiff > 0 ? '▼ FALTA' : '▲ SOBRA'}
-                  </p>
-                  <p className={`text-sm font-bold tabular-nums ${
-                    diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
-                  }`}>
-                    {diffOk ? '—' : `${cierreDiff > 0 ? '−' : '+'}${ars.format(Math.abs(cierreDiff))}`}
-                  </p>
-                </div>
-
-                {/* Botones */}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={handleImprimir}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-white text-sm font-semibold hover:border-kp-gray transition-colors"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                      <polyline points="6 9 6 2 18 2 18 9" />
-                      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-                      <rect x="6" y="14" width="12" height="8" />
-                    </svg>
-                    Imprimir cierre
-                  </button>
-                  <button
-                    onClick={handleClose}
-                    className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                  >
-                    Cerrar
-                  </button>
-                </div>
+            {/* Desglose retiro + fondo */}
+            <div className="bg-kp-surface2 border border-kp-border rounded-xl overflow-hidden divide-y divide-kp-border">
+              <div className="flex justify-between items-center px-3 py-2.5">
+                <p className="text-xs text-kp-gray">Retiro (me llevo)</p>
+                <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(retiroNum)}</p>
               </div>
-            ) : (
-              /* ── Form ── */
-              <div className="p-5 space-y-4">
+              <div className="flex justify-between items-center px-3 py-2.5">
+                <p className="text-xs text-kp-gray">Fondo (dejo en caja)</p>
+                <p className="text-sm font-semibold tabular-nums text-kp-white">{ars.format(fondoNum)}</p>
+              </div>
+              <div className="flex justify-between items-center px-3 py-2.5 bg-kp-border/10">
+                <p className="text-xs font-bold text-kp-gray uppercase tracking-widest">Total contado</p>
+                <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(cierreReal)}</p>
+              </div>
+            </div>
 
-                {/* Saldo sistema (read-only) */}
-                <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-0.5">Saldo sistema</p>
-                    <p className="text-xs text-kp-gray/60">Calculado automáticamente</p>
-                  </div>
-                  <p className="text-xl font-bold tabular-nums text-kp-white">
-                    {ars.format(saldoSistema)}
-                  </p>
-                </div>
+            {/* Diferencia */}
+            <div className={`border rounded-lg p-3 flex justify-between items-center ${
+              diffOk
+                ? 'bg-green-500/10 border-green-500/30'
+                : cierreDiff > 0
+                  ? 'bg-kp-red/10 border-kp-red/30'
+                  : 'bg-amber-500/10 border-amber-500/30'
+            }`}>
+              <p className={`text-xs font-bold uppercase tracking-widest ${
+                diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
+              }`}>
+                {diffOk ? '✓ Cuadrada' : cierreDiff > 0 ? '▼ FALTA' : '▲ SOBRA'}
+              </p>
+              <p className={`text-sm font-bold tabular-nums ${
+                diffOk ? 'text-green-400' : cierreDiff > 0 ? 'text-kp-red' : 'text-amber-400'
+              }`}>
+                {diffOk ? '—' : `${cierreDiff > 0 ? '−' : '+'}${ars.format(Math.abs(cierreDiff))}`}
+              </p>
+            </div>
 
-                {/* Retiro */}
-                <div>
-                  <label className={labelCls}>Retiro — lo que te llevás *</label>
-                  <NumericInput
-                    placeholder="0.00"
-                    value={retiro}
-                    onChange={e => setRetiro(e.target.value)}
-                    autoFocus
-                    className={inputCls}
-                  />
-                </div>
+            {/* Botones */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleImprimir}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-white text-sm font-semibold hover:border-kp-gray transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                Imprimir cierre
+              </button>
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Form ── */
+          <div className="p-5 space-y-4">
 
-                {/* Fondo */}
-                <div>
-                  <label className={labelCls}>Fondo de caja — lo que dejás *</label>
-                  <NumericInput
-                    placeholder="0.00"
-                    value={fondo}
-                    onChange={e => setFondo(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
+            {/* Saldo sistema (read-only) */}
+            <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 flex justify-between items-center">
+              <div>
+                <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold mb-0.5">Saldo sistema</p>
+                <p className="text-xs text-kp-gray/60">Calculado automáticamente</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums text-kp-white">
+                {ars.format(saldoSistema)}
+              </p>
+            </div>
 
-                {/* Total en tiempo real */}
-                {hayAlgunValor && (
-                  <div className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5 flex justify-between items-center">
-                    <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold">Total contado</p>
-                    <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(saldoRealNum)}</p>
-                  </div>
-                )}
+            {/* Retiro */}
+            <div>
+              <label className={labelCls}>Retiro — lo que te llevás *</label>
+              <NumericInput
+                placeholder="0.00"
+                value={retiro}
+                onChange={e => setRetiro(e.target.value)}
+                autoFocus
+                className={inputCls}
+              />
+            </div>
 
-                {/* Diferencia en tiempo real */}
-                {hayAlgunValor && (
-                  <div className={[
-                    'rounded-xl border p-3',
-                    !hayDiferencia
-                      ? 'border-green-500/30 bg-green-500/5'
-                      : diferencia > 0
-                        ? 'border-kp-red/30 bg-kp-red/5'
-                        : 'border-amber-500/30 bg-amber-500/5',
-                  ].join(' ')}>
-                    <div className="flex justify-between items-center">
-                      <p className={[
-                        'text-xs font-semibold uppercase tracking-widest',
-                        !hayDiferencia ? 'text-kp-gray'
-                          : diferencia > 0 ? 'text-kp-red'
-                          : 'text-amber-400',
-                      ].join(' ')}>
-                        {!hayDiferencia ? 'Caja cuadrada' : diferencia > 0 ? '▼ FALTA' : '▲ SOBRA'}
-                      </p>
-                      <p className={[
-                        'text-lg font-bold tabular-nums',
-                        !hayDiferencia ? 'text-green-400'
-                          : diferencia > 0 ? 'text-kp-red'
-                          : 'text-amber-400',
-                      ].join(' ')}>
-                        {hayDiferencia && (diferencia > 0 ? '−' : '+')}{ars.format(Math.abs(diferencia))}
-                      </p>
-                    </div>
-                    {hayDiferencia && (
-                      <p className={`text-xs mt-1.5 ${diferencia > 0 ? 'text-kp-red/90' : 'text-amber-400/90'}`}>
-                        {diferencia > 0
-                          ? `Hay ${ars.format(Math.abs(diferencia))} MENOS que lo que indica el sistema.`
-                          : `Hay ${ars.format(Math.abs(diferencia))} MÁS que lo que indica el sistema.`}
-                      </p>
-                    )}
-                  </div>
-                )}
+            {/* Fondo */}
+            <div>
+              <label className={labelCls}>Fondo de caja — lo que dejás *</label>
+              <NumericInput
+                placeholder="0.00"
+                value={fondo}
+                onChange={e => setFondo(e.target.value)}
+                className={inputCls}
+              />
+            </div>
 
-                {error && (
-                  <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
-                )}
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={handleCerrar}
-                    disabled={saving || !hayAlgunValor}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? <><Spinner /> Cerrando…</> : 'Confirmar Cierre'}
-                  </button>
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+            {/* Total en tiempo real */}
+            {hayAlgunValor && (
+              <div className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2.5 flex justify-between items-center">
+                <p className="text-xs text-kp-gray uppercase tracking-widest font-semibold">Total contado</p>
+                <p className="text-sm font-bold tabular-nums text-kp-white">{ars.format(saldoRealNum)}</p>
               </div>
             )}
+
+            {/* Diferencia en tiempo real */}
+            {hayAlgunValor && (
+              <div className={[
+                'rounded-xl border p-3',
+                !hayDiferencia
+                  ? 'border-green-500/30 bg-green-500/5'
+                  : diferencia > 0
+                    ? 'border-kp-red/30 bg-kp-red/5'
+                    : 'border-amber-500/30 bg-amber-500/5',
+              ].join(' ')}>
+                <div className="flex justify-between items-center">
+                  <p className={[
+                    'text-xs font-semibold uppercase tracking-widest',
+                    !hayDiferencia ? 'text-kp-gray'
+                      : diferencia > 0 ? 'text-kp-red'
+                      : 'text-amber-400',
+                  ].join(' ')}>
+                    {!hayDiferencia ? 'Caja cuadrada' : diferencia > 0 ? '▼ FALTA' : '▲ SOBRA'}
+                  </p>
+                  <p className={[
+                    'text-lg font-bold tabular-nums',
+                    !hayDiferencia ? 'text-green-400'
+                      : diferencia > 0 ? 'text-kp-red'
+                      : 'text-amber-400',
+                  ].join(' ')}>
+                    {hayDiferencia && (diferencia > 0 ? '−' : '+')}{ars.format(Math.abs(diferencia))}
+                  </p>
+                </div>
+                {hayDiferencia && (
+                  <p className={`text-xs mt-1.5 ${diferencia > 0 ? 'text-kp-red/90' : 'text-amber-400/90'}`}>
+                    {diferencia > 0
+                      ? `Hay ${ars.format(Math.abs(diferencia))} MENOS que lo que indica el sistema.`
+                      : `Hay ${ars.format(Math.abs(diferencia))} MÁS que lo que indica el sistema.`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">{error}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleCerrar}
+                disabled={saving || !hayAlgunValor}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
+              >
+                {saving ? <><Spinner /> Cerrando…</> : 'Confirmar Cierre'}
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+          
+      </Modal>
     </>
   );
 }

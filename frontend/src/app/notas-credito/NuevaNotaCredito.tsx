@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NotaCredito, NcItem } from './page';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -325,342 +326,336 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const selectCls = inputCls + ' cursor-pointer';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-8 pb-8 overflow-y-auto">
-      <div className="w-full max-w-3xl mx-4 bg-kp-surface rounded-2xl border border-kp-border shadow-2xl shadow-black/60">
+    <Modal
+      open
+      onClose={onClose}
+      title="Nueva Nota de Crédito"
+      size="xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2 rounded-t-2xl">
-          <div className="flex items-center gap-3">
-            <span className="w-1 h-6 bg-kp-red rounded-full" />
-            <h2 className="text-base font-bold uppercase tracking-wide">Nueva Nota de Crédito</h2>
-          </div>
-          <button onClick={onClose} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
+        {/* ── Devolución de venta completa ── */}
+        <div className={`rounded-xl border transition-colors ${modoDevolucion ? 'border-blue-500/30 bg-blue-500/5' : 'border-kp-border bg-kp-surface2'}`}>
+          <button
+            type="button"
+            onClick={() => { setModoDevolucion(v => !v); setVentaNumero(''); setVentaCargada(null); setErrorVenta(''); setFacturaId(''); }}
+            className="w-full flex items-center justify-between px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              <span className={`text-xs font-bold uppercase tracking-wider ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
+                Devolver venta completa <span className="normal-case font-semibold text-amber-400/90">(obligatorio para ARCA)</span>
+              </span>
+              {ventaCargada && (
+                <span className="ml-1 text-xs font-semibold text-green-400">— Venta #{ventaCargada.numero} cargada ✓</span>
+              )}
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 text-kp-gray transition-transform ${modoDevolucion ? 'rotate-180' : ''}`}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {modoDevolucion && (
+            <div className="px-4 pb-4 space-y-3 border-t border-kp-border/40">
+              <p className="text-xs text-kp-gray pt-3">
+                Ingresá el número de venta para cargar todos sus artículos automáticamente.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={ventaNumero}
+                  onChange={e => setVentaNumero(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarVenta())}
+                  placeholder="Número de venta…"
+                  className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={buscarVenta}
+                  disabled={buscandoVenta || !ventaNumero.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                >
+                  {buscandoVenta ? (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  )}
+                  {buscandoVenta ? 'Buscando…' : 'Cargar'}
+                </button>
+              </div>
+              {errorVenta && (
+                <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{errorVenta}</p>
+              )}
+              {ventaCargada && (
+                <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mt-0.5 flex-shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <div>
+                    <p className="font-semibold">Venta #{ventaCargada.numero} cargada correctamente</p>
+                    {ventaCargada.cliente && <p className="text-green-400/70 mt-0.5">Cliente: {ventaCargada.cliente}</p>}
+                    <p className="text-green-400/70 mt-0.5">Podés ajustar los ítems, cantidades y motivo antes de emitir.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Fila 1: Tipo + Fecha + Referencia */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className={labelCls}>Tipo de comprobante *</label>
+            <select value={tipoId} onChange={e => setTipoId(e.target.value)} required className={selectCls}>
+              {tiposNC.map(t => (
+                <option key={t.id} value={t.id}>{t.descripcion}</option>
+              ))}
+            </select>
+            {ventaCargada?.letra && tiposNC.find(t => t.id === tipoId)?.letra !== ventaCargada.letra && (
+              <p className="text-[11px] text-amber-400/90 mt-1 leading-snug">
+                La Venta #{ventaCargada.numero} se facturó como Factura {ventaCargada.letra}. ARCA exige que la NC tenga la misma letra que el comprobante original.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className={labelCls}>Fecha de emisión *</label>
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} required className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Factura / Doc. de referencia</label>
+            <input
+              type="text" value={numRef}
+              onChange={e => setNumRef(e.target.value)}
+              placeholder="Ej: FAC-B 0001-00000437"
+              className={inputCls}
+            />
+          </div>
+        </div>
 
-          {/* ── Devolución de venta completa ── */}
-          <div className={`rounded-xl border transition-colors ${modoDevolucion ? 'border-blue-500/30 bg-blue-500/5' : 'border-kp-border bg-kp-surface2'}`}>
-            <button
-              type="button"
-              onClick={() => { setModoDevolucion(v => !v); setVentaNumero(''); setVentaCargada(null); setErrorVenta(''); setFacturaId(''); }}
-              className="w-full flex items-center justify-between px-4 py-3 text-left"
+        {/* Fila 2: Cliente + Sucursal */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Cliente (receptor)</label>
+            <select
+              value={clienteId}
+              onChange={e => { setClienteId(e.target.value); if (e.target.value) setConfirmSinCliente(false); }}
+              className={selectCls}
             >
-              <div className="flex items-center gap-2">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-                <span className={`text-xs font-bold uppercase tracking-wider ${modoDevolucion ? 'text-blue-400' : 'text-kp-gray'}`}>
-                  Devolver venta completa <span className="normal-case font-semibold text-amber-400/90">(obligatorio para ARCA)</span>
+              <option value="">Consumidor final / Sin cliente</option>
+              {clientes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.razon_social}{c.cuit ? ` — ${c.cuit}` : ''}
+                </option>
+              ))}
+            </select>
+            {!clienteId && (
+              <label className="mt-2 flex items-start gap-2 text-[11px] text-amber-400/90 leading-snug cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmSinCliente}
+                  onChange={e => setConfirmSinCliente(e.target.checked)}
+                  className="mt-0.5 accent-kp-red"
+                />
+                <span>
+                  Confirmo que esta nota de crédito es para consumidor final / sin cliente registrado.
+                  Si el cliente existe pero no aparece en la lista, puede estar inactivo — revisalo en Clientes.
                 </span>
-                {ventaCargada && (
-                  <span className="ml-1 text-xs font-semibold text-green-400">— Venta #{ventaCargada.numero} cargada ✓</span>
-                )}
-              </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 text-kp-gray transition-transform ${modoDevolucion ? 'rotate-180' : ''}`}>
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
+              </label>
+            )}
+          </div>
+          <div>
+            <label className={labelCls}>Sucursal emisora</label>
+            <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={selectCls}>
+              <option value="">Sin sucursal</option>
+              {sucursales.map(s => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-            {modoDevolucion && (
-              <div className="px-4 pb-4 space-y-3 border-t border-kp-border/40">
-                <p className="text-xs text-kp-gray pt-3">
-                  Ingresá el número de venta para cargar todos sus artículos automáticamente.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={ventaNumero}
-                    onChange={e => setVentaNumero(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarVenta())}
-                    placeholder="Número de venta…"
-                    className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={buscarVenta}
-                    disabled={buscandoVenta || !ventaNumero.trim()}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-                  >
-                    {buscandoVenta ? (
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        {/* Historial de notas de crédito del cliente */}
+        {clienteId && (
+          <div className="rounded-xl border border-kp-border bg-kp-surface2 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border/60">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-kp-gray">
+                Historial de notas de crédito del cliente
+              </span>
+              {!loadingHistorial && (
+                <span className="text-[10px] font-semibold text-kp-gray-lt">
+                  {historial.length} {historial.length === 1 ? 'nota' : 'notas'}
+                </span>
+              )}
+            </div>
+            {loadingHistorial ? (
+              <p className="px-4 py-3 text-xs text-kp-gray">Cargando historial…</p>
+            ) : historial.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-kp-gray">Este cliente no tiene notas de crédito previas.</p>
+            ) : (
+              <div className="max-h-44 overflow-y-auto divide-y divide-kp-border/40">
+                {historial.map(nc => (
+                  <div key={nc.id} className="flex items-center gap-3 px-4 py-2 text-xs">
+                    <span className="font-semibold text-kp-white tabular-nums w-20 shrink-0">
+                      {nc.tipo_letra ?? '?'} N° {nc.numero ? String(nc.numero).padStart(8, '0') : '—'}
+                    </span>
+                    <span className="text-kp-gray w-24 shrink-0 tabular-nums">
+                      {new Date(nc.fecha).toLocaleDateString('es-AR')}
+                    </span>
+                    <span className="text-kp-gray-lt flex-1 min-w-0 truncate">{nc.motivo}</span>
+                    {nc.estado === 'anulada' && (
+                      <span className="text-rose-400 font-bold uppercase text-[9px] shrink-0">Anulada</span>
                     )}
-                    {buscandoVenta ? 'Buscando…' : 'Cargar'}
-                  </button>
-                </div>
-                {errorVenta && (
-                  <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{errorVenta}</p>
-                )}
-                {ventaCargada && (
-                  <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2.5 text-green-400">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mt-0.5 flex-shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
-                    <div>
-                      <p className="font-semibold">Venta #{ventaCargada.numero} cargada correctamente</p>
-                      {ventaCargada.cliente && <p className="text-green-400/70 mt-0.5">Cliente: {ventaCargada.cliente}</p>}
-                      <p className="text-green-400/70 mt-0.5">Podés ajustar los ítems, cantidades y motivo antes de emitir.</p>
-                    </div>
+                    <span className="text-kp-white font-semibold tabular-nums shrink-0">
+                      {ars.format(nc.total)}
+                    </span>
                   </div>
-                )}
+                ))}
               </div>
             )}
           </div>
+        )}
 
-          {/* Fila 1: Tipo + Fecha + Referencia */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className={labelCls}>Tipo de comprobante *</label>
-              <select value={tipoId} onChange={e => setTipoId(e.target.value)} required className={selectCls}>
-                {tiposNC.map(t => (
-                  <option key={t.id} value={t.id}>{t.descripcion}</option>
-                ))}
-              </select>
-              {ventaCargada?.letra && tiposNC.find(t => t.id === tipoId)?.letra !== ventaCargada.letra && (
-                <p className="text-[11px] text-amber-400/90 mt-1 leading-snug">
-                  La Venta #{ventaCargada.numero} se facturó como Factura {ventaCargada.letra}. ARCA exige que la NC tenga la misma letra que el comprobante original.
-                </p>
-              )}
-            </div>
-            <div>
-              <label className={labelCls}>Fecha de emisión *</label>
-              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} required className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Factura / Doc. de referencia</label>
-              <input
-                type="text" value={numRef}
-                onChange={e => setNumRef(e.target.value)}
-                placeholder="Ej: FAC-B 0001-00000437"
-                className={inputCls}
-              />
-            </div>
-          </div>
-
-          {/* Fila 2: Cliente + Sucursal */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Cliente (receptor)</label>
-              <select
-                value={clienteId}
-                onChange={e => { setClienteId(e.target.value); if (e.target.value) setConfirmSinCliente(false); }}
-                className={selectCls}
+        {/* Motivo */}
+        <div>
+          <label className={labelCls}>Motivo de la nota de crédito *</label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {MOTIVOS_PRESET.map(m => (
+              <button
+                key={m} type="button"
+                onClick={() => setMotivo(m)}
+                className={[
+                  'text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                  motivo === m
+                    ? 'bg-kp-red/15 border-kp-red/40 text-kp-red'
+                    : 'bg-kp-surface2 border-kp-border text-kp-gray hover:text-kp-white',
+                ].join(' ')}
               >
-                <option value="">Consumidor final / Sin cliente</option>
-                {clientes.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.razon_social}{c.cuit ? ` — ${c.cuit}` : ''}
-                  </option>
-                ))}
-              </select>
-              {!clienteId && (
-                <label className="mt-2 flex items-start gap-2 text-[11px] text-amber-400/90 leading-snug cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmSinCliente}
-                    onChange={e => setConfirmSinCliente(e.target.checked)}
-                    className="mt-0.5 accent-kp-red"
-                  />
-                  <span>
-                    Confirmo que esta nota de crédito es para consumidor final / sin cliente registrado.
-                    Si el cliente existe pero no aparece en la lista, puede estar inactivo — revisalo en Clientes.
-                  </span>
-                </label>
-              )}
-            </div>
-            <div>
-              <label className={labelCls}>Sucursal emisora</label>
-              <select value={sucursalId} onChange={e => setSucursalId(e.target.value)} className={selectCls}>
-                <option value="">Sin sucursal</option>
-                {sucursales.map(s => (
-                  <option key={s.id} value={s.id}>{s.nombre}</option>
-                ))}
-              </select>
-            </div>
+                {m}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={motivo}
+            onChange={e => setMotivo(e.target.value)}
+            rows={2}
+            placeholder="Descripción del motivo de la nota de crédito..."
+            className={inputCls + ' resize-none'}
+            required
+          />
+        </div>
+
+        {/* Ítems */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className={labelCls + ' mb-0'}>Detalle de ítems *</label>
+            <button
+              type="button" onClick={addItem}
+              className="text-xs font-semibold text-kp-red hover:underline flex items-center gap-1"
+            >
+              + Agregar ítem
+            </button>
           </div>
 
-          {/* Historial de notas de crédito del cliente */}
-          {clienteId && (
-            <div className="rounded-xl border border-kp-border bg-kp-surface2 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border/60">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-kp-gray">
-                  Historial de notas de crédito del cliente
-                </span>
-                {!loadingHistorial && (
-                  <span className="text-[10px] font-semibold text-kp-gray-lt">
-                    {historial.length} {historial.length === 1 ? 'nota' : 'notas'}
-                  </span>
-                )}
-              </div>
-              {loadingHistorial ? (
-                <p className="px-4 py-3 text-xs text-kp-gray">Cargando historial…</p>
-              ) : historial.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-kp-gray">Este cliente no tiene notas de crédito previas.</p>
-              ) : (
-                <div className="max-h-44 overflow-y-auto divide-y divide-kp-border/40">
-                  {historial.map(nc => (
-                    <div key={nc.id} className="flex items-center gap-3 px-4 py-2 text-xs">
-                      <span className="font-semibold text-kp-white tabular-nums w-20 shrink-0">
-                        {nc.tipo_letra ?? '?'} N° {nc.numero ? String(nc.numero).padStart(8, '0') : '—'}
-                      </span>
-                      <span className="text-kp-gray w-24 shrink-0 tabular-nums">
-                        {new Date(nc.fecha).toLocaleDateString('es-AR')}
-                      </span>
-                      <span className="text-kp-gray-lt flex-1 min-w-0 truncate">{nc.motivo}</span>
-                      {nc.estado === 'anulada' && (
-                        <span className="text-rose-400 font-bold uppercase text-[9px] shrink-0">Anulada</span>
-                      )}
-                      <span className="text-kp-white font-semibold tabular-nums shrink-0">
-                        {ars.format(nc.total)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="rounded-xl border border-kp-border">
+            {/* Header tabla */}
+            <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border rounded-t-xl">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
+              <span />
             </div>
-          )}
 
-          {/* Motivo */}
-          <div>
-            <label className={labelCls}>Motivo de la nota de crédito *</label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {MOTIVOS_PRESET.map(m => (
-                <button
-                  key={m} type="button"
-                  onClick={() => setMotivo(m)}
-                  className={[
-                    'text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
-                    motivo === m
-                      ? 'bg-kp-red/15 border-kp-red/40 text-kp-red'
-                      : 'bg-kp-surface2 border-kp-border text-kp-gray hover:text-kp-white',
-                  ].join(' ')}
-                >
-                  {m}
-                </button>
+            {/* Filas */}
+            <div className="divide-y divide-kp-border/40">
+              {items.map((it, i) => (
+                <div key={i} className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2.5 items-center bg-kp-surface">
+                  <ArticuloInput
+                    value={it.descripcion}
+                    onChange={v => updateItem(i, 'descripcion', v)}
+                    onSelect={art => selectArticulo(i, art)}
+                  />
+                  <NumericInput
+                    value={it.cantidad}
+                    onChange={e => updateItem(i, 'cantidad', e.target.value)}
+                    className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-center outline-none py-0.5 tabular-nums transition-colors"
+                  />
+                  <NumericInput
+                    value={it.precio_unitario}
+                    onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
+                    className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-right outline-none py-0.5 tabular-nums transition-colors"
+                  />
+                  <span className="text-sm text-kp-gray-lt text-right tabular-nums">
+                    {ars.format(it.cantidad * it.precio_unitario)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => items.length > 1 && removeItem(i)}
+                    disabled={items.length === 1}
+                    className="text-kp-gray hover:text-rose-400 transition-colors disabled:opacity-20 text-lg leading-none"
+                  >×</button>
+                </div>
               ))}
             </div>
-            <textarea
-              value={motivo}
-              onChange={e => setMotivo(e.target.value)}
-              rows={2}
-              placeholder="Descripción del motivo de la nota de crédito..."
-              className={inputCls + ' resize-none'}
-              required
-            />
           </div>
+        </div>
 
-          {/* Ítems */}
+        {/* Forma de devolución + Totales — la nota de crédito no lleva IVA */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className={labelCls + ' mb-0'}>Detalle de ítems *</label>
-              <button
-                type="button" onClick={addItem}
-                className="text-xs font-semibold text-kp-red hover:underline flex items-center gap-1"
-              >
-                + Agregar ítem
-              </button>
-            </div>
-
-            <div className="rounded-xl border border-kp-border">
-              {/* Header tabla */}
-              <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border rounded-t-xl">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
-                <span />
-              </div>
-
-              {/* Filas */}
-              <div className="divide-y divide-kp-border/40">
-                {items.map((it, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2.5 items-center bg-kp-surface">
-                    <ArticuloInput
-                      value={it.descripcion}
-                      onChange={v => updateItem(i, 'descripcion', v)}
-                      onSelect={art => selectArticulo(i, art)}
-                    />
-                    <NumericInput
-                      value={it.cantidad}
-                      onChange={e => updateItem(i, 'cantidad', e.target.value)}
-                      className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-center outline-none py-0.5 tabular-nums transition-colors"
-                    />
-                    <NumericInput
-                      value={it.precio_unitario}
-                      onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
-                      className="w-full bg-transparent border-b border-kp-border/50 focus:border-kp-red text-sm text-kp-white text-right outline-none py-0.5 tabular-nums transition-colors"
-                    />
-                    <span className="text-sm text-kp-gray-lt text-right tabular-nums">
-                      {ars.format(it.cantidad * it.precio_unitario)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => items.length > 1 && removeItem(i)}
-                      disabled={items.length === 1}
-                      className="text-kp-gray hover:text-rose-400 transition-colors disabled:opacity-20 text-lg leading-none"
-                    >×</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Forma de devolución + Totales — la nota de crédito no lleva IVA */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-            <div>
-              <label className={labelCls}>Forma de devolución</label>
-              <select
-                value={formaDevolucion}
-                onChange={e => setFormaDevolucion(e.target.value as typeof formaDevolucion)}
-                className={selectCls}
-              >
-                <option value="cuenta_corriente">Cuenta corriente (suma al saldo del cliente)</option>
-                <option value="efectivo">Efectivo (devolución física)</option>
-                <option value="transferencia">Transferencia (devolución física)</option>
-              </select>
-              <p className="text-[11px] text-kp-gray mt-1.5 leading-snug">
-                {formaDevolucion === 'cuenta_corriente'
-                  ? clienteId
-                    ? 'Se acreditará el total al saldo a favor del cliente.'
-                    : 'Seleccioná un cliente para acreditar el saldo.'
-                  : formaDevolucion === 'efectivo'
-                    ? 'Se registrará un egreso por el total en la caja abierta de la sucursal.'
-                    : 'Devolución por transferencia. No afecta la caja ni la cuenta corriente.'}
-              </p>
-            </div>
-            <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
-              <div className="flex justify-between text-sm text-kp-gray">
-                <span>Subtotal</span>
-                <span className="tabular-nums text-kp-white">{ars.format(subtotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-base border-t border-kp-border pt-2">
-                <span className="text-kp-white">TOTAL a favor</span>
-                <span className="text-kp-red tabular-nums">{ars.format(total)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
-              {error}
+            <label className={labelCls}>Forma de devolución</label>
+            <select
+              value={formaDevolucion}
+              onChange={e => setFormaDevolucion(e.target.value as typeof formaDevolucion)}
+              className={selectCls}
+            >
+              <option value="cuenta_corriente">Cuenta corriente (suma al saldo del cliente)</option>
+              <option value="efectivo">Efectivo (devolución física)</option>
+              <option value="transferencia">Transferencia (devolución física)</option>
+            </select>
+            <p className="text-[11px] text-kp-gray mt-1.5 leading-snug">
+              {formaDevolucion === 'cuenta_corriente'
+                ? clienteId
+                  ? 'Se acreditará el total al saldo a favor del cliente.'
+                  : 'Seleccioná un cliente para acreditar el saldo.'
+                : formaDevolucion === 'efectivo'
+                  ? 'Se registrará un egreso por el total en la caja abierta de la sucursal.'
+                  : 'Devolución por transferencia. No afecta la caja ni la cuenta corriente.'}
             </p>
-          )}
-
-          {/* Acciones */}
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="px-5 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-border/60 transition-colors">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-6 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 disabled:opacity-50 transition-colors">
-              {saving ? 'Guardando…' : 'Emitir Nota de Crédito'}
-            </button>
           </div>
-        </form>
-      </div>
-    </div>
+          <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
+            <div className="flex justify-between text-sm text-kp-gray">
+              <span>Subtotal</span>
+              <span className="tabular-nums text-kp-white">{ars.format(subtotal)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-base border-t border-kp-border pt-2">
+              <span className="text-kp-white">TOTAL a favor</span>
+              <span className="text-kp-red tabular-nums">{ars.format(total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
+
+        {/* Acciones */}
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose}
+            className="px-5 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-border/60 transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving}
+            className="px-6 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 disabled:opacity-50 transition-colors">
+            {saving ? 'Guardando…' : 'Emitir Nota de Crédito'}
+          </button>
+        </div>
+      </form>
+
+    </Modal>
   );
 }

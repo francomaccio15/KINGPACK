@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 type Sucursal   = { id: string; nombre: string };
 type Proveedor  = { id: string; razon_social: string };
@@ -181,242 +182,227 @@ export default function NuevoPedido({
         Nuevo Pedido
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-5xl max-h-[92vh] flex flex-col bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nuevo Pedido a Proveedor"
+        size="xl"
+      >
+        {/* Body — dos columnas */}
+        <div className="flex flex-1 min-h-0">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-base font-bold uppercase tracking-wide">Nuevo Pedido a Proveedor</h3>
+          {/* Columna izquierda — formulario */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 border-r border-kp-border">
+
+            {/* Proveedor + Sucursal */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Proveedor *</label>
+                <select
+                  value={proveedorId}
+                  onChange={e => setProveedorId(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">— Seleccionar —</option>
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>{p.razon_social}</option>
+                  ))}
+                </select>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-kp-gray hover:text-kp-white transition-colors"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
+              <div>
+                <label className={labelCls}>Sucursal *</label>
+                <select
+                  value={sucursalId}
+                  onChange={e => setSucursalId(e.target.value)}
+                  className={inputCls}
+                >
+                  {sucursales.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Body — dos columnas */}
-            <div className="flex flex-1 min-h-0">
+            {/* Nº Factura */}
+            <div>
+              <label className={labelCls}>Nº Factura Proveedor</label>
+              <input
+                type="text"
+                placeholder="0001-00012345"
+                value={nroFactura}
+                onChange={e => setNroFactura(e.target.value)}
+                className={inputCls}
+              />
+            </div>
 
-              {/* Columna izquierda — formulario */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-5 border-r border-kp-border">
-
-                {/* Proveedor + Sucursal */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls}>Proveedor *</label>
-                    <select
-                      value={proveedorId}
-                      onChange={e => setProveedorId(e.target.value)}
-                      className={inputCls}
-                    >
-                      <option value="">— Seleccionar —</option>
-                      {proveedores.map(p => (
-                        <option key={p.id} value={p.id}>{p.razon_social}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Sucursal *</label>
-                    <select
-                      value={sucursalId}
-                      onChange={e => setSucursalId(e.target.value)}
-                      className={inputCls}
-                    >
-                      {sucursales.map(s => (
-                        <option key={s.id} value={s.id}>{s.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Nº Factura */}
-                <div>
-                  <label className={labelCls}>Nº Factura Proveedor</label>
+            {/* Dropdown de artículos */}
+            <div>
+              <label className={labelCls}>Agregar Artículo</label>
+              <div className="relative" ref={dropRef}>
+                <div className="relative">
                   <input
                     type="text"
-                    placeholder="0001-00012345"
-                    value={nroFactura}
-                    onChange={e => setNroFactura(e.target.value)}
+                    placeholder="Buscar por nombre o código…"
+                    value={artQ}
+                    onFocus={() => setDropOpen(true)}
+                    onChange={e => { setArtQ(e.target.value); setDropOpen(true); }}
                     className={inputCls}
+                    autoComplete="off"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setDropOpen(v => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-kp-gray hover:text-kp-white transition-colors px-1"
+                    tabIndex={-1}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 transition-transform ${dropOpen ? 'rotate-180' : ''}`}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
                 </div>
 
-                {/* Dropdown de artículos */}
-                <div>
-                  <label className={labelCls}>Agregar Artículo</label>
-                  <div className="relative" ref={dropRef}>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Buscar por nombre o código…"
-                        value={artQ}
-                        onFocus={() => setDropOpen(true)}
-                        onChange={e => { setArtQ(e.target.value); setDropOpen(true); }}
-                        className={inputCls}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setDropOpen(v => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-kp-gray hover:text-kp-white transition-colors px-1"
-                        tabIndex={-1}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 transition-transform ${dropOpen ? 'rotate-180' : ''}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
+                {dropOpen && (
+                  <div className="absolute z-20 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-2xl flex flex-col" style={{ maxHeight: '260px' }}>
+                    <div className="px-2 pt-2 pb-1 border-b border-kp-border flex-shrink-0">
+                      <p className="text-xs text-kp-gray/60">
+                        {artFiltrados.length} {artFiltrados.length === 1 ? 'artículo' : 'artículos'}
+                      </p>
                     </div>
-
-                    {dropOpen && (
-                      <div className="absolute z-20 w-full mt-1 bg-kp-surface2 border border-kp-border rounded-lg shadow-2xl flex flex-col" style={{ maxHeight: '260px' }}>
-                        <div className="px-2 pt-2 pb-1 border-b border-kp-border flex-shrink-0">
-                          <p className="text-xs text-kp-gray/60">
-                            {artFiltrados.length} {artFiltrados.length === 1 ? 'artículo' : 'artículos'}
-                          </p>
-                        </div>
-                        <ul className="overflow-y-auto flex-1">
-                          {artFiltrados.length === 0 ? (
-                            <li className="px-4 py-6 text-center text-xs text-kp-gray">
-                              Sin resultados para &ldquo;{artQ}&rdquo;
-                            </li>
-                          ) : (
-                            artFiltrados.map(a => (
-                              <li key={a.id}>
-                                <button
-                                  type="button"
-                                  onMouseDown={e => { e.preventDefault(); addItem(a); }}
-                                  className="w-full text-left px-4 py-2.5 hover:bg-kp-red/10 transition-colors flex items-center justify-between gap-3"
-                                >
-                                  <div className="min-w-0">
-                                    <span className="text-sm font-medium text-kp-white block truncate">{a.nombre}</span>
-                                    <span className="text-xs text-kp-gray font-mono">{a.codigo}</span>
-                                  </div>
-                                  <span className="text-xs text-kp-gray-lt tabular-nums whitespace-nowrap flex-shrink-0">
-                                    {ars.format(a.costo_base ?? 0)}
-                                  </span>
-                                </button>
-                              </li>
-                            ))
-                          )}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Tabla de items */}
-                {items.length > 0 && (
-                  <div className="rounded-xl border border-kp-border overflow-hidden">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="bg-kp-surface2 border-b border-kp-border">
-                          <th className="text-left px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold">Artículo</th>
-                          <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-24">Cant.</th>
-                          <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-32">P. Compra</th>
-                          <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-28">Subtotal</th>
-                          <th className="w-8" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-kp-border">
-                        {items.map((item, idx) => (
-                          <tr key={item.articulo_id} className="bg-kp-surface">
-                            <td className="px-3 py-2">
-                              <div className="text-sm font-medium text-kp-white">{item.nombre}</div>
-                              <div className="text-xs text-kp-gray font-mono">{item.codigo}</div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <NumericInput
-                                value={item.cantidad}
-                                onChange={e => updateItem(idx, 'cantidad', e.target.value)}
-                                className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <NumericInput
-                                decimals={3}
-                                value={item.precio_compra}
-                                onChange={e => updateItem(idx, 'precio_compra', e.target.value)}
-                                className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
-                              />
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-sm text-kp-white font-semibold">
-                              {ars.format(item.precio_compra * item.cantidad)}
-                            </td>
-                            <td className="px-2 py-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => removeItem(idx)}
-                                className="text-kp-gray hover:text-kp-red transition-colors"
-                                title="Eliminar"
-                              >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <ul className="overflow-y-auto flex-1">
+                      {artFiltrados.length === 0 ? (
+                        <li className="px-4 py-6 text-center text-xs text-kp-gray">
+                          Sin resultados para &ldquo;{artQ}&rdquo;
+                        </li>
+                      ) : (
+                        artFiltrados.map(a => (
+                          <li key={a.id}>
+                            <button
+                              type="button"
+                              onMouseDown={e => { e.preventDefault(); addItem(a); }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-kp-red/10 transition-colors flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <span className="text-sm font-medium text-kp-white block truncate">{a.nombre}</span>
+                                <span className="text-xs text-kp-gray font-mono">{a.codigo}</span>
+                              </div>
+                              <span className="text-xs text-kp-gray-lt tabular-nums whitespace-nowrap flex-shrink-0">
+                                {ars.format(a.costo_base ?? 0)}
+                              </span>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Columna derecha — resumen */}
-              <div className="w-72 flex-shrink-0 flex flex-col p-6 bg-kp-surface2 space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Resumen del Pedido</h4>
+            {/* Tabla de items */}
+            {items.length > 0 && (
+              <div className="rounded-xl border border-kp-border overflow-hidden">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-kp-surface2 border-b border-kp-border">
+                      <th className="text-left px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold">Artículo</th>
+                      <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-24">Cant.</th>
+                      <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-32">P. Compra</th>
+                      <th className="text-right px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold w-28">Subtotal</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-kp-border">
+                    {items.map((item, idx) => (
+                      <tr key={item.articulo_id} className="bg-kp-surface">
+                        <td className="px-3 py-2">
+                          <div className="text-sm font-medium text-kp-white">{item.nombre}</div>
+                          <div className="text-xs text-kp-gray font-mono">{item.codigo}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <NumericInput
+                            value={item.cantidad}
+                            onChange={e => updateItem(idx, 'cantidad', e.target.value)}
+                            className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <NumericInput
+                            decimals={3}
+                            value={item.precio_compra}
+                            onChange={e => updateItem(idx, 'precio_compra', e.target.value)}
+                            className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-sm text-kp-white font-semibold">
+                          {ars.format(item.precio_compra * item.cantidad)}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            className="text-kp-gray hover:text-kp-red transition-colors"
+                            title="Eliminar"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
-                <div className="space-y-3 flex-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-kp-gray">Mercadería</span>
-                    <span className="tabular-nums text-kp-white">{ars.format(totalMerc)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-kp-gray">Artículos</span>
-                    <span className="tabular-nums text-kp-gray-lt">{items.length}</span>
-                  </div>
+          {/* Columna derecha — resumen */}
+          <div className="w-72 flex-shrink-0 flex flex-col p-6 bg-kp-surface2 space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Resumen del Pedido</h4>
 
-                  <div className="border-t border-kp-border pt-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-bold text-kp-white uppercase tracking-wide">Total</span>
-                      <span className="text-lg font-bold tabular-nums text-kp-white">{ars.format(totalGeneral)}</span>
-                    </div>
-                  </div>
-                </div>
+            <div className="space-y-3 flex-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-kp-gray">Mercadería</span>
+                <span className="tabular-nums text-kp-white">{ars.format(totalMerc)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-kp-gray">Artículos</span>
+                <span className="tabular-nums text-kp-gray-lt">{items.length}</span>
+              </div>
 
-                {saveError && (
-                  <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
-                    {saveError}
-                  </p>
-                )}
-
-                <div className="space-y-2 pt-2">
-                  <button
-                    onClick={handleSubmit}
-                    disabled={saving || items.length === 0 || !proveedorId}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {saving ? <><Spinner /> Guardando…</> : 'Registrar Pedido'}
-                  </button>
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="w-full px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                  >
-                    Cancelar
-                  </button>
+              <div className="border-t border-kp-border pt-3">
+                <div className="flex justify-between">
+                  <span className="text-sm font-bold text-kp-white uppercase tracking-wide">Total</span>
+                  <span className="text-lg font-bold tabular-nums text-kp-white">{ars.format(totalGeneral)}</span>
                 </div>
               </div>
+            </div>
+
+            {saveError && (
+              <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
+                {saveError}
+              </p>
+            )}
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleSubmit}
+                disabled={saving || items.length === 0 || !proveedorId}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-kp-red text-white text-sm font-semibold shadow-lg shadow-kp-red/20 hover:bg-kp-red/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? <><Spinner /> Guardando…</> : 'Registrar Pedido'}
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="w-full px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </>
   );
 }

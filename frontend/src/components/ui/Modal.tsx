@@ -47,6 +47,11 @@ export interface ModalProps {
   /** Elemento a enfocar al abrir. En mobile evitar inputs: abren el teclado. */
   initialFocusRef?: React.RefObject<HTMLElement>;
   hideCloseButton?: boolean;
+  /**
+   * `false` quita el padding y el scroll del cuerpo, para modales que manejan
+   * su propio layout interno (el POS, por ejemplo).
+   */
+  padded?: boolean;
   bodyClassName?: string;
   panelClassName?: string;
   children: React.ReactNode;
@@ -82,6 +87,7 @@ export default function Modal({
   closeOnEscape = true,
   initialFocusRef,
   hideCloseButton = false,
+  padded = true,
   bodyClassName,
   panelClassName,
   children,
@@ -190,8 +196,9 @@ export default function Modal({
         onKeyDown={onKeyDown}
         className={panelCls}
       >
-        {/* Handle del sheet: senal visual de que se cierra hacia abajo */}
-        {isSheet && (
+        {/* Handle del sheet: senal visual de que se cierra hacia abajo.
+            En `full` no va: ocupa pantalla completa, no hay nada que arrastrar. */}
+        {isSheet && size !== 'full' && (
           <div className={cn('mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-kp-border shrink-0', isCenter && 'md:hidden')} />
         )}
 
@@ -223,7 +230,14 @@ export default function Modal({
           </div>
         )}
 
-        <div className={cn('flex-1 overflow-y-auto overscroll-contain px-4 md:px-6 py-4 md:py-5 space-y-4', bodyClassName)}>
+        <div
+          className={cn(
+            padded
+              ? 'flex-1 overflow-y-auto overscroll-contain px-4 md:px-6 py-4 md:py-5 space-y-4'
+              : 'flex-1 min-h-0 overflow-hidden flex flex-col',
+            bodyClassName,
+          )}
+        >
           {children}
         </div>
 

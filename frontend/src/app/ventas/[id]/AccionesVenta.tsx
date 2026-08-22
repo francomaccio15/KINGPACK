@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -341,297 +342,277 @@ export default function AccionesVenta({
       )}
     </div>
 
-    {anularOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-5 bg-rose-500 rounded-full block" />
-              <h3 className="text-sm font-bold uppercase tracking-wide text-rose-400">Anular Venta</h3>
-            </div>
-            <button onClick={() => setAnularOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
-              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Esta acción es irreversible. El stock de los artículos será restaurado automáticamente.
-            </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Motivo de anulación *</label>
-              <textarea
-                value={anularMotivo}
-                onChange={e => setAnularMotivo(e.target.value)}
-                rows={3}
-                placeholder="Ej: Error en los artículos cargados, pedido cancelado por el cliente..."
-                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-rose-500 transition-colors resize-none"
-              />
-            </div>
-            {anularError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{anularError}</p>
-            )}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleAnular}
-                disabled={anularLoading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {anularLoading ? (
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                ) : null}
-                {anularLoading ? 'Anulando…' : 'Confirmar Anulación'}
-              </button>
-              <button
-                onClick={() => setAnularOpen(false)}
-                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
+    <Modal
+      open={anularOpen}
+      onClose={() => setAnularOpen(false)}
+      title="Anular Venta"
+      size="sm"
+    >
+      <div className="space-y-4">
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Esta acción es irreversible. El stock de los artículos será restaurado automáticamente.
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Motivo de anulación *</label>
+          <textarea
+            value={anularMotivo}
+            onChange={e => setAnularMotivo(e.target.value)}
+            rows={3}
+            placeholder="Ej: Error en los artículos cargados, pedido cancelado por el cliente..."
+            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-rose-500 transition-colors resize-none"
+          />
+        </div>
+        {anularError && (
+          <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{anularError}</p>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleAnular}
+            disabled={anularLoading}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {anularLoading ? (
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            ) : null}
+            {anularLoading ? 'Anulando…' : 'Confirmar Anulación'}
+          </button>
+          <button
+            onClick={() => setAnularOpen(false)}
+            className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
-    )}
+        
+    </Modal>
 
-    {editObsOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-sm bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-5 bg-kp-red rounded-full block" />
-              <h3 className="text-sm font-bold uppercase tracking-wide">Editar Observaciones</h3>
-            </div>
-            <button onClick={() => setEditObsOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
-          </div>
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Observaciones</label>
-              <textarea
-                value={editObsText}
-                onChange={e => setEditObsText(e.target.value)}
-                rows={4}
-                placeholder="Observaciones opcionales…"
-                className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
-              />
-            </div>
-            {editObsError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{editObsError}</p>
-            )}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleEditObs}
-                disabled={editObsLoading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red hover:bg-kp-red/90 text-white text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {editObsLoading ? (
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                ) : null}
-                {editObsLoading ? 'Guardando…' : 'Guardar'}
-              </button>
-              <button
-                onClick={() => setEditObsOpen(false)}
-                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
+    <Modal
+      open={editObsOpen}
+      onClose={() => setEditObsOpen(false)}
+      title="Editar Observaciones"
+      size="sm"
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Observaciones</label>
+          <textarea
+            value={editObsText}
+            onChange={e => setEditObsText(e.target.value)}
+            rows={4}
+            placeholder="Observaciones opcionales…"
+            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
+          />
+        </div>
+        {editObsError && (
+          <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{editObsError}</p>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleEditObs}
+            disabled={editObsLoading}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red hover:bg-kp-red/90 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {editObsLoading ? (
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            ) : null}
+            {editObsLoading ? 'Guardando…' : 'Guardar'}
+          </button>
+          <button
+            onClick={() => setEditObsOpen(false)}
+            className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
-    )}
+        
+    </Modal>
 
     {/* ── Modal: Emitir factura ── */}
-    {facturarOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-5 bg-kp-red rounded-full block" />
-              <h3 className="text-sm font-bold uppercase tracking-wide">Emitir factura electrónica</h3>
-            </div>
-            <button onClick={() => setFacturarOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
+    <Modal
+      open={facturarOpen}
+      onClose={() => setFacturarOpen(false)}
+      title="Emitir factura electrónica"
+      size="md"
+    >
+      <div className="space-y-4">
+
+        {/* Ambiente ARCA */}
+        {arcaModo === 'produccion' ? (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-300">
+            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span><strong>Producción.</strong> Esta factura es <strong>real y con validez fiscal</strong>. Una vez emitida no se puede borrar; solo se corrige con una nota de crédito.</span>
           </div>
-          <div className="p-6 space-y-4">
-
-            {/* Ambiente ARCA */}
-            {arcaModo === 'produccion' ? (
-              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/40 text-xs text-rose-300">
-                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                <span><strong>Producción.</strong> Esta factura es <strong>real y con validez fiscal</strong>. Una vez emitida no se puede borrar; solo se corrige con una nota de crédito.</span>
-              </div>
-            ) : (
-              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
-                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                <span><strong>Homologación (prueba).</strong> El CAE es de prueba, <strong>sin validez fiscal</strong>. Sirve para validar la conexión con ARCA.</span>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
-              <span className="text-xs text-kp-gray uppercase tracking-widest">Total a facturar</span>
-              <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
-            </div>
-            <p className="text-[11px] text-kp-gray px-1">
-              El tipo de comprobante (Factura A o B) se determina automáticamente según la condición de IVA del cliente.
-            </p>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={emitirFactura}
-                disabled={loadingFactura}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-kp-red hover:bg-kp-red-dark text-white text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {loadingFactura
-                  ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Emitiendo…</>
-                  : <>Emitir factura</>}
-              </button>
-              <button
-                onClick={() => setFacturarOpen(false)}
-                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
+        ) : (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span><strong>Homologación (prueba).</strong> El CAE es de prueba, <strong>sin validez fiscal</strong>. Sirve para validar la conexión con ARCA.</span>
           </div>
+        )}
+
+        <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
+          <span className="text-xs text-kp-gray uppercase tracking-widest">Total a facturar</span>
+          <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
+        </div>
+        <p className="text-[11px] text-kp-gray px-1">
+          El tipo de comprobante (Factura A o B) se determina automáticamente según la condición de IVA del cliente.
+        </p>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={emitirFactura}
+            disabled={loadingFactura}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-kp-red hover:bg-kp-red-dark text-white text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {loadingFactura
+              ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Emitiendo…</>
+              : <>Emitir factura</>}
+          </button>
+          <button
+            onClick={() => setFacturarOpen(false)}
+            className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
-    )}
+        
+    </Modal>
 
     {/* ── Modal: Confirmar Preventa ── */}
-    {confirmarOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-kp-border bg-kp-surface2">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-5 bg-green-500 rounded-full block" />
-              <h3 className="text-sm font-bold uppercase tracking-wide">Confirmar Venta</h3>
-            </div>
-            <button onClick={() => setConfirmarOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors text-xl leading-none">×</button>
-          </div>
-          <div className="p-6 space-y-4">
+    <Modal
+      open={confirmarOpen}
+      onClose={() => setConfirmarOpen(false)}
+      title="Confirmar Venta"
+      size="md"
+    >
+      <div className="space-y-4">
 
-            {/* Total a pagar */}
-            <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
-              <span className="text-xs text-kp-gray uppercase tracking-widest">Total de la venta</span>
-              <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
-            </div>
+        {/* Total a pagar */}
+        <div className="flex justify-between items-center rounded-xl bg-kp-surface2 border border-kp-border px-4 py-3">
+          <span className="text-xs text-kp-gray uppercase tracking-widest">Total de la venta</span>
+          <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
+        </div>
 
-            {/* Medios de pago */}
-            <div className="space-y-2">
-              <label className="block text-xs text-kp-gray uppercase tracking-widest">Métodos de Pago *</label>
-              {mediosPago.length === 0 ? (
-                <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
-              ) : (
-                <>
-                  {pagos.map((pago, idx) => {
-                    const medio = mediosPago.find(mp => mp.id === pago.medio_pago_id);
-                    const esTransferencia = esMedioTransferencia(medio?.nombre);
-                    const cuentaSel = cuentasBancarias.find(c => c.id === pago.cuenta_destino_id);
-                    return (
-                    <div key={idx} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={pago.medio_pago_id}
-                          onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, medio_pago_id: e.target.value, cuenta_destino_id: '' } : p))}
-                          className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
-                        >
-                          {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
-                        </select>
-                        <div className="relative w-32">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
-                          <input
-                            type="number" min="0" step="0.01"
-                            value={pago.monto}
-                            onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, monto: e.target.value } : p))}
-                            placeholder="0.00"
-                            className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-2 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setPagos(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-kp-gray hover:text-rose-400 transition-colors p-1 flex-shrink-0"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                          </svg>
-                        </button>
-                      </div>
-                      {esTransferencia && cuentasBancarias.length > 0 && (
-                        <div className="pl-1">
-                          <select
-                            value={pago.cuenta_destino_id}
-                            onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, cuenta_destino_id: e.target.value } : p))}
-                            className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
-                          >
-                            <option value="">Seleccioná cuenta de destino…</option>
-                            {cuentasBancarias.map(c => (
-                              <option key={c.id} value={c.id}>
-                                {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
-                              </option>
-                            ))}
-                          </select>
-                          {cuentaSel && (cuentaSel.banco || cuentaSel.alias) && (
-                            <p className="mt-1 text-[11px] text-kp-gray px-1">
-                              {cuentaSel.banco && <span>{cuentaSel.banco}</span>}
-                              {cuentaSel.banco && cuentaSel.alias && <span> · </span>}
-                              {cuentaSel.alias && <span>Alias: {cuentaSel.alias}</span>}
-                            </p>
-                          )}
-                        </div>
+        {/* Medios de pago */}
+        <div className="space-y-2">
+          <label className="block text-xs text-kp-gray uppercase tracking-widest">Métodos de Pago *</label>
+          {mediosPago.length === 0 ? (
+            <div className="text-xs text-kp-gray italic px-1">Cargando...</div>
+          ) : (
+            <>
+              {pagos.map((pago, idx) => {
+                const medio = mediosPago.find(mp => mp.id === pago.medio_pago_id);
+                const esTransferencia = esMedioTransferencia(medio?.nombre);
+                const cuentaSel = cuentasBancarias.find(c => c.id === pago.cuenta_destino_id);
+                return (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={pago.medio_pago_id}
+                      onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, medio_pago_id: e.target.value, cuenta_destino_id: '' } : p))}
+                      className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                    >
+                      {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
+                    </select>
+                    <div className="relative w-32">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={pago.monto}
+                        onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, monto: e.target.value } : p))}
+                        placeholder="0.00"
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg pl-6 pr-2 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPagos(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-kp-gray hover:text-rose-400 transition-colors p-1 flex-shrink-0"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                  {esTransferencia && cuentasBancarias.length > 0 && (
+                    <div className="pl-1">
+                      <select
+                        value={pago.cuenta_destino_id}
+                        onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, cuenta_destino_id: e.target.value } : p))}
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                      >
+                        <option value="">Seleccioná cuenta de destino…</option>
+                        {cuentasBancarias.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {cuentaSel && (cuentaSel.banco || cuentaSel.alias) && (
+                        <p className="mt-1 text-[11px] text-kp-gray px-1">
+                          {cuentaSel.banco && <span>{cuentaSel.banco}</span>}
+                          {cuentaSel.banco && cuentaSel.alias && <span> · </span>}
+                          {cuentaSel.alias && <span>Alias: {cuentaSel.alias}</span>}
+                        </p>
                       )}
                     </div>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={agregarPagoConfirmar}
-                    className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors flex items-center gap-1"
-                  >
-                    + Agregar método
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Balance */}
-            {pagos.length > 0 && totalPagos > 0 && (
-              <div className={`flex justify-between items-center rounded-xl border px-4 py-3 ${
-                Math.abs(totalPagos - totalVenta) < 0.01
-                  ? 'border-green-500/30 bg-green-500/10'
-                  : 'border-amber-500/30 bg-amber-500/10'
-              }`}>
-                <span className="text-xs text-kp-gray uppercase tracking-widest">Total ingresado</span>
-                <span className={`font-bold tabular-nums ${Math.abs(totalPagos - totalVenta) < 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
-                  {ars.format(totalPagos)}
-                </span>
-              </div>
-            )}
-
-            {confirmarError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{confirmarError}</p>
-            )}
-
-            <div className="flex gap-2 pt-1">
+                  )}
+                </div>
+                );
+              })}
               <button
-                onClick={handleConfirmar}
-                disabled={confirmarLoading || pagos.length === 0}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                type="button"
+                onClick={agregarPagoConfirmar}
+                className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors flex items-center gap-1"
               >
-                {confirmarLoading
-                  ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Confirmando…</>
-                  : <><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="20 6 9 17 4 12"/></svg>Confirmar</>
-                }
+                + Agregar método
               </button>
-              <button
-                onClick={() => setConfirmarOpen(false)}
-                className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
+            </>
+          )}
+        </div>
+
+        {/* Balance */}
+        {pagos.length > 0 && totalPagos > 0 && (
+          <div className={`flex justify-between items-center rounded-xl border px-4 py-3 ${
+            Math.abs(totalPagos - totalVenta) < 0.01
+              ? 'border-green-500/30 bg-green-500/10'
+              : 'border-amber-500/30 bg-amber-500/10'
+          }`}>
+            <span className="text-xs text-kp-gray uppercase tracking-widest">Total ingresado</span>
+            <span className={`font-bold tabular-nums ${Math.abs(totalPagos - totalVenta) < 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
+              {ars.format(totalPagos)}
+            </span>
           </div>
+        )}
+
+        {confirmarError && (
+          <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">{confirmarError}</p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleConfirmar}
+            disabled={confirmarLoading || pagos.length === 0}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+          >
+            {confirmarLoading
+              ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Confirmando…</>
+              : <><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="20 6 9 17 4 12"/></svg>Confirmar</>
+            }
+          </button>
+          <button
+            onClick={() => setConfirmarOpen(false)}
+            className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
-    )}
+        
+    </Modal>
   </>
   );
 }

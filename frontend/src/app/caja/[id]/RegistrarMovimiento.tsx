@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -189,272 +190,260 @@ export default function RegistrarMovimiento({
         Movimiento
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-kp-surface border border-kp-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Registrar Movimiento"
+        size="md"
+      >
+        {/* Body — scrollable */}
+        <div className="p-5 space-y-4 overflow-y-auto">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-kp-border bg-kp-surface2 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-5 bg-kp-red rounded-full block" />
-                <h3 className="text-sm font-bold uppercase tracking-wide">Registrar Movimiento</h3>
-              </div>
-              <button onClick={() => setOpen(false)} className="text-kp-gray hover:text-kp-white transition-colors">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          {/* Tipo */}
+          <div>
+            <label className={labelCls}>Tipo</label>
+            <div className="flex gap-2">
+              {TIPOS.map(t => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => { setTipo(t.value as typeof tipo); setSubrubroId(''); }}
+                  className={[
+                    'flex-1 py-2 rounded-lg border text-xs font-semibold transition-colors',
+                    tipo === t.value ? t.color : 'border-kp-border text-kp-gray hover:border-kp-gray',
+                  ].join(' ')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Concepto */}
+          <div>
+            <label className={labelCls}>Concepto *</label>
+            <input
+              type="text"
+              placeholder={tipo === 'ingreso' ? 'Ej: Depósito de gerencia' : tipo === 'egreso' ? 'Ej: Compra de insumos' : 'Ej: Retiro cierre de turno'}
+              value={concepto}
+              onChange={e => setConcepto(e.target.value)}
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+
+          {/* Rubro — solo para egresos */}
+          {tipo === 'egreso' && rubros.length > 0 && (
+            <div>
+              <label className={labelCls}>
+                Rubro <span className="normal-case font-normal text-kp-gray/60">(opcional)</span>
+              </label>
+              <select value={subrubroId} onChange={e => setSubrubroId(e.target.value)} className={inputCls}>
+                <option value="">— Sin categoría —</option>
+                {rubros.map(r => (
+                  <optgroup key={r.id} label={r.nombre}>
+                    {r.subrubros.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* ── Medios de pago ───────────────────────────────────────────── */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className={labelCls}>
+                Medios de pago *
+                <span className="ml-1 normal-case font-normal text-kp-gray/60">— podés combinar</span>
+              </label>
+              <button
+                type="button"
+                onClick={addMedio}
+                disabled={medios.length >= mediosPago.length}
+                className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/80 hover:bg-kp-red transition-colors px-2.5 py-1 rounded-lg disabled:opacity-40"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
+                Agregar
               </button>
             </div>
 
-            {/* Body — scrollable */}
-            <div className="p-5 space-y-4 overflow-y-auto">
-
-              {/* Tipo */}
-              <div>
-                <label className={labelCls}>Tipo</label>
-                <div className="flex gap-2">
-                  {TIPOS.map(t => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => { setTipo(t.value as typeof tipo); setSubrubroId(''); }}
-                      className={[
-                        'flex-1 py-2 rounded-lg border text-xs font-semibold transition-colors',
-                        tipo === t.value ? t.color : 'border-kp-border text-kp-gray hover:border-kp-gray',
-                      ].join(' ')}
+            {medios.map((m, i) => {
+              const esCh = esCheque(m.medio_pago_id);
+              return (
+                <div key={i} className="grid grid-cols-12 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-2">
+                  <div className="col-span-6">
+                    <label className={labelCls}>Medio</label>
+                    <select
+                      value={m.medio_pago_id}
+                      onChange={e => updMedio(i, 'medio_pago_id', e.target.value)}
+                      className={inputCls}
                     >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Concepto */}
-              <div>
-                <label className={labelCls}>Concepto *</label>
-                <input
-                  type="text"
-                  placeholder={tipo === 'ingreso' ? 'Ej: Depósito de gerencia' : tipo === 'egreso' ? 'Ej: Compra de insumos' : 'Ej: Retiro cierre de turno'}
-                  value={concepto}
-                  onChange={e => setConcepto(e.target.value)}
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-
-              {/* Rubro — solo para egresos */}
-              {tipo === 'egreso' && rubros.length > 0 && (
-                <div>
-                  <label className={labelCls}>
-                    Rubro <span className="normal-case font-normal text-kp-gray/60">(opcional)</span>
-                  </label>
-                  <select value={subrubroId} onChange={e => setSubrubroId(e.target.value)} className={inputCls}>
-                    <option value="">— Sin categoría —</option>
-                    {rubros.map(r => (
-                      <optgroup key={r.id} label={r.nombre}>
-                        {r.subrubros.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* ── Medios de pago ───────────────────────────────────────────── */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className={labelCls}>
-                    Medios de pago *
-                    <span className="ml-1 normal-case font-normal text-kp-gray/60">— podés combinar</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addMedio}
-                    disabled={medios.length >= mediosPago.length}
-                    className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/80 hover:bg-kp-red transition-colors px-2.5 py-1 rounded-lg disabled:opacity-40"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3">
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    Agregar
-                  </button>
-                </div>
-
-                {medios.map((m, i) => {
-                  const esCh = esCheque(m.medio_pago_id);
-                  return (
-                    <div key={i} className="grid grid-cols-12 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-2">
-                      <div className="col-span-6">
-                        <label className={labelCls}>Medio</label>
-                        <select
-                          value={m.medio_pago_id}
-                          onChange={e => updMedio(i, 'medio_pago_id', e.target.value)}
-                          className={inputCls}
-                        >
-                          {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
-                        </select>
+                      {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-5">
+                    <label className={labelCls}>Monto</label>
+                    {esCh ? (
+                      <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt cursor-default`}>
+                        <span className="tabular-nums">{fmt(totalCheques)}</span>
+                        <span className="text-[10px] text-kp-gray">según cheques ↓</span>
                       </div>
-                      <div className="col-span-5">
-                        <label className={labelCls}>Monto</label>
-                        {esCh ? (
-                          <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt cursor-default`}>
-                            <span className="tabular-nums">{fmt(totalCheques)}</span>
-                            <span className="text-[10px] text-kp-gray">según cheques ↓</span>
-                          </div>
-                        ) : (
-                          <NumericInput
-                            value={m.monto}
-                            placeholder="0.00"
-                            onChange={e => updMedio(i, 'monto', e.target.value)}
-                            className={inputCls}
-                          />
-                        )}
-                      </div>
-                      {requiereCuenta(m.medio_pago_id) && (
-                        <div className="col-span-11">
-                          <label className={labelCls}>Cuenta bancaria</label>
-                          <select
-                            value={m.cuenta_bancaria_id ?? ''}
-                            onChange={e => updMedio(i, 'cuenta_bancaria_id', e.target.value)}
-                            className={inputCls}
-                          >
-                            <option value="">Seleccioná la cuenta</option>
-                            {cuentas.map(c => (
-                              <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <div className="col-span-1 flex justify-end">
-                        {medios.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => delMedio(i)}
-                            title="Quitar medio"
-                            className="text-kp-gray hover:text-kp-red px-2 py-2 transition-colors"
-                          >✕</button>
-                        )}
-                      </div>
+                    ) : (
+                      <NumericInput
+                        value={m.monto}
+                        placeholder="0.00"
+                        onChange={e => updMedio(i, 'monto', e.target.value)}
+                        className={inputCls}
+                      />
+                    )}
+                  </div>
+                  {requiereCuenta(m.medio_pago_id) && (
+                    <div className="col-span-11">
+                      <label className={labelCls}>Cuenta bancaria</label>
+                      <select
+                        value={m.cuenta_bancaria_id ?? ''}
+                        onChange={e => updMedio(i, 'cuenta_bancaria_id', e.target.value)}
+                        className={inputCls}
+                      >
+                        <option value="">Seleccioná la cuenta</option>
+                        {cuentas.map(c => (
+                          <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
+                        ))}
+                      </select>
                     </div>
-                  );
-                })}
-
-                {/* Resumen total cuando hay más de un medio */}
-                {medios.length > 1 && (
-                  <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
-                    <span className="text-xs uppercase tracking-widest text-kp-gray">Total</span>
-                    <span className={`text-sm font-bold tabular-nums ${totalMedios > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
-                      {fmt(totalMedios)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Detalle de cheques ────────────────────────────────────────── */}
-              {hayCheque && (
-                <div className="space-y-3 pt-2 border-t border-kp-border">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">
-                      Cheques ({cheques.length})
-                    </p>
-                    <button
-                      type="button"
-                      onClick={addCheque}
-                      className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/80 hover:bg-kp-red transition-colors px-2.5 py-1 rounded-lg"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3">
-                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                      Agregar cheque
-                    </button>
-                  </div>
-
-                  {cheques.map((ch, i) => (
-                    <div key={i} className="grid grid-cols-2 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
-                      <div>
-                        <label className={labelCls}>Banco</label>
-                        <input
-                          type="text"
-                          value={ch.banco}
-                          placeholder="Banco Nación…"
-                          onChange={e => updCheque(i, 'banco', e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>N° Cheque</label>
-                        <input
-                          type="text"
-                          value={ch.numero_cheque}
-                          placeholder="00000000"
-                          onChange={e => updCheque(i, 'numero_cheque', e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Fecha del cheque *</label>
-                        <input
-                          type="date"
-                          value={ch.fecha_vencimiento}
-                          onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Importe *</label>
-                        <div className="flex gap-2">
-                          <NumericInput
-                            value={ch.importe}
-                            placeholder="0.00"
-                            onChange={e => updCheque(i, 'importe', e.target.value)}
-                            className={inputCls}
-                          />
-                          {cheques.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => delCheque(i)}
-                              className="self-stretch px-2 text-kp-gray hover:text-kp-red transition-colors"
-                            >✕</button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Total cheques */}
-                  <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
-                    <span className="text-xs uppercase tracking-widest text-kp-gray">Total cheques</span>
-                    <span className={`text-sm font-bold tabular-nums ${totalCheques > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
-                      {fmt(totalCheques)}
-                    </span>
+                  )}
+                  <div className="col-span-1 flex justify-end">
+                    {medios.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => delMedio(i)}
+                        title="Quitar medio"
+                        className="text-kp-gray hover:text-kp-red px-2 py-2 transition-colors"
+                      >✕</button>
+                    )}
                   </div>
                 </div>
-              )}
+              );
+            })}
 
-              {error && (
-                <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
-                  {error}
+            {/* Resumen total cuando hay más de un medio */}
+            {medios.length > 1 && (
+              <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
+                <span className="text-xs uppercase tracking-widest text-kp-gray">Total</span>
+                <span className={`text-sm font-bold tabular-nums ${totalMedios > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
+                  {fmt(totalMedios)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* ── Detalle de cheques ────────────────────────────────────────── */}
+          {hayCheque && (
+            <div className="space-y-3 pt-2 border-t border-kp-border">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+                  Cheques ({cheques.length})
                 </p>
-              )}
+                <button
+                  type="button"
+                  onClick={addCheque}
+                  className="flex items-center gap-1 text-xs font-semibold text-white bg-kp-red/80 hover:bg-kp-red transition-colors px-2.5 py-1 rounded-lg"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="w-3 h-3">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Agregar cheque
+                </button>
+              </div>
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={handleGuardar}
-                  disabled={saving || totalMedios <= 0}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
-                >
-                  {saving ? <><Spinner /> Guardando…</> : 'Registrar'}
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
-                >
-                  Cancelar
-                </button>
+              {cheques.map((ch, i) => (
+                <div key={i} className="grid grid-cols-2 gap-2 items-end rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
+                  <div>
+                    <label className={labelCls}>Banco</label>
+                    <input
+                      type="text"
+                      value={ch.banco}
+                      placeholder="Banco Nación…"
+                      onChange={e => updCheque(i, 'banco', e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>N° Cheque</label>
+                    <input
+                      type="text"
+                      value={ch.numero_cheque}
+                      placeholder="00000000"
+                      onChange={e => updCheque(i, 'numero_cheque', e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Fecha del cheque *</label>
+                    <input
+                      type="date"
+                      value={ch.fecha_vencimiento}
+                      onChange={e => updCheque(i, 'fecha_vencimiento', e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Importe *</label>
+                    <div className="flex gap-2">
+                      <NumericInput
+                        value={ch.importe}
+                        placeholder="0.00"
+                        onChange={e => updCheque(i, 'importe', e.target.value)}
+                        className={inputCls}
+                      />
+                      {cheques.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => delCheque(i)}
+                          className="self-stretch px-2 text-kp-gray hover:text-kp-red transition-colors"
+                        >✕</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Total cheques */}
+              <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
+                <span className="text-xs uppercase tracking-widest text-kp-gray">Total cheques</span>
+                <span className={`text-sm font-bold tabular-nums ${totalCheques > 0 ? 'text-kp-white' : 'text-kp-gray'}`}>
+                  {fmt(totalCheques)}
+                </span>
               </div>
             </div>
+          )}
+
+          {error && (
+            <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleGuardar}
+              disabled={saving || totalMedios <= 0}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50"
+            >
+              {saving ? <><Spinner /> Guardando…</> : 'Registrar'}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="px-4 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
-      )}
+          
+      </Modal>
     </>
   );
 }
