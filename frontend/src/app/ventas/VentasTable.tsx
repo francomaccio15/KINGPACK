@@ -164,7 +164,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                         {v.medios_pago.split(', ').map((m) => (
                           <span
                             key={m}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-kp-surface2 text-kp-gray-lt border border-kp-border whitespace-nowrap"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs md:text-[11px] font-medium bg-kp-surface2 text-kp-gray-lt border border-kp-border whitespace-nowrap"
                           >
                             {m}
                           </span>
@@ -193,7 +193,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                       {v.estado === 'preventa' && v.vendedor_rol === 'vendedor' && (
                         <span
                           title={v.vendedor_nombre ? `Preventa creada por el preventista ${v.vendedor_nombre}` : 'Preventa creada por un preventista'}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30 whitespace-nowrap max-w-[140px]"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs md:text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30 whitespace-nowrap max-w-[140px]"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5 flex-shrink-0">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -204,7 +204,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                         </span>
                       )}
                       {v.fue_editada && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs md:text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -213,7 +213,7 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
                         </span>
                       )}
                       {v.estado === 'anulada' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs md:text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 whitespace-nowrap">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-2.5 h-2.5">
                             <circle cx="12" cy="12" r="10"/>
                             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>

@@ -13,7 +13,7 @@ export default function FiltroFecha({ fecha }: { fecha: string }) {
     router.push(`/pago-clientes?${params.toString()}`);
   };
 
-  const inputCls = 'bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
 
   return (
     <div className="flex flex-wrap items-center gap-3">

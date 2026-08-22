@@ -43,8 +43,8 @@ export default async function EditarVentaPage({ params }: { params: { id: string
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <span className="w-1 h-6 bg-kp-red rounded-full block" />
-        <h2 className="text-2xl font-bold uppercase tracking-wide">Editar Venta #{venta.numero}</h2>
+        <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+        <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Editar Venta #{venta.numero}</h2>
       </div>
 
       <EditarVentaForm

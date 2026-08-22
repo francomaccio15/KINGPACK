@@ -115,7 +115,7 @@ function BarChart({ data }: { data: DiaDato[] }) {
                   <span className="block text-kp-gray">{fmtNum(d.cantidad)} egreso{d.cantidad !== 1 ? 's' : ''}</span>
                 </div>
               </div>
-              <span className="text-[9px] text-kp-gray rotate-45 origin-left whitespace-nowrap translate-y-1">
+              <span className="text-2xs md:text-[9px] text-kp-gray rotate-45 origin-left whitespace-nowrap translate-y-1">
                 {fmtDia(d.dia)}
               </span>
             </div>
@@ -257,7 +257,7 @@ export default function ReporteGastos({
           <p className="text-sm text-kp-gray py-2">Sin egresos en el período</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table data-rt="1" className="w-full text-sm">
               <thead>
                 <tr className="border-b border-kp-border">
                   <th className="text-left py-2 text-xs font-semibold uppercase tracking-widest text-kp-gray">Fecha</th>

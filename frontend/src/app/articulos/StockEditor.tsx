@@ -115,7 +115,7 @@ function FilaStock({
             {saving ? '…' : estado === 'ok' && !cambio ? '✓' : 'Guardar'}
           </button>
         </div>
-        {estado === 'err' && <p className="text-[11px] text-kp-red text-right mt-1">{msg}</p>}
+        {estado === 'err' && <p className="text-2xs md:text-[11px] text-kp-red text-right mt-1">{msg}</p>}
       </td>
     </tr>
   );
@@ -197,7 +197,7 @@ export default function StockEditor({
       ? { ...a, stock_total: String(cantidad), stock_adelante: String(adelante), stock_deposito: String(deposito) }
       : a)));
 
-  const selectCls = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
+  const selectCls = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
 
   return (
     <div className="space-y-4">
@@ -242,7 +242,7 @@ export default function StockEditor({
 
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table className="min-w-full text-sm">
+        <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>

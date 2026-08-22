@@ -87,8 +87,8 @@ export default async function TraspasosPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Traspasos de Stock</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Traspasos de Stock</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {count} {count === 1 ? 'traspaso' : 'traspasos'}
@@ -128,7 +128,7 @@ export default async function TraspasosPage() {
 
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table className="min-w-full text-sm">
+        <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Fecha</th>

@@ -34,7 +34,7 @@ function Medalla({ pos, variant }: { pos: number; variant: 'top' | 'low' }) {
   }
   return (
     <span className={[
-      'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+      'w-5 h-5 rounded-full flex items-center justify-center text-2xs md:text-[10px] font-bold flex-shrink-0',
       variant === 'top'
         ? 'bg-violet-500/20 text-violet-300'
         : 'bg-kp-surface border border-kp-border text-kp-gray',
@@ -74,7 +74,7 @@ function RankRow({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-kp-white truncate leading-tight">{item.nombre}</p>
-        <p className="text-[10px] text-kp-gray truncate">{item.categoria}</p>
+        <p className="text-2xs md:text-[10px] text-kp-gray truncate">{item.categoria}</p>
         {/* Barra */}
         <div className="mt-1.5 h-1 rounded-full bg-kp-border/50 overflow-hidden">
           <div
@@ -93,7 +93,7 @@ function RankRow({
           {formatUnidades(item.total_unidades)}
         </p>
         {item.total_ingresos > 0 && (
-          <p className="text-[10px] text-kp-gray tabular-nums">{formatPesos(item.total_ingresos)}</p>
+          <p className="text-2xs md:text-[10px] text-kp-gray tabular-nums">{formatPesos(item.total_ingresos)}</p>
         )}
       </div>
     </div>
@@ -124,7 +124,7 @@ function Panel({
       <div className="px-4 py-3 border-b border-kp-border/60 flex items-center justify-between gap-2">
         <div>
           <h3 className={`text-sm font-bold uppercase tracking-wide ${titleColor}`}>{title}</h3>
-          <p className="text-[10px] text-kp-gray mt-0.5">{subtitle}</p>
+          <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">{subtitle}</p>
         </div>
         <span className="text-xl leading-none">
           {variant === 'top' ? '📈' : '📉'}
@@ -165,7 +165,7 @@ export default function RankingArticulos({ mes, masVendidos, menosVendidos }: Pr
         <h3 className="text-sm font-bold uppercase tracking-widest text-kp-gray-lt">
           Ranking de ventas
         </h3>
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-kp-surface2 border border-kp-border text-kp-gray capitalize">
+        <span className="text-2xs md:text-[10px] font-semibold px-2 py-0.5 rounded-full bg-kp-surface2 border border-kp-border text-kp-gray capitalize">
           {mesCapitalizado}
         </span>
       </div>

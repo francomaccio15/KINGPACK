@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import RegistrarPago from '../clientes/[id]/RegistrarPago';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn } from '@/lib/ui';
 
 export interface ClienteCobranza {
   id: string;
@@ -58,15 +60,15 @@ export default function CobranzasClient({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-green-500 rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Pago de Clientes</h2>
+            <span className="w-1 h-5 md:h-6 bg-green-500 rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Pago de Clientes</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             Buscá al cliente y registrá el pago que trae al mostrador.
           </p>
         </div>
         <div className="rounded-xl border border-kp-border bg-kp-surface px-4 py-2">
-          <p className="text-[10px] text-kp-gray uppercase tracking-widest">Deuda total</p>
+          <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Deuda total</p>
           <p className="text-lg font-bold tabular-nums text-amber-400">{ars.format(totalDeuda)}</p>
         </div>
       </div>
@@ -85,13 +87,14 @@ export default function CobranzasClient({
           onChange={e => setQ(e.target.value)}
           placeholder="Buscar por nombre o CUIT…"
           autoFocus
-          className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-4 py-2.5 text-sm text-kp-white
+          inputMode="search" enterKeyHint="search" autoComplete="off"
+          className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-4 py-2.5 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
             placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
         />
         <button
           type="button"
           onClick={() => setSoloDeuda(v => !v)}
-          className={`px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+          className={`px-4 py-2.5 min-h-touch md:min-h-touch-sm rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
             soloDeuda
               ? 'border-green-500 bg-green-500/10 text-green-300'
               : 'border-kp-border bg-kp-surface2 text-kp-gray hover:text-kp-white hover:border-kp-gray'
@@ -102,7 +105,7 @@ export default function CobranzasClient({
       </div>
 
       {/* Listado */}
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+      <TableWrap className="shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -121,7 +124,7 @@ export default function CobranzasClient({
                     <Link href={`/clientes/${c.id}`} className="font-medium text-kp-white hover:text-green-400 transition-colors">
                       {c.razon_social}
                     </Link>
-                    {c.telefono && <p className="text-[11px] text-kp-gray">{c.telefono}</p>}
+                    {c.telefono && <p className="text-2xs md:text-[11px] text-kp-gray">{c.telefono}</p>}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">{c.cuit || '—'}</td>
                   <td className={`px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap ${
@@ -144,7 +147,34 @@ export default function CobranzasClient({
             )}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      {/* Mobile: el boton de cobrar ocupa el ancho de la tarjeta — es la accion
+          principal de esta pantalla y se usa parado frente al mostrador. */}
+      <MobileCards>
+        {filtrados.map(c => {
+          const saldo = parseFloat(c.saldo_actual || '0');
+          return (
+            <RecordCard
+              key={c.id}
+              title={c.razon_social}
+              subtitle={[c.cuit, c.telefono].filter(Boolean).join(' · ')}
+              fields={[{ label: 'Saldo', value: ars.format(saldo), strong: true }]}
+              actions={
+                <>
+                  <Link href={`/clientes/${c.id}`} className={cn(btnSecondary, 'flex-1')}>Ficha</Link>
+                  <div className="flex-1 [&>button]:w-full">
+                    <RegistrarPago clienteId={c.id} saldoActual={saldo} sucursalId={sucursalId} />
+                  </div>
+                </>
+              }
+            />
+          );
+        })}
+        {filtrados.length === 0 && (
+          <EmptyState title={q ? 'Ningún cliente coincide con la búsqueda.' : 'No hay clientes para mostrar.'} />
+        )}
+      </MobileCards>
 
       <p className="text-xs text-kp-gray">
         Mostrando {filtrados.length} de {clientes.length} clientes activos.

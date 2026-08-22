@@ -205,13 +205,13 @@ export default function RegistrarPago({
             <div>
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Cuenta que recibe *</label>
               <select value={cuentaId} onChange={e => setCuentaId(e.target.value)}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
                 <option value="">Seleccioná la cuenta</option>
                 {cuentas.map(c => (
                   <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-kp-gray">Se acredita en el saldo de esa cuenta.</p>
+              <p className="mt-1 text-2xs md:text-[11px] text-kp-gray">Se acredita en el saldo de esa cuenta.</p>
             </div>
           )}
 
@@ -221,27 +221,27 @@ export default function RegistrarPago({
               <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Datos del cheque</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Banco</label>
+                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Banco</label>
                   <input value={chBanco} onChange={e => setChBanco(e.target.value)} placeholder="Banco"
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Nº Cheque</label>
+                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Nº Cheque</label>
                   <input value={chNumero} onChange={e => setChNumero(e.target.value)} placeholder="00000000"
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
+                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
                   <input type="date" value={chEmision} onChange={e => setChEmision(e.target.value)}
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha de pago *</label>
+                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha de pago *</label>
                   <input type="date" value={chVenc} onChange={e => setChVenc(e.target.value)}
-                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
               </div>
-              <p className="text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
+              <p className="text-2xs md:text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
             </div>
           )}
 
@@ -251,7 +251,7 @@ export default function RegistrarPago({
             <input
               value={concepto} onChange={e => setConcepto(e.target.value)}
               placeholder="ej: Pago cuota septiembre..."
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors"
             />
           </div>

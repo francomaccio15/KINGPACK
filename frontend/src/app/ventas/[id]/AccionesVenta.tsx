@@ -328,7 +328,7 @@ export default function AccionesVenta({
                   Factura {resultFactura.letra} N° {String(resultFactura.puntoVenta ?? 0).padStart(4, '0')}-{String(resultFactura.nroComprobante ?? 0).padStart(8, '0')}
                 </span>
                 {resultFactura.modo === 'homo' && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wide">Prueba</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-2xs md:text-[10px] font-bold uppercase tracking-wide">Prueba</span>
                 )}
               </div>
               <div>
@@ -360,7 +360,7 @@ export default function AccionesVenta({
             onChange={e => setAnularMotivo(e.target.value)}
             rows={3}
             placeholder="Ej: Error en los artículos cargados, pedido cancelado por el cliente..."
-            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-rose-500 transition-colors resize-none"
+            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-rose-500 transition-colors resize-none"
           />
         </div>
         {anularError && (
@@ -402,7 +402,7 @@ export default function AccionesVenta({
             onChange={e => setEditObsText(e.target.value)}
             rows={4}
             placeholder="Observaciones opcionales…"
-            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
+            className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
           />
         </div>
         {editObsError && (
@@ -456,7 +456,7 @@ export default function AccionesVenta({
           <span className="text-xs text-kp-gray uppercase tracking-widest">Total a facturar</span>
           <span className="font-bold tabular-nums text-kp-white">{ars.format(totalVenta)}</span>
         </div>
-        <p className="text-[11px] text-kp-gray px-1">
+        <p className="text-2xs md:text-[11px] text-kp-gray px-1">
           El tipo de comprobante (Factura A o B) se determina automáticamente según la condición de IVA del cliente.
         </p>
 
@@ -513,7 +513,7 @@ export default function AccionesVenta({
                     <select
                       value={pago.medio_pago_id}
                       onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, medio_pago_id: e.target.value, cuenta_destino_id: '' } : p))}
-                      className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                      className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500"
                     >
                       {mediosPago.map(mp => <option key={mp.id} value={mp.id}>{mp.nombre}</option>)}
                     </select>
@@ -542,7 +542,7 @@ export default function AccionesVenta({
                       <select
                         value={pago.cuenta_destino_id}
                         onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, cuenta_destino_id: e.target.value } : p))}
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-green-500"
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500"
                       >
                         <option value="">Seleccioná cuenta de destino…</option>
                         {cuentasBancarias.map(c => (
@@ -552,7 +552,7 @@ export default function AccionesVenta({
                         ))}
                       </select>
                       {cuentaSel && (cuentaSel.banco || cuentaSel.alias) && (
-                        <p className="mt-1 text-[11px] text-kp-gray px-1">
+                        <p className="mt-1 text-2xs md:text-[11px] text-kp-gray px-1">
                           {cuentaSel.banco && <span>{cuentaSel.banco}</span>}
                           {cuentaSel.banco && cuentaSel.alias && <span> · </span>}
                           {cuentaSel.alias && <span>Alias: {cuentaSel.alias}</span>}

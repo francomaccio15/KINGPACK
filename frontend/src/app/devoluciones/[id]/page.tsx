@@ -91,20 +91,20 @@ export default async function DevolucionPage({ params }: { params: { id: string 
               </div>
               <p className="text-sm font-bold mt-2 text-gray-700">N° {numero}</p>
               <p className="text-sm text-gray-500">{fecha}</p>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 mt-1">Documento no fiscal</p>
+              <p className="text-2xs md:text-[10px] uppercase tracking-widest text-gray-400 mt-1">Documento no fiscal</p>
             </div>
           </div>
 
           {/* ══ PARTES ══ */}
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Comercio</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Comercio</p>
               <Row label="Nombre" value={emisor.razon_social} />
               <Row label="Domicilio" value={emisor.domicilio} />
               {dev.sucursal_nombre && <Row label="Sucursal" value={dev.sucursal_nombre} />}
             </div>
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Cliente</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Cliente</p>
               <Row label="Nombre" value={dev.cliente_razon_social ?? 'Consumidor Final'} />
               {dev.cliente_cuit && <Row label="CUIT" value={dev.cliente_cuit} />}
               {dev.cliente_direccion && <Row label="Domicilio" value={dev.cliente_direccion} />}
@@ -121,14 +121,14 @@ export default async function DevolucionPage({ params }: { params: { id: string 
 
           {/* ══ MOTIVO ══ */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Motivo</p>
+            <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Motivo</p>
             <p className="text-sm text-gray-800 leading-relaxed">{dev.motivo}</p>
           </div>
 
           {/* ══ DETALLE ══ */}
           {items.length > 0 && (
             <div className="mb-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
                 Mercadería devuelta
               </p>
               <table className="w-full border-collapse text-sm">
@@ -186,11 +186,11 @@ export default async function DevolucionPage({ params }: { params: { id: string 
 
           {/* ══ PIE ══ */}
           <div className="mt-8 pt-4 border-t border-gray-100 text-center">
-            <p className="text-[9px] text-gray-400 uppercase tracking-widest">
+            <p className="text-2xs md:text-[9px] text-gray-400 uppercase tracking-widest">
               {emisor.razon_social} · Documento generado el {fecha}
               {dev.emitida_por_nombre ? ` · Emitido por ${dev.emitida_por_nombre}` : ''}
             </p>
-            <p className="text-[9px] text-gray-400 mt-1">* Documento interno. No válido como comprobante fiscal.</p>
+            <p className="text-2xs md:text-[9px] text-gray-400 mt-1">* Documento interno. No válido como comprobante fiscal.</p>
             {dev.estado === 'anulada' && (
               <p className="text-sm font-black text-red-600 mt-2 uppercase tracking-widest">
                 ⚠ DEVOLUCIÓN ANULADA

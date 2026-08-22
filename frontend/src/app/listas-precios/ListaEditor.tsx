@@ -74,7 +74,7 @@ export default function ListaEditor({ lista }: { lista: Lista }) {
               {TIPO_LABEL[lista.tipo] ?? lista.nombre}
             </h3>
             {esMadre && (
-              <span className="text-[10px] bg-kp-red/20 text-kp-red border border-kp-red/30 rounded px-1.5 py-0.5 uppercase tracking-wide font-semibold">
+              <span className="text-2xs md:text-[10px] bg-kp-red/20 text-kp-red border border-kp-red/30 rounded px-1.5 py-0.5 uppercase tracking-wide font-semibold">
                 Referencia
               </span>
             )}
@@ -146,7 +146,7 @@ export default function ListaEditor({ lista }: { lista: Lista }) {
               )}
             </div>
 
-            <p className="text-[11px] text-kp-gray">
+            <p className="text-2xs md:text-[11px] text-kp-gray">
               Al guardar, el descuento se aplica inmediatamente a todos los artículos de esta lista.
             </p>
           </div>

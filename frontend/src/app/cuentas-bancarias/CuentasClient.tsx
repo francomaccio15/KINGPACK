@@ -67,7 +67,7 @@ function FormCuenta({
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
 
   const handleSubmit = async () => {
@@ -129,7 +129,7 @@ function FormCuenta({
         <label className={labelCls}>Saldo actual</label>
         <input type="number" step="0.01" value={saldo} onChange={e => setSaldo(e.target.value)}
           placeholder="0" className={inputCls} />
-        <p className="text-[10px] text-kp-gray mt-1">
+        <p className="text-2xs md:text-[10px] text-kp-gray mt-1">
           El saldo se mantiene solo con cada cobro y pago. Ponelo acá sólo para corregirlo
           con el real del banco: pasa a ser el punto de partida y los movimientos siguen contando sobre él.
         </p>
@@ -140,7 +140,7 @@ function FormCuenta({
           <option value="">— Sin asignar —</option>
           {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
         </select>
-        <p className="text-[10px] text-kp-gray mt-1">Determina bajo qué filtro de sucursal se muestra en el dashboard.</p>
+        <p className="text-2xs md:text-[10px] text-kp-gray mt-1">Determina bajo qué filtro de sucursal se muestra en el dashboard.</p>
       </div>
       {error &&<p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>}
       <div className="flex gap-3 pt-2">
@@ -228,8 +228,8 @@ export default function CuentasClient() {
       {/* Encabezado */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Cuentas Bancarias</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Cuentas Bancarias</h2>
           <span className="ml-2 text-xs font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded-full px-2 py-0.5">
             {cuentas.length}
           </span>
@@ -254,7 +254,7 @@ export default function CuentasClient() {
         </div>
       ) : (
         <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table data-rt="1" className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Nombre</th>
@@ -272,7 +272,7 @@ export default function CuentasClient() {
                   <td className="px-4 py-3 font-medium text-kp-white">
                     {c.nombre}
                     {c.es_cuenta_cheques && (
-                      <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide text-kp-red bg-kp-red/10 border border-kp-red/20 rounded px-1.5 py-0.5">
+                      <span className="ml-2 align-middle text-2xs md:text-[10px] font-semibold uppercase tracking-wide text-kp-red bg-kp-red/10 border border-kp-red/20 rounded px-1.5 py-0.5">
                         Cheques
                       </span>
                     )}

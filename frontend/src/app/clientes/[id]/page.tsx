@@ -9,6 +9,7 @@ import ComprasPorMes from './ComprasPorMes';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const fmt = (v: any) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
@@ -87,8 +88,8 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">{cliente.razon_social}</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">{cliente.razon_social}</h2>
             {!cliente.activo && (
               <span className="text-xs bg-kp-surface2 border border-kp-border text-kp-gray rounded px-2 py-0.5">Inactivo</span>
             )}
@@ -127,14 +128,14 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-amber-400">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold">
+              <p className="text-2xs md:text-[10px] text-amber-400 uppercase tracking-widest font-bold">
                 {excedeCredito ? 'Crédito Excedido' : 'Deuda'}
               </p>
             </div>
             <p className={`text-xl font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-amber-400'}`}>
               {fmt(saldoActual)}
             </p>
-            <p className="text-[10px] text-kp-gray mt-1">debe a King Pack</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">debe a King Pack</p>
           </div>
         ) : saldoActual < 0 ? (
           <div className="rounded-xl border bg-emerald-500/5 border-emerald-500/30 px-5 py-4">
@@ -142,26 +143,26 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-emerald-400">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Saldo a Favor</p>
+              <p className="text-2xs md:text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Saldo a Favor</p>
             </div>
             <p className="text-xl font-bold tabular-nums text-emerald-400">{fmt(Math.abs(saldoActual))}</p>
-            <p className="text-[10px] text-kp-gray mt-1">tiene crédito disponible</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">tiene crédito disponible</p>
           </div>
         ) : (
           <div className="rounded-xl border bg-kp-surface border-kp-border px-5 py-4">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Saldo</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Saldo</p>
             <p className="text-xl font-bold tabular-nums text-kp-white">$0,00</p>
-            <p className="text-[10px] text-kp-gray mt-1">al día</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">al día</p>
           </div>
         )}
 
         <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
-          <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</p>
+          <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</p>
           <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-kp-white'}`}>
             {fmt(limiteCredito)}
           </p>
           {excedeCredito && limiteCredito > 0 && (
-            <p className="text-[10px] text-kp-red mt-1">excedido en {fmt(saldoActual - limiteCredito)}</p>
+            <p className="text-2xs md:text-[10px] text-kp-red mt-1">excedido en {fmt(saldoActual - limiteCredito)}</p>
           )}
         </div>
 
@@ -170,7 +171,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           { label: 'Lista de Precios', value: cliente.lista_precio ?? '—', color: 'text-kp-gray-lt' },
         ].map(card => (
           <div key={card.label} className="rounded-xl bg-kp-surface border border-kp-border px-5 py-4">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">{card.label}</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">{card.label}</p>
             <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
           </div>
         ))}
@@ -195,7 +196,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             { label: 'Cliente desde', value: new Date(cliente.created_at).toLocaleDateString('es-AR') },
           ].map(row => (
             <div key={row.label}>
-              <p className="text-[10px] text-kp-gray uppercase tracking-widest">{row.label}</p>
+              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">{row.label}</p>
               <p className="text-kp-gray-lt mt-0.5">{row.value || '—'}</p>
             </div>
           ))}
@@ -210,7 +211,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           <span className="text-xs text-kp-gray">({movimientos.length} movimientos)</span>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+        <TableWrap className="shadow-lg shadow-black/40">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -287,6 +288,57 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
               ))}
             </tbody>
           </table>
+        </TableWrap>
+
+        {/* Mobile: cada movimiento como fila legible. El saldo acumulado es el
+            dato que se mira, asi que va destacado a la derecha. */}
+        <div className="md:hidden print:hidden rounded-xl border border-kp-border overflow-hidden bg-kp-surface">
+          <div className="flex items-center justify-between px-3 py-2 bg-kp-surface2 border-b border-kp-border">
+            <span className="text-2xs text-kp-gray uppercase tracking-widest italic">Saldo inicial</span>
+            <span className="text-xs font-semibold text-kp-gray-lt tabular-nums">{fmt(saldo_inicial)}</span>
+          </div>
+          {movimientos.length === 0 && (
+            <p className="px-3 py-8 text-center text-xs text-kp-gray">Sin movimientos registrados</p>
+          )}
+          {movimientos.map((m: any) => {
+            const debe  = parseFloat(m.debe) || 0;
+            const haber = parseFloat(m.haber) || 0;
+            const saldo = parseFloat(m.saldo) || 0;
+            return (
+              <div key={m.id} className="px-3 py-2.5 border-b border-kp-border last:border-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-2xs text-kp-gray whitespace-nowrap">{fmtFecha(m.fecha)}</span>
+                    {(m.origen_tipo === 'venta' || m.origen_tipo === 'edicion_venta') && m.origen_id ? (
+                      <Link href={`/ventas/${m.origen_id}`} className="text-2xs font-medium px-2 py-0.5 rounded border text-amber-400 bg-amber-400/10 border-amber-400/30">
+                        {m.origen_tipo === 'edicion_venta' ? 'Modificación' : 'Venta'}
+                      </Link>
+                    ) : (
+                      <span className={`text-2xs font-medium px-2 py-0.5 rounded border ${m.origen_tipo === 'pago'
+                        ? 'text-green-400 bg-green-400/10 border-green-400/30'
+                        : 'text-kp-gray-lt bg-kp-surface2 border-kp-border'}`}>
+                        {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${saldo > 0 ? 'text-amber-400' : saldo < 0 ? 'text-green-400' : 'text-kp-gray'}`}>
+                    {fmt(saldo)}
+                  </span>
+                </div>
+                <p className="text-2xs text-kp-gray mt-0.5 tabular-nums">
+                  {debe > 0 && <span className="text-amber-400">Debe {fmt(debe)}</span>}
+                  {debe > 0 && haber > 0 && ' · '}
+                  {haber > 0 && <span className="text-green-400">Haber {fmt(haber)}</span>}
+                  {debe === 0 && haber === 0 && '—'}
+                </p>
+                {m.origen_tipo === 'pago' && puedeEditarPago && (
+                  <div className="mt-1">
+                    <EditarPago clienteId={cliente.id} movId={m.id} montoActual={haber} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -298,7 +350,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             <h3 className="font-bold uppercase tracking-wide text-sm">Ventas</h3>
             <span className="text-xs text-kp-gray">({ventasCliente.length})</span>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+          <TableWrap className="shadow-lg shadow-black/40">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -336,7 +388,23 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
+
+          <MobileCards>
+            {ventasCliente.map((v: any) => (
+              <RecordCard
+                key={v.id}
+                href={`/ventas/${v.id}`}
+                title={`#${v.numero}`}
+                subtitle={[
+                  new Date(v.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                  v.sucursal_nombre,
+                ].filter(Boolean).join(' · ')}
+                badge={{ label: VENTA_ESTADO_LABEL[v.estado] ?? v.estado, tone: 'neutral' }}
+                fields={[{ label: 'Total', value: fmt(v.total), strong: true }]}
+              />
+            ))}
+          </MobileCards>
         </div>
       )}
 

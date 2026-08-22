@@ -5,6 +5,7 @@ import ClientesFiltros from './ClientesFiltros';
 import DeudoresTable from './DeudoresTable';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 type Cliente = {
   id: string; razon_social: string; cuit: string | null; telefono: string | null;
@@ -54,8 +55,8 @@ export default async function ClientesPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Clientes</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Clientes</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {clientes.length} {clientes.length === 1 ? 'registro' : 'registros'}
@@ -106,7 +107,7 @@ export default async function ClientesPage({
             <ClientesFiltros />
           </Suspense>
 
-          <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+          <TableWrap className="shadow-lg shadow-black/40">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -183,7 +184,35 @@ export default async function ClientesPage({
                 )}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
+
+          {/* Mobile: una tarjeta por cliente. Se muestran razon social, saldo
+              y estado; el resto del detalle vive en la ficha. */}
+          <MobileCards>
+            {(clientes as Cliente[]).map((c) => {
+              const saldo  = parseFloat(c.saldo_actual || '0');
+              const limite = parseFloat(c.limite_credito || '0');
+              const excede = limite > 0 && saldo > limite;
+              return (
+                <RecordCard
+                  key={c.id}
+                  href={`/clientes/${c.id}`}
+                  title={c.razon_social}
+                  subtitle={[c.cuit, c.cond_iva].filter(Boolean).join(' · ')}
+                  badge={c.activo ? { label: 'Activo', tone: 'danger' } : { label: 'Inactivo', tone: 'neutral' }}
+                  fields={esAdmin ? [
+                    { label: 'Saldo', value: fmt(saldo), strong: true },
+                    { label: excede ? 'Excede el limite' : 'Limite', value: fmt(c.limite_credito), align: 'right' },
+                  ] : (c.lista_precio ? [{ label: 'Lista', value: c.lista_precio }] : undefined)}
+                />
+              );
+            })}
+            {clientes.length === 0 && (
+              <EmptyState title={hayFiltros
+                ? 'No hay clientes que coincidan con los filtros.'
+                : 'No hay clientes cargados todavía.'} />
+            )}
+          </MobileCards>
         </>
       )}
 

@@ -106,8 +106,8 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Impuestos</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Impuestos</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">Libro IVA Ventas · Libro IVA Compras · Posición Fiscal</p>
         </div>

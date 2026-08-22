@@ -174,10 +174,10 @@ export default async function ArticulosPage({
     return (
       <section className="space-y-5">
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Artículos</h2>
           {sucursalActiva && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest
+            <span className="inline-flex items-center gap-1.5 text-2xs md:text-[10px] font-semibold uppercase tracking-widest
               bg-kp-surface2 border border-kp-red/30 text-kp-red rounded px-2 py-0.5 ml-1">
               <span className="w-1 h-1 rounded-full bg-kp-red" />
               {sucursalActiva.nombre}
@@ -221,12 +221,12 @@ export default async function ArticulosPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Artículos</h2>
 
             {/* Badge de sucursal activa */}
             {sucursalActiva && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest
+              <span className="inline-flex items-center gap-1.5 text-2xs md:text-[10px] font-semibold uppercase tracking-widest
                 bg-kp-surface2 border border-kp-red/30 text-kp-red rounded px-2 py-0.5 ml-1">
                 <span className="w-1 h-1 rounded-full bg-kp-red" />
                 {sucursalActiva.nombre}
@@ -244,7 +244,7 @@ export default async function ArticulosPage({
             {searchParams.stock_bajo !== 'true' && stockBajoCount > 0 && (
               <Link
                 href={`/articulos?stock_bajo=true${listaActivaId ? `&lista_id=${listaActivaId}` : ''}`}
-                className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg
+                className="inline-flex items-center gap-1.5 text-2xs md:text-[11px] font-bold px-2.5 py-1 rounded-lg
                   bg-amber-500/10 border border-amber-500/30 text-amber-400
                   hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors"
               >
@@ -309,7 +309,7 @@ export default async function ArticulosPage({
 
       {/* ── Tabla ── */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table className="min-w-full text-sm">
+        <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-3 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold whitespace-nowrap">Código</th>
@@ -320,7 +320,7 @@ export default async function ArticulosPage({
                   {listaActiva ? (TIPO_LABEL[listaActiva.tipo] ?? listaActiva.nombre) : 'Precio'}
                 </span>
                 {descBase > 0 && (
-                  <span className="block text-[10px] text-green-400 font-normal normal-case tracking-normal">
+                  <span className="block text-2xs md:text-[10px] text-green-400 font-normal normal-case tracking-normal">
                     −{descBase.toFixed(1)}%
                   </span>
                 )}

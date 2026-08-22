@@ -110,7 +110,7 @@ function ArticuloInput({
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
-                <p className="text-[10px] text-kp-gray font-mono">{art.codigo}</p>
+                <p className="text-2xs md:text-[10px] text-kp-gray font-mono">{art.codigo}</p>
               </div>
               <span className="text-xs text-kp-gray-lt tabular-nums shrink-0">
                 {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2, maximumFractionDigits: 3}).format(art.precio_madre)}
@@ -321,8 +321,8 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     }
   };
 
-  const labelCls = 'block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1';
-  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const labelCls = 'block text-2xs md:text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1';
+  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const selectCls = inputCls + ' cursor-pointer';
 
   return (
@@ -370,7 +370,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                   onChange={e => setVentaNumero(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarVenta())}
                   placeholder="Número de venta…"
-                  className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
+                  className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
                 />
                 <button
                   type="button"
@@ -413,7 +413,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
               ))}
             </select>
             {ventaCargada?.letra && tiposNC.find(t => t.id === tipoId)?.letra !== ventaCargada.letra && (
-              <p className="text-[11px] text-amber-400/90 mt-1 leading-snug">
+              <p className="text-2xs md:text-[11px] text-amber-400/90 mt-1 leading-snug">
                 La Venta #{ventaCargada.numero} se facturó como Factura {ventaCargada.letra}. ARCA exige que la NC tenga la misma letra que el comprobante original.
               </p>
             )}
@@ -450,7 +450,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
               ))}
             </select>
             {!clienteId && (
-              <label className="mt-2 flex items-start gap-2 text-[11px] text-amber-400/90 leading-snug cursor-pointer">
+              <label className="mt-2 flex items-start gap-2 text-2xs md:text-[11px] text-amber-400/90 leading-snug cursor-pointer">
                 <input
                   type="checkbox"
                   checked={confirmSinCliente}
@@ -479,11 +479,11 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
         {clienteId && (
           <div className="rounded-xl border border-kp-border bg-kp-surface2 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-kp-border/60">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-kp-gray">
+              <span className="text-2xs md:text-[11px] font-bold uppercase tracking-wider text-kp-gray">
                 Historial de notas de crédito del cliente
               </span>
               {!loadingHistorial && (
-                <span className="text-[10px] font-semibold text-kp-gray-lt">
+                <span className="text-2xs md:text-[10px] font-semibold text-kp-gray-lt">
                   {historial.length} {historial.length === 1 ? 'nota' : 'notas'}
                 </span>
               )}
@@ -504,7 +504,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                     </span>
                     <span className="text-kp-gray-lt flex-1 min-w-0 truncate">{nc.motivo}</span>
                     {nc.estado === 'anulada' && (
-                      <span className="text-rose-400 font-bold uppercase text-[9px] shrink-0">Anulada</span>
+                      <span className="text-rose-400 font-bold uppercase text-2xs md:text-[9px] shrink-0">Anulada</span>
                     )}
                     <span className="text-kp-white font-semibold tabular-nums shrink-0">
                       {ars.format(nc.total)}
@@ -525,7 +525,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
                 key={m} type="button"
                 onClick={() => setMotivo(m)}
                 className={[
-                  'text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                  'text-2xs md:text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
                   motivo === m
                     ? 'bg-kp-red/15 border-kp-red/40 text-kp-red'
                     : 'bg-kp-surface2 border-kp-border text-kp-gray hover:text-kp-white',
@@ -560,10 +560,10 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
           <div className="rounded-xl border border-kp-border">
             {/* Header tabla */}
             <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border rounded-t-xl">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
               <span />
             </div>
 
@@ -614,7 +614,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
               <option value="efectivo">Efectivo (devolución física)</option>
               <option value="transferencia">Transferencia (devolución física)</option>
             </select>
-            <p className="text-[11px] text-kp-gray mt-1.5 leading-snug">
+            <p className="text-2xs md:text-[11px] text-kp-gray mt-1.5 leading-snug">
               {formaDevolucion === 'cuenta_corriente'
                 ? clienteId
                   ? 'Se acreditará el total al saldo a favor del cliente.'

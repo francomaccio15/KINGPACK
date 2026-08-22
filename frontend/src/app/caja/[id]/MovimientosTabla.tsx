@@ -226,7 +226,7 @@ export default function MovimientosTabla({
                 >
                   {f.label}
                   <span className={[
-                    'inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold',
+                    'inline-flex items-center justify-center w-4 h-4 rounded-full text-2xs md:text-[10px] font-bold',
                     isActive ? 'bg-kp-red/20 text-kp-red' : 'bg-kp-border/60 text-kp-gray',
                   ].join(' ')}>
                     {count}
@@ -264,7 +264,7 @@ export default function MovimientosTabla({
                   <td className="px-4 py-3">
                     <span className="block text-kp-white">{m.concepto}</span>
                     {m.empleado_nombre && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-400/80 mt-0.5">
+                      <span className="inline-flex items-center gap-1 text-2xs md:text-[11px] text-amber-400/80 mt-0.5">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
                           <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
                         </svg>
@@ -272,7 +272,7 @@ export default function MovimientosTabla({
                       </span>
                     )}
                     {m.usuario_nombre && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-kp-gray mt-0.5">
+                      <span className="inline-flex items-center gap-1 text-2xs md:text-[11px] text-kp-gray mt-0.5">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                         </svg>

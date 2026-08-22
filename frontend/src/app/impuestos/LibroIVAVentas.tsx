@@ -67,7 +67,7 @@ export default function LibroIVAVentas({ ventas, totales }: { ventas: VentaIVA[]
         </div>
       ) : (
         <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table className="w-full text-xs min-w-[1100px]">
+          <table data-rt="1" className="w-full text-xs min-w-[1100px]">
             <thead className="bg-kp-surface2 text-kp-gray uppercase tracking-wide">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">Fecha</th>

@@ -10,8 +10,8 @@ export default function TrazabilidadPage() {
     <section className="space-y-5">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Seguimiento de Artículos</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Seguimiento de Artículos</h2>
         </div>
         <p className="text-sm text-kp-gray pl-3">
           Rastreá en qué ventas aparece un artículo y a qué cliente se le vendió.

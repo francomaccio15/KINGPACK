@@ -446,7 +446,7 @@ export default function EditarVentaForm({
 
                 {/* Cantidad */}
                 <div className="flex flex-col items-center gap-0.5">
-                  <label className="text-[10px] text-kp-gray uppercase tracking-widest">Cant.</label>
+                  <label className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Cant.</label>
                   <input
                     type="number"
                     min="1"
@@ -459,7 +459,7 @@ export default function EditarVentaForm({
 
                 {/* Descuento */}
                 <div className="flex flex-col items-center gap-0.5" title="Descuento de este artículo (%). Vacío = hereda el de la venta.">
-                  <label className="text-[10px] text-kp-gray uppercase tracking-widest">Desc.</label>
+                  <label className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Desc.</label>
                   <div className="flex items-center">
                     <NumericInput
                       decimals={1}
@@ -568,7 +568,7 @@ export default function EditarVentaForm({
                   <select
                     value={pago.medio_pago_id}
                     onChange={e => actualizarPago(idx, 'medio_pago_id', e.target.value)}
-                    className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red"
+                    className="flex-1 bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red"
                   >
                     <option value="">— Seleccionar —</option>
                     {mediosPago.map(mp => (
@@ -601,9 +601,9 @@ export default function EditarVentaForm({
                 {/* Cuenta destino — solo para medios bancarios (transferencia/MP/QR). */}
                 {bancario && (
                   <div className="pl-1 pr-11">
-                    <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Cuenta destino</p>
+                    <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Cuenta destino</p>
                     {cuentasBancarias.length === 0 ? (
-                      <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-amber-500/30 text-[11px] text-amber-400">
+                      <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-amber-500/30 text-2xs md:text-[11px] text-amber-400">
                         No hay cuentas bancarias cargadas. Cargalas en Cuentas bancarias.
                       </p>
                     ) : (
@@ -621,7 +621,7 @@ export default function EditarVentaForm({
                           ))}
                         </select>
                         {cc && (
-                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
                             {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
                             {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}

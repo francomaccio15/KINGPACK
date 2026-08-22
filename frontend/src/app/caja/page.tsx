@@ -62,8 +62,8 @@ export default async function CajaPage() {
     return (
       <section className="space-y-7">
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Caja</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Caja</h2>
         </div>
         <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-sm text-yellow-400">
           No tenés sucursal asignada. Contactá al administrador para que configure tu sucursal de trabajo.
@@ -89,8 +89,8 @@ export default async function CajaPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Caja</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Caja</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {esCajero && sucursales[0]
@@ -225,7 +225,7 @@ export default async function CajaPage() {
                 </div>
 
                 <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-                  <table className="min-w-full text-sm">
+                  <table data-rt="1" className="min-w-full text-sm">
                     <thead>
                       <tr className="bg-kp-surface2 border-b border-kp-border">
                         <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Apertura</th>
@@ -262,7 +262,7 @@ export default async function CajaPage() {
                               {c.diferencia == null ? '—' : (
                                 <span title={diffCuadrada ? 'Caja cuadrada' : diff > 0 ? 'Falta dinero' : 'Sobra dinero'}>
                                   {!diffCuadrada && (diff > 0 ? '−' : '+')}{fmt(Math.abs(diff))}
-                                  {!diffCuadrada && <span className="ml-1 text-[10px] uppercase">{diff > 0 ? 'falta' : 'sobra'}</span>}
+                                  {!diffCuadrada && <span className="ml-1 text-2xs md:text-[10px] uppercase">{diff > 0 ? 'falta' : 'sobra'}</span>}
                                 </span>
                               )}
                             </td>

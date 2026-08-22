@@ -77,7 +77,7 @@ export default function AbrirCaja({
               value={saldoInicial}
               onChange={e => setSaldo(e.target.value)}
               autoFocus
-              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+              className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
             />
           </div>
 

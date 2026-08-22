@@ -460,7 +460,7 @@ export default function PagosProveedorClient() {
     }
   };
 
-  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
   const cardCls  = 'rounded-xl border border-kp-border p-5 space-y-4 bg-kp-surface';
 
@@ -468,8 +468,8 @@ export default function PagosProveedorClient() {
     <section className="space-y-5 pb-12">
       {/* Encabezado */}
       <div className="flex items-center gap-2">
-        <span className="w-1 h-6 bg-kp-red rounded-full block" />
-        <h2 className="text-2xl font-bold uppercase tracking-wide">Pago a Proveedores</h2>
+        <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+        <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Pago a Proveedores</h2>
       </div>
 
       {/* ── Selección de proveedor ── */}
@@ -494,7 +494,7 @@ export default function PagosProveedorClient() {
         {proveedor && (
           <div className="flex flex-wrap items-center gap-4 pt-1">
             <div className="rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
-              <span className="block text-[11px] uppercase tracking-widest text-kp-gray">Saldo que le debemos</span>
+              <span className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Saldo que le debemos</span>
               <span className={`text-lg font-bold tabular-nums ${saldoProv > 0.005 ? 'text-kp-red' : saldoProv < -0.005 ? 'text-green-400' : 'text-kp-gray'}`}>
                 {fmt(saldoProv)}
               </span>
@@ -564,14 +564,14 @@ export default function PagosProveedorClient() {
                             <td className="px-3 py-2 whitespace-nowrap">
                               <span className="text-xs font-semibold text-kp-white">{TIPO_COMP_LABEL[e.tipo_comprobante ?? ''] ?? e.tipo_comprobante ?? '—'}</span>
                               {e.numero_comprobante && <span className="ml-1 text-xs text-kp-gray font-mono">{e.punto_venta ? `${e.punto_venta}-` : ''}{e.numero_comprobante}</span>}
-                              {e.estado_pago === 'parcial' && <span className="ml-1 text-[10px] text-blue-400">(parcial)</span>}
+                              {e.estado_pago === 'parcial' && <span className="ml-1 text-2xs md:text-[10px] text-blue-400">(parcial)</span>}
                             </td>
                             <td className="px-3 py-2 text-xs text-kp-gray-lt max-w-[220px] truncate">{e.descripcion}</td>
                             <td className="px-3 py-2 text-center text-xs text-kp-gray whitespace-nowrap">{e.fecha_vencimiento_pago ? fmtFecha(e.fecha_vencimiento_pago) : '—'}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-xs text-kp-gray-lt">
                               {fmt(e.total)}
                               {a && Math.abs(a.pend - (parseFloat(e.total) || 0)) > 0.01 && (
-                                <span className="block text-[10px] text-blue-400">pendiente {fmt(a.pend)}</span>
+                                <span className="block text-2xs md:text-[10px] text-blue-400">pendiente {fmt(a.pend)}</span>
                               )}
                             </td>
                             <td className="px-3 py-2">
@@ -656,13 +656,13 @@ export default function PagosProveedorClient() {
                         <label className={labelCls}>Monto</label>
                         {!cheque && resto > 0 && (
                           <button type="button" onClick={() => updMedio(i, 'monto', String(resto))}
-                            className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(resto)}</button>
+                            className="text-2xs md:text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(resto)}</button>
                         )}
                       </div>
                       {cheque
                         ? <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt`}>
                             <span className="tabular-nums">{fmt(totalCheques)}</span>
-                            <span className="text-[10px] text-kp-gray">según cheques ↓</span>
+                            <span className="text-2xs md:text-[10px] text-kp-gray">según cheques ↓</span>
                           </div>
                         : <NumericInput value={m.monto} placeholder="0.00" onChange={e => updMedio(i, 'monto', e.target.value)} className={inputCls} />
                       }
@@ -698,11 +698,11 @@ export default function PagosProveedorClient() {
                     {fmt(totalMedios)}
                   </span>
                   {esParcial ? (
-                    <span className="block text-[11px] text-amber-400">
+                    <span className="block text-2xs md:text-[11px] text-amber-400">
                       Pago parcial — quedan {fmt(restoDeuda)} como deuda, prorrateados entre {seleccionados.length} comprobante{seleccionados.length === 1 ? '' : 's'}
                     </span>
                   ) : totalPago > 0 && Math.abs(totalMedios - totalPago) > 0.01 && (
-                    <span className="block text-[11px] text-kp-red">
+                    <span className="block text-2xs md:text-[11px] text-kp-red">
                       {totalMedios < totalPago ? `Faltan ${fmt(totalPago - totalMedios)}` : `Se pasan ${fmt(totalMedios - totalPago)}`}
                     </span>
                   )}
@@ -760,7 +760,7 @@ export default function PagosProveedorClient() {
                               <label className={labelCls}>Importe *</label>
                               {restante > 0 && (
                                 <button type="button" onClick={() => updCheque(i, 'importe', String(restante))}
-                                  className="text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(restante)}</button>
+                                  className="text-2xs md:text-[10px] text-kp-red hover:underline mb-1">usar resto {fmt(restante)}</button>
                               )}
                             </div>
                             <div className="flex gap-2">
@@ -790,14 +790,14 @@ export default function PagosProveedorClient() {
                             <button key={c.id} type="button" onClick={() => toggleEndoso(c.id)}
                               className={`w-full flex items-center gap-3 text-left rounded-lg border px-3 py-2 transition-colors ${
                                 sel ? 'border-kp-red bg-kp-red/10' : 'border-kp-border bg-kp-surface2/40 hover:border-kp-gray'}`}>
-                              <span className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                              <span className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center text-2xs md:text-[10px] ${
                                 sel ? 'bg-kp-red border-kp-red text-white' : 'border-kp-gray text-transparent'}`}>✓</span>
                               <span className="flex-1 min-w-0">
                                 <span className="block text-sm text-kp-white truncate">
                                   {(c.banco || 's/banco')} #{c.numero_cheque || 's/nº'}
                                   {c.origen_nombre ? ` · ${c.origen_nombre}` : ''}
                                 </span>
-                                <span className="block text-[10px] text-kp-gray">Vence {fmtVenc(c.fecha_vencimiento)}</span>
+                                <span className="block text-2xs md:text-[10px] text-kp-gray">Vence {fmtVenc(c.fecha_vencimiento)}</span>
                               </span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-kp-white">{fmt(parseFloat(c.importe) || 0)}</span>
                             </button>
@@ -824,11 +824,11 @@ export default function PagosProveedorClient() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-6">
                 <div>
-                  <span className="block text-[11px] uppercase tracking-widest text-kp-gray">Total a pagar</span>
+                  <span className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Total a pagar</span>
                   <span className="text-2xl font-bold tabular-nums text-kp-white">{fmt(totalPago)}</span>
                 </div>
                 <div>
-                  <span className="block text-[11px] uppercase tracking-widest text-kp-gray">Saldo resultante</span>
+                  <span className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Saldo resultante</span>
                   <span className="text-lg font-bold tabular-nums text-kp-gray-lt">{fmt(saldoProv - totalPago)}</span>
                 </div>
               </div>
@@ -898,12 +898,12 @@ export default function PagosProveedorClient() {
             value={filtroRegistro}
             onChange={e => setFiltroRegistro(e.target.value)}
             placeholder="Buscar por proveedor, medio u observación…"
-            className="w-full sm:w-80 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+            className="w-full sm:w-80 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors"
           />
         </div>
 
         <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table data-rt="1" className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
                 <th className="text-left px-4 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Fecha</th>

@@ -197,7 +197,7 @@ export default function EditarArticulo({
     }
   };
 
-  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs text-kp-gray uppercase tracking-widest mb-1';
 
   return (
@@ -230,7 +230,7 @@ export default function EditarArticulo({
             <label className={labelCls}>Nombre</label>
             <input
               required value={form.nombre} onChange={set('nombre')}
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 focus:outline-none focus:border-kp-red transition-colors"
             />
           </div>
@@ -241,7 +241,7 @@ export default function EditarArticulo({
               <label className={labelCls}>Categoría</label>
               <select
                 value={form.categoria_id} onChange={onCategoria}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 {categorias.map(c => (
@@ -253,7 +253,7 @@ export default function EditarArticulo({
               <label className={labelCls}>IVA</label>
               <select
                 value={form.alicuota_iva_id} onChange={onIva}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 {alicuotas.map(a => (
@@ -317,7 +317,7 @@ export default function EditarArticulo({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta</span>
-                <span className="block text-[10px] text-kp-gray mt-0.5">
+                <span className="block text-2xs md:text-[10px] text-kp-gray mt-0.5">
                   IVA incluido · al cambiar el IVA el precio no cambia
                 </span>
               </div>
@@ -334,8 +334,8 @@ export default function EditarArticulo({
             </div>
             {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
             {precioNum > 0 && (
-              <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
-                <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
+              <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-2xs md:text-[11px]">
+                <span className="text-kp-gray uppercase tracking-widest text-2xs md:text-[10px]">En la factura</span>
                 <div className="flex items-center gap-4 text-kp-gray">
                   <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
                   <span>IVA ({ivaPct.toFixed(ivaPct % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
@@ -343,7 +343,7 @@ export default function EditarArticulo({
               </div>
             )}
             {costo > 0 && (
-              <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
+              <div className="flex items-center justify-end gap-4 mt-2 text-2xs md:text-[11px] text-kp-gray">
                 <span>
                   Margen:{' '}
                   <span className="font-semibold text-kp-white tabular-nums">

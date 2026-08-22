@@ -251,7 +251,7 @@ export default function NuevoArticulo({
                 required value={form.codigo}
                 onChange={e => { setForm(f => ({ ...f, codigo: e.target.value })); setCodigoAuto(false); }}
                 placeholder="ej: 001"
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
               />
             </div>
@@ -260,7 +260,7 @@ export default function NuevoArticulo({
               <input
                 required value={form.nombre} onChange={set('nombre')}
                 placeholder="Descripción del producto"
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
               />
             </div>
@@ -274,7 +274,7 @@ export default function NuevoArticulo({
                 <button
                   type="button"
                   onClick={() => { setShowCat(v => !v); setCatError(''); }}
-                  className="text-[10px] text-kp-red hover:text-white transition-colors font-semibold uppercase tracking-wide"
+                  className="text-2xs md:text-[10px] text-kp-red hover:text-white transition-colors font-semibold uppercase tracking-wide"
                 >
                   {showCat ? '— Cancelar' : '+ Nueva'}
                 </button>
@@ -282,7 +282,7 @@ export default function NuevoArticulo({
               <select
                 required value={form.categoria_id}
                 onChange={e => { onCategoria(e); if (codigoAuto) generarCodigo(); }}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 {categorias.map(c => (
@@ -294,7 +294,7 @@ export default function NuevoArticulo({
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">IVA *</label>
               <select
                 required value={form.alicuota_iva_id} onChange={onIva}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 {alicuotas.map(a => (
@@ -315,7 +315,7 @@ export default function NuevoArticulo({
                     value={catForm.nombre}
                     onChange={e => setCatForm(f => ({ ...f, nombre: e.target.value }))}
                     placeholder="ej: Vasos descartables"
-                    className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                    className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                       placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                   />
                 </div>
@@ -403,7 +403,7 @@ export default function NuevoArticulo({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <span className="text-xs text-kp-gray uppercase tracking-widest">Precio de venta final</span>
-                <span className="block text-[10px] text-kp-gray mt-0.5">
+                <span className="block text-2xs md:text-[10px] text-kp-gray mt-0.5">
                   IVA incluido · al cambiar el IVA el precio no cambia
                 </span>
               </div>
@@ -420,8 +420,8 @@ export default function NuevoArticulo({
             </div>
             {/* Desglose del precio: cómo se reparte entre neto e IVA en la factura. */}
             {precioNum > 0 && (
-              <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-[11px]">
-                <span className="text-kp-gray uppercase tracking-widest text-[10px]">En la factura</span>
+              <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-kp-border/60 text-2xs md:text-[11px]">
+                <span className="text-kp-gray uppercase tracking-widest text-2xs md:text-[10px]">En la factura</span>
                 <div className="flex items-center gap-4 text-kp-gray">
                   <span>Neto: <span className="font-semibold text-kp-white tabular-nums">{ars.format(netoUnit)}</span></span>
                   <span>IVA ({ivaReal.toFixed(ivaReal % 1 === 0 ? 0 : 1)}%): <span className="font-semibold text-kp-white tabular-nums">{ars.format(ivaUnit)}</span></span>
@@ -429,7 +429,7 @@ export default function NuevoArticulo({
               </div>
             )}
             {costo > 0 && (
-              <div className="flex items-center justify-end gap-4 mt-2 text-[11px] text-kp-gray">
+              <div className="flex items-center justify-end gap-4 mt-2 text-2xs md:text-[11px] text-kp-gray">
                 <span>
                   Margen:{' '}
                   <span className="font-semibold text-kp-white tabular-nums">

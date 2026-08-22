@@ -43,8 +43,8 @@ export default async function ListasPreciosPage() {
       {/* Encabezado */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Listas de Precios</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Listas de Precios</h2>
         </div>
         <p className="text-sm text-kp-gray pl-3">
           {listas.length} listas activas &nbsp;·&nbsp; {totalArticulos} artículos por lista
@@ -53,7 +53,7 @@ export default async function ListasPreciosPage() {
 
       {/* Explicación */}
       <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 text-xs text-kp-gray space-y-1.5">
-        <p className="font-semibold text-kp-gray-lt uppercase tracking-wide text-[10px]">¿Cómo funciona?</p>
+        <p className="font-semibold text-kp-gray-lt uppercase tracking-wide text-2xs md:text-[10px]">¿Cómo funciona?</p>
         <p>
           Cada lista tiene un descuento que se aplica sobre el <strong className="text-kp-gray-lt">Precio Base</strong> de cada artículo.
           Al guardar un descuento, todos los precios de esa lista se actualizan automáticamente.

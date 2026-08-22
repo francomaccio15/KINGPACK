@@ -74,7 +74,7 @@ export default async function EmpleadoDetallePage({
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold uppercase tracking-wide">{empleado.nombre}</h2>
+                <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">{empleado.nombre}</h2>
                 {!empleado.activo && (
                   <span className="text-xs bg-kp-surface2 border border-kp-border text-kp-gray rounded px-2 py-0.5">
                     Inactivo
@@ -101,13 +101,13 @@ export default async function EmpleadoDetallePage({
       {esAdmin && empleado.salario && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-xl bg-kp-surface border border-kp-border px-5 py-4">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Salario mensual</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Salario mensual</p>
             <p className="text-xl font-bold tabular-nums text-kp-white">
               {ars.format(parseFloat(empleado.salario))}
             </p>
           </div>
           <div className="rounded-xl bg-kp-surface border border-kp-border px-5 py-4">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">Sucursal</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Sucursal</p>
             <p className="text-xl font-bold text-kp-white">{empleado.sucursal_nombre || '—'}</p>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default async function EmpleadoDetallePage({
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           {INFO.map(row => (
             <div key={row.label}>
-              <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-0.5">{row.label}</p>
+              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-0.5">{row.label}</p>
               <p className="text-kp-gray-lt">{row.value || '—'}</p>
             </div>
           ))}

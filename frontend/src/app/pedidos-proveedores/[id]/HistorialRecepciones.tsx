@@ -102,9 +102,9 @@ export default function HistorialRecepciones({ eventos }: { eventos: Evento[] })
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-kp-surface2/60 border-b border-kp-border">
-                          <th className="text-left px-3 py-2 text-[11px] text-kp-gray uppercase tracking-widest font-semibold">Producto</th>
-                          <th className="text-left px-3 py-2 text-[11px] text-kp-gray uppercase tracking-widest font-semibold w-24">Código</th>
-                          <th className="text-right px-3 py-2 text-[11px] text-kp-gray uppercase tracking-widest font-semibold w-32">
+                          <th className="text-left px-3 py-2 text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest font-semibold">Producto</th>
+                          <th className="text-left px-3 py-2 text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest font-semibold w-24">Código</th>
+                          <th className="text-right px-3 py-2 text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest font-semibold w-32">
                             {ev.tipo === 'correccion' ? 'Corrección' : 'Cantidad'}
                           </th>
                         </tr>
@@ -126,7 +126,7 @@ export default function HistorialRecepciones({ eventos }: { eventos: Evento[] })
                     </table>
                   </div>
                   {ev.tipo === 'correccion' && (
-                    <p className="text-[11px] text-kp-gray mt-2">
+                    <p className="text-2xs md:text-[11px] text-kp-gray mt-2">
                       Ajuste sobre lo recibido. Un valor negativo revierte del stock las unidades cargadas de más.
                     </p>
                   )}

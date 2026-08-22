@@ -169,8 +169,8 @@ export default function NotasView({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Notas de equipo</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Notas de equipo</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {countPendientes > 0
@@ -290,7 +290,7 @@ export default function NotasView({
                 <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                 {cfg.label}
                 {count > 0 && (
-                  <span className={`text-[9px] font-bold px-1 rounded ${cfg.bg} ${cfg.color}`}>{count}</span>
+                  <span className={`text-2xs md:text-[9px] font-bold px-1 rounded ${cfg.bg} ${cfg.color}`}>{count}</span>
                 )}
               </button>
             );
@@ -321,7 +321,7 @@ export default function NotasView({
               >
                 {/* Card header */}
                 <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${cfg.color}`}>
+                  <span className={`inline-flex items-center gap-1.5 text-2xs md:text-[10px] font-bold uppercase tracking-widest ${cfg.color}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                     {cfg.label}
                     {nota.resuelta && <span className="text-emerald-400 ml-1">· Resuelto</span>}
@@ -341,13 +341,13 @@ export default function NotasView({
                         <span className="flex items-center gap-1">
                           <button
                             onClick={() => handleDelete(nota.id)}
-                            className="px-2 py-1 rounded text-[10px] font-bold text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            className="px-2 py-1 rounded text-2xs md:text-[10px] font-bold text-rose-400 hover:bg-rose-500/10 transition-colors"
                           >
                             Eliminar
                           </button>
                           <button
                             onClick={() => setDelConfirm(null)}
-                            className="px-2 py-1 rounded text-[10px] font-bold text-kp-gray hover:text-kp-white transition-colors"
+                            className="px-2 py-1 rounded text-2xs md:text-[10px] font-bold text-kp-gray hover:text-kp-white transition-colors"
                           >
                             No
                           </button>
@@ -375,7 +375,7 @@ export default function NotasView({
                           key={key}
                           onClick={() => setEditando(e => e ? { ...e, tipo: key } : e)}
                           className={[
-                            'flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-semibold transition-colors',
+                            'flex items-center gap-1 px-2 py-1 rounded border text-2xs md:text-[10px] font-semibold transition-colors',
                             editando.tipo === key ? `${c.bg} ${c.border} ${c.color}` : 'bg-kp-surface2 border-kp-border text-kp-gray',
                           ].join(' ')}
                         >
@@ -390,7 +390,7 @@ export default function NotasView({
                       onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleEdit(); }}
                       rows={3}
                       autoFocus
-                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white resize-none focus:outline-none focus:border-kp-red transition-colors"
+                      className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white resize-none focus:outline-none focus:border-kp-red transition-colors"
                     />
                     <div className="flex gap-2">
                       <button
@@ -419,14 +419,14 @@ export default function NotasView({
                 {!editandoEsta && (
                   <div className="flex items-center justify-between px-4 py-2.5 border-t border-kp-border/60">
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold text-kp-gray capitalize">{nota.autor}</span>
-                      <span className="text-[10px] text-kp-gray/70">{tiempoRelativo(nota.created_at)}</span>
+                      <span className="text-2xs md:text-[10px] font-semibold text-kp-gray capitalize">{nota.autor}</span>
+                      <span className="text-2xs md:text-[10px] text-kp-gray/70">{tiempoRelativo(nota.created_at)}</span>
                     </div>
                     {/* Botón resolver/abrir */}
                     <button
                       onClick={() => handleResolver(nota.id, !nota.resuelta)}
                       className={[
-                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all',
+                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-2xs md:text-[10px] font-bold transition-all',
                         nota.resuelta
                           ? 'border-kp-border text-kp-gray hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/5'
                           : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/15',

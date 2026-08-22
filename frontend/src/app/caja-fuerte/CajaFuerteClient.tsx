@@ -72,7 +72,7 @@ function FormAjuste({ caja, onGuardar, onCerrar }: { caja: Caja; onGuardar: () =
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
-  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
 
   const nuevo = parseFloat(valor);
@@ -100,7 +100,7 @@ function FormAjuste({ caja, onGuardar, onCerrar }: { caja: Caja; onGuardar: () =
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-kp-surface2 border border-kp-border px-4 py-3">
-        <p className="text-[11px] uppercase tracking-widest text-kp-gray">Saldo actual del sistema</p>
+        <p className="text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Saldo actual del sistema</p>
         <p className="text-xl font-bold tabular-nums text-kp-white mt-0.5">{fmt(caja.saldo)}</p>
       </div>
 
@@ -108,7 +108,7 @@ function FormAjuste({ caja, onGuardar, onCerrar }: { caja: Caja; onGuardar: () =
         <label className={labelCls}>Efectivo realmente contado *</label>
         <input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)}
           placeholder="0.00" className={inputCls} autoFocus />
-        <p className="text-[10px] text-kp-gray mt-1">
+        <p className="text-2xs md:text-[10px] text-kp-gray mt-1">
           Pasa a ser el punto de partida. Los movimientos que se registren de acá en adelante
           (cierres de caja, gastos y pagos con efectivo de caja fuerte) se van a sumar y restar sobre este número.
         </p>
@@ -116,11 +116,11 @@ function FormAjuste({ caja, onGuardar, onCerrar }: { caja: Caja; onGuardar: () =
 
       {valido && diferencia !== 0 && (
         <div className={`rounded-lg border px-4 py-3 ${diferencia > 0 ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-          <p className="text-[11px] uppercase tracking-widest text-kp-gray">Diferencia</p>
+          <p className="text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Diferencia</p>
           <p className={`text-lg font-bold tabular-nums ${diferencia > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
             {diferencia > 0 ? '+' : '−'}{fmt(Math.abs(diferencia))}
           </p>
-          <p className="text-[10px] text-kp-gray mt-1">
+          <p className="text-2xs md:text-[10px] text-kp-gray mt-1">
             No se registra como movimiento: es una corrección del punto de partida, no plata que entró o salió.
             El historial de movimientos queda intacto.
           </p>
@@ -173,7 +173,7 @@ function Movimientos({ sucursalId }: { sucursalId: string }) {
               <p className="text-xs font-semibold text-kp-white truncate">
                 {m.concepto || ORIGEN_LABEL[m.origen_tipo ?? ''] || 'Movimiento'}
               </p>
-              <p className="text-[10px] text-kp-gray truncate">
+              <p className="text-2xs md:text-[10px] text-kp-gray truncate">
                 {new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                 {' '}{new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                 {m.origen_tipo && <> · {ORIGEN_LABEL[m.origen_tipo] ?? m.origen_tipo}</>}
@@ -217,8 +217,8 @@ export default function CajaFuerteClient() {
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Caja Fuerte</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Caja Fuerte</h2>
         </div>
         {cajas.length > 0 && (
           <span className="text-xs text-kp-gray">
@@ -245,12 +245,12 @@ export default function CajaFuerteClient() {
                     <span className="text-emerald-400"><IcoVault /></span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
+                    <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">
                       Caja fuerte · {c.sucursal_nombre}
                     </p>
                     <p className="text-2xl font-bold leading-none text-emerald-400 tabular-nums">{fmt(c.saldo)}</p>
                     {c.updated_at && (
-                      <p className="text-[10px] text-kp-gray mt-1.5">
+                      <p className="text-2xs md:text-[10px] text-kp-gray mt-1.5">
                         Últ. movimiento: {new Date(c.updated_at).toLocaleString('es-AR', {
                           day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -258,7 +258,7 @@ export default function CajaFuerteClient() {
                   </div>
 
                   {/* De qué se compone el saldo — el invariante, a la vista */}
-                  <div className="text-right text-[11px] text-kp-gray tabular-nums leading-relaxed">
+                  <div className="text-right text-2xs md:text-[11px] text-kp-gray tabular-nums leading-relaxed">
                     <p>Punto de partida <span className="text-kp-gray-lt">{fmt(c.saldo_inicial)}</span></p>
                     <p>Ingresos <span className="text-emerald-400">+{fmt(c.ingresos)}</span></p>
                     <p>Egresos <span className="text-rose-400">−{fmt(c.egresos)}</span></p>

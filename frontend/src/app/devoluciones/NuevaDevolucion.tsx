@@ -101,7 +101,7 @@ function ArticuloInput({
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
-                <p className="text-[10px] text-kp-gray font-mono">{art.codigo}</p>
+                <p className="text-2xs md:text-[10px] text-kp-gray font-mono">{art.codigo}</p>
               </div>
               <span className="text-xs text-kp-gray-lt tabular-nums shrink-0">
                 {new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2, maximumFractionDigits: 3}).format(art.precio_madre)}
@@ -289,8 +289,8 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
     }
   })();
 
-  const labelCls = 'block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1';
-  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const labelCls = 'block text-2xs md:text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1';
+  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const selectCls = inputCls + ' cursor-pointer';
 
   return (
@@ -338,7 +338,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
                   onChange={e => setVentaNumero(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), buscarVenta())}
                   placeholder="Número de venta…"
-                  className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
+                  className="flex-1 bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-blue-500 transition-colors"
                 />
                 <button
                   type="button"
@@ -421,7 +421,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
                 key={m} type="button"
                 onClick={() => setMotivo(m)}
                 className={[
-                  'text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                  'text-2xs md:text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors',
                   motivo === m
                     ? 'bg-kp-red/15 border-kp-red/40 text-kp-red'
                     : 'bg-kp-surface2 border-kp-border text-kp-gray hover:text-kp-white',
@@ -455,10 +455,10 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
 
           <div className="rounded-xl border border-kp-border">
             <div className="grid grid-cols-[1fr_80px_110px_100px_36px] gap-2 px-3 py-2 bg-kp-surface2 border-b border-kp-border rounded-t-xl">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray">Descripción</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-center">Cant.</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Precio unit.</span>
+              <span className="text-2xs md:text-[10px] font-bold uppercase tracking-wider text-kp-gray text-right">Subtotal</span>
               <span />
             </div>
 
@@ -494,7 +494,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
               ))}
             </div>
           </div>
-          <p className="text-[11px] text-kp-gray mt-1.5">
+          <p className="text-2xs md:text-[11px] text-kp-gray mt-1.5">
             Los ítems seleccionados del buscador reingresan al stock automáticamente.
           </p>
         </div>
@@ -512,7 +512,7 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </select>
-            <p className="text-[11px] text-kp-gray mt-1.5 leading-snug">{ayudaForma}</p>
+            <p className="text-2xs md:text-[11px] text-kp-gray mt-1.5 leading-snug">{ayudaForma}</p>
           </div>
           <div className="bg-kp-surface2 border border-kp-border rounded-xl p-4 space-y-2">
             <div className="flex justify-between text-sm text-kp-gray">

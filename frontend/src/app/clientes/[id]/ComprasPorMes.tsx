@@ -49,11 +49,11 @@ export default function ComprasPorMes({ meses }: { meses: MesCompra[] }) {
         {/* Resumen: mes actual destacado + contexto */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="rounded-xl border border-kp-red/30 bg-kp-red/5 px-4 py-3">
-            <p className="text-[10px] text-kp-red uppercase tracking-widest font-bold mb-1">
+            <p className="text-2xs md:text-[10px] text-kp-red uppercase tracking-widest font-bold mb-1">
               {etiquetaMesLargo(actual.mes)}
             </p>
             <p className="text-2xl font-bold tabular-nums text-kp-white">{fmt(actual.total)}</p>
-            <p className="text-[10px] text-kp-gray mt-1">
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">
               {actual.cantidad > 0 ? `${actual.cantidad} compra${actual.cantidad === 1 ? '' : 's'} este mes` : 'sin compras este mes'}
               {variacion !== null && (
                 <span className={variacion >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
@@ -64,15 +64,15 @@ export default function ComprasPorMes({ meses }: { meses: MesCompra[] }) {
           </div>
 
           <div className="rounded-xl border border-kp-border bg-kp-surface2/40 px-4 py-3">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-bold mb-1">Promedio mensual</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest font-bold mb-1">Promedio mensual</p>
             <p className="text-xl font-bold tabular-nums text-kp-white">{fmt(promedio)}</p>
-            <p className="text-[10px] text-kp-gray mt-1">meses con compras</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">meses con compras</p>
           </div>
 
           <div className="col-span-2 md:col-span-1 rounded-xl border border-kp-border bg-kp-surface2/40 px-4 py-3">
-            <p className="text-[10px] text-kp-gray uppercase tracking-widest font-bold mb-1">Total 12 meses</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest font-bold mb-1">Total 12 meses</p>
             <p className="text-xl font-bold tabular-nums text-kp-white">{fmt(totalAnual)}</p>
-            <p className="text-[10px] text-kp-gray mt-1">{conCompras.length} de 12 meses con compras</p>
+            <p className="text-2xs md:text-[10px] text-kp-gray mt-1">{conCompras.length} de 12 meses con compras</p>
           </div>
         </div>
 
@@ -83,7 +83,7 @@ export default function ComprasPorMes({ meses }: { meses: MesCompra[] }) {
             const ancho = m.total > 0 ? Math.max((m.total / maxTotal) * 100, 2) : 0;
             return (
               <div key={m.mes} className="flex items-center gap-3">
-                <span className={`w-14 shrink-0 text-[11px] tabular-nums ${esActual ? 'text-kp-white font-semibold' : 'text-kp-gray'}`}>
+                <span className={`w-14 shrink-0 text-2xs md:text-[11px] tabular-nums ${esActual ? 'text-kp-white font-semibold' : 'text-kp-gray'}`}>
                   {etiquetaMes(m.mes)}
                 </span>
                 <div className="flex-1 h-5 rounded bg-kp-surface2/60 overflow-hidden">

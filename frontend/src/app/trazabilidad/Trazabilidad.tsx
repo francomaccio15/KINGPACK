@@ -256,7 +256,7 @@ export default function Trazabilidad() {
       {articulo && (
         <div className="rounded-xl border border-kp-border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table data-rt="1" className="w-full text-sm">
               <thead className="bg-kp-surface2 text-kp-gray">
                 <tr className="text-left">
                   <th className="px-4 py-3 font-semibold">Fecha</th>

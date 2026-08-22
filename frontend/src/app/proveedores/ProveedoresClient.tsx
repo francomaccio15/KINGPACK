@@ -121,7 +121,7 @@ function FormProveedor({
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
 
-  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
 
   const handleSubmit = async () => {
@@ -200,12 +200,12 @@ function FormProveedor({
           <div>
             <input type="number" step="0.01" value={saldoIniFact} onChange={e => setSaldoIniFact(e.target.value)}
               placeholder="0.00" className={inputCls} />
-            <p className="mt-1 text-[11px] text-kp-gray/70">Facturado (con factura)</p>
+            <p className="mt-1 text-2xs md:text-[11px] text-kp-gray/70">Facturado (con factura)</p>
           </div>
           <div>
             <input type="number" step="0.01" value={saldoIniNoFact} onChange={e => setSaldoIniNoFact(e.target.value)}
               placeholder="0.00" className={inputCls} />
-            <p className="mt-1 text-[11px] text-kp-gray/70">No facturado (sin factura)</p>
+            <p className="mt-1 text-2xs md:text-[11px] text-kp-gray/70">No facturado (sin factura)</p>
           </div>
         </div>
       </div>
@@ -293,7 +293,7 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
                   <td className="px-3 py-2 text-xs text-kp-gray whitespace-nowrap">{fmtFecha(m.fecha)}</td>
                   <td className="px-3 py-2 text-xs text-kp-gray-lt">{m.descripcion ?? m.origen_tipo ?? '—'}</td>
                   <td className="px-3 py-2 text-center">
-                    <span className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded border ${m.facturado ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                    <span className={`inline-block px-2 py-0.5 text-2xs md:text-[10px] font-semibold rounded border ${m.facturado ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
                       {m.facturado ? 'Facturado' : 'No fact.'}
                     </span>
                   </td>
@@ -461,8 +461,8 @@ export default function ProveedoresClient() {
       {/* Encabezado */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">Proveedores</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Proveedores</h2>
           <span className="ml-2 text-xs font-semibold text-kp-gray bg-kp-surface2 border border-kp-border rounded-full px-2 py-0.5">
             {proveedores.length}
           </span>
@@ -520,7 +520,7 @@ export default function ProveedoresClient() {
         <select
           value={filtroActivo}
           onChange={e => setFiltroActivo(e.target.value as '' | 'true' | 'false')}
-          className="bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+          className="bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors"
         >
           <option value="true">Activos</option>
           <option value="false">Inactivos</option>
@@ -537,7 +537,7 @@ export default function ProveedoresClient() {
         </div>
       ) : (
         <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table data-rt="1" className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Razón Social</th>

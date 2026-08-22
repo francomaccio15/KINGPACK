@@ -153,7 +153,7 @@ function BuscadorDesplegable({
               ${!seleccionada ? 'bg-kp-red/10 text-kp-red font-semibold' : 'text-kp-gray hover:bg-kp-surface2 hover:text-kp-white'}`}
           >
             Todas las categorías
-            <span className="ml-auto text-[10px] text-kp-gray">{categorias.length}</span>
+            <span className="ml-auto text-2xs md:text-[10px] text-kp-gray">{categorias.length}</span>
           </button>
 
           {/* Lista filtrada */}
@@ -173,11 +173,11 @@ function BuscadorDesplegable({
                         ? 'bg-kp-red/10 text-kp-red'
                         : 'hover:bg-kp-surface2 text-kp-gray-lt hover:text-kp-white'}`}
                   >
-                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black flex-shrink-0 ${LETTER_COLORS[idx]}`}>
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-2xs md:text-[10px] font-black flex-shrink-0 ${LETTER_COLORS[idx]}`}>
                       {c.nombre[0]}
                     </span>
                     <span className="flex-1 truncate font-medium">{c.nombre}</span>
-                    <span className="text-[10px] text-kp-gray tabular-nums flex-shrink-0">
+                    <span className="text-2xs md:text-[10px] text-kp-gray tabular-nums flex-shrink-0">
                       {c.articulos_count} art.
                     </span>
                     {isSelected && <IcoCheck />}
@@ -219,7 +219,7 @@ function FormCategoria({
     else onClose();
   };
 
-  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const esEdicion = !!inicial;
 
   return (
@@ -231,12 +231,12 @@ function FormCategoria({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Nombre *</label>
+          <label className="block text-2xs md:text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Nombre *</label>
           <input ref={inputRef} value={nombre} onChange={e => setNombre(e.target.value)}
             placeholder="Ej: BOLSAS CAMISETAS" className={inputCls} />
         </div>
         <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Margen por defecto (%)</label>
+          <label className="block text-2xs md:text-[11px] font-semibold uppercase tracking-wider text-kp-gray mb-1.5">Margen por defecto (%)</label>
           <div className="relative">
             <NumericInput
               value={margen} onChange={e => setMargen(e.target.value)}
@@ -244,7 +244,7 @@ function FormCategoria({
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-sm font-bold">%</span>
           </div>
           {esEdicion && (
-            <p className="text-[10px] text-amber-400 mt-1.5">
+            <p className="text-2xs md:text-[10px] text-amber-400 mt-1.5">
               ⚠ Cambiar el margen actualiza automáticamente todos los artículos de esta categoría.
             </p>
           )}
@@ -347,7 +347,7 @@ function CategoriaCard({
                 {cat.nombre}
               </h3>
               {!cat.activo && (
-                <span className="text-[10px] text-kp-gray font-semibold">Inactiva</span>
+                <span className="text-2xs md:text-[10px] text-kp-gray font-semibold">Inactiva</span>
               )}
             </div>
           </div>
@@ -370,7 +370,7 @@ function CategoriaCard({
 
           {/* Hint ver artículos */}
           {cat.articulos_count > 0 && (
-            <p className={`text-[10px] mt-3 flex items-center gap-1 transition-colors ${expandida ? 'text-kp-red' : 'text-kp-gray group-hover:text-kp-gray-lt'}`}>
+            <p className={`text-2xs md:text-[10px] mt-3 flex items-center gap-1 transition-colors ${expandida ? 'text-kp-red' : 'text-kp-gray group-hover:text-kp-gray-lt'}`}>
               <IcoList />
               {expandida ? 'Clic para cerrar' : 'Clic para ver artículos'}
             </p>
@@ -378,7 +378,7 @@ function CategoriaCard({
 
           {/* Error de borrado */}
           {delError && (
-            <p className="text-[11px] text-rose-400 mt-2 bg-rose-500/10 rounded-lg px-2 py-1">{delError}</p>
+            <p className="text-2xs md:text-[11px] text-rose-400 mt-2 bg-rose-500/10 rounded-lg px-2 py-1">{delError}</p>
           )}
         </div>
 
@@ -389,7 +389,7 @@ function CategoriaCard({
             <button
               onClick={() => onToggle(cat.id, !cat.activo)}
               className={[
-                'text-[10px] font-bold flex items-center gap-1 transition-colors',
+                'text-2xs md:text-[10px] font-bold flex items-center gap-1 transition-colors',
                 cat.activo
                   ? 'text-kp-gray hover:text-rose-400'
                   : 'text-kp-gray hover:text-green-400',
@@ -414,12 +414,12 @@ function CategoriaCard({
                 confirmDel ? (
                   <div className="flex items-center gap-1 ml-1">
                     <button onClick={handleDelete} disabled={deleting}
-                      className="text-[10px] font-bold text-rose-400 hover:underline">
+                      className="text-2xs md:text-[10px] font-bold text-rose-400 hover:underline">
                       {deleting ? '…' : 'Confirmar'}
                     </button>
-                    <span className="text-kp-border text-[10px]">/</span>
+                    <span className="text-kp-border text-2xs md:text-[10px]">/</span>
                     <button onClick={() => { setConfirmDel(false); setDelError(''); }}
-                      className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                      className="text-2xs md:text-[10px] font-bold text-kp-gray hover:underline">No</button>
                   </div>
                 ) : (
                   <button
@@ -561,8 +561,8 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Categorías</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Categorías</h2>
           </div>
           <div className="flex items-center gap-3 pl-3 flex-wrap">
             <p className="text-sm text-kp-gray">
@@ -652,7 +652,7 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
                 <div>
                   <h3 className="text-sm font-bold text-kp-white uppercase tracking-wide">{cat?.nombre}</h3>
                   {!loadingArt && (
-                    <p className="text-[11px] text-kp-gray mt-0.5">{articulosCat.length} artículo{articulosCat.length !== 1 ? 's' : ''}</p>
+                    <p className="text-2xs md:text-[11px] text-kp-gray mt-0.5">{articulosCat.length} artículo{articulosCat.length !== 1 ? 's' : ''}</p>
                   )}
                 </div>
               </div>
@@ -678,9 +678,9 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table data-rt="1" className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] text-kp-gray uppercase tracking-wider border-b border-kp-border/60">
+                    <tr className="text-2xs md:text-[11px] text-kp-gray uppercase tracking-wider border-b border-kp-border/60">
                       <th className="text-left px-5 py-3 font-semibold">Código</th>
                       <th className="text-left px-5 py-3 font-semibold">Nombre</th>
                       <th className="text-right px-5 py-3 font-semibold">Precio madre</th>
@@ -708,7 +708,7 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
                             : <span className="text-kp-gray">0</span>}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${a.activo ? 'bg-green-500/15 text-green-400' : 'bg-kp-surface2 text-kp-gray'}`}>
+                          <span className={`inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full ${a.activo ? 'bg-green-500/15 text-green-400' : 'bg-kp-surface2 text-kp-gray'}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${a.activo ? 'bg-green-400' : 'bg-kp-gray'}`} />
                             {a.activo ? 'Activo' : 'Inactivo'}
                           </span>
@@ -725,7 +725,7 @@ export default function CategoriasView({ categoriasIniciales }: { categoriasInic
 
       {/* Aviso margen */}
       {isAdmin && (
-        <p className="text-[11px] text-kp-gray px-1">
+        <p className="text-2xs md:text-[11px] text-kp-gray px-1">
           💡 Editar el margen actualiza automáticamente todos los artículos de esa categoría.
         </p>
       )}

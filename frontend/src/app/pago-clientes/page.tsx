@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
 import FiltroFecha from './FiltroFecha';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import PageHeader from '@/components/ui/PageHeader';
 
 type MovCliente = {
   id: string;
@@ -110,18 +112,11 @@ export default async function PagoClientesPage({
   return (
     <section className="space-y-5">
       {/* Encabezado */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Consolidado de Pagos</h2>
-          </div>
-          <p className="text-sm text-kp-gray pl-3 capitalize">{fechaLarga}</p>
-        </div>
-        <Suspense>
-          <FiltroFecha fecha={fecha} />
-        </Suspense>
-      </div>
+      <PageHeader
+        title="Consolidado de Pagos"
+        subtitle={<span className="capitalize">{fechaLarga}</span>}
+        action={<Suspense><FiltroFecha fecha={fecha} /></Suspense>}
+      />
 
       {/* Tarjetas de totales */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -144,7 +139,7 @@ export default async function PagoClientesPage({
         <h3 className="text-sm font-bold uppercase tracking-widest text-kp-gray-lt mb-2 pl-1">
           Movimientos de clientes ({movimientos_clientes.length})
         </h3>
-        <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+        <TableWrap className="shadow-lg shadow-black/40">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -184,7 +179,27 @@ export default async function PagoClientesPage({
               )}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
+
+        <MobileCards>
+          {movimientos_clientes.map(m => (
+            <RecordCard
+              key={m.id}
+              href={`/clientes/${m.cliente_id}`}
+              title={m.cliente_nombre}
+              subtitle={horaAR(m.fecha)}
+              badge={{ label: ORIGEN_LABEL[m.origen_tipo ?? ''] ?? (m.origen_tipo ?? '—'), tone: 'neutral' }}
+              fields={[
+                { label: parseFloat(m.haber) ? 'Haber' : 'Debe',
+                  value: parseFloat(m.haber) ? fmt(m.haber) : fmt(m.debe), strong: true },
+                { label: 'Saldo', value: fmt(m.saldo), align: 'right' },
+              ]}
+            />
+          ))}
+          {movimientos_clientes.length === 0 && (
+            <EmptyState title="No hay movimientos de clientes en este día." />
+          )}
+        </MobileCards>
       </div>
 
       {/* ── Egresos ── */}
@@ -192,7 +207,7 @@ export default async function PagoClientesPage({
         <h3 className="text-sm font-bold uppercase tracking-widest text-kp-gray-lt mb-2 pl-1">
           Egresos del día ({egresos.length})
         </h3>
-        <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+        <TableWrap className="shadow-lg shadow-black/40">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -241,7 +256,23 @@ export default async function PagoClientesPage({
               )}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
+
+        <MobileCards>
+          {egresos.map(e => (
+            <RecordCard
+              key={e.id}
+              href={`/gastos/${e.id}`}
+              title={e.descripcion}
+              subtitle={[TIPO_LABEL[e.tipo_operacion] ?? e.tipo_operacion, e.proveedor_nombre, e.sucursal_nombre]
+                .filter(Boolean).join(' · ')}
+              badge={{ label: PAGO_LABEL[e.estado_pago] ?? e.estado_pago,
+                       tone: e.estado_pago === 'pagado' ? 'ok' : e.estado_pago === 'parcial' ? 'info' : 'warn' }}
+              fields={[{ label: 'Total', value: fmt(e.total), strong: true }]}
+            />
+          ))}
+          {egresos.length === 0 && <EmptyState title="No hay egresos en este día." />}
+        </MobileCards>
       </div>
     </section>
   );

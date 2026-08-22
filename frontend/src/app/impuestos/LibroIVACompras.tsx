@@ -94,7 +94,7 @@ export default function LibroIVACompras({
         </div>
       ) : (
         <div className="rounded-xl border border-kp-border overflow-x-auto">
-          <table className="w-full text-xs min-w-[1200px]">
+          <table data-rt="1" className="w-full text-xs min-w-[1200px]">
             <thead className="bg-kp-surface2 text-kp-gray uppercase tracking-wide">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">Fecha</th>
@@ -123,7 +123,7 @@ export default function LibroIVACompras({
                   <td className="px-3 py-2.5 text-kp-gray whitespace-nowrap">{fmtFecha(c.fecha)}</td>
                   <td className="px-3 py-2.5">
                     <p className="font-medium text-kp-white">{fmtComp(c.tipo_comprobante, c.punto_venta, c.numero_comprobante)}</p>
-                    {c.sin_cuit && <p className="text-amber-400 text-[10px]">sin CUIT</p>}
+                    {c.sin_cuit && <p className="text-amber-400 text-2xs md:text-[10px]">sin CUIT</p>}
                   </td>
                   <td className="px-3 py-2.5 max-w-[160px]">
                     <p className="text-kp-white font-medium truncate">{c.proveedor_nombre}</p>

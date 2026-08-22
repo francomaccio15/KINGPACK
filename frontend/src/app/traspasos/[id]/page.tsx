@@ -108,7 +108,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
 
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3 mb-1">
-          <span className="w-1 h-6 bg-kp-red rounded-full block flex-shrink-0" />
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0 flex-shrink-0" />
           <h2 className="text-xl sm:text-2xl font-bold">Traspaso de sucursal</h2>
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[traspaso.estado] ?? ''}`}>
             {ESTADO_LABEL[traspaso.estado] ?? traspaso.estado}
@@ -122,7 +122,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
           {/* Origen */}
           <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70 mb-1">Envía</p>
+            <p className="text-2xs md:text-[10px] font-bold uppercase tracking-widest text-blue-400/70 mb-1">Envía</p>
             <p className="text-base font-bold text-kp-white">{traspaso.sucursal_origen_nombre}</p>
           </div>
 
@@ -135,7 +135,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
 
           {/* Destino */}
           <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-green-400/70 mb-1">Recibe</p>
+            <p className="text-2xs md:text-[10px] font-bold uppercase tracking-widest text-green-400/70 mb-1">Recibe</p>
             <p className="text-base font-bold text-kp-white">{traspaso.sucursal_destino_nombre}</p>
           </div>
         </div>
@@ -281,7 +281,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
             </div>
             <div className="text-right">
               <div className="inline-flex flex-col items-center border-2 border-gray-900 rounded-lg px-6 py-3">
-                <span className="text-[10px] uppercase tracking-widest font-black text-gray-600">Remito</span>
+                <span className="text-2xs md:text-[10px] uppercase tracking-widest font-black text-gray-600">Remito</span>
                 <span className="text-xl font-black leading-none font-mono mt-1">{nroRemito}</span>
               </div>
               <p className="text-sm text-gray-500 mt-2">{fechaCreacionCorta}</p>
@@ -294,11 +294,11 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
           {/* ══ SECCIÓN 1: ORIGEN / DESTINO ════════════════════════════════════ */}
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Sucursal Origen</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Sucursal Origen</p>
               <p className="text-base font-bold text-gray-900">{traspaso.sucursal_origen_nombre}</p>
             </div>
             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-2">Sucursal Destino</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-green-600 mb-2">Sucursal Destino</p>
               <p className="text-base font-bold text-gray-900">{traspaso.sucursal_destino_nombre}</p>
             </div>
           </div>
@@ -306,16 +306,16 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
           {/* ══ SECCIÓN 2: ESTADO Y FECHAS ══════════════════════════════════════ */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex flex-wrap gap-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Estado</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Estado</p>
               <p className="text-sm font-bold text-gray-800">{ESTADO_LABEL_PRINT[traspaso.estado] ?? traspaso.estado}</p>
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de creación</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de creación</p>
               <p className="text-sm font-semibold text-gray-800">{fechaCreacionCorta}</p>
             </div>
             {traspaso.fecha_envio && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de envío</p>
+                <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de envío</p>
                 <p className="text-sm font-semibold text-gray-800">
                   {new Date(traspaso.fecha_envio).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </p>
@@ -323,7 +323,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
             )}
             {traspaso.fecha_recepcion && (
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de recepción</p>
+                <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Fecha de recepción</p>
                 <p className="text-sm font-semibold text-gray-800">
                   {new Date(traspaso.fecha_recepcion).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </p>
@@ -334,14 +334,14 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
           {/* ══ SECCIÓN 3: NOTAS ════════════════════════════════════════════════ */}
           {traspaso.notas && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Observaciones</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Observaciones</p>
               <p className="text-sm text-gray-800 leading-relaxed">{traspaso.notas}</p>
             </div>
           )}
 
           {/* ══ SECCIÓN 4: DETALLE DE ARTÍCULOS ════════════════════════════════ */}
           <div className="mb-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+            <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
               Detalle de artículos
             </p>
             <table className="w-full border-collapse text-sm">
@@ -399,7 +399,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
 
           {/* ══ PIE ══════════════════════════════════════════════════════════════ */}
           <div className="mt-8 pt-4 border-t border-gray-100 text-center">
-            <p className="text-[9px] text-gray-400 uppercase tracking-widest">
+            <p className="text-2xs md:text-[9px] text-gray-400 uppercase tracking-widest">
               KING PACK S.R.L. · Remito interno N° {nroRemito} · Emitido el {fechaCreacionCorta}
               {traspaso.usuario_nombre ? ` · por ${traspaso.usuario_nombre}` : ''}
             </p>

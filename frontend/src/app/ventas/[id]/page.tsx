@@ -142,8 +142,8 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <span className="w-1 h-6 bg-kp-red rounded-full block" />
-              <h2 className="text-2xl font-bold uppercase tracking-wide">
+              <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+              <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">
                 Venta #{venta.numero}
               </h2>
               <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${ESTADO_STYLE[venta.estado] ?? ''}`}>
@@ -432,7 +432,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                           Eliminado
                         </span>
                         <span className="text-kp-gray">{it.nombre}</span>
-                        <span className="text-kp-gray font-mono text-[10px]">({it.codigo})</span>
+                        <span className="text-kp-gray font-mono text-2xs md:text-[10px]">({it.codigo})</span>
                         <span className="text-kp-gray ml-auto">x{parseFloat(it.cantidad).toFixed(0)} · {fmt(it.precio_unitario_final)}</span>
                       </div>
                     ))}
@@ -443,7 +443,7 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                           Agregado
                         </span>
                         <span className="text-kp-gray">{it.nombre}</span>
-                        <span className="text-kp-gray font-mono text-[10px]">({it.codigo})</span>
+                        <span className="text-kp-gray font-mono text-2xs md:text-[10px]">({it.codigo})</span>
                         <span className="text-kp-gray ml-auto">x{parseFloat(it.cantidad).toFixed(0)} · {fmt(it.precio_unitario_final)}</span>
                       </div>
                     ))}

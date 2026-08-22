@@ -81,7 +81,7 @@ export default function FiltrosArticulos({
       <select
         value={params.get('categoria_id') || ''}
         onChange={e => push({ categoria_id: e.target.value })}
-        className="bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors cursor-pointer"
+        className="bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors cursor-pointer"
       >
         <option value="">Todas las categorías</option>
         {categorias.map(c => (

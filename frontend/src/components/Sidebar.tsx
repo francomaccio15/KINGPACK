@@ -357,12 +357,12 @@ export default function Sidebar({ mobileOpen, onMobileClose, mobileHeader }: Sid
                 {collapsed ? (
                   <>
                     <hr className="hidden md:block border-kp-border mx-3 mb-2" />
-                    <p className="md:hidden px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
+                    <p className="md:hidden px-4 mb-1 text-2xs md:text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
                       {group.label}
                     </p>
                   </>
                 ) : (
-                  <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
+                  <p className="px-4 mb-1 text-2xs md:text-[10px] font-bold uppercase tracking-widest text-kp-gray select-none">
                     {group.label}
                   </p>
                 )}

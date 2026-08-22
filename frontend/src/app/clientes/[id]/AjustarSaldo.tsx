@@ -106,7 +106,7 @@ export default function AjustarSaldo({
                 Saldo a favor
               </button>
             </div>
-            <p className="mt-1 text-[11px] text-kp-gray/70">
+            <p className="mt-1 text-2xs md:text-[11px] text-kp-gray/70">
               {tipo === 'cargo'
                 ? 'Aumenta lo que el cliente debe.'
                 : 'Baja la deuda o genera crédito a favor del cliente.'}
@@ -134,7 +134,7 @@ export default function AjustarSaldo({
             <input
               value={motivo} onChange={e => setMotivo(e.target.value)}
               placeholder="ej: deuda anterior, ajuste manual…"
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
             />
           </div>

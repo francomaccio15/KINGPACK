@@ -144,7 +144,7 @@ export default function ChequesEmitidosResumen({ cheques, meses }: Props) {
 
       {/* Tabla pivot por mes */}
       <div className="rounded-xl border border-kp-border overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px]">
+        <table data-rt="1" className="w-full text-sm min-w-[700px]">
           <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-kp-surface2 z-10 min-w-[180px]">

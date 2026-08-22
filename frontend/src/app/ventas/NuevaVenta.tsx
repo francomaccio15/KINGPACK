@@ -1429,7 +1429,7 @@ export default function NuevaVenta({
                         Cuenta destino
                       </p>
                       {cuentasBancarias.length === 0 ? (
-                        <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray">
+                        <p className="px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray">
                           No hay cuentas bancarias cargadas. Cargalas en Cuentas bancarias para poder elegir el destino.
                         </p>
                       ) : (
@@ -1450,7 +1450,7 @@ export default function NuevaVenta({
                       {(() => {
                         const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId);
                         return cc ? (
-                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
                             {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
                             {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}
@@ -1484,7 +1484,7 @@ export default function NuevaVenta({
                       {(() => {
                         const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId2);
                         return cc ? (
-                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-[11px] text-kp-gray space-y-0.5">
+                          <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
                             {cc.banco   && <p><span className="text-kp-gray-lt font-medium">Banco:</span> {cc.banco}</p>}
                             {cc.cbu     && <p><span className="text-kp-gray-lt font-medium">CBU:</span> <span className="font-mono">{cc.cbu}</span></p>}
@@ -1599,7 +1599,7 @@ export default function NuevaVenta({
                               key={m}
                               type="button"
                               onClick={() => setDescExtraModo(m)}
-                              className={`px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+                              className={`px-2.5 py-0.5 text-2xs md:text-[11px] font-bold transition-colors ${
                                 descExtraModo === m
                                   ? 'bg-kp-red text-white'
                                   : 'text-kp-gray hover:text-kp-white'

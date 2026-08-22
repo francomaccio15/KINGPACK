@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 type Cliente = {
   id: string;
@@ -46,7 +47,7 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+      <TableWrap className="shadow-lg shadow-black/40">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -103,7 +104,29 @@ export default function DeudoresTable({ clientes }: { clientes: Cliente[] }) {
             })}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
+
+      {/* Mobile: la deuda es el dato protagonista, va destacada. */}
+      <MobileCards>
+        {deudores.map((c) => {
+          const saldo  = parseFloat(c.saldo_actual || '0');
+          const limite = parseFloat(c.limite_credito || '0');
+          const excede = limite > 0 && saldo > limite;
+          return (
+            <RecordCard
+              key={c.id}
+              href={`/clientes/${c.id}`}
+              title={c.razon_social}
+              subtitle={c.cuit || undefined}
+              badge={excede ? { label: 'Excede limite', tone: 'danger' } : undefined}
+              fields={[
+                { label: 'Deuda', value: fmt(saldo), strong: true },
+                { label: 'Limite', value: fmt(c.limite_credito), align: 'right' },
+              ]}
+            />
+          );
+        })}
+      </MobileCards>
     </div>
   );
 }

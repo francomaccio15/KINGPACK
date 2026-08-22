@@ -107,10 +107,10 @@ export default function EditarPago({
               value={motivo} onChange={e => setMotivo(e.target.value)}
               placeholder="ej: se cargó mal el monto, faltó descuento..."
               rows={3}
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 placeholder:text-kp-gray focus:outline-none focus:border-sky-500 transition-colors resize-none"
             />
-            <p className="text-[11px] text-kp-gray/70 mt-1">Le llega al administrador como aviso en las notificaciones.</p>
+            <p className="text-2xs md:text-[11px] text-kp-gray/70 mt-1">Le llega al administrador como aviso en las notificaciones.</p>
           </div>
 
           {error && (

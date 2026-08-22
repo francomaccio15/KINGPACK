@@ -173,7 +173,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-2">
-            <span className="w-1 h-6 bg-kp-red rounded-full block flex-shrink-0" />
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0 flex-shrink-0" />
             <h2 className="text-2xl font-bold">{egreso.descripcion}</h2>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${TIPO_COLOR[egreso.tipo_operacion] ?? ''}`}>
               {TIPO_LABEL[egreso.tipo_operacion] ?? egreso.tipo_operacion}

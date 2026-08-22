@@ -132,7 +132,7 @@ export default function EditarCliente({
             <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Razón Social *</label>
             <input
               required value={form.razon_social} onChange={set('razon_social')}
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
             />
           </div>
@@ -144,7 +144,7 @@ export default function EditarCliente({
               <input
                 value={form.cuit} onChange={set('cuit')}
                 placeholder="20-12345678-9"
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
               />
             </div>
@@ -152,7 +152,7 @@ export default function EditarCliente({
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Condición IVA *</label>
               <select
                 required value={form.cond_iva_id} onChange={set('cond_iva_id')}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 {condIva.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -167,7 +167,7 @@ export default function EditarCliente({
               <input
                 value={form.telefono} onChange={set('telefono')}
                 placeholder="387 000-0000"
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
               />
             </div>
@@ -175,7 +175,7 @@ export default function EditarCliente({
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Sucursal</label>
               <select
                 value={form.sucursal_default_id} onChange={set('sucursal_default_id')}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                   focus:outline-none focus:border-kp-red transition-colors"
               >
                 <option value="">— Sin asignar</option>
@@ -190,7 +190,7 @@ export default function EditarCliente({
             <input
               value={form.direccion} onChange={set('direccion')}
               placeholder="Calle 123, Salta"
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
             />
           </div>
@@ -200,7 +200,7 @@ export default function EditarCliente({
             <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Lista de Precios</label>
             <select
               value={form.lista_precio_id} onChange={set('lista_precio_id')}
-              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+              className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                 focus:outline-none focus:border-kp-red transition-colors"
             >
               <option value="">— Sin lista asignada</option>

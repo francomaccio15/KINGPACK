@@ -29,7 +29,7 @@ interface Props {
 function EstadoBadge({ estado }: { estado: string }) {
   return (
     <span className={[
-      'inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border capitalize',
+      'inline-flex items-center gap-1 text-2xs md:text-[10px] font-bold px-2 py-0.5 rounded-full border capitalize',
       estado === 'emitida'
         ? 'bg-green-500/10 border-green-500/30 text-green-400'
         : 'bg-kp-border/30 border-kp-border/50 text-kp-gray',
@@ -122,8 +122,8 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
-            <h2 className="text-2xl font-bold uppercase tracking-wide">Notas de Crédito</h2>
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+            <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Notas de Crédito</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
             {filtered.length} {filtered.length === 1 ? 'documento' : 'documentos'}
@@ -168,7 +168,7 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
 
       {/* ── Tabla ── */}
       <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-        <table className="min-w-full text-sm">
+        <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Tipo / N°</th>
@@ -209,14 +209,14 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                       {n.cliente_razon_social ?? 'Consumidor final'}
                     </p>
                     {n.cliente_cuit && (
-                      <p className="text-[10px] text-kp-gray font-mono">{n.cliente_cuit}</p>
+                      <p className="text-2xs md:text-[10px] text-kp-gray font-mono">{n.cliente_cuit}</p>
                     )}
                   </td>
                   <td className="px-4 py-3 max-w-[200px]">
                     <p className="text-xs text-kp-gray-lt truncate">{n.motivo}</p>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-[11px] font-mono text-kp-gray">{n.numero_referencia ?? '—'}</span>
+                    <span className="text-2xs md:text-[11px] font-mono text-kp-gray">{n.numero_referencia ?? '—'}</span>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <span className={`text-sm font-bold tabular-nums ${n.estado === 'anulada' ? 'text-kp-gray line-through' : 'text-kp-red'}`}>
@@ -243,16 +243,16 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                         confirmId === n.id ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => handleAnular(n.id)} disabled={anulando === n.id}
-                              className="text-[10px] font-bold text-rose-400 hover:underline">
+                              className="text-2xs md:text-[10px] font-bold text-rose-400 hover:underline">
                               {anulando === n.id ? '…' : 'Anular'}
                             </button>
                             <span className="text-kp-border">/</span>
                             <button onClick={() => setConfirmId(null)}
-                              className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                              className="text-2xs md:text-[10px] font-bold text-kp-gray hover:underline">No</button>
                           </div>
                         ) : (
                           <button onClick={() => setConfirmId(n.id)}
-                            className="text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1">
+                            className="text-2xs md:text-[10px] font-semibold text-kp-gray hover:text-rose-400 transition-colors px-1">
                             Anular
                           </button>
                         )
@@ -263,12 +263,12 @@ export default function NotasCreditoView({ notasIniciales, totalCount, clientes,
                         confirmDelId === n.id ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => handleEliminar(n.id)} disabled={eliminando === n.id}
-                              className="text-[10px] font-bold text-rose-500 hover:underline">
+                              className="text-2xs md:text-[10px] font-bold text-rose-500 hover:underline">
                               {eliminando === n.id ? '…' : '¡Eliminar!'}
                             </button>
                             <span className="text-kp-border">/</span>
                             <button onClick={() => setConfirmDelId(null)}
-                              className="text-[10px] font-bold text-kp-gray hover:underline">No</button>
+                              className="text-2xs md:text-[10px] font-bold text-kp-gray hover:underline">No</button>
                           </div>
                         ) : (
                           <button onClick={() => setConfirmDelId(n.id)} title="Eliminar"

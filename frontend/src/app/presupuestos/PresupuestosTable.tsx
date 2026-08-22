@@ -80,7 +80,7 @@ export default function PresupuestosTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
-      <table className="min-w-full text-sm">
+      <table data-rt="1" className="min-w-full text-sm">
         <thead>
           <tr className="bg-kp-surface2 border-b border-kp-border">
             <th className="w-8 px-3 py-3" />

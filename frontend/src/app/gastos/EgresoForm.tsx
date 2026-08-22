@@ -503,7 +503,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   };
 
   // ── Estilos reutilizables ─────────────────────────────────────────────────
-  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
   const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
   const sectionCls = 'rounded-xl border border-kp-border p-5 space-y-4';
 
@@ -514,8 +514,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-6 bg-kp-red rounded-full block" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide">{esEdicion ? 'Editar Egreso' : 'Nuevo Egreso'}</h2>
+          <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
+          <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">{esEdicion ? 'Editar Egreso' : 'Nuevo Egreso'}</h2>
         </div>
         <Link href={esEdicion ? `/gastos/${edicion!.id}` : '/gastos'} className="text-sm text-kp-gray hover:text-kp-white transition-colors">
           ← Volver
@@ -938,7 +938,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
           </div>
 
           {bonificaciones.length === 0 ? (
-            <p className="text-[11px] text-kp-gray/70">
+            <p className="text-2xs md:text-[11px] text-kp-gray/70">
               Descuento extra que el proveedor aplica sobre el total de la lista (aparte del
               descuento por línea). Se aplican en cascada, en el orden cargado.
             </p>
@@ -997,7 +997,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
               <NumericInput placeholder="0.00" value={netoGravado}
                 onChange={e => setNetoGravado(e.target.value)} className={inputCls} />
               {items.length > 0 && (
-                <p className="text-[10px] text-kp-gray/70 mt-1">
+                <p className="text-2xs md:text-[10px] text-kp-gray/70 mt-1">
                   {bonif.rows.length > 0
                     ? 'Calculado de los ítems menos bonificaciones. Editable.'
                     : 'Calculado de los ítems. Editable.'}
@@ -1148,13 +1148,13 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
                       <label className={labelCls}>Monto</label>
                       {!cheque && resto > 0 && (
                         <button type="button" onClick={() => updMedioPago(i, 'monto', String(resto))}
-                          className="text-[10px] text-kp-red hover:underline mb-1">usar resto {ars.format(resto)}</button>
+                          className="text-2xs md:text-[10px] text-kp-red hover:underline mb-1">usar resto {ars.format(resto)}</button>
                       )}
                     </div>
                     {cheque
                       ? <div className={`${inputCls} flex items-center justify-between text-kp-gray-lt`}>
                           <span className="tabular-nums">{ars.format(totalCheques)}</span>
-                          <span className="text-[10px] text-kp-gray">según cheques ↓</span>
+                          <span className="text-2xs md:text-[10px] text-kp-gray">según cheques ↓</span>
                         </div>
                       : <NumericInput value={m.monto} placeholder="0.00" onChange={e => updMedioPago(i, 'monto', e.target.value)} className={inputCls} />
                     }
@@ -1186,7 +1186,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
                   {ars.format(totalPagoMedios)}
                 </span>
                 {parseFloat(totalComprobante) > 0 && totalPagoMedios > 0 && totalPagoMedios < parseFloat(totalComprobante) - 0.01 && (
-                  <span className="block text-[11px] text-amber-400">Pago parcial — quedan {ars.format(parseFloat(totalComprobante) - totalPagoMedios)}</span>
+                  <span className="block text-2xs md:text-[11px] text-amber-400">Pago parcial — quedan {ars.format(parseFloat(totalComprobante) - totalPagoMedios)}</span>
                 )}
               </div>
             </div>

@@ -89,14 +89,14 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
             <div className="text-right">
               <div className="inline-flex flex-col items-center border-2 border-gray-900 rounded-lg px-6 py-3">
                 <span className="text-4xl font-black leading-none">{letra}</span>
-                <span className="text-[9px] uppercase tracking-widest font-bold text-gray-500 mt-0.5">
+                <span className="text-2xs md:text-[9px] uppercase tracking-widest font-bold text-gray-500 mt-0.5">
                   {nota.tipo_comprobante ?? 'Nota de Crédito'}
                 </span>
               </div>
               <p className="text-sm font-bold mt-2 text-gray-700">N° {numero}</p>
               <p className="text-sm text-gray-500">{fecha}</p>
               {nota.cae && (
-                <p className="text-[10px] text-gray-400 font-mono mt-1">CAE: {nota.cae}</p>
+                <p className="text-2xs md:text-[10px] text-gray-400 font-mono mt-1">CAE: {nota.cae}</p>
               )}
             </div>
           </div>
@@ -105,7 +105,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
           <div className="grid grid-cols-2 gap-6 mb-6">
             {/* Emisor detalle */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Emisor</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Emisor</p>
               <Row label="Razón Social" value={emisor.razon_social} />
               <Row label="CUIT" value={emisor.cuit} />
               <Row label="Cond. IVA" value={emisor.cond_iva} />
@@ -115,7 +115,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
 
             {/* Receptor */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Receptor</p>
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Receptor</p>
               <Row label="Razón Social" value={nota.cliente_razon_social ?? 'Consumidor Final'} />
               {nota.cliente_cuit && <Row label="CUIT" value={nota.cliente_cuit} />}
               {nota.cliente_direccion && <Row label="Domicilio" value={nota.cliente_direccion} />}
@@ -125,7 +125,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
 
           {/* ══ SECCIÓN 2: DOCUMENTO DE REFERENCIA ══════════════════════════════ */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">
+            <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">
               Documento de referencia
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -143,7 +143,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
 
           {/* ══ SECCIÓN 3: MOTIVO ════════════════════════════════════════════════ */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">
+            <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">
               Concepto / Motivo
             </p>
             <p className="text-sm text-gray-800 leading-relaxed">{nota.motivo}</p>
@@ -152,7 +152,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
           {/* ══ SECCIÓN 4: DETALLE DE ÍTEMS ════════════════════════════════════ */}
           {items.length > 0 && (
             <div className="mb-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+              <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
                 Detalle de artículos / servicios
               </p>
               <table className="w-full border-collapse text-sm">
@@ -210,7 +210,7 @@ export default async function NotaCreditoPage({ params }: { params: { id: string
 
           {/* ══ PIE ══════════════════════════════════════════════════════════════ */}
           <div className="mt-8 pt-4 border-t border-gray-100 text-center">
-            <p className="text-[9px] text-gray-400 uppercase tracking-widest">
+            <p className="text-2xs md:text-[9px] text-gray-400 uppercase tracking-widest">
               {emisor.razon_social} · {emisor.cuit} · Documento emitido el {fecha}
               {nota.emitida_por_nombre ? ` · Emitido por ${nota.emitida_por_nombre}` : ''}
             </p>

@@ -183,7 +183,7 @@ export default function ArticulosTabla({
             <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
               <span className="font-bold text-kp-white">{fmt(a.precio_lista)}</span>
               {diffPct !== null && Math.abs(diffPct) >= 0.01 && (
-                <span className={`block text-[10px] ${diffPct < 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                <span className={`block text-2xs md:text-[10px] ${diffPct < 0 ? 'text-green-400' : 'text-amber-400'}`}>
                   {diffPct < 0 ? '−' : '+'}{Math.abs(diffPct).toFixed(1)}%
                 </span>
               )}
@@ -211,7 +211,7 @@ export default function ArticulosTabla({
                     <span key={sd.nombre}
                       className={`inline-flex items-center gap-1 text-xs tabular-nums
                         ${sd.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
-                      <span className="text-[10px] text-kp-gray font-semibold uppercase">
+                      <span className="text-2xs md:text-[10px] text-kp-gray font-semibold uppercase">
                         {sd.nombre[0]}:
                       </span>
                       {sd.cantidad % 1 === 0

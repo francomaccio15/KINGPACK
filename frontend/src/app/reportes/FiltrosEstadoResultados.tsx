@@ -43,14 +43,14 @@ export default function FiltrosEstadoResultados({
   return (
     <form onSubmit={aplicar} className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-semibold uppercase tracking-widest text-kp-gray">Desde</label>
+        <label className="text-2xs md:text-[10px] font-semibold uppercase tracking-widest text-kp-gray">Desde</label>
         <input type="date" value={desde} onChange={e => setDesde(e.target.value)}
-          className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red [color-scheme:dark]" />
+          className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red [color-scheme:dark]" />
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-semibold uppercase tracking-widest text-kp-gray">Hasta</label>
+        <label className="text-2xs md:text-[10px] font-semibold uppercase tracking-widest text-kp-gray">Hasta</label>
         <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
-          className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red [color-scheme:dark]" />
+          className="bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red [color-scheme:dark]" />
       </div>
       <button type="submit"
         className="px-4 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/80 transition-colors">

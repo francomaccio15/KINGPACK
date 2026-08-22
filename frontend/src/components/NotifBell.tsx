@@ -220,7 +220,7 @@ export default function NotifBell() {
         <IcoBell active={open} />
         {/* Badge */}
         {count > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full bg-kp-red text-white text-[9px] font-bold leading-none ring-2 ring-kp-bg">
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full bg-kp-red text-white text-2xs md:text-[9px] font-bold leading-none ring-2 ring-kp-bg">
             {count > 9 ? '9+' : count}
           </span>
         )}
@@ -235,12 +235,12 @@ export default function NotifBell() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-kp-white">Notificaciones</span>
               {total > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-kp-surface border border-kp-border text-kp-gray">
+                <span className="text-2xs md:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-kp-surface border border-kp-border text-kp-gray">
                   {total}
                 </span>
               )}
               {count > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red text-white">
+                <span className="text-2xs md:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red text-white">
                   {count} nueva{count !== 1 ? 's' : ''}
                 </span>
               )}
@@ -248,7 +248,7 @@ export default function NotifBell() {
             <Link
               href="/notas"
               onClick={() => setOpen(false)}
-              className="text-[10px] font-semibold text-kp-red hover:underline flex items-center gap-0.5"
+              className="text-2xs md:text-[10px] font-semibold text-kp-red hover:underline flex items-center gap-0.5"
             >
               Ver notas <IcoChev />
             </Link>
@@ -285,16 +285,16 @@ export default function NotifBell() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-kp-white leading-snug line-clamp-2">{item.title}</p>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className={`text-[10px] font-bold ${item.labelColor}`}>{item.tagLabel}</span>
+                          <span className={`text-2xs md:text-[10px] font-bold ${item.labelColor}`}>{item.tagLabel}</span>
                           {item.isNew && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red/15 text-kp-red border border-kp-red/20">
+                            <span className="text-2xs md:text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-kp-red/15 text-kp-red border border-kp-red/20">
                               Nueva
                             </span>
                           )}
                           {item.meta && (
                             <>
                               <span className="text-kp-gray/40">·</span>
-                              <span className="text-[10px] text-kp-gray">{item.meta}</span>
+                              <span className="text-2xs md:text-[10px] text-kp-gray">{item.meta}</span>
                             </>
                           )}
                         </div>
@@ -312,7 +312,7 @@ export default function NotifBell() {
                         onClick={() => marcarPagado(item.obligacion!, item.periodo!)}
                         disabled={marcando === pagoKey}
                         title="Marcar como pagado"
-                        className="shrink-0 self-center text-[10px] font-bold px-2 py-1 rounded-md border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40 whitespace-nowrap"
+                        className="shrink-0 self-center text-2xs md:text-[10px] font-bold px-2 py-1 rounded-md border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40 whitespace-nowrap"
                       >
                         {marcando === pagoKey ? '…' : '✓ Pagado'}
                       </button>
@@ -325,7 +325,7 @@ export default function NotifBell() {
 
           {/* Footer */}
           <div className="border-t border-kp-border px-4 py-2 bg-kp-surface2">
-            <p className="text-[10px] text-kp-gray text-center">
+            <p className="text-2xs md:text-[10px] text-kp-gray text-center">
               {data?.ultima_vista && new Date(data.ultima_vista).getTime() > 1000
                 ? `Última revisión: ${tiempoRelativo(data.ultima_vista)}`
                 : 'Primera apertura'}

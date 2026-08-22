@@ -134,7 +134,7 @@ export default function PosicionIVA({
 
       {/* ── Tabla mensual ── */}
       <div className="rounded-xl border border-kp-border overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
+        <table data-rt="1" className="w-full text-sm min-w-[900px]">
           <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left font-semibold">Mes</th>

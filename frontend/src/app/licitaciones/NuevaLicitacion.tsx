@@ -180,7 +180,7 @@ export default function NuevaLicitacion() {
                   value={titulo}
                   onChange={e => setTitulo(e.target.value)}
                   placeholder="Ej: Municipalidad — Julio 2026"
-                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                 />
               </div>
               <div className="relative">
@@ -189,7 +189,7 @@ export default function NuevaLicitacion() {
                   value={cliente ? cliente.razon_social : clienteQ}
                   onChange={e => { setCliente(null); setClienteQ(e.target.value); }}
                   placeholder="Buscar cliente..."
-                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                 />
                 {clienteSugs.length > 0 && !cliente && (
                   <ul className="absolute top-full left-0 right-0 z-10 mt-1 bg-kp-surface border border-kp-border rounded-lg overflow-hidden shadow-xl max-h-48 overflow-y-auto">
@@ -226,7 +226,7 @@ export default function NuevaLicitacion() {
                   value={artQ}
                   onChange={e => setArtQ(e.target.value)}
                   placeholder="Buscar por nombre o código..."
-                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                  className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                 />
                 {artSugs.length > 0 && (
                   <ul className="absolute top-full left-0 right-0 z-10 mt-1 bg-kp-surface border border-kp-border rounded-lg overflow-hidden shadow-xl max-h-64 overflow-y-auto">
@@ -271,7 +271,7 @@ export default function NuevaLicitacion() {
                       <tr key={it.articulo_id} className="hover:bg-kp-surface2/40">
                         <td className="px-3 py-2">
                           <p className="font-medium text-kp-white text-xs">{it.nombre}</p>
-                          <p className="text-kp-gray text-[10px] font-mono">{it.codigo}</p>
+                          <p className="text-kp-gray text-2xs md:text-[10px] font-mono">{it.codigo}</p>
                         </td>
                         <td className="px-3 py-2 text-center">
                           <input
@@ -330,7 +330,7 @@ export default function NuevaLicitacion() {
                 onChange={e => setObs(e.target.value)}
                 rows={2}
                 placeholder="Condiciones especiales, vigencia, etc."
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors resize-none"
               />
             </div>
 

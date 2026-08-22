@@ -418,7 +418,7 @@ export default function NuevoPresupuesto({
 
             {/* Article search */}
             <div>
-              <label className="block text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
+              <label className="block text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1.5">
                 Buscar artículo
               </label>
               <div className="relative">
@@ -442,7 +442,7 @@ export default function NuevoPresupuesto({
             {artResults.length > 0 && (
               <div className="border border-kp-border rounded-xl overflow-hidden shrink-0 max-h-56 overflow-y-auto">
                 <div className="px-3 py-1.5 bg-kp-surface2 border-b border-kp-border">
-                  <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                  <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                     Resultados ({artResults.length})
                   </span>
                 </div>
@@ -464,7 +464,7 @@ export default function NuevoPresupuesto({
                         <p className="text-sm font-semibold text-kp-white truncate">{art.nombre}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-kp-gray">{art.codigo}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
+                          <span className={`text-2xs md:text-[10px] font-semibold px-1.5 py-0.5 rounded border ${stockBadge.cls}`}>
                             {stockBadge.label}
                           </span>
                         </div>
@@ -474,7 +474,7 @@ export default function NuevoPresupuesto({
                           {ars.format(displayPrice)}
                         </p>
                         {listaId && art.precio_lista !== art.precio_madre && (
-                          <p className="text-[10px] text-kp-gray line-through tabular-nums">
+                          <p className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
                             {ars.format(art.precio_madre)}
                           </p>
                         )}
@@ -501,11 +501,11 @@ export default function NuevoPresupuesto({
 
             {/* Cart section header */}
             <div className="flex items-center justify-between shrink-0">
-              <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+              <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                 Carrito
               </span>
               {cart.length > 0 && (
-                <span className="text-[10px] text-kp-gray">
+                <span className="text-2xs md:text-[10px] text-kp-gray">
                   {cart.reduce((acc, i) => acc + i.cantidad, 0)} unidades
                 </span>
               )}
@@ -543,23 +543,23 @@ export default function NuevoPresupuesto({
                             {item.nombre}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-kp-gray">{item.codigo}</span>
+                            <span className="text-2xs md:text-[10px] text-kp-gray">{item.codigo}</span>
                             {hasDiscount && (
                               <>
-                                <span className="text-[10px] text-kp-gray line-through tabular-nums">
+                                <span className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
                                   {ars.format(item.precio_lista)}
                                 </span>
-                                <span className="text-[10px] font-semibold text-kp-red bg-kp-red/10
+                                <span className="text-2xs md:text-[10px] font-semibold text-kp-red bg-kp-red/10
                                   border border-kp-red/20 rounded px-1 py-0.5 leading-none">
                                   -{item.descuento_pct.toFixed(1)}%
                                 </span>
-                                <span className="text-[10px] text-kp-white tabular-nums">
+                                <span className="text-2xs md:text-[10px] text-kp-white tabular-nums">
                                   {ars.format(item.precio_unitario_final)}
                                 </span>
                               </>
                             )}
                             {!hasDiscount && (
-                              <span className="text-[10px] text-kp-gray tabular-nums">
+                              <span className="text-2xs md:text-[10px] text-kp-gray tabular-nums">
                                 {ars.format(item.precio_unitario_final)} c/u
                               </span>
                             )}
@@ -602,7 +602,7 @@ export default function NuevoPresupuesto({
                           </button>
                         </div>
                         {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
-                          <span className="text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
+                          <span className="text-2xs md:text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
                             Stock: {item.stock_disponible}
                           </span>
                         )}
@@ -654,7 +654,7 @@ export default function NuevoPresupuesto({
 
               {/* ── Cliente ─────────────────────────────────────────── */}
               <section>
-                <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
+                <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2.5">
                   Cliente
                 </p>
 
@@ -722,7 +722,7 @@ export default function NuevoPresupuesto({
                               {cli.razon_social}
                             </p>
                             {cli.lista_precio && (
-                              <p className="text-[10px] text-kp-gray mt-0.5">
+                              <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">
                                 Lista: {cli.lista_precio}
                                 {cli.descuento_adicional > 0 && ` · Dto. ${cli.descuento_adicional}%`}
                               </p>
@@ -744,12 +744,12 @@ export default function NuevoPresupuesto({
                           {selectedClient.razon_social}
                         </p>
                         {selectedClient.lista_precio && (
-                          <p className="text-[10px] text-kp-gray mt-0.5">
+                          <p className="text-2xs md:text-[10px] text-kp-gray mt-0.5">
                             Lista: {selectedClient.lista_precio}
                           </p>
                         )}
                         {selectedClient.descuento_adicional > 0 && (
-                          <p className="text-[10px] text-kp-red font-semibold mt-0.5">
+                          <p className="text-2xs md:text-[10px] text-kp-red font-semibold mt-0.5">
                             Dto. adicional: {selectedClient.descuento_adicional}%
                           </p>
                         )}
@@ -761,13 +761,13 @@ export default function NuevoPresupuesto({
 
               {/* ── Lista de precios ────────────────────────────────── */}
               <section>
-                <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-2">
+                <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-2">
                   Lista de precios
                 </p>
                 <select
                   value={listaId}
                   onChange={e => setListaId(e.target.value)}
-                  className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white
+                  className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white
                     focus:outline-none focus:border-kp-red transition-colors"
                 >
                   <option value="">— Precio madre (sin lista)</option>
@@ -782,7 +782,7 @@ export default function NuevoPresupuesto({
               {/* ── Discount breakdown ──────────────────────────────── */}
               {(descuentoLista > 0 || descuentoCliente > 0) && (
                 <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
-                  <p className="text-[10px] text-kp-gray uppercase tracking-widest mb-1">
+                  <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">
                     Descuentos aplicados
                   </p>
                   {descuentoLista > 0 && (
@@ -844,7 +844,7 @@ export default function NuevoPresupuesto({
                 {/* ── Descuento extra manual (sobre el total) ─────────── */}
                 <div className="px-4 py-3 border-t border-kp-border space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-kp-gray uppercase tracking-widest">
+                    <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
                       Descuento extra
                     </span>
                     <div className="flex rounded-md border border-kp-border overflow-hidden">
@@ -853,7 +853,7 @@ export default function NuevoPresupuesto({
                           key={m}
                           type="button"
                           onClick={() => setDescExtraModo(m)}
-                          className={`px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+                          className={`px-2.5 py-0.5 text-2xs md:text-[11px] font-bold transition-colors ${
                             descExtraModo === m
                               ? 'bg-kp-red text-white'
                               : 'text-kp-gray hover:text-kp-white'

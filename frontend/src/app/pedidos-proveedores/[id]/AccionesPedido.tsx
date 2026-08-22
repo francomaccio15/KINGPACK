@@ -292,7 +292,7 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                               placeholder="0"
                             />
                             {aRecibir > 0 && aRecibir < pendiente && (
-                              <span className="text-[10px] text-amber-400 font-bold whitespace-nowrap">parcial</span>
+                              <span className="text-2xs md:text-[10px] text-amber-400 font-bold whitespace-nowrap">parcial</span>
                             )}
                           </div>
                         )}

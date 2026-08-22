@@ -94,7 +94,7 @@ export default async function DetallePedidoPage({ params }: { params: { id: stri
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <span className="w-1 h-6 bg-kp-red rounded-full block" />
+            <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
             <h2 className="text-2xl font-bold">{pedido.proveedor_nombre}</h2>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ESTADO_STYLE[pedido.estado] ?? ''}`}>
               {ESTADO_LABEL[pedido.estado] ?? pedido.estado}
