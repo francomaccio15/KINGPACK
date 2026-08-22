@@ -39,7 +39,7 @@ export default async function DevolucionPage({ params }: { params: { id: string 
 
   if (!dev) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[100dvh]">
         <p className="text-kp-gray">Devolución no encontrada.</p>
       </div>
     );
@@ -60,7 +60,7 @@ export default async function DevolucionPage({ params }: { params: { id: string 
       <PrintTrigger />
 
       {/* ── Barra de acciones (no se imprime) ── */}
-      <div className="print:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 text-white px-6 py-3 flex items-center justify-between">
+      <div className="print:hidden fixed top-0 left-0 right-0 z-50 bg-gray-900 text-white px-4 md:px-6 py-3 pt-safe flex flex-wrap items-center justify-between gap-2 z-pop">
         <a href="/devoluciones" className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1.5">
           ← Volver a Devoluciones
         </a>
@@ -131,7 +131,8 @@ export default async function DevolucionPage({ params }: { params: { id: string 
               <p className="text-2xs md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
                 Mercadería devuelta
               </p>
-              <table className="w-full border-collapse text-sm">
+              <div className="overflow-x-auto print:overflow-visible">
+<table data-rt="1" className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-gray-900 text-white">
                     <th className="text-left px-3 py-2 font-semibold rounded-tl-lg">Descripción</th>
@@ -151,6 +152,7 @@ export default async function DevolucionPage({ params }: { params: { id: string 
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 

@@ -148,7 +148,8 @@ export default function CerrarCaja({
         </div>
       </div>
 
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      <div className="overflow-x-auto">
+<table data-rt="1" style="width:100%;border-collapse:collapse;margin-bottom:20px">
         <tbody>
           ${row('Saldo inicial', ars.format(saldoInicial ?? 0))}
           ${row('Saldo sistema', ars.format(sistema))}
@@ -159,6 +160,7 @@ export default function CerrarCaja({
           ${row(diffLabel, diffValue, true, diffColor)}
         </tbody>
       </table>
+      </div>
 
       ${!diffOk ? `<p style="font-size:12px;color:${diffColor};text-align:center;margin-bottom:16px">
         ${diff > 0

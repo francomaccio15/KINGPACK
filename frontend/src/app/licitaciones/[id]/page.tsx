@@ -114,7 +114,8 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
                   Artículos ({items.length})
                 </h3>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto print:overflow-visible">
+<table data-rt="1" className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-kp-border/50">
                     <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-kp-gray">Artículo</th>
@@ -151,6 +152,7 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
                   </tr>
                 </tfoot>
               </table>
+              </div>
             </div>
           </div>
 
@@ -255,7 +257,8 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
         </div>
 
         {/* Tabla de artículos */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '5px', border: '1.5px solid #111' }}>
+        <div className="overflow-x-auto print:overflow-visible">
+<table data-rt="1" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginBottom: '5px', border: '1.5px solid #111' }}>
           <thead>
             <tr style={{ background: '#111', color: 'white' }}>
               <th style={{ textAlign: 'left', padding: '3px 5px', fontSize: '7px', fontWeight: '700', textTransform: 'uppercase', borderRight: '1px solid #555' }}>Código</th>
@@ -277,6 +280,7 @@ export default async function LicitacionDetallePage({ params }: { params: { id: 
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Footer: observaciones + total */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'end' }}>

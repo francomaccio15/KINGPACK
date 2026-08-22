@@ -1,5 +1,7 @@
 'use client';
 
+import { TableScrollHint } from '@/components/ui/ResponsiveTable';
+
 interface MesPosicion {
   mes: string;
   debito_fiscal: number;
@@ -133,11 +135,12 @@ export default function PosicionIVA({
       </div>
 
       {/* ── Tabla mensual ── */}
+      <TableScrollHint />
       <div className="rounded-xl border border-kp-border overflow-x-auto">
         <table data-rt="1" className="w-full text-sm min-w-[900px]">
           <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold">Mes</th>
+              <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-kp-surface2 z-10">Mes</th>
               <th className="px-4 py-3 text-right font-semibold">Neto Ventas</th>
               <th className="px-4 py-3 text-right font-semibold text-red-400">Débito Fiscal</th>
               <th className="px-4 py-3 text-right font-semibold">Neto Compras</th>
@@ -158,7 +161,7 @@ export default function PosicionIVA({
                     esActual ? 'bg-kp-surface2' : 'hover:bg-kp-surface2',
                   ].join(' ')}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 sticky left-0 bg-kp-surface z-10">
                     <p className={`font-semibold capitalize ${esActual ? 'text-kp-red' : 'text-kp-white'}`}>
                       {fmtMes(p.mes)}
                     </p>

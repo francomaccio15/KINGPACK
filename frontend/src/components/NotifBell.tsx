@@ -228,7 +228,9 @@ export default function NotifBell() {
 
       {/* ── Panel ── */}
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-[360px] rounded-xl border border-kp-border bg-kp-surface shadow-2xl shadow-black/60 overflow-hidden">
+        <div className="fixed inset-x-2 top-16 z-pop w-auto max-w-sm mx-auto
+          md:absolute md:inset-x-auto md:right-0 md:top-11 md:mx-0 md:w-[360px]
+          rounded-xl border border-kp-border bg-kp-surface shadow-2xl shadow-black/60 overflow-hidden">
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-kp-border bg-kp-surface2">

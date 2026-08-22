@@ -179,7 +179,8 @@ export default function EstadoResultados({
           <PrintButton />
         </div>
 
-        <table className="w-full">
+        <div className="overflow-x-auto">
+<table data-rt="1" className="w-full">
           <thead>
             <tr className="border-b-2 border-kp-border">
               <th className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-kp-gray">Concepto</th>
@@ -260,6 +261,7 @@ export default function EstadoResultados({
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Cards resumen */}

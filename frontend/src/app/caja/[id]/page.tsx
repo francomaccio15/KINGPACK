@@ -338,7 +338,8 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
           </div>
 
           {/* Resumen de saldos */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '16px' }}>
+          <div className="overflow-x-auto">
+<table data-rt="1" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '16px' }}>
             <tbody>
               {([
                 ['Saldo inicial',            fmt(caja.saldo_inicial)],
@@ -358,6 +359,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Footer */}
           <p style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '8px', margin: 0 }}>

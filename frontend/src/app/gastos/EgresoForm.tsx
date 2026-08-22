@@ -825,7 +825,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
 
           {items.length > 0 && (
             <div className="rounded-xl border border-kp-border overflow-hidden">
-              <table className="min-w-full text-sm">
+              <div className="overflow-x-auto">
+<table data-rt="1" className="min-w-full text-sm">
                 <thead>
                   <tr className="bg-kp-surface2 border-b border-kp-border">
                     <th className="text-left px-3 py-2 text-xs text-kp-gray uppercase tracking-widest font-semibold">
@@ -916,6 +917,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
                   </tr>
                 </tfoot>
               </table>
+              </div>
             </div>
           )}
         </div>

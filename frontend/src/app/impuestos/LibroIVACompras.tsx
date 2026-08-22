@@ -1,5 +1,7 @@
 'use client';
 
+import { TableScrollHint } from '@/components/ui/ResponsiveTable';
+
 interface CompraIVA {
   id: string;
   fecha: string;
@@ -93,11 +95,13 @@ export default function LibroIVACompras({
           No hay compras en el período seleccionado.
         </div>
       ) : (
+        <div>
+        <TableScrollHint />
         <div className="rounded-xl border border-kp-border overflow-x-auto">
           <table data-rt="1" className="w-full text-xs min-w-[1200px]">
             <thead className="bg-kp-surface2 text-kp-gray uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold">Fecha</th>
+                <th className="px-3 py-3 text-left font-semibold sticky left-0 bg-kp-surface2 z-10">Fecha</th>
                 <th className="px-3 py-3 text-left font-semibold">Comprobante</th>
                 <th className="px-3 py-3 text-left font-semibold">Proveedor</th>
                 <th className="px-3 py-3 text-left font-semibold">CUIT</th>
@@ -120,7 +124,7 @@ export default function LibroIVACompras({
                     c.sin_cuit ? 'opacity-60' : '',
                   ].join(' ')}
                 >
-                  <td className="px-3 py-2.5 text-kp-gray whitespace-nowrap">{fmtFecha(c.fecha)}</td>
+                  <td className="px-3 py-2.5 text-kp-gray whitespace-nowrap sticky left-0 bg-kp-surface z-10">{fmtFecha(c.fecha)}</td>
                   <td className="px-3 py-2.5">
                     <p className="font-medium text-kp-white">{fmtComp(c.tipo_comprobante, c.punto_venta, c.numero_comprobante)}</p>
                     {c.sin_cuit && <p className="text-amber-400 text-2xs md:text-[10px]">sin CUIT</p>}
@@ -164,6 +168,7 @@ export default function LibroIVACompras({
               </tr>
             </tfoot>
           </table>
+        </div>
         </div>
       )}
     </div>

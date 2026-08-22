@@ -87,7 +87,8 @@ export default function CierreMensual({ anio, mes }: { anio: number; mes: number
 
       {/* Lista de categorías */}
       <div className="rounded-xl border border-kp-border overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+<table data-rt="1" className="w-full">
           <thead>
             <tr className="border-b-2 border-kp-border bg-kp-surface2/60">
               <th className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-kp-gray">Categoría</th>
@@ -128,6 +129,7 @@ export default function CierreMensual({ anio, mes }: { anio: number; mes: number
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Acción final */}

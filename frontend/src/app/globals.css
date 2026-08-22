@@ -63,25 +63,11 @@ body {
   }
 }
 
-/* ── Tablas no migradas todavia ───────────────────────────────────────────
-   Parche historico: vuelve scrollable cualquier tabla en mobile. Se conserva
-   SOLO para las tablas que aun no pasaron al patron <TableWrap> + card-list.
-   TableWrap marca su <table> con data-rt="1" para quedar excluida de aca.
-   Cuando no quede ninguna tabla sin migrar, este bloque entero se elimina.  */
-@media (max-width: 767px) {
-  main table:not([data-rt='1']) {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
-  }
-  /* Excepto las tablas de documentos imprimibles */
-  main .print\:block table {
-    display: table;
-    overflow-x: visible;
-    white-space: normal;
-  }
-}
+/* Nota: aca vivia un parche que volvia display:block y nowrap a todas las
+   tablas en mobile. Se elimino cuando las 70 tablas del sistema pasaron al
+   patron <TableWrap> + tarjetas (o a tabla con scroll propio y columna fija):
+   cada una resuelve ahora su propio ancho, sin romper colspan ni anchos de
+   columna.                                                                  */
 
 /* ── Utilidades propias ───────────────────────────────────────────────────
    Solo lo que Tailwind 3.4 no cubre: safe-area del notch/home indicator y

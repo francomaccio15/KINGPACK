@@ -99,7 +99,8 @@ export default function HistorialRecepciones({ eventos }: { eventos: Evento[] })
               {open && (
                 <div className="px-4 pb-4 pt-1">
                   <div className="rounded-lg border border-kp-border overflow-hidden">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
                       <thead>
                         <tr className="bg-kp-surface2/60 border-b border-kp-border">
                           <th className="text-left px-3 py-2 text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest font-semibold">Producto</th>
@@ -124,6 +125,7 @@ export default function HistorialRecepciones({ eventos }: { eventos: Evento[] })
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                   {ev.tipo === 'correccion' && (
                     <p className="text-2xs md:text-[11px] text-kp-gray mt-2">

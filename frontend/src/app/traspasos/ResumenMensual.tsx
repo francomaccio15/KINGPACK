@@ -139,7 +139,8 @@ export default function ResumenMensual({ resumen }: { resumen: ResumenRow[] }) {
 
                           {open && (
                             <div className="ml-5 mt-1.5 mb-2 rounded-lg border border-kp-border overflow-hidden">
-                              <table className="min-w-full text-xs">
+                              <div className="overflow-x-auto">
+<table data-rt="1" className="min-w-full text-xs">
                                 <thead>
                                   <tr className="bg-kp-surface2 text-kp-gray">
                                     <th className="text-left px-3 py-1.5 font-semibold uppercase tracking-wide">Artículo</th>
@@ -163,6 +164,7 @@ export default function ResumenMensual({ resumen }: { resumen: ResumenRow[] }) {
                                   )}
                                 </tbody>
                               </table>
+                              </div>
                             </div>
                           )}
                         </div>

@@ -237,7 +237,8 @@ export default function MovimientosTabla({
           </div>
         </div>
 
-        <table className="min-w-full text-sm">
+        <div className="overflow-x-auto">
+<table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2/50 border-b border-kp-border">
               <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Hora</th>
@@ -331,6 +332,7 @@ export default function MovimientosTabla({
             </tfoot>
           )}
         </table>
+        </div>
       </div>
     </>
   );

@@ -74,7 +74,8 @@ export default async function LicitacionesPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-kp-border overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
             <thead>
               <tr className="border-b border-kp-border bg-kp-surface2">
                 <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-widest text-kp-gray">N°</th>
@@ -120,6 +121,7 @@ export default async function LicitacionesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

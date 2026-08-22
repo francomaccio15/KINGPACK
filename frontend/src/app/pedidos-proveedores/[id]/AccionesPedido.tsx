@@ -240,7 +240,8 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
         >
           {/* Tabla de ítems */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
               <thead>
                 <tr className="border-b border-kp-border">
                   <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
@@ -302,6 +303,7 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Footer con total y botones */}
@@ -343,7 +345,8 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
           size="lg"
         >
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
               <thead>
                 <tr className="border-b border-kp-border">
                   <th className="text-left pb-2 text-xs text-kp-gray uppercase tracking-widest">Artículo</th>
@@ -391,6 +394,7 @@ export default function AccionesPedido({ pedido, items, esCajero, mostrarMontos 
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="shrink-0 border-t border-kp-border px-6 py-4 space-y-3">

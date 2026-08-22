@@ -1,5 +1,7 @@
 'use client';
 
+import { TableScrollHint } from '@/components/ui/ResponsiveTable';
+
 interface VentaIVA {
   id: string;
   fecha: string;
@@ -66,11 +68,13 @@ export default function LibroIVAVentas({ ventas, totales }: { ventas: VentaIVA[]
           No hay ventas en el período seleccionado.
         </div>
       ) : (
+        <div>
+        <TableScrollHint />
         <div className="rounded-xl border border-kp-border overflow-x-auto">
           <table data-rt="1" className="w-full text-xs min-w-[1100px]">
             <thead className="bg-kp-surface2 text-kp-gray uppercase tracking-wide">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold">Fecha</th>
+                <th className="px-3 py-3 text-left font-semibold sticky left-0 bg-kp-surface2 z-10">Fecha</th>
                 <th className="px-3 py-3 text-left font-semibold">Comprobante</th>
                 <th className="px-3 py-3 text-left font-semibold">Cliente</th>
                 <th className="px-3 py-3 text-left font-semibold">CUIT</th>
@@ -86,7 +90,7 @@ export default function LibroIVAVentas({ ventas, totales }: { ventas: VentaIVA[]
             <tbody className="divide-y divide-kp-border">
               {ventas.map(v => (
                 <tr key={v.id} className="hover:bg-kp-surface2 transition-colors">
-                  <td className="px-3 py-2.5 text-kp-gray whitespace-nowrap">{fmtFecha(v.fecha)}</td>
+                  <td className="px-3 py-2.5 text-kp-gray whitespace-nowrap sticky left-0 bg-kp-surface z-10">{fmtFecha(v.fecha)}</td>
                   <td className="px-3 py-2.5">
                     {v.cae ? (
                       <div>
@@ -135,6 +139,7 @@ export default function LibroIVAVentas({ ventas, totales }: { ventas: VentaIVA[]
               </tr>
             </tfoot>
           </table>
+        </div>
         </div>
       )}
     </div>

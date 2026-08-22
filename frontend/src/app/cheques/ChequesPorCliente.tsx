@@ -129,7 +129,8 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
       {abierto && (
         <tr>
           <td colSpan={6} className="bg-kp-surface2/50 border-b border-kp-border px-0 py-0">
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-xs">
               <thead>
                 <tr className="border-b border-kp-border/60">
                   <th className="px-8 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Banco / N°</th>
@@ -186,6 +187,7 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </td>
         </tr>
       )}
@@ -226,7 +228,8 @@ export default function ChequesPorCliente({ clientes }: { clientes: ClienteChequ
 
       {/* Tabla por cliente */}
       <div className="rounded-xl border border-kp-border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
           <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left font-semibold">Cliente</th>
@@ -243,6 +246,7 @@ export default function ChequesPorCliente({ clientes }: { clientes: ClienteChequ
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

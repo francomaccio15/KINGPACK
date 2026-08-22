@@ -367,7 +367,8 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
             <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Ítems</h3>
             <span className="text-xs text-kp-gray/60">{items.length} línea{items.length !== 1 ? 's' : ''}</span>
           </div>
-          <table className="min-w-full text-sm">
+          <div className="overflow-x-auto">
+<table data-rt="1" className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2/50 border-b border-kp-border">
                 <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Descripción</th>
@@ -436,6 +437,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
               )}
             </tfoot>
           </table>
+          </div>
         </div>
       )}
 
@@ -503,7 +505,8 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
               </span>
             )}
           </div>
-          <table className="min-w-full text-sm">
+          <div className="overflow-x-auto">
+<table data-rt="1" className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2/50 border-b border-kp-border">
                 <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Fecha</th>
@@ -539,6 +542,7 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
               ))}
             </tbody>
           </table>
+          </div>
           {totalesCC && (
             <div className="bg-kp-surface2 border-t border-kp-border px-4 py-3 flex gap-6 text-sm">
               <div>

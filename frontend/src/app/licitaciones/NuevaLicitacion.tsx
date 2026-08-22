@@ -255,7 +255,8 @@ export default function NuevaLicitacion() {
             {/* Tabla de items */}
             {items.length > 0 && (
               <div className="rounded-xl border border-kp-border overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+<table data-rt="1" className="w-full text-sm">
                   <thead>
                     <tr className="bg-kp-surface2 border-b border-kp-border">
                       <th className="text-left px-3 py-2 text-xs font-bold uppercase tracking-widest text-kp-gray">Artículo</th>
@@ -319,6 +320,7 @@ export default function NuevaLicitacion() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               </div>
             )}
 
