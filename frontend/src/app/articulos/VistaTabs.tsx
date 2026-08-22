@@ -6,16 +6,21 @@ import Link from 'next/link';
  * que pueden ajustar stock (administrador / supervisor).
  */
 export default function VistaTabs({
-  vista, puedeEditarStock,
+  vista, puedeEditarStock, esAdmin = false,
 }: {
-  vista: 'precios' | 'stock';
+  vista: 'precios' | 'stock' | 'valorizado';
   puedeEditarStock: boolean;
+  esAdmin?: boolean;
 }) {
-  const tabs: { label: string; href: string; key: 'precios' | 'stock' }[] = [
+  const tabs: { label: string; href: string; key: 'precios' | 'stock' | 'valorizado' }[] = [
     { label: 'Precios', href: '/articulos', key: 'precios' },
   ];
   if (puedeEditarStock) {
     tabs.push({ label: 'Stock', href: '/articulos?vista=stock', key: 'stock' });
+  }
+  // Stock valorizado (costo del inventario) — solo administradores
+  if (esAdmin) {
+    tabs.push({ label: 'Stock Valorizado', href: '/articulos?vista=valorizado', key: 'valorizado' });
   }
 
   return (

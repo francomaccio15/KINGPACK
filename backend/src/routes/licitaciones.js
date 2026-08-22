@@ -1,12 +1,22 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
-const soloAdmin = requireRol('administrador');
+
+// Licitaciones lo ven los administradores y, entre los cajeros, SOLO el de
+// Laprida (regla de negocio). Los cajeros de otras sucursales y el resto de los
+// roles quedan afuera. Depende de sucursal_default_nombre en el JWT: los tokens
+// viejos (sin ese campo) fallan cerrado → hay que re-loguear una vez.
+function adminOLaprida(req, res, next) {
+  const u = req.usuario;
+  if (!u) return res.status(401).json({ error: 'No autenticado' });
+  if (u.rol === 'administrador') return next();
+  if (u.rol === 'cajero' && /laprida/i.test(u.sucursal_default_nombre || '')) return next();
+  return res.status(403).json({ error: 'Sin permiso para esta acción' });
+}
 
 // ─── GET /api/licitaciones ────────────────────────────────────────────────────
-router.get('/', soloAdmin, async (req, res, next) => {
+router.get('/', adminOLaprida, async (req, res, next) => {
   try {
     const { q, estado, limit = '100', offset = '0' } = req.query;
     const params = [];
@@ -55,7 +65,7 @@ router.get('/', soloAdmin, async (req, res, next) => {
 });
 
 // ─── POST /api/licitaciones ───────────────────────────────────────────────────
-router.post('/', soloAdmin, async (req, res, next) => {
+router.post('/', adminOLaprida, async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { titulo, cliente_id, observaciones, items = [] } = req.body;
@@ -102,7 +112,7 @@ router.post('/', soloAdmin, async (req, res, next) => {
 });
 
 // ─── GET /api/licitaciones/:id ────────────────────────────────────────────────
-router.get('/:id', soloAdmin, async (req, res, next) => {
+router.get('/:id', adminOLaprida, async (req, res, next) => {
   try {
     const { rows: [lic] } = await pool.query(
       `SELECT
@@ -135,7 +145,7 @@ router.get('/:id', soloAdmin, async (req, res, next) => {
 });
 
 // ─── PUT /api/licitaciones/:id ────────────────────────────────────────────────
-router.put('/:id', soloAdmin, async (req, res, next) => {
+router.put('/:id', adminOLaprida, async (req, res, next) => {
   try {
     const { titulo, observaciones, estado } = req.body;
     const ESTADOS = ['borrador', 'enviada'];
@@ -158,7 +168,7 @@ router.put('/:id', soloAdmin, async (req, res, next) => {
 });
 
 // ─── POST /api/licitaciones/:id/adjudicar ────────────────────────────────────
-router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
+router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { sucursal_id } = req.body;
@@ -297,6 +307,35 @@ router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
       [venta.id, lic.id]
     );
 
+    // Registrar la deuda en la cuenta corriente del cliente. La licitación se
+    // adjudica a cuenta corriente (no hay cobro en el momento), así que el total
+    // impacta como débito en el saldo del cliente. Sin esto, la venta queda
+    // confirmada/facturada pero el saldo del cliente nunca refleja la deuda.
+    if (lic.cliente_id) {
+      const { rows: [saldoRow] } = await client.query(`
+        SELECT COALESCE(c.saldo_inicial, 0)
+               + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+               + COALESCE(cs.total_correcciones, 0) AS saldo_actual
+          FROM clientes c
+          LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+          LEFT JOIN (
+            SELECT cliente_id, SUM(monto) AS total_correcciones
+              FROM correcciones_saldo_cliente GROUP BY cliente_id
+          ) cs ON cs.cliente_id = c.id
+         WHERE c.id = $1
+         GROUP BY c.id, c.saldo_inicial, cs.total_correcciones
+      `, [lic.cliente_id]);
+
+      const saldoActual = parseFloat(saldoRow?.saldo_actual ?? '0');
+      const nuevoSaldo  = parseFloat((saldoActual + total).toFixed(2));
+
+      await client.query(`
+        INSERT INTO cuentas_corrientes_cliente
+          (cliente_id, debe, haber, saldo, origen_tipo, origen_id)
+        VALUES ($1, $2, 0, $3, 'venta', $4)
+      `, [lic.cliente_id, total.toFixed(2), nuevoSaldo, venta.id]);
+    }
+
     await client.query('COMMIT');
     res.status(201).json({ venta_id: venta.id, venta_numero: venta.numero });
   } catch (err) {
@@ -308,7 +347,7 @@ router.post('/:id/adjudicar', soloAdmin, async (req, res, next) => {
 });
 
 // ─── DELETE /api/licitaciones/:id ─────────────────────────────────────────────
-router.delete('/:id', soloAdmin, async (req, res, next) => {
+router.delete('/:id', adminOLaprida, async (req, res, next) => {
   try {
     const { rows: [deleted] } = await pool.query(
       `UPDATE licitaciones SET deleted_at = now()

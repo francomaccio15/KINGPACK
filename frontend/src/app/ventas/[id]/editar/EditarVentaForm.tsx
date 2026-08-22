@@ -210,8 +210,11 @@ export default function EditarVentaForm({
           : i
         );
       }
-      // Ítem nuevo: hereda el descuento de la venta (descuento_manual = null).
-      const precioLista = art.precio_madre || art.precio_lista;
+      // Ítem nuevo: el precio base es el PRECIO DE LISTA que resuelve el backend al
+      // pasar lista_id (ya trae aplicado el descuento de la lista). Encima hereda el
+      // descuento de la venta (cliente/manual). Así el artículo nuevo entra con el
+      // descuento de la lista ya puesto, sin tener que cargarlo a mano.
+      const precioLista = art.precio_lista || art.precio_madre;
       const eff = descuentoVenta;
       const precioFinal = +(precioLista * (1 - eff / 100)).toFixed(4);
       return [...prev, {
@@ -351,7 +354,7 @@ export default function EditarVentaForm({
             </div>
           )}
           {resultados.length > 0 && (
-            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-kp-surface2 border border-kp-border rounded-lg shadow-xl overflow-hidden">
+            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-kp-surface2 border border-kp-border rounded-lg shadow-xl max-h-72 overflow-y-auto">
               {resultados.map(art => (
                 <button
                   key={art.id}

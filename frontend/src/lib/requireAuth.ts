@@ -79,7 +79,7 @@ export function requireAuth(modulo?: string): AuthUser {
     redirect('/login');
   }
 
-  if (modulo && !puedeAcceder(user.rol, modulo)) redirect('/forbidden');
+  if (modulo && !puedeAcceder(user.rol, modulo, user.sucursal_default_nombre)) redirect('/forbidden');
 
   return user;
 }

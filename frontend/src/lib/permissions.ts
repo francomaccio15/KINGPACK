@@ -18,11 +18,24 @@ const PERMISOS: Record<Rol, string[] | '*'> = {
   vendedor:      ['/presupuestos', '/articulos'],
 };
 
-/** Devuelve true si el rol puede acceder al módulo dado su href. */
-export function puedeAcceder(rol: Rol, href: string): boolean {
+/**
+ * Devuelve true si el rol puede acceder al módulo dado su href.
+ *
+ * `sucursalNombre` habilita reglas que dependen de la sucursal del usuario.
+ * Regla especial: /licitaciones lo ven los administradores y, entre los
+ * cajeros, SOLO el de Laprida.
+ */
+export function puedeAcceder(rol: Rol, href: string, sucursalNombre?: string | null): boolean {
+  const path = href.split('?')[0]; // ignorar query params al chequear permisos
+
+  // /licitaciones: admin siempre; cajero solo si su sucursal es Laprida.
+  if (path === '/licitaciones' || path.startsWith('/licitaciones/')) {
+    if (rol === 'administrador') return true;
+    return rol === 'cajero' && /laprida/i.test(sucursalNombre ?? '');
+  }
+
   const p = PERMISOS[rol];
   if (p === '*') return true;
-  const path = href.split('?')[0]; // ignorar query params al chequear permisos
   return p.some(m => path === m || path.startsWith(m + '/'));
 }
 
