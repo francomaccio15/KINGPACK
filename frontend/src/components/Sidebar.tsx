@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { puedeAcceder } from '@/lib/permissions';
+import { useScrollLock } from '@/lib/useScrollLock';
 
 // ─── Íconos ──────────────────────────────────────────────────────────────────
 const ChevronLeft = () => (
@@ -242,10 +243,16 @@ const NAV_GROUPS: NavGroup[] = [
 interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /**
+   * Contenido extra que solo se ve en el drawer mobile, arriba del menu.
+   * Lo usa ClientLayout para meter ahi el selector de sucursal, que en el
+   * header esta oculto por debajo de 640px.
+   */
+  mobileHeader?: React.ReactNode;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
+export default function Sidebar({ mobileOpen, onMobileClose, mobileHeader }: SidebarProps) {
   const pathname     = usePathname();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -260,6 +267,17 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     onMobileClose();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // El drawer es un overlay modal en mobile: bloquea el scroll del fondo.
+  useScrollLock(mobileOpen);
+
+  // Cerrar con Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onMobileClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen, onMobileClose]);
 
   const toggle = () => {
     setCollapsed(c => {
@@ -276,17 +294,20 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         aria-hidden="true"
         onClick={onMobileClose}
         className={[
-          'fixed inset-0 bg-black/60 z-40 md:hidden transition-opacity duration-200',
+          'fixed inset-0 bg-black/60 z-drawer md:hidden transition-opacity duration-200',
           mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         ].join(' ')}
       />
 
       {/* ── Sidebar ── */}
       <aside
+        role="dialog"
+        aria-modal={mobileOpen ? 'true' : undefined}
+        aria-label="Menu principal"
         className={[
           'flex flex-col flex-shrink-0 bg-kp-surface border-r border-kp-border',
           // Mobile: drawer fijo que entra/sale por la izquierda
-          'fixed inset-y-0 left-0 z-50',
+          'fixed inset-y-0 left-0 z-modal pt-safe pb-safe',
           // Desktop: vuelve al flujo normal
           'md:relative md:z-10',
           // Transición suave en ambas dimensiones
@@ -314,6 +335,11 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         >
           <IcoClose />
         </button>
+
+        {/* Cabecera del drawer (solo mobile): sucursal activa */}
+        {mobileHeader && (
+          <div className="md:hidden px-3 pt-12 pb-3 border-b border-kp-border">{mobileHeader}</div>
+        )}
 
         {/* Nav scrollable */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-5">
@@ -365,6 +391,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
                     const cls = [
                       'group relative flex items-center gap-3 px-3 py-2.5 mx-1 rounded-md',
+                      // 44px tactiles en el drawer; en escritorio queda como estaba
+                      'min-h-touch md:min-h-0',
                       'text-sm font-medium transition-colors duration-150 border-l-2',
                       isActive
                         ? 'bg-kp-red/10 border-kp-red text-kp-red'

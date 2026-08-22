@@ -80,7 +80,7 @@ function AppShell({
 
   return (
     <>
-      <header className="h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-20 print:hidden">
+      <header className="sticky top-0 h-14 flex-shrink-0 bg-kp-surface border-b border-kp-border z-30 pt-safe print:hidden">
         <div className="h-full px-4 md:px-5 flex items-center gap-3">
 
           {/* Hamburger — solo mobile */}
@@ -114,18 +114,36 @@ function AppShell({
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 md:overflow-hidden">
         <div className="print:hidden">
-          <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+          <Sidebar
+            mobileOpen={mobileOpen}
+            onMobileClose={() => setMobileOpen(false)}
+            mobileHeader={
+              user.rol === 'cajero' ? (
+                <div>
+                  <p className="text-2xs font-semibold uppercase tracking-widest text-kp-gray mb-1.5">Sucursal</p>
+                  <p className="text-sm font-semibold text-kp-white">
+                    {sucursales.find(s => s.id === user.sucursal_default_id)?.nombre ?? 'Sucursal'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-2xs font-semibold uppercase tracking-widest text-kp-gray mb-1.5">Sucursal activa</p>
+                  <SucursalSelector sucursales={sucursales} activaId={activaId ?? ''} layout="stack" />
+                </div>
+              )
+            }
+          />
         </div>
-        <main className="flex-1 overflow-y-auto min-w-0">
-          <div className="max-w-6xl mx-auto px-4 py-6 md:px-6 md:py-8">
+        <main className="flex-1 min-w-0 md:overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-4 py-5 md:px-6 md:py-8 pb-safe">
             {children}
           </div>
         </main>
       </div>
 
-      <footer className="border-t border-kp-border text-xs text-center text-kp-gray py-4 flex-shrink-0 bg-kp-surface print:hidden">
+      <footer className="border-t border-kp-border text-2xs text-center text-kp-gray py-3 pb-safe flex-shrink-0 bg-kp-surface print:hidden">
         KingPack &nbsp;·&nbsp; MaccioTEC &nbsp;·&nbsp;
         <span className="capitalize">{user.rol}</span>
       </footer>

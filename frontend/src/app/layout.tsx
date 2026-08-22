@@ -23,9 +23,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor:  '#0d0d0d',
-  width:       'device-width',
+  themeColor:   '#0d0d0d',
+  width:        'device-width',
   initialScale: 1,
+  // Permite zoom manual (accesibilidad): nunca poner userScalable: false.
+  maximumScale: 5,
+  // El contenido entra debajo del notch/home indicator; las utilidades
+  // pt-safe / pb-safe se encargan de despejarlo donde corresponde.
+  viewportFit: 'cover',
+  // Al abrir el teclado virtual se reduce el viewport en vez de taparlo, para
+  // que las barras de acciones sticky (POS, formularios largos) sigan visibles.
+  interactiveWidget: 'resizes-content',
 };
 
 const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -46,7 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="es" className={montserrat.variable}>
-      <body className="min-h-screen flex flex-col bg-kp-bg text-kp-white">
+      <body className="min-h-[100dvh] flex flex-col bg-kp-bg text-kp-white">
         <ClientLayout sucursales={sucursales} activaId={sucursalActivaId}>
           {children}
         </ClientLayout>

@@ -91,9 +91,13 @@ export default function NumericInput({
 
   return (
     <input
+      // Teclado numerico en mobile. Con decimals = 0 (cantidades, unidades) se
+      // pide el teclado entero, sin la tecla de coma.
+      inputMode={decimals === 0 ? 'numeric' : 'decimal'}
+      enterKeyHint="done"
+      autoComplete="off"
       {...rest}
       type="text"
-      inputMode="decimal"
       value={focused ? editDisplay : formatDisplay(strValue)}
       onChange={handleChange}
       onFocus={handleFocus}

@@ -3,6 +3,8 @@
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/auth';
+import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
+import { btnSecondary, cn, type Tone } from '@/lib/ui';
 
 type Venta = {
   id: string;
@@ -41,6 +43,14 @@ const ESTADO_STYLE: Record<string, string> = {
   confirmada: 'bg-green-500/10 text-green-400 border-green-500/30',
   facturada:  'bg-blue-500/10 text-blue-400 border-blue-500/30',
   anulada:    'bg-kp-border/30 text-kp-gray border-kp-border/50',
+};
+
+// Tono del badge en la vista mobile (mismo criterio de color que ESTADO_STYLE).
+const ESTADO_TONE: Record<string, Tone> = {
+  preventa:   'warn',
+  confirmada: 'ok',
+  facturada:  'info',
+  anulada:    'neutral',
 };
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -83,22 +93,21 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
 
   if (ventas.length === 0) {
     return (
-      <div className="rounded-xl border border-kp-border bg-kp-surface py-16 flex flex-col items-center gap-3">
-        <svg className="w-10 h-10 text-kp-border" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
-        </svg>
-        <p className="text-kp-gray text-sm">
-          {hayFiltros ? 'No hay ventas que coincidan con los filtros.' : 'No hay ventas registradas todavía.'}
-        </p>
-        {!hayFiltros && (
-          <p className="text-kp-gray/50 text-xs">Usá el botón "Nueva Venta" para registrar la primera.</p>
-        )}
-      </div>
+      <EmptyState
+        icon={
+          <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
+          </svg>
+        }
+        title={hayFiltros ? 'No hay ventas que coincidan con los filtros.' : 'No hay ventas registradas todavía.'}
+        hint={hayFiltros ? undefined : 'Usá el botón "Nueva Venta" para registrar la primera.'}
+      />
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-kp-border shadow-lg shadow-black/40">
+    <>
+    <TableWrap className="shadow-lg shadow-black/40">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="bg-kp-surface2 border-b border-kp-border">
@@ -283,6 +292,80 @@ export default function VentasTable({ ventas, hayFiltros }: { ventas: Venta[]; h
           })}
         </tbody>
       </table>
-    </div>
+    </TableWrap>
+
+    {/* ── Vista mobile: una tarjeta por venta ── */}
+    <MobileCards>
+      {ventas.map((v) => {
+        const descuento = parseFloat(v.descuento_madre || v.descuento_total || '0');
+        const fecha = new Date(v.fecha).toLocaleDateString('es-AR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+        });
+        const isOpen    = expanded === v.id;
+        const items     = itemsCache[v.id] ?? [];
+        const isLoading = loading === v.id;
+
+        return (
+          <RecordCard
+            key={v.id}
+            title={`#${v.numero} · ${v.cliente_nombre ?? 'Consumidor Final'}`}
+            subtitle={[fecha, v.sucursal_nombre].filter(Boolean).join(' · ')}
+            badge={{ label: ESTADO_LABEL[v.estado] ?? v.estado, tone: ESTADO_TONE[v.estado] }}
+            fields={[
+              { label: 'Total', value: fmt(v.total), strong: true },
+              {
+                label: 'Descuento',
+                value: descuento > 0 ? `−${fmt(descuento)}` : '—',
+                align: 'right',
+              },
+            ]}
+            expandable
+            expanded={isOpen}
+            onToggle={() => toggle(v.id)}
+            actions={
+              <>
+                {v.fue_editada && (
+                  <span className="text-2xs font-bold text-amber-400 uppercase tracking-wide">Editada</span>
+                )}
+                <Link href={`/ventas/${v.id}`} className={cn(btnSecondary, 'flex-1')}>
+                  Ver venta
+                </Link>
+              </>
+            }
+          >
+            {v.medios_pago && (
+              <div className="flex flex-wrap gap-1">
+                {v.medios_pago.split(', ').map((m) => (
+                  <span key={m} className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-kp-surface2 text-kp-gray-lt border border-kp-border">
+                    {m}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {isLoading ? (
+              <p className="text-2xs text-kp-gray">Cargando ítems...</p>
+            ) : items.length === 0 ? (
+              <p className="text-2xs text-kp-gray/60 italic">Sin ítems registrados.</p>
+            ) : (
+              items.map((it, i) => {
+                const pFinal   = parseFloat(it.precio_unitario_final || '0');
+                const subtotal = pFinal * it.cantidad;
+                return (
+                  <div key={i} className="flex items-start justify-between gap-3 py-1.5 border-b border-kp-border/50 last:border-b-0">
+                    <div className="min-w-0">
+                      <p className="text-xs text-kp-white font-medium truncate">{it.nombre}</p>
+                      <p className="text-2xs text-kp-gray font-mono">{it.codigo} · {it.cantidad} u × {fmt(pFinal)}</p>
+                    </div>
+                    <p className="text-xs font-semibold text-kp-white tabular-nums shrink-0">{fmt(subtotal)}</p>
+                  </div>
+                );
+              })
+            )}
+          </RecordCard>
+        );
+      })}
+    </MobileCards>
+    </>
   );
 }

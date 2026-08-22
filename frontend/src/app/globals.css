@@ -6,11 +6,19 @@
   color-scheme: dark;
 }
 
+html {
+  /* Evita que iOS reescale el texto al rotar el dispositivo */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   @apply bg-kp-bg text-kp-white;
   font-weight: 500;
   -webkit-font-smoothing: auto;
   text-rendering: optimizeLegibility;
+  /* Corta el "rubber band" del scroll vertical, que en mobile hace que el
+     fondo se mueva detras de los modales. */
+  overscroll-behavior-y: none;
 }
 
 /* Scrollbar personalizado */
@@ -28,10 +36,40 @@ body {
   @apply bg-kp-red;
 }
 
-/* ── Tablas responsivas en mobile ───────────────────────────────────────── */
+/* En pantallas tactiles un scrollbar de 6px no se puede agarrar y solo roba
+   ancho util: se oculta y se scrollea con el dedo. */
+@media (pointer: coarse) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* ── Anti-zoom de iOS ─────────────────────────────────────────────────────
+   Safari hace zoom automatico al enfocar cualquier campo con font-size < 16px.
+   Como el sistema usa text-sm (14px) en ~91 inputs, esta regla lo resuelve de
+   forma global sin tocar los componentes.
+
+   La especificidad esta subida a proposito (los :not() suman) para ganarle a
+   las utilidades .text-xs / .text-sm de Tailwind, que valen 0,1,0.
+   Si algun campo necesita ser MAS grande en mobile, se fuerza con el modificador
+   important de Tailwind: className="!text-lg".
+   Arriba de 768px no aplica: ahi manda el md:text-sm de cada control.        */
 @media (max-width: 767px) {
-  /* Cualquier tabla dentro del contenido principal scrollea horizontalmente */
-  main table {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select:not([multiple]),
+  textarea:not([hidden]) {
+    font-size: 16px;
+  }
+}
+
+/* ── Tablas no migradas todavia ───────────────────────────────────────────
+   Parche historico: vuelve scrollable cualquier tabla en mobile. Se conserva
+   SOLO para las tablas que aun no pasaron al patron <TableWrap> + card-list.
+   TableWrap marca su <table> con data-rt="1" para quedar excluida de aca.
+   Cuando no quede ninguna tabla sin migrar, este bloque entero se elimina.  */
+@media (max-width: 767px) {
+  main table:not([data-rt='1']) {
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -43,6 +81,25 @@ body {
     overflow-x: visible;
     white-space: normal;
   }
+}
+
+/* ── Utilidades propias ───────────────────────────────────────────────────
+   Solo lo que Tailwind 3.4 no cubre: safe-area del notch/home indicator y
+   scroll horizontal con snap para carruseles de KPIs y tabs.               */
+@layer utilities {
+  .pb-safe { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+  .pt-safe { padding-top:    env(safe-area-inset-top); }
+  .px-safe {
+    padding-left:  env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .mb-safe { margin-bottom: max(0px, env(safe-area-inset-bottom)); }
+
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  .snap-row { scroll-snap-type: x mandatory; }
+  .snap-row > * { scroll-snap-align: start; }
 }
 
 /* ── Print styles ────────────────────────────────────────────────────────── */

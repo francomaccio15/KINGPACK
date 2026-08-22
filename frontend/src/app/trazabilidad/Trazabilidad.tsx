@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { fmtFecha } from '@/lib/dates';
+import AutocompletePanel, { AutocompleteItem } from '@/components/ui/AutocompletePanel';
+import { inputCls, labelCls } from '@/lib/ui';
 
 // ─── API helper (mismo patrón que el resto de componentes cliente) ───────────
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -68,7 +70,10 @@ export default function Trazabilidad() {
   const [buscando, setBuscando] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const boxRef   = useRef<HTMLDivElement>(null);
+  // El panel se ancla al input, no al contenedor: asi el ancho del desplegable
+  // coincide con el del campo aunque el contenedor sea mas ancho.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Artículo seleccionado + resultados
   const [articulo, setArticulo]     = useState<Articulo | null>(null);
@@ -105,15 +110,6 @@ export default function Trazabilidad() {
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
-
-  // Cerrar dropdown al clickear fuera
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setDropOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
 
   // ─── Cargar ventas del artículo ────────────────────────────────────────────
   async function cargar(art: Articulo) {
@@ -155,43 +151,40 @@ export default function Trazabilidad() {
   return (
     <div className="space-y-5">
       {/* ── Buscador ── */}
-      <div ref={boxRef} className="relative max-w-2xl">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-kp-gray mb-1.5">
-          Buscar artículo
-        </label>
+      <div ref={boxRef} className="relative w-full md:max-w-2xl">
+        <label className={labelCls}>Buscar artículo</label>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => { setQuery(e.target.value); if (articulo) { setArticulo(null); setMovimientos([]); setResumen(null); } }}
           onFocus={() => { if (results.length) setDropOpen(true); }}
           placeholder="Código o nombre (ej: bandeja 618)"
-          className="w-full px-4 py-2.5 rounded-lg bg-kp-surface2 border border-kp-border text-kp-white placeholder:text-kp-gray/60 focus:outline-none focus:border-kp-red transition-colors"
+          inputMode="search" enterKeyHint="search" autoComplete="off" autoCapitalize="off"
+          className={inputCls}
         />
         {buscando && (
-          <span className="absolute right-3 top-9 text-xs text-kp-gray">Buscando…</span>
+          <span className="absolute right-3 bottom-3 md:bottom-2.5 text-2xs text-kp-gray pointer-events-none">Buscando…</span>
         )}
 
-        {dropOpen && results.length > 0 && (
-          <ul className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg bg-kp-surface2 border border-kp-border shadow-xl">
-            {results.map((a) => (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  onClick={() => seleccionar(a)}
-                  className="w-full text-left px-4 py-2.5 hover:bg-kp-red/10 transition-colors flex items-center gap-3"
-                >
-                  <span className="font-mono text-xs text-kp-gray shrink-0">{a.codigo}</span>
+        <AutocompletePanel
+          anchorRef={inputRef}
+          open={dropOpen && !!query.trim() && (results.length > 0 || !buscando)}
+          onClose={() => setDropOpen(false)}
+        >
+          {results.length > 0 ? (
+            results.map((a) => (
+              <AutocompleteItem key={a.id} onSelect={() => seleccionar(a)}>
+                <span className="flex items-center gap-3">
+                  <span className="font-mono text-2xs text-kp-gray shrink-0">{a.codigo}</span>
                   <span className="text-sm text-kp-white truncate">{a.nombre}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {dropOpen && !buscando && query.trim() && results.length === 0 && (
-          <div className="absolute z-30 mt-1 w-full rounded-lg bg-kp-surface2 border border-kp-border px-4 py-3 text-sm text-kp-gray">
-            Sin resultados para “{query.trim()}”.
-          </div>
-        )}
+                </span>
+              </AutocompleteItem>
+            ))
+          ) : (
+            <p className="px-3 py-3 text-sm text-kp-gray">Sin resultados para “{query.trim()}”.</p>
+          )}
+        </AutocompletePanel>
       </div>
 
       {/* ── Artículo seleccionado + resumen + filtros ── */}
