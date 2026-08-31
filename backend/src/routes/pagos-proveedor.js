@@ -40,7 +40,7 @@ async function saldoMovimientos(client, proveedorId) {
 // ?proveedor_id=  ?fecha_desde=  ?fecha_hasta=  ?incluir_anulados=true
 router.get('/', async (req, res, next) => {
   try {
-    const { proveedor_id, fecha_desde, fecha_hasta, incluir_anulados, limit = 100, offset = 0 } = req.query;
+    const { proveedor_id, fecha_desde, fecha_hasta, incluir_anulados, con_saldo, limit = 100, offset = 0 } = req.query;
 
     const cond = [];
     const params = [];
@@ -50,6 +50,12 @@ router.get('/', async (req, res, next) => {
     if (fecha_desde)  { cond.push(`pp.fecha >= $${idx++}`);       params.push(fecha_desde); }
     if (fecha_hasta)  { cond.push(`pp.fecha <= $${idx++}`);       params.push(fecha_hasta); }
     if (incluir_anulados !== 'true') cond.push(`pp.anulado = FALSE`);
+    // Solo pagos con dinero todavía sin imputar a comprobantes (saldo a favor
+    // utilizable): alimenta la pantalla de imputación.
+    if (con_saldo === 'true') {
+      cond.push(`pp.anulado = FALSE`);
+      cond.push(`pp.monto - COALESCE((SELECT SUM(a3.monto_aplicado) FROM pago_proveedor_aplicaciones a3 WHERE a3.pago_proveedor_id = pp.id), 0) > 0.01`);
+    }
 
     const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
     params.push(Math.min(parseInt(limit) || 100, 500));
@@ -67,7 +73,10 @@ router.get('/', async (req, res, next) => {
              ) AS medio_pago_nombre,
              s.nombre  AS sucursal_nombre,
              u.nombre  AS usuario_nombre,
-             (SELECT COUNT(*) FROM pago_proveedor_aplicaciones a WHERE a.pago_proveedor_id = pp.id) AS aplicaciones_count
+             (SELECT COUNT(*) FROM pago_proveedor_aplicaciones a WHERE a.pago_proveedor_id = pp.id) AS aplicaciones_count,
+             pp.monto - COALESCE(
+               (SELECT SUM(a2.monto_aplicado) FROM pago_proveedor_aplicaciones a2
+                 WHERE a2.pago_proveedor_id = pp.id), 0) AS sin_imputar
         FROM pagos_proveedor pp
         JOIN proveedores p   ON p.id  = pp.proveedor_id
         JOIN medios_pago mp  ON mp.id = pp.medio_pago_id
@@ -387,6 +396,108 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// ─── POST /api/pagos-proveedor/:id/imputar ────────────────────────────────────
+// Imputa el remanente sin aplicar de un pago YA REGISTRADO (típicamente un "pago
+// a cuenta") contra comprobantes pendientes del mismo proveedor.
+// Body: { aplicaciones: [{ egreso_id, monto }] }
+//
+// La cuenta corriente NO se toca: el haber por el total del pago ya se asentó
+// cuando se registró el pago. Imputar solo vincula ese dinero con los
+// comprobantes, salda su `estado_pago` y los saca de la alerta de vencimientos.
+router.post('/:id/imputar', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { aplicaciones = [] } = req.body;
+
+    if (!Array.isArray(aplicaciones) || aplicaciones.length === 0) {
+      return res.status(400).json({ error: 'Seleccioná al menos un comprobante a imputar' });
+    }
+
+    await client.query('BEGIN');
+
+    // El pago se bloquea para que dos imputaciones simultáneas no repartan dos
+    // veces el mismo saldo a favor.
+    const { rows: pagoRows } = await client.query(
+      `SELECT id, proveedor_id, monto, medio_pago_id, cuenta_bancaria_id, observaciones, anulado
+         FROM pagos_proveedor WHERE id = $1 FOR UPDATE`, [id]
+    );
+    const pago = pagoRows[0];
+    if (!pago) throw Object.assign(new Error('Pago no encontrado'), { status: 404 });
+    if (pago.anulado) throw Object.assign(new Error('El pago está anulado'), { status: 400 });
+
+    const { rows: impRows } = await client.query(
+      `SELECT COALESCE(SUM(monto_aplicado), 0) AS imputado
+         FROM pago_proveedor_aplicaciones WHERE pago_proveedor_id = $1`, [id]
+    );
+    const disponible = +(parseFloat(pago.monto) - parseFloat(impRows[0].imputado)).toFixed(2);
+    if (disponible <= 0.01) {
+      throw Object.assign(new Error('Este pago ya está totalmente imputado'), { status: 400 });
+    }
+
+    const sumaAplic = aplicaciones.reduce((s, a) => s + (parseFloat(a.monto) || 0), 0);
+    if (sumaAplic - disponible > 0.01) {
+      throw Object.assign(new Error(
+        `La suma a imputar (${sumaAplic.toFixed(2)}) supera el saldo sin imputar del pago (${disponible.toFixed(2)})`
+      ), { status: 400 });
+    }
+
+    for (const ap of aplicaciones) {
+      const montoAp = parseFloat(ap.monto);
+      if (!montoAp || montoAp <= 0) throw Object.assign(new Error('monto de imputación inválido'), { status: 400 });
+
+      const { rows: egRows } = await client.query(
+        `SELECT id, total, estado_pago, proveedor_id
+           FROM egresos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [ap.egreso_id]
+      );
+      const egreso = egRows[0];
+      if (!egreso) throw Object.assign(new Error('Egreso no encontrado'), { status: 404 });
+      if (egreso.proveedor_id !== pago.proveedor_id) {
+        throw Object.assign(new Error('Un comprobante no pertenece al proveedor del pago'), { status: 400 });
+      }
+      if (egreso.estado_pago === 'pagado') {
+        throw Object.assign(new Error('Un comprobante seleccionado ya está pagado'), { status: 400 });
+      }
+
+      const { rows: pagadoRows } = await client.query(
+        `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [ap.egreso_id]
+      );
+      const pendiente = +(parseFloat(egreso.total) - parseFloat(pagadoRows[0].pagado)).toFixed(2);
+      if (montoAp - pendiente > 0.01) {
+        throw Object.assign(new Error(`La imputación (${montoAp.toFixed(2)}) supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`), { status: 400 });
+      }
+
+      await client.query(`
+        INSERT INTO egreso_pagos
+          (egreso_id, medio_pago_id, monto, cuenta_bancaria_id, observaciones, pago_proveedor_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [ap.egreso_id, pago.medio_pago_id, montoAp, pago.cuenta_bancaria_id,
+          `Imputación de pago a cuenta${pago.observaciones ? ' — ' + pago.observaciones : ''}`.substring(0, 200), pago.id]);
+
+      const nuevoPagado = +(parseFloat(pagadoRows[0].pagado) + montoAp).toFixed(2);
+      const nuevoEstado = Math.abs(nuevoPagado - parseFloat(egreso.total)) <= 0.01 ? 'pagado' : 'parcial';
+      await client.query(
+        `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`,
+        [nuevoEstado, ap.egreso_id]
+      );
+
+      await client.query(`
+        INSERT INTO pago_proveedor_aplicaciones (pago_proveedor_id, egreso_id, monto_aplicado)
+        VALUES ($1, $2, $3)
+      `, [pago.id, ap.egreso_id, montoAp]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, imputado: +sumaAplic.toFixed(2), sin_imputar: +(disponible - sumaAplic).toFixed(2) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── POST /api/pagos-proveedor/:id/anular ─────────────────────────────────────
 // Revierte cuenta corriente, estado de los egresos imputados y, si es posible,
 // el movimiento de caja (compensa en la caja abierta de la sucursal).
@@ -458,12 +569,13 @@ router.post('/:id/anular', async (req, res, next) => {
         [estado, ap.egreso_id]);
     }
 
-    // 3) Revertir cuenta corriente por los montos EXACTOS de este pago (un debe de
-    //    corrección por cada haber generado). No se consultan los haber por origen_id
-    //    para no revertir de más si el comprobante tuvo otros pagos.
-    const reversas = aplic.length
-      ? aplic.map(a => parseFloat(a.monto_aplicado))
-      : [parseFloat(pago.monto)];
+    // 3) Revertir cuenta corriente por el monto TOTAL del pago (un único debe de
+    //    corrección). No se consultan los haber por origen_id para no revertir de
+    //    más si el comprobante tuvo otros pagos.
+    //    Se usa el total del pago y no la suma de imputaciones porque un pago a
+    //    cuenta imputado después (POST /:id/imputar) tiene su haber asentado por
+    //    el total, con imputaciones que pueden cubrirlo solo en parte.
+    const reversas = [parseFloat(pago.monto)];
     for (const monto of reversas) {
       if (!monto || monto <= 0) continue;
       const saldoPrev = await saldoMovimientos(client, pago.proveedor_id);

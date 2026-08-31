@@ -45,6 +45,9 @@ interface PagoHist {
   anulado: boolean;
   aplicaciones_count: string;
   proveedor_nombre?: string;
+  // Parte del pago que todavia no se imputo a ningun comprobante (saldo a favor).
+  sin_imputar?: string;
+  proveedor_id?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -159,6 +162,14 @@ export default function PagosProveedorClient() {
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [okMsg, setOkMsg]                 = useState<string | null>(null);
+
+  // Imputación de un pago a cuenta ya registrado contra comprobantes pendientes
+  const [imputarTarget, setImputarTarget] = useState<PagoHist | null>(null);
+  const [impPend, setImpPend]             = useState<EgresoPendiente[]>([]);
+  const [impSel, setImpSel]               = useState<Record<string, { sel: boolean; monto: string; pend: number }>>({});
+  const [impLoading, setImpLoading]       = useState(false);
+  const [imputando, setImputando]         = useState(false);
+  const [impError, setImpError]           = useState<string | null>(null);
 
   // Anulación de un pago del historial
   const [anularTarget, setAnularTarget]   = useState<PagoHist | null>(null);
@@ -436,6 +447,85 @@ export default function PagosProveedorClient() {
     setProveedores(prov.proveedores ?? []);
   };
 
+  // ── Imputación de un pago a cuenta ya registrado ───────────────────────────
+  // Trae los comprobantes pendientes del proveedor del pago y pre-tilda los más
+  // viejos hasta agotar el saldo sin imputar (mismo criterio que aplicaría a mano
+  // el usuario: primero lo que vence antes).
+  const abrirImputar = async (h: PagoHist) => {
+    setImputarTarget(h);
+    setImpError(null);
+    setImpSel({});
+    setImpPend([]);
+    setImpLoading(true);
+    try {
+      const provId = h.proveedor_id ?? proveedorId;
+      const data = await apiFetch(`/api/egresos/pendientes?proveedor_id=${provId}&limit=200`)
+        .then(r => r.json()).catch(() => ({ egresos: [] }));
+      const egresos: EgresoPendiente[] = data.egresos ?? [];
+      setImpPend(egresos);
+
+      let resto = parseFloat(h.sin_imputar ?? h.monto) || 0;
+      const map: Record<string, { sel: boolean; monto: string; pend: number }> = {};
+      for (const e of egresos) {
+        const pend = parseFloat(e.pendiente ?? e.total) || 0;
+        const asignado = Math.min(pend, Math.max(0, resto));
+        map[e.id] = { sel: asignado > 0.005, monto: asignado.toFixed(2), pend };
+        resto = +(resto - asignado).toFixed(2);
+      }
+      setImpSel(map);
+    } finally {
+      setImpLoading(false);
+    }
+  };
+
+  // Pagos del proveedor elegido con dinero todavía sin imputar.
+  const pagosSinImputar = useMemo(
+    () => historial.filter(h => !h.anulado && parseFloat(h.sin_imputar ?? '0') > 0.01),
+    [historial],
+  );
+  const sinImputarProv = useMemo(
+    () => pagosSinImputar.reduce((s, h) => s + (parseFloat(h.sin_imputar ?? '0') || 0), 0),
+    [pagosSinImputar],
+  );
+
+  const impDisponible = parseFloat(imputarTarget?.sin_imputar ?? imputarTarget?.monto ?? '0') || 0;
+  const impTotal = Object.values(impSel).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0);
+
+  const confirmarImputar = async () => {
+    if (!imputarTarget) return;
+    setImpError(null);
+    const aplicaciones = Object.entries(impSel)
+      .filter(([, a]) => a.sel && (parseFloat(a.monto) || 0) > 0)
+      .map(([egreso_id, a]) => ({ egreso_id, monto: +(parseFloat(a.monto)).toFixed(2) }));
+    if (aplicaciones.length === 0) { setImpError('Seleccioná al menos un comprobante'); return; }
+    if (impTotal - impDisponible > 0.01) {
+      setImpError(`Estás imputando ${ars.format(impTotal)} y el pago solo tiene ${ars.format(impDisponible)} sin imputar`);
+      return;
+    }
+    if (Object.entries(impSel).some(([, a]) => a.sel && (parseFloat(a.monto) || 0) - a.pend > 0.01)) {
+      setImpError('Hay un comprobante con un monto mayor a su saldo pendiente');
+      return;
+    }
+    setImputando(true);
+    try {
+      const res = await apiFetch(`/api/pagos-proveedor/${imputarTarget.id}/imputar`, {
+        method: 'POST', body: JSON.stringify({ aplicaciones }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setImpError(data.error ?? 'Error al imputar el pago'); return; }
+      setImputarTarget(null);
+      setOkMsg(`Se imputaron ${ars.format(data.imputado ?? impTotal)} a ${aplicaciones.length} comprobante(s).`
+        + ((data.sin_imputar ?? 0) > 0.01 ? ` Quedan ${ars.format(data.sin_imputar)} sin imputar.` : ''));
+      await recargarSaldos();
+      if (proveedorId) await cargarProveedor(proveedorId);
+      await cargarTodos();
+    } catch {
+      setImpError('Error de conexión con el servidor');
+    } finally {
+      setImputando(false);
+    }
+  };
+
   const confirmarAnular = async () => {
     if (!anularTarget) return;
     setAnularError(null);
@@ -500,6 +590,27 @@ export default function PagosProveedorClient() {
               </span>
             </div>
             <a href="/proveedores" className="text-xs text-kp-gray hover:text-kp-white underline">Ver cuenta corriente completa →</a>
+          </div>
+        )}
+        {/* Pagos ya cobrados por el proveedor que nunca se imputaron a un comprobante:
+            mientras siguen sin imputar, esas facturas figuran impagas y alertan por
+            vencimiento aunque el dinero ya haya salido. */}
+        {proveedor && sinImputarProv > 0.01 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 space-y-2">
+            <p className="text-sm text-amber-300">
+              <span className="font-bold">{fmt(sinImputarProv)}</span> ya pagados a este proveedor sin imputar a ningún comprobante.
+              {pendientes.length > 0 && ' Mientras no se imputen, sus facturas siguen figurando impagas y alertan por vencimiento.'}
+            </p>
+            {pagosSinImputar.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pagosSinImputar.map(h => (
+                  <button key={h.id} type="button" onClick={() => abrirImputar(h)}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-amber-500/50 text-amber-300 hover:bg-amber-500/20 transition-colors">
+                    Imputar {fmt(h.sin_imputar!)} del {fmtFecha(h.fecha)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -867,7 +978,13 @@ export default function PagosProveedorClient() {
                           {h.anulado ? ' · ANULADO' : ''}
                         </td>
                         <td className="px-4 py-2 text-right tabular-nums font-semibold text-kp-white">{fmt(h.monto)}</td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          {!h.anulado && parseFloat(h.sin_imputar ?? '0') > 0.01 && (
+                            <button onClick={() => abrirImputar(h)}
+                              className="text-xs text-amber-400 hover:text-amber-300 px-2 py-1 mr-1 rounded border border-amber-500/40 hover:bg-amber-500/10 transition-colors">
+                              Imputar {fmt(h.sin_imputar!)}
+                            </button>
+                          )}
                           {!h.anulado && (
                             <button onClick={() => { setAnularTarget(h); setMotivoAnular(''); setAnularError(null); }}
                               className="text-xs text-kp-gray hover:text-kp-red px-2 py-1 rounded border border-transparent hover:border-kp-red/40 hover:bg-kp-red/10 transition-colors">
@@ -932,7 +1049,13 @@ export default function PagosProveedorClient() {
                     {h.anulado ? ' · ANULADO' : ''}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums font-semibold text-kp-white whitespace-nowrap">{fmt(h.monto)}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {!h.anulado && parseFloat(h.sin_imputar ?? '0') > 0.01 && (
+                      <button onClick={() => abrirImputar(h)}
+                        className="text-xs text-amber-400 hover:text-amber-300 px-2 py-1 mr-1 rounded border border-amber-500/40 hover:bg-amber-500/10 transition-colors">
+                        Imputar {fmt(h.sin_imputar!)}
+                      </button>
+                    )}
                     {!h.anulado && (
                       <button onClick={() => { setAnularTarget(h); setMotivoAnular(''); setAnularError(null); }}
                         className="text-xs text-kp-gray hover:text-kp-red px-2 py-1 rounded border border-transparent hover:border-kp-red/40 hover:bg-kp-red/10 transition-colors">
@@ -946,6 +1069,97 @@ export default function PagosProveedorClient() {
           </table>
         </div>
       </div>
+
+      {/* ── Modal de imputación de un pago a cuenta ── */}
+      <Modal
+        open={!!imputarTarget}
+        onClose={() => !imputando && setImputarTarget(null)}
+        title="Imputar pago a comprobantes"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-kp-gray-lt">
+            Pago del {imputarTarget ? fmtFecha(imputarTarget.fecha) : ''} por{' '}
+            <span className="font-bold text-kp-white">{fmt(imputarTarget?.monto ?? 0)}</span>
+            {imputarTarget?.proveedor_nombre ? ` — ${imputarTarget.proveedor_nombre}` : ''}.
+            Sin imputar: <span className="font-bold text-amber-300">{fmt(impDisponible)}</span>.
+          </p>
+          <p className="text-xs text-kp-gray">
+            El dinero ya está descontado de la cuenta corriente: imputar solo vincula el pago con los comprobantes
+            y los marca como pagados. No genera un pago nuevo ni toca caja ni banco.
+          </p>
+
+          {impLoading ? (
+            <div className="flex justify-center py-10 text-kp-gray"><Spinner /></div>
+          ) : impPend.length === 0 ? (
+            <p className="text-center py-6 text-sm text-kp-gray">Este proveedor no tiene comprobantes pendientes para imputar.</p>
+          ) : (
+            <div className="rounded-xl border border-kp-border overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-kp-surface2 border-b border-kp-border">
+                    <th className="w-8 px-3 py-2" />
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Comprobante</th>
+                    <th className="text-center px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Venc.</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest">Pendiente</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-kp-gray uppercase tracking-widest w-36">A imputar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-kp-border">
+                  {impPend.map(e => {
+                    const a = impSel[e.id];
+                    return (
+                      <tr key={e.id} className={`bg-kp-surface ${a?.sel ? 'bg-kp-red/5' : ''}`}>
+                        <td className="px-3 py-2 text-center">
+                          <input type="checkbox" checked={a?.sel ?? false}
+                            onChange={() => setImpSel(prev => ({ ...prev, [e.id]: { ...prev[e.id], sel: !prev[e.id]?.sel } }))}
+                            className="rounded border-kp-border" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs font-semibold text-kp-white">{TIPO_COMP_LABEL[e.tipo_comprobante ?? ''] ?? e.tipo_comprobante ?? '—'}</span>
+                          {e.numero_comprobante && <span className="ml-1 text-xs text-kp-gray font-mono">{e.punto_venta ? `${e.punto_venta}-` : ''}{e.numero_comprobante}</span>}
+                          <span className="block text-2xs md:text-[11px] text-kp-gray truncate max-w-[220px]">{e.descripcion}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center text-xs text-kp-gray whitespace-nowrap">{fmtVenc(e.fecha_vencimiento_pago)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-xs text-kp-gray-lt">{fmt(a?.pend ?? e.total)}</td>
+                        <td className="px-3 py-2">
+                          <NumericInput value={a?.monto ?? ''} disabled={!a?.sel}
+                            onChange={ev => setImpSel(prev => ({ ...prev, [e.id]: { ...prev[e.id], monto: ev.target.value } }))}
+                            className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red disabled:opacity-40" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Total a imputar</span>
+              <span className={`text-xl font-bold tabular-nums ${impTotal - impDisponible > 0.01 ? 'text-kp-red' : 'text-kp-white'}`}>{fmt(impTotal)}</span>
+            </div>
+            <div>
+              <span className="block text-2xs md:text-[11px] uppercase tracking-widest text-kp-gray">Quedaría sin imputar</span>
+              <span className="text-lg font-bold tabular-nums text-kp-gray-lt">{fmt(Math.max(0, impDisponible - impTotal))}</span>
+            </div>
+          </div>
+
+          {impError && <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{impError}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setImputarTarget(null)} disabled={imputando}
+              className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors disabled:opacity-50">
+              Cancelar
+            </button>
+            <button onClick={confirmarImputar} disabled={imputando || impTotal <= 0}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
+              {imputando ? <><Spinner /> Imputando…</> : 'Imputar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Modal de anulación ── */}
       <Modal
