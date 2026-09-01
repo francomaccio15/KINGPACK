@@ -48,6 +48,8 @@ interface PagoHist {
   // Parte del pago que todavia no se imputo a ningun comprobante (saldo a favor).
   sin_imputar?: string;
   proveedor_id?: string;
+  // Columna en la que el pago descuento: facturado (blanco) o no (negro).
+  facturado?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -168,6 +170,7 @@ export default function PagosProveedorClient() {
   const [impPend, setImpPend]             = useState<EgresoPendiente[]>([]);
   const [impSel, setImpSel]               = useState<Record<string, { sel: boolean; monto: string; pend: number }>>({});
   const [impLoading, setImpLoading]       = useState(false);
+  const [impReclasificar, setImpReclas]   = useState(true);
   const [imputando, setImputando]         = useState(false);
   const [impError, setImpError]           = useState<string | null>(null);
 
@@ -454,6 +457,7 @@ export default function PagosProveedorClient() {
   const abrirImputar = async (h: PagoHist) => {
     setImputarTarget(h);
     setImpError(null);
+    setImpReclas(true);
     setImpSel({});
     setImpPend([]);
     setImpLoading(true);
@@ -491,6 +495,23 @@ export default function PagosProveedorClient() {
   const impDisponible = parseFloat(imputarTarget?.sin_imputar ?? imputarTarget?.monto ?? '0') || 0;
   const impTotal = Object.values(impSel).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0);
 
+  // Comprobantes tildados que están en la columna contraria a la del pago: el
+  // pago descontó de "blanco" y se aplica a informales, o al revés. Si no se
+  // reclasifica, el total del proveedor queda bien pero el desglose facturado /
+  // no facturado queda cruzado.
+  const impCruzados = useMemo(() => {
+    if (!imputarTarget) return [];
+    const pagoFact = !!imputarTarget.facturado;
+    return impPend.filter(e => {
+      const a = impSel[e.id];
+      if (!a?.sel || (parseFloat(a.monto) || 0) <= 0) return false;
+      const compFact = !!(e.tipo_comprobante && e.tipo_comprobante !== 'informal');
+      return compFact !== pagoFact;
+    });
+  }, [impPend, impSel, imputarTarget]);
+  const impMontoCruzado = impCruzados.reduce(
+    (s, e) => s + (parseFloat(impSel[e.id]?.monto ?? '0') || 0), 0);
+
   const confirmarImputar = async () => {
     if (!imputarTarget) return;
     setImpError(null);
@@ -509,7 +530,8 @@ export default function PagosProveedorClient() {
     setImputando(true);
     try {
       const res = await apiFetch(`/api/pagos-proveedor/${imputarTarget.id}/imputar`, {
-        method: 'POST', body: JSON.stringify({ aplicaciones }),
+        method: 'POST',
+        body: JSON.stringify({ aplicaciones, reclasificar: impReclasificar && impCruzados.length > 0 }),
       });
       const data = await res.json();
       if (!res.ok) { setImpError(data.error ?? 'Error al imputar el pago'); return; }
@@ -1132,6 +1154,26 @@ export default function PagosProveedorClient() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {impCruzados.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 space-y-2">
+              <p className="text-sm text-amber-300">
+                Este pago se cargó como <span className="font-bold">{imputarTarget?.facturado ? 'facturado (blanco)' : 'no facturado (negro)'}</span>
+                {' '}y lo estás aplicando a {impCruzados.length} comprobante{impCruzados.length !== 1 ? 's' : ''}
+                {' '}<span className="font-bold">{imputarTarget?.facturado ? 'informales (negro)' : 'con factura (blanco)'}</span>
+                {' '}por {fmt(impMontoCruzado)}.
+              </p>
+              <label className="flex items-start gap-2 text-xs text-amber-300/90 cursor-pointer">
+                <input type="checkbox" checked={impReclasificar}
+                  onChange={e => setImpReclas(e.target.checked)}
+                  className="mt-0.5 rounded border-kp-border" />
+                <span>
+                  Corregir el desglose facturado / no facturado del proveedor.
+                  El total que le debemos no cambia: solo se mueve ese importe de una columna a la otra.
+                </span>
+              </label>
             </div>
           )}
 

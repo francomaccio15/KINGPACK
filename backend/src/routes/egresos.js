@@ -7,7 +7,10 @@ const {
 const {
   registrarEgresosCajaFuerteDeMedios,
   revertirMovimientosCajaFuerte,
+  registrarMovimientoCajaFuerte,
+  agruparMediosCajaFuerte,
 } = require('../services/movimientos-caja-fuerte');
+const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
@@ -57,16 +60,19 @@ router.get('/alertas', async (req, res, next) => {
           AND e.fecha_vencimiento_pago BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
         ORDER BY e.fecha_vencimiento_pago
       `),
+      // Cheques PROPIOS por vencer, de cualquier origen: los emitidos al pagar un
+      // egreso, los de Pago a Proveedores y los cargados a mano. `vw_cheques` ya
+      // unifica las cinco tablas y deja afuera los de pagos anulados.
+      // Solo interesan los que todavía pueden debitar: un cheque ya debitado o
+      // rechazado no es un vencimiento por venir.
       pool.query(`
-        SELECT ec.banco, ec.numero_cheque, ec.fecha_vencimiento, ec.importe,
-               e.descripcion AS egreso_descripcion,
-               p.razon_social AS proveedor_nombre
-        FROM egreso_cheques ec
-        JOIN egreso_pagos ep ON ep.id = ec.egreso_pago_id
-        JOIN egresos e        ON e.id  = ep.egreso_id
-        LEFT JOIN proveedores p ON p.id = e.proveedor_id
-        WHERE ec.fecha_vencimiento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-        ORDER BY ec.fecha_vencimiento
+        SELECT banco, numero_cheque, fecha_vencimiento, importe,
+               origen_nombre AS proveedor_nombre, origen_tipo
+        FROM vw_cheques
+        WHERE tipo = 'emitido'
+          AND estado IN ('emitido', 'presentado')
+          AND fecha_vencimiento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY fecha_vencimiento
       `),
       pool.query(`
         SELECT id, descripcion, periodo_mes, periodo_anio
@@ -504,9 +510,9 @@ router.post('/', async (req, res, next) => {
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
           (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
-        VALUES ($1, 0, $2, $3, 'anticipo', $4, $5, false)
+        VALUES ($1, 0, $2, $3, 'anticipo', $4, $5, $6)
       `, [proveedor_id, totalNum, +(saldo - totalNum).toFixed(2),
-          egreso.id, `Anticipo — ${descripcion}`.substring(0, 200)]);
+          egreso.id, `Anticipo — ${descripcion}`.substring(0, 200), esFacturado]);
     }
 
     // --- Registrar pago inmediato (uno o varios medios: pago dividido) ---
@@ -526,6 +532,13 @@ router.post('/', async (req, res, next) => {
       const mediosValidos = mediosPago.filter(m => m.medio_pago_id && m.monto > 0);
       if (mediosValidos.length > 0) {
         const totalPago = mediosValidos.reduce((s, m) => s + m.monto, 0);
+
+        // No se puede pagar más que el comprobante (ver POST /:id/pago).
+        if (totalPago - totalNum > 0.01) {
+          throw Object.assign(new Error(
+            `El pago (${totalPago.toFixed(2)}) supera el total del comprobante (${totalNum.toFixed(2)})`
+          ), { status: 400 });
+        }
 
         // Nombres para detectar el medio cheque (los cheques se atan a esa línea)
         const { rows: mpRows } = await client.query(
@@ -616,6 +629,7 @@ router.post('/', async (req, res, next) => {
         error: 'Ya existe un comprobante con ese número para este proveedor. Verificá punto de venta y número.',
       });
     }
+    if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   } finally {
     client.release();
@@ -715,6 +729,20 @@ router.post('/:id/pago', async (req, res, next) => {
       return res.status(400).json({ error: 'Este egreso ya está pagado' });
     }
 
+    // Nunca se puede pagar más que el saldo que queda: si no, el comprobante
+    // queda 'parcial' para siempre (avisando de un vencimiento ya pagado) y la
+    // cuenta corriente recibe un haber mayor a la deuda. Mismo criterio que la
+    // imputación de Pago a Proveedores.
+    const { rows: yaPagado } = await pool.query(
+      `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [id]
+    );
+    const pendiente = +(parseFloat(egresoRows[0].total) - parseFloat(yaPagado[0].pagado)).toFixed(2);
+    if (montoPago - pendiente > 0.01) {
+      return res.status(400).json({
+        error: `El pago (${montoPago.toFixed(2)}) supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`,
+      });
+    }
+
     await client.query('BEGIN');
 
     // "ERROR REDONDEO": medio ficticio. No deja rastro (ni egreso_pagos, ni CC
@@ -802,6 +830,127 @@ router.post('/:id/pago', async (req, res, next) => {
     res.json({ ok: true, estado_pago: nuevoEstado, pago_id: pagoId });
   } catch (err) {
     await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/egresos/:id/pagos/:pagoId/anular ───────────────────────────────
+// Deshace un pago cargado sobre el egreso: devuelve la plata a la caja fuerte o
+// a la cuenta bancaria de donde salió, corrige la cuenta corriente del proveedor
+// y recalcula el estado del comprobante.
+//
+// La plata se repone con movimientos INVERSOS en vez de borrar los originales:
+// `revertirMovimientos*` trabaja por origen (el egreso entero) y un egreso puede
+// tener varios pagos, así que borraría de más. El destino se deduce igual que al
+// registrar: la caja fuerte sale del medio de pago y el banco de la cuenta
+// guardada en el propio pago.
+router.post('/:id/pagos/:pagoId/anular', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id, pagoId } = req.params;
+    const { motivo } = req.body;
+    if (!motivo || !motivo.trim()) {
+      return res.status(400).json({ error: 'El motivo de anulación es requerido' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: pagoRows } = await client.query(`
+      SELECT ep.id, ep.egreso_id, ep.medio_pago_id, ep.monto, ep.cuenta_bancaria_id,
+             ep.pago_proveedor_id, mp.nombre AS medio_nombre
+        FROM egreso_pagos ep
+        LEFT JOIN medios_pago mp ON mp.id = ep.medio_pago_id
+       WHERE ep.id = $1 AND ep.egreso_id = $2
+       FOR UPDATE OF ep`, [pagoId, id]);
+    const pago = pagoRows[0];
+    if (!pago) throw Object.assign(new Error('Pago no encontrado para este egreso'), { status: 404 });
+
+    // Los pagos que vienen de Pago a Proveedores se deshacen desde esa pantalla:
+    // ahí hay que tocar además la imputación y la cuenta corriente del pago.
+    if (pago.pago_proveedor_id) {
+      throw Object.assign(new Error(
+        'Este pago se hizo desde Pago a Proveedores: anulalo o reimputalo desde esa pantalla'
+      ), { status: 400 });
+    }
+
+    // Un cheque ya debitado o rechazado movió plata de verdad: no se puede
+    // deshacer el pago sin arreglar antes el cheque.
+    const { rows: chq } = await client.query(
+      `SELECT estado, COUNT(*) AS n FROM egreso_cheques WHERE egreso_pago_id = $1 GROUP BY estado`, [pagoId]
+    );
+    const chequesFirmes = chq.filter(c => c.estado !== 'emitido');
+    if (chequesFirmes.length > 0) {
+      throw Object.assign(new Error(
+        `Este pago tiene cheques en estado "${chequesFirmes[0].estado}": cambialos desde Cheques antes de anular el pago`
+      ), { status: 400 });
+    }
+
+    const { rows: egRows } = await client.query(
+      `SELECT id, total, proveedor_id, tipo_comprobante, sucursal_id
+         FROM egresos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id]
+    );
+    const egreso = egRows[0];
+    if (!egreso) throw Object.assign(new Error('Egreso no encontrado'), { status: 404 });
+
+    const montoPago = parseFloat(pago.monto);
+    const usuarioId = req.usuario?.id ?? null;
+
+    // 1) Reponer la caja fuerte, si el pago salió de ahí.
+    const porCaja = await agruparMediosCajaFuerte(
+      client, [{ medio_pago_id: pago.medio_pago_id, monto: montoPago }], egreso.sucursal_id
+    );
+    for (const [sucursal_id, monto] of porCaja) {
+      await registrarMovimientoCajaFuerte(client, {
+        sucursal_id, tipo: 'ingreso', monto,
+        concepto: `Anulación de pago de egreso — ${motivo.trim()}`,
+        origen_tipo: 'egreso', origen_id: id, usuario_id: usuarioId,
+      });
+    }
+
+    // 2) Devolver a la cuenta bancaria, si salió de una.
+    if (pago.cuenta_bancaria_id) {
+      await registrarMovimientoBancario(client, {
+        cuenta_bancaria_id: pago.cuenta_bancaria_id, tipo: 'ingreso', monto: montoPago,
+        concepto: `Anulación de pago de egreso — ${motivo.trim()}`,
+        origen_tipo: 'egreso', origen_id: id, usuario_id: usuarioId,
+      });
+    }
+
+    // 3) Corregir la cuenta corriente: la deuda vuelve, en la misma columna
+    //    (facturado / no facturado) en la que se había descontado.
+    if (egreso.proveedor_id) {
+      const esFacturado = !!(egreso.tipo_comprobante && egreso.tipo_comprobante !== 'informal');
+      const saldo = await calcularSaldoProveedor(client, egreso.proveedor_id);
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, 0, $3, 'correccion', $4, $5, $6)
+      `, [egreso.proveedor_id, montoPago, +(saldo + montoPago).toFixed(2), id,
+          `Anulación de pago — ${motivo.trim()}`.substring(0, 200), esFacturado]);
+    }
+
+    // 4) Borrar el pago (arrastra sus cheques emitidos por CASCADE) y recalcular
+    //    el estado con la fórmula de siempre.
+    await client.query(`DELETE FROM egreso_pagos WHERE id = $1`, [pagoId]);
+
+    const { rows: tp } = await client.query(
+      `SELECT COALESCE(SUM(monto), 0) AS pagado FROM egreso_pagos WHERE egreso_id = $1`, [id]
+    );
+    const pagado = parseFloat(tp[0].pagado);
+    const total  = parseFloat(egreso.total);
+    const nuevoEstado = pagado <= 0.01 ? 'pendiente'
+                      : Math.abs(pagado - total) <= 0.01 ? 'pagado' : 'parcial';
+    await client.query(
+      `UPDATE egresos SET estado_pago = $1, updated_at = NOW() WHERE id = $2`, [nuevoEstado, id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, estado_pago: nuevoEstado, monto_anulado: montoPago });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   } finally {
     client.release();
@@ -1060,11 +1209,33 @@ router.delete('/:id', async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: egRows } = await client.query(
-      `SELECT id FROM egresos WHERE id = $1 AND deleted_at IS NULL`, [id]
+      `SELECT id, proveedor_id FROM egresos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id]
     );
     if (egRows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Egreso no encontrado o ya eliminado' });
+    }
+
+    // Un egreso con pagos no se borra: primero hay que anular esos pagos, para
+    // que la plata vuelva a la caja o al banco de donde salió. Mismo criterio
+    // que la edición, que tampoco admite egresos ya pagados.
+    const { rows: conPagos } = await client.query(
+      `SELECT 1 FROM egreso_pagos WHERE egreso_id = $1 LIMIT 1`, [id]
+    );
+    if (conPagos.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Este egreso tiene pagos registrados. Anulá los pagos antes de eliminarlo.',
+      });
+    }
+    const { rows: conImputaciones } = await client.query(
+      `SELECT 1 FROM pago_proveedor_aplicaciones WHERE egreso_id = $1 LIMIT 1`, [id]
+    );
+    if (conImputaciones.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Este egreso está imputado a un pago a proveedor. Anulá ese pago antes de eliminarlo.',
+      });
     }
 
     await client.query(
@@ -1073,6 +1244,37 @@ router.delete('/:id', async (req, res, next) => {
         WHERE id = $2 AND deleted_at IS NULL`,
       [motivo.trim(), id]
     );
+
+    // Dar de baja la deuda que este egreso había generado en la cuenta corriente
+    // del proveedor. No se borra el asiento original —la columna `saldo` de cada
+    // fila es un acumulado histórico que se muestra en el extracto—: se agrega el
+    // asiento inverso, separado por columna facturado / no facturado para no
+    // cruzar el desglose en blanco y en negro.
+    // Los asientos 'anticipo' quedan como están a propósito: ese dinero salió de
+    // verdad y sigue siendo un crédito contra el proveedor aunque el comprobante
+    // que lo originó se elimine.
+    const { rows: asientos } = await client.query(`
+      SELECT facturado,
+             COALESCE(SUM(debe), 0)  AS debe,
+             COALESCE(SUM(haber), 0) AS haber
+        FROM cuentas_corrientes_proveedor
+       WHERE origen_tipo = 'egreso' AND origen_id = $1
+       GROUP BY facturado`, [id]);
+
+    for (const a of asientos) {
+      const debe  = +(parseFloat(a.haber) || 0).toFixed(2);
+      const haber = +(parseFloat(a.debe)  || 0).toFixed(2);
+      if (debe <= 0 && haber <= 0) continue;
+      const proveedorId = egRows[0].proveedor_id;
+      if (!proveedorId) continue;
+      const saldo = await calcularSaldoProveedor(client, proveedorId);
+      await client.query(`
+        INSERT INTO cuentas_corrientes_proveedor
+          (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+        VALUES ($1, $2, $3, $4, 'correccion', $5, $6, $7)
+      `, [proveedorId, debe, haber, +(saldo + debe - haber).toFixed(2), id,
+          `Egreso eliminado — ${motivo.trim()}`.substring(0, 200), a.facturado]);
+    }
 
     // Devolver a la caja fuerte lo que este egreso descontó (si aplica). Los
     // pagos que vinieron de un pago a proveedor tienen origen 'pago_proveedor'

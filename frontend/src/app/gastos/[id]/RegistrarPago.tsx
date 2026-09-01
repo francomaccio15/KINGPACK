@@ -64,6 +64,11 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
     if (!medioPagoId) { setError('Seleccioná un medio de pago'); return; }
     const montoNum = parseFloat(monto);
     if (!montoNum || montoNum <= 0) { setError('El monto debe ser mayor a 0'); return; }
+    // El backend rechaza el pago si supera el saldo: avisamos antes de mandarlo.
+    if (montoNum - pendiente > 0.01) {
+      setError(`El monto supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`);
+      return;
+    }
 
     const body: Record<string, unknown> = {
       medio_pago_id: medioPagoId,
@@ -75,6 +80,14 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
     if (esCheque) {
       const chequesValidos = cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe);
       if (chequesValidos.length === 0) { setError('Completá al menos un cheque'); return; }
+      // Los cheques cargados tienen que dar el monto del pago, como en Pago a
+      // Proveedores: si no, el comprobante queda saldado por un importe y los
+      // cheques que vencen dicen otro.
+      const sumaCheques = chequesValidos.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+      if (Math.abs(sumaCheques - montoNum) > 0.01) {
+        setError(`Los cheques suman ${sumaCheques.toFixed(2)} y el pago es de ${montoNum.toFixed(2)}`);
+        return;
+      }
       body.cheques = chequesValidos.map(c => ({ ...c, importe: parseFloat(c.importe), fecha_emision: c.fecha_emision || null }));
     }
 

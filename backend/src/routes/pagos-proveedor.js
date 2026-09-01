@@ -63,7 +63,7 @@ router.get('/', async (req, res, next) => {
 
     const { rows } = await pool.query(`
       SELECT pp.id, pp.proveedor_id, pp.fecha, pp.monto, pp.observaciones,
-             pp.anulado, pp.motivo_anulacion, pp.created_at,
+             pp.anulado, pp.motivo_anulacion, pp.created_at, pp.facturado,
              p.razon_social AS proveedor_nombre,
              COALESCE(
                (SELECT string_agg(DISTINCT mp2.nombre, ' + ')
@@ -399,16 +399,20 @@ router.post('/', async (req, res, next) => {
 // ─── POST /api/pagos-proveedor/:id/imputar ────────────────────────────────────
 // Imputa el remanente sin aplicar de un pago YA REGISTRADO (típicamente un "pago
 // a cuenta") contra comprobantes pendientes del mismo proveedor.
-// Body: { aplicaciones: [{ egreso_id, monto }] }
+// Body: { aplicaciones: [{ egreso_id, monto }], reclasificar?: boolean }
 //
-// La cuenta corriente NO se toca: el haber por el total del pago ya se asentó
-// cuando se registró el pago. Imputar solo vincula ese dinero con los
+// El SALDO de la cuenta corriente no se toca: el haber por el total del pago ya
+// se asentó cuando se registró el pago. Imputar solo vincula ese dinero con los
 // comprobantes, salda su `estado_pago` y los saca de la alerta de vencimientos.
+//
+// `reclasificar` sí mueve plata entre las columnas facturado y no facturado
+// cuando el pago se cargó en una y los comprobantes que salda están en la otra
+// (ver bloque de reclasificación más abajo). El neto sigue sin cambiar.
 router.post('/:id/imputar', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { aplicaciones = [] } = req.body;
+    const { aplicaciones = [], reclasificar = false } = req.body;
 
     if (!Array.isArray(aplicaciones) || aplicaciones.length === 0) {
       return res.status(400).json({ error: 'Seleccioná al menos un comprobante a imputar' });
@@ -419,7 +423,8 @@ router.post('/:id/imputar', async (req, res, next) => {
     // El pago se bloquea para que dos imputaciones simultáneas no repartan dos
     // veces el mismo saldo a favor.
     const { rows: pagoRows } = await client.query(
-      `SELECT id, proveedor_id, monto, medio_pago_id, cuenta_bancaria_id, observaciones, anulado
+      `SELECT id, proveedor_id, monto, medio_pago_id, cuenta_bancaria_id, observaciones,
+              anulado, facturado
          FROM pagos_proveedor WHERE id = $1 FOR UPDATE`, [id]
     );
     const pago = pagoRows[0];
@@ -442,12 +447,14 @@ router.post('/:id/imputar', async (req, res, next) => {
       ), { status: 400 });
     }
 
+    let reclasificado = 0;
+
     for (const ap of aplicaciones) {
       const montoAp = parseFloat(ap.monto);
       if (!montoAp || montoAp <= 0) throw Object.assign(new Error('monto de imputación inválido'), { status: 400 });
 
       const { rows: egRows } = await client.query(
-        `SELECT id, total, estado_pago, proveedor_id
+        `SELECT id, total, estado_pago, proveedor_id, tipo_comprobante
            FROM egresos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [ap.egreso_id]
       );
       const egreso = egRows[0];
@@ -485,10 +492,40 @@ router.post('/:id/imputar', async (req, res, next) => {
         INSERT INTO pago_proveedor_aplicaciones (pago_proveedor_id, egreso_id, monto_aplicado)
         VALUES ($1, $2, $3)
       `, [pago.id, ap.egreso_id, montoAp]);
+
+      // Reclasificación entre columnas (opcional, la decide el usuario en el
+      // modal). El pago descontó de una columna —la que se eligió al cargarlo— y
+      // el comprobante que salda vive en la otra: sin esto el neto del proveedor
+      // queda bien pero el desglose facturado / no facturado queda cruzado.
+      // Se mueve con dos asientos que se anulan entre sí: se saca el crédito de
+      // la columna vieja y se pone en la que corresponde al comprobante.
+      const compFacturado = !!(egreso.tipo_comprobante && egreso.tipo_comprobante !== 'informal');
+      if (reclasificar && compFacturado !== !!pago.facturado) {
+        const detalle = `Reclasificación por imputación — ${compFacturado ? 'pasa a facturado' : 'pasa a no facturado'}`;
+        const saldoPrev = await saldoMovimientos(client, pago.proveedor_id);
+        await client.query(`
+          INSERT INTO cuentas_corrientes_proveedor
+            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+          VALUES ($1, $2, 0, $3, 'correccion', $4, $5, $6)
+        `, [pago.proveedor_id, montoAp, +(saldoPrev + montoAp).toFixed(2), pago.id,
+            detalle, !!pago.facturado]);
+        await client.query(`
+          INSERT INTO cuentas_corrientes_proveedor
+            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+          VALUES ($1, 0, $2, $3, 'correccion', $4, $5, $6)
+        `, [pago.proveedor_id, montoAp, +(saldoPrev).toFixed(2), pago.id,
+            detalle, compFacturado]);
+        reclasificado = +(reclasificado + montoAp).toFixed(2);
+      }
     }
 
     await client.query('COMMIT');
-    res.json({ ok: true, imputado: +sumaAplic.toFixed(2), sin_imputar: +(disponible - sumaAplic).toFixed(2) });
+    res.json({
+      ok: true,
+      imputado: +sumaAplic.toFixed(2),
+      sin_imputar: +(disponible - sumaAplic).toFixed(2),
+      reclasificado,
+    });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -550,9 +587,11 @@ router.post('/:id/anular', async (req, res, next) => {
     await client.query(`DELETE FROM pago_proveedor_endosos WHERE pago_proveedor_id = $1`, [id]);
 
     // 2) Revertir imputaciones a egresos
-    const { rows: aplic } = await client.query(
-      `SELECT egreso_id, monto_aplicado FROM pago_proveedor_aplicaciones WHERE pago_proveedor_id = $1`, [id]
-    );
+    const { rows: aplic } = await client.query(`
+      SELECT a.egreso_id, a.monto_aplicado, e.tipo_comprobante
+        FROM pago_proveedor_aplicaciones a
+        JOIN egresos e ON e.id = a.egreso_id
+       WHERE a.pago_proveedor_id = $1`, [id]);
     for (const ap of aplic) {
       // Borrar los egreso_pagos generados por este pago y recalcular estado
       await client.query(`DELETE FROM egreso_pagos WHERE egreso_id = $1 AND pago_proveedor_id = $2`,
@@ -569,21 +608,66 @@ router.post('/:id/anular', async (req, res, next) => {
         [estado, ap.egreso_id]);
     }
 
-    // 3) Revertir cuenta corriente por el monto TOTAL del pago (un único debe de
-    //    corrección). No se consultan los haber por origen_id para no revertir de
-    //    más si el comprobante tuvo otros pagos.
-    //    Se usa el total del pago y no la suma de imputaciones porque un pago a
-    //    cuenta imputado después (POST /:id/imputar) tiene su haber asentado por
-    //    el total, con imputaciones que pueden cubrirlo solo en parte.
-    const reversas = [parseFloat(pago.monto)];
-    for (const monto of reversas) {
-      if (!monto || monto <= 0) continue;
+    // 3) Revertir la cuenta corriente por el monto TOTAL del pago, devolviendo
+    //    cada peso a la columna facturado / no facturado de la que salió. Meterlo
+    //    todo en una sola deja el desglose en blanco y en negro cruzado, aunque el
+    //    neto cierre.
+    //
+    //    Los dos modos de pago asientan distinto y hay que tratarlos distinto:
+    //      · "Pago a cuenta": un único haber por el total, con origen_id = pago y
+    //        la columna que declaró el usuario. Se lee directo, es inequívoco.
+    //      · "Aplicar a comprobantes": un haber por comprobante, con
+    //        origen_id = EGRESO y la columna de ese comprobante. No se puede leer
+    //        por origen_id (el egreso puede tener otros pagos), así que se deduce
+    //        de las imputaciones, que suman exactamente el monto del pago.
+    const porColumna = new Map(); // facturado (bool) → monto a devolver
+    const sumar = (facturado, monto) => {
+      const m = +(parseFloat(monto) || 0).toFixed(2);
+      if (m === 0) return;
+      porColumna.set(!!facturado, +((porColumna.get(!!facturado) || 0) + m).toFixed(2));
+    };
+
+    const { rows: propios } = await client.query(`
+      SELECT facturado, COALESCE(SUM(haber), 0) - COALESCE(SUM(debe), 0) AS neto
+        FROM cuentas_corrientes_proveedor
+       WHERE origen_tipo = 'pago' AND origen_id = $1
+       GROUP BY facturado`, [id]);
+    let cubierto = 0;
+    for (const r of propios) {
+      cubierto += parseFloat(r.neto) || 0;
+      sumar(r.facturado, r.neto);
+    }
+
+    // Lo que no está asentado a nombre del pago se asentó por comprobante.
+    const resto = +(parseFloat(pago.monto) - cubierto).toFixed(2);
+    if (resto > 0.01) {
+      const imputado = aplic.reduce((s, ap) => s + (parseFloat(ap.monto_aplicado) || 0), 0);
+      for (const ap of aplic) {
+        sumar(!!(ap.tipo_comprobante && ap.tipo_comprobante !== 'informal'), ap.monto_aplicado);
+      }
+      // Si algo quedó sin imputar y sin asiento propio, va a la columna del pago.
+      sumar(!!pago.facturado, +(resto - imputado).toFixed(2));
+    }
+
+    // Si el pago se reclasificó al imputarlo, ese movimiento entre columnas
+    // también forma parte de su efecto y hay que deshacerlo.
+    const { rows: reclas } = await client.query(`
+      SELECT facturado, COALESCE(SUM(haber), 0) - COALESCE(SUM(debe), 0) AS neto
+        FROM cuentas_corrientes_proveedor
+       WHERE origen_tipo = 'correccion' AND origen_id = $1
+       GROUP BY facturado`, [id]);
+    for (const r of reclas) sumar(r.facturado, r.neto);
+
+    for (const [facturado, monto] of porColumna) {
+      if (!monto || monto === 0) continue;
       const saldoPrev = await saldoMovimientos(client, pago.proveedor_id);
+      const debe  = monto > 0 ? monto : 0;
+      const haber = monto < 0 ? -monto : 0;
       await client.query(`
         INSERT INTO cuentas_corrientes_proveedor
           (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
-        VALUES ($1, $2, 0, $3, 'correccion', $4, 'Anulación de pago a proveedor', FALSE)
-      `, [pago.proveedor_id, monto, +(saldoPrev + monto).toFixed(2), id]);
+        VALUES ($1, $2, $3, $4, 'correccion', $5, 'Anulación de pago a proveedor', $6)
+      `, [pago.proveedor_id, debe, haber, +(saldoPrev + debe - haber).toFixed(2), id, facturado]);
     }
 
     await client.query('COMMIT');

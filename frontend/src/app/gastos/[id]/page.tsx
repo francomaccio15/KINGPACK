@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import RegistrarPago from './RegistrarPago';
 import EliminarEgreso from './EliminarEgreso';
+import AnularPago from './AnularPago';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
@@ -470,6 +471,21 @@ export default async function DetalleEgresoPage({ params }: { params: { id: stri
                     <span className="text-kp-gray text-xs italic">{pago.observaciones}</span>
                   )}
                   <span className="ml-auto font-bold tabular-nums text-green-400">{fmt(pago.monto)}</span>
+                  {/* Los pagos que vienen de Pago a Proveedores se deshacen desde
+                      esa pantalla: ahí además hay que rehacer la imputación. */}
+                  {!pago.pago_proveedor_id && (
+                    <AnularPago
+                      egresoId={egreso.id}
+                      pagoId={pago.id}
+                      monto={pago.monto}
+                      medioNombre={pago.medio_pago_nombre ?? null}
+                    />
+                  )}
+                  {pago.pago_proveedor_id && (
+                    <Link href="/pagos-proveedor" className="text-xs text-kp-gray hover:text-kp-white underline">
+                      desde Pago a Proveedores
+                    </Link>
+                  )}
                 </div>
 
                 {/* Cheques anidados */}

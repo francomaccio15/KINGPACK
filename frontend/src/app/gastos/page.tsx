@@ -28,7 +28,7 @@ type Egreso = {
 
 type Alerta = {
   vencimientos_egresos: { id: string; descripcion: string; total: string; fecha_vencimiento_pago: string; proveedor_nombre: string | null }[];
-  vencimientos_cheques: { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string; proveedor_nombre: string | null }[];
+  vencimientos_cheques: { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string; proveedor_nombre: string | null; origen_tipo: string }[];
   obligaciones_pendientes: { id: string; descripcion: string; periodo_mes: number; periodo_anio: number }[];
   bloqueo_cierre: boolean;
 };
@@ -37,6 +37,18 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 const fmt = (v: string | number | null) => {
   const n = parseFloat(String(v ?? ''));
   return isNaN(n) ? '—' : ars.format(n);
+};
+// Fecha "solo día" (vencimientos) a DD/MM/AAAA. No pasa por Date a propósito:
+// una fecha sin hora llega como medianoche UTC y en Argentina se correría un día.
+const fmtVenc = (s: string | null) => {
+  const p = String(s ?? '').slice(0, 10).split('-');
+  return p.length === 3 && p[0] ? `${p[2]}/${p[1]}/${p[0]}` : 's/f';
+};
+const ORIGEN_CHEQUE: Record<string, string> = {
+  egreso:          'pago de egreso',
+  pago_proveedor:  'pago a proveedor',
+  manual:          'carga manual',
+  movimiento_caja: 'movimiento de caja',
 };
 
 const TIPO_LABEL: Record<string, string> = {
@@ -146,12 +158,14 @@ export default async function GastosPage({
             <div className="text-xs text-amber-400/80 mt-0.5 space-y-0.5">
               {alertas?.vencimientos_egresos?.map(v => (
                 <p key={v.id}>
-                  · {new Date(v.fecha_vencimiento_pago).toLocaleDateString('es-AR')} — {v.descripcion} {v.proveedor_nombre ? `(${v.proveedor_nombre})` : ''} — {fmt(v.total)}
+                  · {fmtVenc(v.fecha_vencimiento_pago)} — {v.descripcion} {v.proveedor_nombre ? `(${v.proveedor_nombre})` : ''} — {fmt(v.total)}
                 </p>
               ))}
               {alertas?.vencimientos_cheques?.map((c, i) => (
                 <p key={i}>
-                  · Cheque {c.banco} Nº {c.numero_cheque} vence {new Date(c.fecha_vencimiento).toLocaleDateString('es-AR')} — {fmt(c.importe)}
+                  · Cheque {c.banco} Nº {c.numero_cheque} vence {fmtVenc(c.fecha_vencimiento)} — {fmt(c.importe)}
+                  {c.proveedor_nombre ? ` (${c.proveedor_nombre})` : ''}
+                  {ORIGEN_CHEQUE[c.origen_tipo] ? ` · ${ORIGEN_CHEQUE[c.origen_tipo]}` : ''}
                 </p>
               ))}
             </div>
