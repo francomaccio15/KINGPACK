@@ -126,9 +126,9 @@ function CategoriaHeader({ nombre, total, id }: { nombre: string; total: number;
 
 /** Fila de subtotal (bold, con fondo) */
 function Subtotal({
-  label, valor, grande = false
+  label, valor, grande = false, formula
 }: {
-  label: string; valor: number; grande?: boolean;
+  label: string; valor: number; grande?: boolean; formula?: string;
 }) {
   const esPositivo = valor >= 0;
   const valorCls = grande
@@ -140,6 +140,9 @@ function Subtotal({
       <td className={['px-5 py-2.5 font-bold', grande ? 'text-base' : 'text-sm'].join(' ')}
           style={{ paddingLeft: grande ? 20 : 28 }}>
         <span className="text-kp-white">{label}</span>
+        {formula && (
+          <span className="ml-2 text-xs font-normal italic text-kp-gray/70 whitespace-normal">({formula})</span>
+        )}
       </td>
       <td className={['px-5 py-2.5 text-right tabular-nums font-bold', grande ? 'text-base' : 'text-sm', valorCls].join(' ')}>
         {fmt(valor)}
@@ -194,7 +197,7 @@ export default function EstadoResultados({
             <Linea label={`Ventas brutas (${ingresos.cantidad_ventas} ventas)`} valor={ingresos.ventas_brutas} cero={ingresos.ventas_brutas === 0} />
             <Linea label="(−) Descuentos otorgados" valor={ingresos.descuentos} cero={ingresos.descuentos === 0} negativo={ingresos.descuentos > 0} italic />
             <Linea label="(−) Notas de crédito / Devoluciones" valor={ingresos.notas_credito} cero={ingresos.notas_credito === 0} negativo={ingresos.notas_credito > 0} italic />
-            <Subtotal label="= Ingreso por ventas (neto)" valor={ingresos.ventas_netas} />
+            <Subtotal label="= Ingreso por ventas (neto)" valor={ingresos.ventas_netas} formula="Ventas brutas − Descuentos − Notas de crédito" />
             <Separador />
 
             {/* ─── Costo de mercadería vendida → Utilidad bruta ─── */}
@@ -203,8 +206,8 @@ export default function EstadoResultados({
             {costo_mercaderia.costo_devuelto > 0 && (
               <Linea label="(+) Costo de artículos devueltos" valor={costo_mercaderia.costo_devuelto} nivel={1} italic />
             )}
-            <Subtotal label="= Costo de mercadería vendida (neto de notas de crédito)" valor={-costo_mercaderia.costo_vendido} />
-            <Subtotal label="= UTILIDAD BRUTA" valor={costo_mercaderia.utilidad_bruta} />
+            <Subtotal label="= Costo de mercadería vendida (neto de notas de crédito)" valor={-costo_mercaderia.costo_vendido} formula="Costo de artículos vendidos − Costo de artículos devueltos" />
+            <Subtotal label="= UTILIDAD BRUTA" valor={costo_mercaderia.utilidad_bruta} formula="Ingreso por ventas (neto) − Costo de mercadería vendida" />
             <Separador />
 
             {/* ─── Gastos operativos por categoría ─── */}
@@ -215,11 +218,11 @@ export default function EstadoResultados({
                 <CategoriaBloque key={cat.categoria_id} cat={cat} subsNoCero={subsNoCero} id={`cat-${cat.categoria_id}`} />
               );
             })}
-            <Subtotal label="= Total gastos operativos" valor={-gastos.total} />
+            <Subtotal label="= Total gastos operativos" valor={-gastos.total} formula="Suma de todos los gastos operativos del período" />
             <Separador />
 
             {/* ─── Utilidad neta del producto ─── */}
-            <Subtotal label="= UTILIDAD NETA DEL PRODUCTO" valor={data.utilidad_neta_producto} grande />
+            <Subtotal label="= UTILIDAD NETA DEL PRODUCTO" valor={data.utilidad_neta_producto} grande formula="Utilidad bruta − Total gastos operativos" />
             <Separador />
 
             {/* ─── Retiros del período ─── */}
@@ -234,7 +237,7 @@ export default function EstadoResultados({
             ).map(s => (
               <Linea key={s.subrubro_id} label={s.subrubro} valor={s.monto} cero={s.es_cero} negativo={!s.es_cero} />
             ))}
-            <Subtotal label="(−) Total retiros del período" valor={-retiros.total} />
+            <Subtotal label="(−) Total retiros del período" valor={-retiros.total} formula="Suma de todos los retiros de socios del período" />
             <Separador />
 
             {/* ─── Resultado acumulado ─── */}
@@ -256,7 +259,10 @@ export default function EstadoResultados({
               'border-t-2 border-b-2',
               resultado_acumulado.total >= 0 ? 'border-emerald-700/50 bg-emerald-950/30' : 'border-red-700/50 bg-red-950/30',
             ].join(' ')}>
-              <td className="px-5 py-4 text-base font-black text-kp-white">RESULTADO ACUMULADO</td>
+              <td className="px-5 py-4 text-base font-black text-kp-white">
+                RESULTADO ACUMULADO
+                <span className="ml-2 text-xs font-normal italic text-kp-gray/70 whitespace-normal">(Acumulado mes anterior + Utilidad neta del producto − Retiros del período)</span>
+              </td>
               <td className={[
                 'px-5 py-4 text-xl font-black text-right tabular-nums',
                 resultado_acumulado.total >= 0 ? 'text-emerald-400' : 'text-red-400',
