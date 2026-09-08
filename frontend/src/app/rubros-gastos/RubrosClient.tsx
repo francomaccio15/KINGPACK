@@ -55,6 +55,12 @@ const hrefEstadoResultados = (anio: number, mes: number, categoriaId: string) =>
   return `/reportes?${qs.toString()}#cat-${categoriaId}`;
 };
 
+// Link al listado de egresos filtrado por subrubro y el mismo período mensual.
+const hrefEgresosSubrubro = (subrubroId: string, desde: string, hasta: string) => {
+  const qs = new URLSearchParams({ subrubro_gasto_id: subrubroId, fecha_desde: desde, fecha_hasta: hasta });
+  return `/gastos?${qs.toString()}`;
+};
+
 function Spinner() {
   return (
     <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -271,24 +277,32 @@ export default function RubrosClient() {
                   <p className="text-xs text-kp-gray italic">Sin subrubros.</p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {r.subrubros.map(s => (
-                      <li key={s.id} className="group flex items-center gap-2 text-sm text-kp-gray-lt">
-                        <span className="w-1 h-1 rounded-full bg-kp-red shrink-0" />
-                        <span className="flex-1 truncate">{s.nombre}</span>
-                        {s.total != null && (
-                          <span className={`tabular-nums text-xs shrink-0 ${s.total > 0 ? 'text-kp-white font-medium' : 'text-kp-gray'}`}>
-                            {fmtMoneda(s.total)}
-                          </span>
-                        )}
+                    {r.subrubros.map(s => {
+                      const { desde, hasta } = rangoDelMes(anio, mes);
+                      return (
+                      <li key={s.id} className="group flex items-center gap-1 text-sm text-kp-gray-lt">
+                        <Link
+                          href={hrefEgresosSubrubro(s.id, desde, hasta)}
+                          title={`Ver egresos de "${s.nombre}"`}
+                          className="flex-1 min-w-0 flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-kp-surface2 hover:text-kp-white transition-colors">
+                          <span className="w-1 h-1 rounded-full bg-kp-red shrink-0" />
+                          <span className="flex-1 truncate">{s.nombre}</span>
+                          {s.total != null && (
+                            <span className={`tabular-nums text-xs shrink-0 ${s.total > 0 ? 'text-kp-white font-medium' : 'text-kp-gray'}`}>
+                              {fmtMoneda(s.total)}
+                            </span>
+                          )}
+                        </Link>
                         <button onClick={() => setEditSubrubro(s)} title="Editar subrubro"
-                          className="p-1 rounded text-kp-gray opacity-0 group-hover:opacity-100 hover:text-kp-white transition-all">
+                          className="p-1 rounded text-kp-gray opacity-0 group-hover:opacity-100 hover:text-kp-white transition-all shrink-0">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                           </svg>
                         </button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>
