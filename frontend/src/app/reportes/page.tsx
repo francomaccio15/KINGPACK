@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireAuth } from '@/lib/requireAuth';
 import { serverFetch } from '@/lib/serverFetch';
+import { getSucursalActivaId } from '@/lib/getSucursalActiva';
 import FiltrosReportes from './FiltrosReportes';
 import ReporteGastos from './ReporteGastos';
 import EstadoResultados from './EstadoResultados';
@@ -247,7 +248,7 @@ export default async function ReportesPage({
               <p className="text-kp-gray text-sm">No se pudo cargar el estado de resultados.</p>
             </div>
           : erData.cierre_pendiente
-            ? <CierreMensual anio={erData.anio} mes={erData.mes} />
+            ? <CierreMensual anio={erData.anio} mes={erData.mes} sucursalId={getSucursalActivaId()} />
             : <EstadoResultados data={erData} fechaDesde={erData.periodo.desde} fechaHasta={erData.periodo.hasta} />
       )}
 

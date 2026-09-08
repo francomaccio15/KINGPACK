@@ -553,6 +553,10 @@ router.get('/estado-resultados/cierre', async (req, res, next) => {
     const hoy  = new Date().toISOString().slice(0, 10);
     const anio = parseInt(req.query.anio, 10) || parseInt(hoy.slice(0, 4), 10);
     const mes  = parseInt(req.query.mes, 10)  || parseInt(hoy.slice(5, 7), 10);
+    // '' o ausente = Todas; UUID = filtrar por esa sucursal (coincide con el selector del header)
+    const sucursal_id = req.query.sucursal_id && String(req.query.sucursal_id).trim() !== ''
+      ? req.query.sucursal_id
+      : null;
     const desde = primerDiaHabil(anio, mes);
     const esMesActual = anio === parseInt(hoy.slice(0, 4), 10) && mes === parseInt(hoy.slice(5, 7), 10);
     const hasta = esMesActual ? hoy : ultimoDiaMes(anio, mes);
@@ -574,13 +578,14 @@ router.get('/estado-resultados/cierre', async (req, res, next) => {
         AND e.deleted_at IS NULL
         AND e.fecha_emision::date BETWEEN $1 AND $2
         AND e.tipo_operacion <> 'compra_mercaderia'
+        AND ($5::uuid IS NULL OR e.sucursal_id = $5::uuid)
       LEFT JOIN cierre_categoria cc
         ON  cc.categoria_resultado_id = cr.id
         AND cc.periodo_anio = $3 AND cc.periodo_mes = $4
       WHERE cr.seccion <> 'excluido'
       GROUP BY cr.id, cr.nombre, cr.orden, cr.seccion
       ORDER BY cr.orden ASC
-    `, [desde, hasta, anio, mes]);
+    `, [desde, hasta, anio, mes, sucursal_id]);
 
     const categorias = rows.map((r) => ({
       categoria_id: r.categoria_id,

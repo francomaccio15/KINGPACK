@@ -34,7 +34,7 @@ const ars = new Intl.NumberFormat('es-AR', {
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-export default function CierreMensual({ anio, mes }: { anio: number; mes: number }) {
+export default function CierreMensual({ anio, mes, sucursalId = '' }: { anio: number; mes: number; sucursalId?: string }) {
   const router = useRouter();
   const [cats, setCats]       = useState<CategoriaCierre[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,22 +44,22 @@ export default function CierreMensual({ anio, mes }: { anio: number; mes: number
   const [sucCache, setSucCache] = useState<string>('');
 
   const cargar = useCallback(async () => {
-    const res = await apiFetch(`/api/reportes/estado-resultados/cierre?anio=${anio}&mes=${mes}`);
+    const res = await apiFetch(`/api/reportes/estado-resultados/cierre?anio=${anio}&mes=${mes}&sucursal_id=${encodeURIComponent(sucursalId)}`);
     if (res.ok) {
       const data = await res.json();
       setCats(data.categorias || []);
     }
     setLoading(false);
-  }, [anio, mes]);
+  }, [anio, mes, sucursalId]);
 
   useEffect(() => { cargar(); }, [cargar]);
+  // Al cambiar de sucursal, cierro el detalle abierto y limpio el cache
+  useEffect(() => { setAbierta(null); setDetalles({}); setSucCache(sucursalId); }, [sucursalId]);
 
   async function toggleDetalle(categoria_resultado_id: string) {
     if (abierta === categoria_resultado_id) { setAbierta(null); return; }
     setAbierta(categoria_resultado_id);
-    const suc = typeof document !== 'undefined'
-      ? (document.cookie.match(/(?:^|;\s*)kp_sucursal_id=([^;]*)/)?.[1] ?? '')
-      : '';
+    const suc = sucursalId;
     // Si cambió la sucursal activa desde la última carga, invalido el cache
     let cache = detalles;
     if (suc !== sucCache) { cache = {}; setDetalles({}); setSucCache(suc); }
