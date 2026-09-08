@@ -1,30 +1,81 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { sucursalEfectiva } = require('../middleware/auth');
 
 const router = express.Router();
 
 // ─── GET /api/rubros-gastos ───────────────────────────────────────────────────
-// Retorna rubros con sus subrubros anidados
+// Retorna rubros con sus subrubros anidados.
+// Query opcional: ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (+ sucursal_id vía toggle)
+// → agrega el total y la cantidad de egresos por subrubro/rubro en ese período.
+// Usa los MISMOS filtros que el estado de resultados (deleted_at IS NULL,
+// tipo_operacion <> 'compra_mercaderia') para que los montos reconcilien.
 router.get('/', async (req, res, next) => {
   try {
-    const [{ rows: rubros }, { rows: subrubros }] = await Promise.all([
+    const { desde, hasta } = req.query;
+    const conFechas = Boolean(desde && hasta);
+
+    // Filtro de sucursal coherente con el resto del sistema (cajero fijo, admin
+    // por query/cookie inyectada). null = todas las sucursales.
+    const sucId = sucursalEfectiva(req);
+
+    // Traer totales por subrubro solo si se pidió un rango de fechas.
+    let totalesPromise = Promise.resolve({ rows: [] });
+    if (conFechas) {
+      const sucEgreso  = sucId ? 'AND e.sucursal_id = $3' : '';
+      const params     = sucId ? [desde, hasta, sucId] : [desde, hasta];
+      totalesPromise = pool.query(`
+        SELECT
+          sg.id                            AS subrubro_id,
+          COALESCE(SUM(e.total), 0)::float AS total,
+          COUNT(e.id)::int                 AS cantidad
+        FROM subrubro_gastos sg
+        LEFT JOIN egresos e
+          ON  e.subrubro_gasto_id = sg.id
+          AND e.deleted_at IS NULL
+          AND e.fecha_emision::date BETWEEN $1 AND $2
+          AND e.tipo_operacion <> 'compra_mercaderia'
+          ${sucEgreso}
+        GROUP BY sg.id
+      `, params);
+    }
+
+    const [{ rows: rubros }, { rows: subrubros }, { rows: totales }] = await Promise.all([
       pool.query(`SELECT id, nombre, orden FROM rubros_gastos ORDER BY orden, nombre`),
       pool.query(`
         SELECT id, nombre, rubro_id, rubro AS rubro_texto
         FROM subrubro_gastos
         ORDER BY nombre
       `),
+      totalesPromise,
     ]);
 
-    const rubrosMap = rubros.map(r => ({
-      ...r,
-      subrubros: subrubros.filter(s => s.rubro_id === r.id),
-    }));
+    const totalMap = new Map(totales.map(t => [t.subrubro_id, t]));
+    const conMonto = (s) => {
+      if (!conFechas) return s;
+      const t = totalMap.get(s.id);
+      return { ...s, total: t ? t.total : 0, cantidad: t ? t.cantidad : 0 };
+    };
+
+    const rubrosMap = rubros.map(r => {
+      const subs = subrubros.filter(s => s.rubro_id === r.id).map(conMonto);
+      const total = conFechas ? subs.reduce((a, s) => a + s.total, 0) : undefined;
+      const cantidad = conFechas ? subs.reduce((a, s) => a + s.cantidad, 0) : undefined;
+      return { ...r, subrubros: subs, ...(conFechas ? { total, cantidad } : {}) };
+    });
 
     // Subrubros sin rubro asignado (legado con campo rubro texto)
-    const sinRubro = subrubros.filter(s => !s.rubro_id);
+    const sinRubro = subrubros.filter(s => !s.rubro_id).map(conMonto);
 
-    res.json({ rubros: rubrosMap, sin_clasificar: sinRubro });
+    const totalGeneral = conFechas
+      ? rubrosMap.reduce((a, r) => a + (r.total || 0), 0)
+      : undefined;
+
+    res.json({
+      rubros: rubrosMap,
+      sin_clasificar: sinRubro,
+      ...(conFechas ? { periodo: { desde, hasta }, total_general: totalGeneral } : {}),
+    });
   } catch (err) { next(err); }
 });
 

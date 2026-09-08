@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-interface Subrubro { id: string; nombre: string; rubro_id: string | null; }
-interface Rubro    { id: string; nombre: string; orden: number; subrubros: Subrubro[]; }
+interface Subrubro { id: string; nombre: string; rubro_id: string | null; total?: number; cantidad?: number; }
+interface Rubro    { id: string; nombre: string; orden: number; subrubros: Subrubro[]; total?: number; cantidad?: number; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -20,6 +20,20 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
     },
   });
 };
+
+// Sucursal activa (cookie que setea el toggle TODAS/HUAICO/LAPRIDA). '' = todas.
+const sucursalActiva = () => {
+  if (typeof document === 'undefined') return '';
+  const m = document.cookie.match(/(?:^|;\s*)kp_sucursal_id=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
+
+const fmtMoneda = (n: number) =>
+  '$ ' + Math.round(n).toLocaleString('es-AR');
+
+// Rango por defecto: mes actual (1° → hoy)
+const hoyISO = () => new Date().toISOString().slice(0, 10);
+const inicioMesISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 
 function Spinner() {
   return (
@@ -110,20 +124,32 @@ export default function RubrosClient() {
   const [editRubro,     setEditRubro]     = useState<Rubro | null>(null);
   const [editSubrubro,  setEditSubrubro]  = useState<Subrubro | null>(null);
 
+  const [desde,        setDesde]        = useState(inicioMesISO());
+  const [hasta,        setHasta]        = useState(hoyISO());
+  const [totalGeneral, setTotalGeneral] = useState<number | null>(null);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await apiFetch('/api/rubros-gastos');
+      const qs = new URLSearchParams();
+      if (desde) qs.set('desde', desde);
+      if (hasta) qs.set('hasta', hasta);
+      const suc = sucursalActiva();
+      if (suc) qs.set('sucursal_id', suc);
+      const res  = await apiFetch(`/api/rubros-gastos?${qs.toString()}`);
       const data = await res.json();
       setRubros(data.rubros ?? []);
+      setTotalGeneral(typeof data.total_general === 'number' ? data.total_general : null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [desde, hasta]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
   const totalSub = rubros.reduce((acc, r) => acc + r.subrubros.length, 0);
+
+  const inputFecha = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
 
   return (
     <section className="space-y-5">
@@ -148,6 +174,33 @@ export default function RubrosClient() {
         </button>
       </div>
 
+      {/* Filtro de fechas + total del período */}
+      <div className="flex items-center justify-between flex-wrap gap-3 rounded-xl border border-kp-border bg-kp-surface px-4 py-3">
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Desde</label>
+            <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} className={inputFecha} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Hasta</label>
+            <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} className={inputFecha} />
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => { setDesde(inicioMesISO()); setHasta(hoyISO()); }}
+              className="px-3 py-1.5 rounded-lg border border-kp-border text-xs font-semibold text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
+              Mes actual
+            </button>
+          </div>
+        </div>
+        {totalGeneral != null && (
+          <div className="text-right">
+            <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Total del período</p>
+            <p className="text-xl font-bold text-kp-white tabular-nums">{fmtMoneda(totalGeneral)}</p>
+          </div>
+        )}
+      </div>
+
       {/* Listado */}
       {loading ? (
         <div className="flex justify-center py-20 text-kp-gray"><Spinner /></div>
@@ -160,8 +213,13 @@ export default function RubrosClient() {
           {rubros.map(r => (
             <div key={r.id} className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden flex flex-col">
               <div className="flex items-center justify-between px-4 py-3 bg-kp-surface2 border-b border-kp-border">
-                <h3 className="font-semibold text-kp-white text-sm">{r.nombre}</h3>
-                <div className="flex items-center gap-1">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-kp-white text-sm truncate">{r.nombre}</h3>
+                  {r.total != null && (
+                    <p className="text-base font-bold text-kp-red tabular-nums">{fmtMoneda(r.total)}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setEditRubro(r)} title="Editar rubro"
                     className="p-1.5 rounded-lg text-kp-gray hover:text-kp-white hover:bg-kp-border/40 transition-colors">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -185,7 +243,12 @@ export default function RubrosClient() {
                     {r.subrubros.map(s => (
                       <li key={s.id} className="group flex items-center gap-2 text-sm text-kp-gray-lt">
                         <span className="w-1 h-1 rounded-full bg-kp-red shrink-0" />
-                        <span className="flex-1">{s.nombre}</span>
+                        <span className="flex-1 truncate">{s.nombre}</span>
+                        {s.total != null && (
+                          <span className={`tabular-nums text-xs shrink-0 ${s.total > 0 ? 'text-kp-white font-medium' : 'text-kp-gray'}`}>
+                            {fmtMoneda(s.total)}
+                          </span>
+                        )}
                         <button onClick={() => setEditSubrubro(s)} title="Editar subrubro"
                           className="p-1 rounded text-kp-gray opacity-0 group-hover:opacity-100 hover:text-kp-white transition-all">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
