@@ -162,6 +162,8 @@ export default function EstadoResultados({
   data: ERData; fechaDesde: string; fechaHasta: string;
 }) {
   const { ingresos, costo_mercaderia, gastos, retiros, resultado_acumulado } = data;
+  // Resultado del mes = lo que este mes aporta al acumulado (antes del arrastre).
+  const resultado_del_mes = data.utilidad_neta_producto - retiros.total;
   const mismoPeriodo = fechaDesde.slice(0, 7) === fechaHasta.slice(0, 7);
   const tituloPeriodo = mismoPeriodo ? fmtMes(fechaDesde) : `${fechaDesde} — ${fechaHasta}`;
 
@@ -254,6 +256,7 @@ export default function EstadoResultados({
               <td className="px-5 py-1.5 text-sm text-kp-gray italic" style={{ paddingLeft: 28 }}>(−) Retiros del período</td>
               <td className="px-5 py-1.5 text-sm text-right tabular-nums text-orange-300">{fmtParen(retiros.total)}</td>
             </tr>
+            <Subtotal label="= RESULTADO DEL MES" valor={resultado_del_mes} formula="Utilidad neta del producto − Retiros del período" />
             <tr><td colSpan={2} className="py-1" /></tr>
             <tr className={[
               'border-t-2 border-b-2',
