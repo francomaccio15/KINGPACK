@@ -256,7 +256,22 @@ export default function EstadoResultados({
               <td className="px-5 py-1.5 text-sm text-kp-gray italic" style={{ paddingLeft: 28 }}>(−) Retiros del período</td>
               <td className="px-5 py-1.5 text-sm text-right tabular-nums text-orange-300">{fmtParen(retiros.total)}</td>
             </tr>
-            <Subtotal label="= RESULTADO DEL MES" valor={resultado_del_mes} formula="Utilidad neta del producto − Retiros del período" />
+            <tr><td colSpan={2} className="py-1" /></tr>
+            <tr className={[
+              'border-t-2 border-b-2',
+              resultado_del_mes >= 0 ? 'border-emerald-600/60 bg-emerald-950/40' : 'border-red-600/60 bg-red-950/40',
+            ].join(' ')}>
+              <td className="px-5 py-4 text-lg font-black uppercase tracking-wide text-kp-white">
+                Resultado del mes
+                <span className="ml-2 text-xs font-normal italic text-kp-gray/70 whitespace-normal normal-case tracking-normal">(Utilidad neta del producto − Retiros del período)</span>
+              </td>
+              <td className={[
+                'px-5 py-4 text-2xl font-black text-right tabular-nums',
+                resultado_del_mes >= 0 ? 'text-emerald-400' : 'text-red-400',
+              ].join(' ')}>
+                {fmt(resultado_del_mes)}
+              </td>
+            </tr>
             <tr><td colSpan={2} className="py-1" /></tr>
             <tr className={[
               'border-t-2 border-b-2',
@@ -276,6 +291,20 @@ export default function EstadoResultados({
           </tbody>
         </table>
         </div>
+      </div>
+
+      {/* Card destacada: el resultado del mes es lo que más importa */}
+      <div className={[
+        'rounded-xl border-2 p-5 flex items-center justify-between flex-wrap gap-2',
+        resultado_del_mes >= 0 ? 'border-emerald-600/60 bg-emerald-950/30' : 'border-red-600/60 bg-red-950/30',
+      ].join(' ')}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-kp-gray mb-1">Resultado del mes</p>
+          <p className="text-xs text-kp-gray/70">Utilidad neta del producto − Retiros del período</p>
+        </div>
+        <p className={['text-3xl md:text-4xl font-black tabular-nums', resultado_del_mes >= 0 ? 'text-emerald-400' : 'text-red-400'].join(' ')}>
+          {fmt(resultado_del_mes)}
+        </p>
       </div>
 
       {/* Cards resumen */}
