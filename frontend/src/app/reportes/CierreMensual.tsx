@@ -41,6 +41,7 @@ export default function CierreMensual({ anio, mes }: { anio: number; mes: number
   const [busy, setBusy]       = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Record<string, EgresoDetalle[] | 'loading'>>({});
+  const [sucCache, setSucCache] = useState<string>('');
 
   const cargar = useCallback(async () => {
     const res = await apiFetch(`/api/reportes/estado-resultados/cierre?anio=${anio}&mes=${mes}`);
@@ -56,10 +57,16 @@ export default function CierreMensual({ anio, mes }: { anio: number; mes: number
   async function toggleDetalle(categoria_resultado_id: string) {
     if (abierta === categoria_resultado_id) { setAbierta(null); return; }
     setAbierta(categoria_resultado_id);
-    if (!detalles[categoria_resultado_id]) {
+    const suc = typeof document !== 'undefined'
+      ? (document.cookie.match(/(?:^|;\s*)kp_sucursal_id=([^;]*)/)?.[1] ?? '')
+      : '';
+    // Si cambió la sucursal activa desde la última carga, invalido el cache
+    let cache = detalles;
+    if (suc !== sucCache) { cache = {}; setDetalles({}); setSucCache(suc); }
+    if (!cache[categoria_resultado_id]) {
       setDetalles(d => ({ ...d, [categoria_resultado_id]: 'loading' }));
       const res = await apiFetch(
-        `/api/reportes/estado-resultados/cierre/detalle?anio=${anio}&mes=${mes}&categoria_resultado_id=${categoria_resultado_id}`
+        `/api/reportes/estado-resultados/cierre/detalle?anio=${anio}&mes=${mes}&categoria_resultado_id=${categoria_resultado_id}&sucursal_id=${encodeURIComponent(suc)}`
       );
       const data = res.ok ? await res.json() : { egresos: [] };
       setDetalles(d => ({ ...d, [categoria_resultado_id]: data.egresos || [] }));

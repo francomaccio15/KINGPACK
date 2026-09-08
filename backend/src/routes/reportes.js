@@ -620,6 +620,10 @@ router.get('/estado-resultados/cierre/detalle', async (req, res, next) => {
     if (!categoria_id) {
       return res.status(400).json({ error: 'categoria_resultado_id es obligatorio' });
     }
+    // '' o ausente = Todas; UUID = filtrar por esa sucursal (coincide con el selector del header)
+    const sucursal_id = req.query.sucursal_id && String(req.query.sucursal_id).trim() !== ''
+      ? req.query.sucursal_id
+      : null;
     const desde = primerDiaHabil(anio, mes);
     const esMesActual = anio === parseInt(hoy.slice(0, 4), 10) && mes === parseInt(hoy.slice(5, 7), 10);
     const hasta = esMesActual ? hoy : ultimoDiaMes(anio, mes);
@@ -649,8 +653,9 @@ router.get('/estado-resultados/cierre/detalle', async (req, res, next) => {
       WHERE e.deleted_at IS NULL
         AND e.fecha_emision::date BETWEEN $1 AND $2
         AND e.tipo_operacion <> 'compra_mercaderia'
+        AND ($4::uuid IS NULL OR e.sucursal_id = $4::uuid)
       ORDER BY e.fecha_emision DESC, e.total DESC
-    `, [desde, hasta, categoria_id]);
+    `, [desde, hasta, categoria_id, sucursal_id]);
 
     const total = rows.reduce((s, r) => s + r.monto, 0);
     res.json({ anio, mes, categoria_resultado_id: categoria_id, cantidad: rows.length, total, egresos: rows });
