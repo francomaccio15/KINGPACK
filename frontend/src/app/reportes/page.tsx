@@ -6,6 +6,7 @@ import FiltrosReportes from './FiltrosReportes';
 import ReporteGastos from './ReporteGastos';
 import EstadoResultados from './EstadoResultados';
 import CierreMensual from './CierreMensual';
+import SelectorPeriodoCierre from './SelectorPeriodoCierre';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,8 +166,8 @@ export default async function ReportesPage({
     const res = await serverFetch(`/api/reportes/gastos?${qs}`, { cache: 'no-store' });
     gastosData = res.ok ? await res.json() : null;
   } else if (tab === 'er') {
-    // Modo mensual por defecto (primer día hábil → hoy). Si el usuario eligió un
-    // rango custom (fecha_desde/fecha_hasta en la URL), se pasa ese rango.
+    // Modo mensual: el usuario elige mes/año con el selector (?anio=&mes=).
+    // Si eligió un rango custom (fecha_desde/fecha_hasta en la URL), se pasa ese rango.
     const customRange = !!(searchParams.fecha_desde || searchParams.fecha_hasta);
     const qs = new URLSearchParams();
     if (customRange) {
@@ -174,8 +175,8 @@ export default async function ReportesPage({
       qs.set('fecha_hasta', fechaHasta);
     } else {
       const hoy = new Date();
-      qs.set('anio', String(hoy.getFullYear()));
-      qs.set('mes', String(hoy.getMonth() + 1));
+      qs.set('anio', String(parseInt(searchParams.anio as string, 10) || hoy.getFullYear()));
+      qs.set('mes',  String(parseInt(searchParams.mes  as string, 10) || hoy.getMonth() + 1));
     }
     const res = await serverFetch(`/api/reportes/estado-resultados?${qs}`, { cache: 'no-store' });
     erData = res.ok ? await res.json() : null;
@@ -193,6 +194,13 @@ export default async function ReportesPage({
 
   // Tabs helper
   const makeTabHref = (t: string) => {
+    // El Estado de Resultados usa modo mensual (selector de mes/año), no rango.
+    if (t === 'er') {
+      const hoy = new Date();
+      const a = parseInt(searchParams.anio as string, 10) || hoy.getFullYear();
+      const m = parseInt(searchParams.mes  as string, 10) || hoy.getMonth() + 1;
+      return `/reportes?${new URLSearchParams({ tab: t, anio: String(a), mes: String(m) })}`;
+    }
     const p = new URLSearchParams({ tab: t, fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
     return `/reportes?${p}`;
   };
@@ -208,6 +216,12 @@ export default async function ReportesPage({
           </p>
         </div>
         {tab === 'ventas' && <FiltrosReportes fechaDesde={fechaDesde} fechaHasta={fechaHasta} />}
+        {tab === 'er' && !searchParams.fecha_desde && !searchParams.fecha_hasta && (
+          <SelectorPeriodoCierre
+            anio={parseInt(searchParams.anio as string, 10) || new Date().getFullYear()}
+            mes={parseInt(searchParams.mes as string, 10) || new Date().getMonth() + 1}
+          />
+        )}
       </div>
 
       {/* Tabs */}
