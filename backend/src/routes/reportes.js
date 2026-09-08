@@ -508,6 +508,17 @@ router.get('/estado-resultados', async (req, res, next) => {
       DO UPDATE SET resultado_acumulado = EXCLUDED.resultado_acumulado
     `, [anio, mes, resultado_acumulado]);
 
+    // Fecha de inicio del acumulado = período más antiguo registrado.
+    const inicioRes = await pool.query(`
+      SELECT periodo_anio, periodo_mes
+      FROM cierre_mensual
+      ORDER BY periodo_anio ASC, periodo_mes ASC
+      LIMIT 1
+    `);
+    const inicio_acumulado = inicioRes.rows[0]
+      ? { anio: inicioRes.rows[0].periodo_anio, mes: inicioRes.rows[0].periodo_mes }
+      : null;
+
     res.json({
       cierre_pendiente: false,
       anio, mes,
@@ -540,6 +551,7 @@ router.get('/estado-resultados', async (req, res, next) => {
       resultado_acumulado: {
         acumulado_anterior: acum_anterior,
         total: resultado_acumulado,
+        inicio: inicio_acumulado,
       },
     });
   } catch (err) { next(err); }

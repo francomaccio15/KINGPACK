@@ -55,6 +55,7 @@ interface ERData {
   resultado_acumulado: {
     acumulado_anterior: number;
     total:              number;
+    inicio?:            { anio: number; mes: number } | null;
   };
 }
 
@@ -76,15 +77,21 @@ function fmtMes(iso: string) {
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 /** Fila de sección (título principal en negrita) */
-function SeccionHeader({ titulo }: { titulo: string }) {
+function SeccionHeader({ titulo, sub }: { titulo: string; sub?: string }) {
   return (
     <tr className="bg-kp-surface2/60">
       <td colSpan={2} className="px-5 py-2 text-xs font-black uppercase tracking-widest text-kp-gray">
         {titulo}
+        {sub && <span className="ml-2 font-normal normal-case tracking-normal text-kp-gray/60">{sub}</span>}
       </td>
     </tr>
   );
 }
+
+const MESES_LBL = ['enero','febrero','marzo','abril','mayo','junio',
+                   'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const fmtInicio = (i?: { anio: number; mes: number } | null) =>
+  i ? `${MESES_LBL[i.mes - 1]} ${i.anio}` : null;
 
 /** Fila de línea simple */
 function Linea({
@@ -243,7 +250,10 @@ export default function EstadoResultados({
             <Separador />
 
             {/* ─── Resultado acumulado ─── */}
-            <SeccionHeader titulo="Resultado Acumulado" />
+            <SeccionHeader
+              titulo="Resultado Acumulado"
+              sub={fmtInicio(resultado_acumulado.inicio) ? `· acumulando desde ${fmtInicio(resultado_acumulado.inicio)}` : undefined}
+            />
             <tr className="border-b border-kp-border/30">
               <td className="px-5 py-1.5 text-sm text-kp-gray" style={{ paddingLeft: 28 }}>Acumulado del mes anterior</td>
               <td className="px-5 py-1.5 text-sm text-right tabular-nums text-kp-white">{fmt(resultado_acumulado.acumulado_anterior)}</td>
@@ -317,7 +327,8 @@ export default function EstadoResultados({
           { label: 'Utilidad neta del producto', value: fmt(data.utilidad_neta_producto),
             color: data.utilidad_neta_producto >= 0 ? 'text-emerald-400' : 'text-red-400' },
           { label: 'Resultado acumulado', value: fmt(resultado_acumulado.total),
-            color: resultado_acumulado.total >= 0 ? 'text-emerald-400' : 'text-red-400' },
+            color: resultado_acumulado.total >= 0 ? 'text-emerald-400' : 'text-red-400',
+            sub: fmtInicio(resultado_acumulado.inicio) ? `desde ${fmtInicio(resultado_acumulado.inicio)}` : undefined },
         ].map(c => (
           <div key={c.label} className="rounded-xl border border-kp-border bg-kp-surface p-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">{c.label}</p>
