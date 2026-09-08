@@ -1,11 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Subrubro { id: string; nombre: string; rubro_id: string | null; total?: number; cantidad?: number; }
-interface Rubro    { id: string; nombre: string; orden: number; subrubros: Subrubro[]; total?: number; cantidad?: number; }
+interface Rubro    {
+  id: string; nombre: string; orden: number; subrubros: Subrubro[];
+  total?: number; cantidad?: number;
+  categoria_resultado_id?: string | null;
+  categoria_nombre?: string | null;
+  categoria_seccion?: string | null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -34,6 +41,14 @@ const fmtMoneda = (n: number) =>
 // Rango por defecto: mes actual (1° → hoy)
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const inicioMesISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+
+// Link al Estado de Resultados (modo mensual). Toma el mes del inicio del rango
+// y ancla en la categoría correspondiente (#cat-<id>).
+const hrefEstadoResultados = (desdeISO: string, categoriaId: string) => {
+  const [y, m] = desdeISO.split('-');
+  const qs = new URLSearchParams({ tab: 'er', anio: y, mes: String(parseInt(m, 10)) });
+  return `/reportes?${qs.toString()}#cat-${categoriaId}`;
+};
 
 function Spinner() {
   return (
@@ -261,6 +276,20 @@ export default function RubrosClient() {
                   </ul>
                 )}
               </div>
+              {r.categoria_resultado_id && r.categoria_seccion !== 'excluido' && (
+                <Link
+                  href={hrefEstadoResultados(desde, r.categoria_resultado_id)}
+                  title={`Ver "${r.categoria_nombre}" en el Estado de Resultados`}
+                  className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-kp-border bg-kp-surface2/40 text-xs font-semibold text-kp-gray hover:text-kp-red hover:bg-kp-surface2 transition-colors">
+                  <span className="truncate">
+                    Ver en Estado de Resultados
+                    {r.categoria_nombre && <span className="text-kp-gray/60"> · {r.categoria_nombre}</span>}
+                  </span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0">
+                    <path d="M5 12h14" /><path d="M12 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              )}
             </div>
           ))}
         </div>

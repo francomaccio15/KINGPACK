@@ -41,7 +41,15 @@ router.get('/', async (req, res, next) => {
     }
 
     const [{ rows: rubros }, { rows: subrubros }, { rows: totales }] = await Promise.all([
-      pool.query(`SELECT id, nombre, orden FROM rubros_gastos ORDER BY orden, nombre`),
+      pool.query(`
+        SELECT rg.id, rg.nombre, rg.orden,
+               rg.categoria_resultado_id,
+               cr.nombre  AS categoria_nombre,
+               cr.seccion AS categoria_seccion
+        FROM rubros_gastos rg
+        LEFT JOIN categorias_resultado cr ON cr.id = rg.categoria_resultado_id
+        ORDER BY rg.orden, rg.nombre
+      `),
       pool.query(`
         SELECT id, nombre, rubro_id, rubro AS rubro_texto
         FROM subrubro_gastos

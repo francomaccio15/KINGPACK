@@ -42,6 +42,7 @@ export default function CierreMensual({ anio, mes, sucursalId = '' }: { anio: nu
   const [abierta, setAbierta] = useState<string | null>(null);
   const [detalles, setDetalles] = useState<Record<string, EgresoDetalle[] | 'loading'>>({});
   const [sucCache, setSucCache] = useState<string>('');
+  const [resaltada, setResaltada] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const res = await apiFetch(`/api/reportes/estado-resultados/cierre?anio=${anio}&mes=${mes}&sucursal_id=${encodeURIComponent(sucursalId)}`);
@@ -55,6 +56,22 @@ export default function CierreMensual({ anio, mes, sucursalId = '' }: { anio: nu
   useEffect(() => { cargar(); }, [cargar]);
   // Al cambiar de sucursal, cierro el detalle abierto y limpio el cache
   useEffect(() => { setAbierta(null); setDetalles({}); setSucCache(sucursalId); }, [sucursalId]);
+
+  // Al llegar con un #cat-<id> (link desde Rubros de Egresos), una vez cargadas
+  // las categorías, hago scroll a esa fila y la resalto unos segundos.
+  useEffect(() => {
+    if (loading || cats.length === 0) return;
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const m = hash.match(/^#cat-(.+)$/);
+    if (!m) return;
+    const id = m[1];
+    if (!cats.some(c => c.categoria_id === id)) return;
+    setResaltada(id);
+    const el = document.getElementById(`cat-${id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = setTimeout(() => setResaltada(null), 3000);
+    return () => clearTimeout(t);
+  }, [loading, cats]);
 
   async function toggleDetalle(categoria_resultado_id: string) {
     if (abierta === categoria_resultado_id) { setAbierta(null); return; }
@@ -134,7 +151,9 @@ export default function CierreMensual({ anio, mes, sucursalId = '' }: { anio: nu
           <tbody>
             {cats.map(c => (
               <Fragment key={c.categoria_id}>
-              <tr className="border-b border-kp-border/40 hover:bg-kp-surface2/30 transition-colors">
+              <tr id={`cat-${c.categoria_id}`}
+                  className={['border-b border-kp-border/40 hover:bg-kp-surface2/30 transition-colors scroll-mt-24',
+                    resaltada === c.categoria_id ? 'bg-kp-red/15 ring-2 ring-inset ring-kp-red/60' : ''].join(' ')}>
                 <td className="px-5 py-3 text-sm font-semibold text-kp-white">
                   <button
                     type="button"

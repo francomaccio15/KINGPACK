@@ -110,10 +110,10 @@ function Linea({
 }
 
 /** Cabecera de categoría de gasto (negrita, con total) */
-function CategoriaHeader({ nombre, total }: { nombre: string; total: number }) {
+function CategoriaHeader({ nombre, total, id }: { nombre: string; total: number; id?: string }) {
   const cero = total === 0;
   return (
-    <tr className="bg-kp-surface2/20 border-b border-kp-border/40">
+    <tr id={id} className="bg-kp-surface2/20 border-b border-kp-border/40 scroll-mt-24 target:bg-kp-red/15 target:ring-2 target:ring-inset target:ring-kp-red/60">
       <td className="px-5 py-2 text-sm font-bold text-kp-white" style={{ paddingLeft: 28 }}>
         {nombre}
       </td>
@@ -212,7 +212,7 @@ export default function EstadoResultados({
             {gastos.categorias.map(cat => {
               const subsNoCero = cat.rubros.flatMap(r => r.subrubros.filter(s => !s.es_cero));
               return (
-                <CategoriaBloque key={cat.categoria_id} cat={cat} subsNoCero={subsNoCero} />
+                <CategoriaBloque key={cat.categoria_id} cat={cat} subsNoCero={subsNoCero} id={`cat-${cat.categoria_id}`} />
               );
             })}
             <Subtotal label="= Total gastos operativos" valor={-gastos.total} />
@@ -223,7 +223,12 @@ export default function EstadoResultados({
             <Separador />
 
             {/* ─── Retiros del período ─── */}
-            <SeccionHeader titulo="Retiros del Período" />
+            <tr id={retiros.categorias[0] ? `cat-${retiros.categorias[0].categoria_id}` : undefined}
+                className="bg-kp-surface2/60 scroll-mt-24 target:bg-kp-red/15 target:ring-2 target:ring-inset target:ring-kp-red/60">
+              <td colSpan={2} className="px-5 py-2 text-xs font-black uppercase tracking-widest text-kp-gray">
+                Retiros del Período
+              </td>
+            </tr>
             {retiros.categorias.flatMap(cat =>
               cat.rubros.flatMap(r => r.subrubros)
             ).map(s => (
@@ -289,10 +294,10 @@ export default function EstadoResultados({
 }
 
 /** Bloque de una categoría de gasto: cabecera + subrubros con monto > 0 */
-function CategoriaBloque({ cat, subsNoCero }: { cat: Categoria; subsNoCero: Subrubro[] }) {
+function CategoriaBloque({ cat, subsNoCero, id }: { cat: Categoria; subsNoCero: Subrubro[]; id?: string }) {
   return (
     <>
-      <CategoriaHeader nombre={cat.categoria} total={cat.total} />
+      <CategoriaHeader nombre={cat.categoria} total={cat.total} id={id} />
       {subsNoCero.map(s => (
         <Linea key={s.subrubro_id} label={s.subrubro} valor={s.monto} nivel={2} negativo />
       ))}
