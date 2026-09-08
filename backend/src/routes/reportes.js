@@ -608,6 +608,55 @@ router.get('/estado-resultados/cierre', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/reportes/estado-resultados/cierre/detalle?anio=&mes=&categoria_resultado_id=
+// Devuelve los comprobantes (egresos) que componen el monto de una categoría del mes,
+// para que se pueda revisar y detectar errores antes de confirmar.
+router.get('/estado-resultados/cierre/detalle', async (req, res, next) => {
+  try {
+    const hoy  = new Date().toISOString().slice(0, 10);
+    const anio = parseInt(req.query.anio, 10) || parseInt(hoy.slice(0, 4), 10);
+    const mes  = parseInt(req.query.mes, 10)  || parseInt(hoy.slice(5, 7), 10);
+    const categoria_id = req.query.categoria_resultado_id;
+    if (!categoria_id) {
+      return res.status(400).json({ error: 'categoria_resultado_id es obligatorio' });
+    }
+    const desde = primerDiaHabil(anio, mes);
+    const esMesActual = anio === parseInt(hoy.slice(0, 4), 10) && mes === parseInt(hoy.slice(5, 7), 10);
+    const hasta = esMesActual ? hoy : ultimoDiaMes(anio, mes);
+
+    const { rows } = await pool.query(`
+      SELECT
+        e.id,
+        e.fecha_emision::text                         AS fecha,
+        COALESCE(pr.razon_social, e.descripcion, '—') AS proveedor,
+        e.descripcion                                 AS descripcion,
+        NULLIF(TRIM(CONCAT_WS(' ',
+          e.tipo_comprobante,
+          CASE WHEN e.punto_venta IS NOT NULL AND e.numero_comprobante IS NOT NULL
+               THEN LPAD(e.punto_venta::text, 4, '0') || '-' || LPAD(e.numero_comprobante::text, 8, '0')
+               ELSE COALESCE(e.numero_comprobante::text, '') END
+        )), '')                                       AS comprobante,
+        COALESCE(rg.nombre, 'Sin rubro')              AS rubro,
+        COALESCE(sg.nombre, 'Sin subrubro')           AS subrubro,
+        e.total::float                                AS monto,
+        e.estado_pago,
+        s.nombre                                      AS sucursal
+      FROM egresos e
+      JOIN subrubro_gastos sg ON sg.id = e.subrubro_gasto_id
+      JOIN rubros_gastos   rg ON rg.id = sg.rubro_id AND rg.categoria_resultado_id = $3
+      LEFT JOIN proveedores pr ON pr.id = e.proveedor_id
+      LEFT JOIN sucursales   s ON s.id  = e.sucursal_id
+      WHERE e.deleted_at IS NULL
+        AND e.fecha_emision::date BETWEEN $1 AND $2
+        AND e.tipo_operacion <> 'compra_mercaderia'
+      ORDER BY e.fecha_emision DESC, e.total DESC
+    `, [desde, hasta, categoria_id]);
+
+    const total = rows.reduce((s, r) => s + r.monto, 0);
+    res.json({ anio, mes, categoria_resultado_id: categoria_id, cantidad: rows.length, total, egresos: rows });
+  } catch (err) { next(err); }
+});
+
 // POST /api/reportes/estado-resultados/cierre/confirmar { anio, mes, categoria_resultado_id }
 // Confirma una categoría del mes (sirve también para confirmar $0).
 router.post('/estado-resultados/cierre/confirmar', async (req, res, next) => {
