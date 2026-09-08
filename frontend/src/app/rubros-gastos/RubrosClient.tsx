@@ -38,15 +38,20 @@ const sucursalActiva = () => {
 const fmtMoneda = (n: number) =>
   '$ ' + Math.round(n).toLocaleString('es-AR');
 
-// Rango por defecto: mes actual (1° → hoy)
-const hoyISO = () => new Date().toISOString().slice(0, 10);
-const inicioMesISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-// Link al Estado de Resultados (modo mensual). Toma el mes del inicio del rango
-// y ancla en la categoría correspondiente (#cat-<id>).
-const hrefEstadoResultados = (desdeISO: string, categoriaId: string) => {
-  const [y, m] = desdeISO.split('-');
-  const qs = new URLSearchParams({ tab: 'er', anio: y, mes: String(parseInt(m, 10)) });
+// Período mensual → rango de fechas [1° … último día del mes]
+const rangoDelMes = (anio: number, mes: number) => {
+  const desde = `${anio}-${String(mes).padStart(2, '0')}-01`;
+  const ultimo = new Date(anio, mes, 0).getDate();
+  const hasta = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+  return { desde, hasta };
+};
+
+// Link al Estado de Resultados (modo mensual), anclado en la categoría (#cat-<id>).
+const hrefEstadoResultados = (anio: number, mes: number, categoriaId: string) => {
+  const qs = new URLSearchParams({ tab: 'er', anio: String(anio), mes: String(mes) });
   return `/reportes?${qs.toString()}#cat-${categoriaId}`;
 };
 
@@ -139,16 +144,16 @@ export default function RubrosClient() {
   const [editRubro,     setEditRubro]     = useState<Rubro | null>(null);
   const [editSubrubro,  setEditSubrubro]  = useState<Subrubro | null>(null);
 
-  const [desde,        setDesde]        = useState(inicioMesISO());
-  const [hasta,        setHasta]        = useState(hoyISO());
+  const ahora = new Date();
+  const [anio,         setAnio]         = useState(ahora.getFullYear());
+  const [mes,          setMes]          = useState(ahora.getMonth() + 1);
   const [totalGeneral, setTotalGeneral] = useState<number | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = new URLSearchParams();
-      if (desde) qs.set('desde', desde);
-      if (hasta) qs.set('hasta', hasta);
+      const { desde, hasta } = rangoDelMes(anio, mes);
+      const qs = new URLSearchParams({ desde, hasta });
       const suc = sucursalActiva();
       if (suc) qs.set('sucursal_id', suc);
       const res  = await apiFetch(`/api/rubros-gastos?${qs.toString()}`);
@@ -158,13 +163,24 @@ export default function RubrosClient() {
     } finally {
       setLoading(false);
     }
-  }, [desde, hasta]);
+  }, [anio, mes]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  // Navegación relativa entre meses (normaliza el rollover de año)
+  const irRelativo = (delta: number) => {
+    const base = new Date(anio, mes - 1 + delta, 1);
+    setAnio(base.getFullYear());
+    setMes(base.getMonth() + 1);
+  };
+  const esFuturo = anio > ahora.getFullYear() || (anio === ahora.getFullYear() && mes >= ahora.getMonth() + 1);
+  const anios: number[] = [];
+  for (let a = ahora.getFullYear(); a >= 2024; a--) anios.push(a);
+
   const totalSub = rubros.reduce((acc, r) => acc + r.subrubros.length, 0);
 
-  const inputFecha = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-1.5 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors';
+  const selPeriodo = 'bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors [color-scheme:dark]';
+  const btnNav = 'px-2.5 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-gray text-sm font-semibold hover:text-kp-white hover:border-kp-red/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
   return (
     <section className="space-y-5">
@@ -189,28 +205,28 @@ export default function RubrosClient() {
         </button>
       </div>
 
-      {/* Filtro de fechas + total del período */}
+      {/* Selector de período mensual + total del mes */}
       <div className="flex items-center justify-between flex-wrap gap-3 rounded-xl border border-kp-border bg-kp-surface px-4 py-3">
-        <div className="flex items-end gap-3 flex-wrap">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Desde</label>
-            <input type="date" value={desde} max={hasta || undefined} onChange={e => setDesde(e.target.value)} className={inputFecha} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1">Hasta</label>
-            <input type="date" value={hasta} min={desde || undefined} onChange={e => setHasta(e.target.value)} className={inputFecha} />
-          </div>
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => { setDesde(inicioMesISO()); setHasta(hoyISO()); }}
-              className="px-3 py-1.5 rounded-lg border border-kp-border text-xs font-semibold text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
-              Mes actual
-            </button>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold uppercase tracking-widest text-kp-gray mr-1">Período</span>
+          <button type="button" onClick={() => irRelativo(-1)} title="Mes anterior" className={btnNav}>◀</button>
+          <select value={mes} onChange={e => setMes(parseInt(e.target.value, 10))} className={selPeriodo}>
+            {MESES.map((nombre, i) => <option key={i} value={i + 1}>{nombre}</option>)}
+          </select>
+          <select value={anio} onChange={e => setAnio(parseInt(e.target.value, 10))} className={selPeriodo}>
+            {anios.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button type="button" onClick={() => irRelativo(1)} disabled={esFuturo} title="Mes siguiente" className={btnNav}>▶</button>
+          <button
+            type="button"
+            onClick={() => { setAnio(ahora.getFullYear()); setMes(ahora.getMonth() + 1); }}
+            className="px-3 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-kp-gray text-xs font-semibold hover:text-kp-white hover:border-kp-red/50 transition-colors">
+            Mes actual
+          </button>
         </div>
         {totalGeneral != null && (
           <div className="text-right">
-            <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Total del período</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-kp-gray">Total {MESES[mes - 1]} {anio}</p>
             <p className="text-xl font-bold text-kp-white tabular-nums">{fmtMoneda(totalGeneral)}</p>
           </div>
         )}
@@ -278,7 +294,7 @@ export default function RubrosClient() {
               </div>
               {r.categoria_resultado_id && r.categoria_seccion !== 'excluido' && (
                 <Link
-                  href={hrefEstadoResultados(desde, r.categoria_resultado_id)}
+                  href={hrefEstadoResultados(anio, mes, r.categoria_resultado_id)}
                   title={`Ver "${r.categoria_nombre}" en el Estado de Resultados`}
                   className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-kp-border bg-kp-surface2/40 text-xs font-semibold text-kp-gray hover:text-kp-red hover:bg-kp-surface2 transition-colors">
                   <span className="truncate">
