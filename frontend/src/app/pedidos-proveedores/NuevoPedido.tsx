@@ -72,6 +72,12 @@ export default function NuevoPedido({
         a.codigo.toLowerCase().includes(artQ.toLowerCase())
       );
 
+  // Al abrir, re-leer la sucursal activa del header (cambia con router.refresh
+  // sin remontar este componente).
+  useEffect(() => {
+    if (open) setSucursalId(sucursalPorDefecto(sucursales));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handler = (e: MouseEvent) => {

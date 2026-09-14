@@ -168,6 +168,12 @@ export default function NuevoPresupuesto({
     resetModal();
   }, [resetModal]);
 
+  // Al abrir, re-leer la sucursal activa del header (cambia con router.refresh
+  // sin remontar este componente).
+  useEffect(() => {
+    if (open) setSucursalId(initialSucursal);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Article search (debounced) ─────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;

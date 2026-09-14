@@ -162,6 +162,13 @@ export default function NuevaVenta({
   // ── Sucursal (arranca en la activa del selector del header)
   const [sucursalId, setSucursalId] = useState<string>(sucursalPorDefecto(sucursales));
 
+  // Al abrir el modal, re-leer la sucursal activa del header. El header cambia
+  // con router.refresh (no remonta este componente), así que sin esto el
+  // desplegable quedaría con la sucursal que estaba al cargar la página.
+  useEffect(() => {
+    if (open) setSucursalId(sucursalPorDefecto(sucursales));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Article search
   const [artQuery, setArtQuery]       = useState('');
   const [artResults, setArtResults]   = useState<ArticuloResult[]>([]);

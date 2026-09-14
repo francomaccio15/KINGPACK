@@ -67,6 +67,12 @@ export default function AgregarCheque() {
     });
   }, [open, sucursales.length]);
 
+  // Al abrir, re-leer la sucursal activa del header (cambia con router.refresh
+  // sin remontar este componente).
+  useEffect(() => {
+    if (open && sucursales.length > 0) setSucursalId(sucursalPorDefecto(sucursales));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Reajustar estado por defecto al cambiar el tipo
   useEffect(() => {
     setEstado(tipo === 'recibido' ? 'en_cartera' : 'emitido');

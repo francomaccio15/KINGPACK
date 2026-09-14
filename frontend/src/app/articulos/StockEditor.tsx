@@ -183,6 +183,14 @@ export default function StockEditor({
   sucursales: Sucursal[]; sucursalActivaId: string;
 }) {
   const [sucursalId, setSucursalId] = useState(sucursalActivaId || sucursales.find(s => /laprida/i.test(s.nombre))?.id || sucursales[0]?.id || '');
+
+  // Al cambiar la sucursal en el selector del header (router.refresh reinyecta
+  // sucursalActivaId como prop, pero el estado del cliente no se re-inicializa
+  // solo), sincronizar el desplegable. En vista "Todas" (id vacío) se mantiene
+  // la última sucursal elegida, porque acá siempre se edita una en concreto.
+  useEffect(() => {
+    if (sucursalActivaId) setSucursalId(sucursalActivaId);
+  }, [sucursalActivaId]);
   const [q, setQ]             = useState('');
   const [arts, setArts]       = useState<Art[]>([]);
   const [loading, setLoading] = useState(false);
