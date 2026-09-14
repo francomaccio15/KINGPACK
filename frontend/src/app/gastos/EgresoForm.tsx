@@ -146,6 +146,23 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   );
   const nextKey = useRef(edicion?.items?.length ?? 0);
 
+  // Al cambiar la sucursal del encabezado, re-apuntar los ítems que venían
+  // siguiéndola (los que apuntan a la sucursal anterior o no tienen sucursal
+  // propia). Así el stock se acredita en la sucursal elegida arriba, aunque los
+  // artículos se hayan agregado antes de cambiarla. No pisa una sucursal que el
+  // usuario haya elegido a mano por ítem (queda distinta de la del encabezado).
+  const prevSucursalRef = useRef(sucursalId);
+  useEffect(() => {
+    const prev = prevSucursalRef.current;
+    prevSucursalRef.current = sucursalId;
+    if (prev === sucursalId) return;
+    setItems(prevItems => prevItems.map(i =>
+      (!i.sucursal_imputacion_id || i.sucursal_imputacion_id === prev)
+        ? { ...i, sucursal_imputacion_id: sucursalId }
+        : i
+    ));
+  }, [sucursalId]);
+
   // Bonificaciones / descuento extra en cascada sobre el subtotal de ítems
   const [bonificaciones, setBonificaciones] = useState<{ pct: string }[]>(
     (edicion?.bonificaciones ?? []).map(b => ({ pct: String(b.pct) }))
