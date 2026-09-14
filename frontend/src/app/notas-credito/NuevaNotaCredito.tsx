@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NotaCredito, NcItem } from './page';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -182,6 +182,16 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const [buscandoVenta,   setBuscandoVenta]    = useState(false);
   const [errorVenta,      setErrorVenta]       = useState('');
   const [facturaId,       setFacturaId]        = useState('');
+
+  // Reflejar en vivo el cambio del selector del header, salvo que ya se haya
+  // cargado una venta (la NC toma la sucursal de esa venta).
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (ventaCargada) return;
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[], facturacion?: Record<string, unknown> | null) => {
     if (venta.cliente_id)  setClienteId(String(venta.cliente_id));

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -153,6 +153,13 @@ export default function PagosProveedorClient() {
   // Forma de pago (uno o varios medios: pago dividido)
   const [medios, setMedios]               = useState<MedioLinea[]>([]);
   const [sucursalId, setSucursalId]       = useState('');
+  // Reflejar en vivo el cambio del selector del header.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva, sucursales]); // eslint-disable-line react-hooks/exhaustive-deps
   const [fecha, setFecha]                 = useState(hoyAR());
   const [observaciones, setObs]           = useState('');
   const [cheques, setCheques]             = useState<Cheque[]>([]);

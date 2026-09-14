@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 type Sucursal = { id: string; nombre: string };
 type Articulo = { id: string; nombre: string; codigo: string };
@@ -56,6 +57,16 @@ export default function NuevoTraspaso({
   const [destinoId, setDestinoId] = useState('');
   const [notas, setNotas]         = useState('');
   const [items, setItems]         = useState<LineItem[]>([]);
+
+  // El origen sigue en vivo la sucursal del selector del header. Si el destino
+  // queda igual al nuevo origen, se limpia (no se puede traspasar a sí misma).
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setOrigenId(sucursalActiva);
+      setDestinoId(prev => (prev === sucursalActiva ? '' : prev));
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [artQ, setArtQ]         = useState('');
   const [dropOpen, setDropOpen] = useState(false);

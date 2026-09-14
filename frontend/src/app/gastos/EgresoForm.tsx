@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NumericInput from '@/components/NumericInput';
@@ -146,6 +146,16 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
     })) ?? []
   );
   const nextKey = useRef(edicion?.items?.length ?? 0);
+
+  // Reflejar en vivo la sucursal del selector del header (salvo en edición, que
+  // conserva la sucursal original del egreso).
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (esEdicion) return;
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva, sucursales]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Al cambiar la sucursal del encabezado, re-apuntar los ítems que venían
   // siguiéndola (los que apuntan a la sucursal anterior o no tienen sucursal

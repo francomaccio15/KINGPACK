@@ -1,10 +1,16 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+// Nombre del evento que dispara el selector del header (SucursalSelector) cuando
+// el usuario cambia de sucursal. Sirve para avisarle a todos los desplegables de
+// sucursal de los formularios, que viven en componentes cliente que NO se
+// remontan con el router.refresh del selector.
+export const SUCURSAL_EVENT = 'kp-sucursal-change';
+
 // Lee la sucursal activa (la del selector TODAS/HUAICO/LAPRIDA del header) desde
 // la cookie `kp_sucursal_id`, del lado del cliente. Devuelve '' cuando la vista
 // activa es "Todas" o no hay cookie todavía.
-//
-// Sirve para que los formularios de alta (ventas, compras/cargas de productos,
-// pagos, cheques, etc.) arranquen con la sucursal que el usuario tiene elegida
-// arriba, en vez de forzar siempre Laprida.
 export function getSucursalActivaCliente(): string {
   if (typeof document === 'undefined') return '';
   const m = document.cookie.match(/(?:^|;\s*)kp_sucursal_id=([^;]*)/);
@@ -24,4 +30,24 @@ export function sucursalPorDefecto(
     sucursales[0]?.id ??
     ''
   );
+}
+
+// Hook reactivo: devuelve el id de la sucursal activa del header y se actualiza
+// solo cuando cambia (evento del selector, cookie compartida entre pestañas, o
+// al volver el foco a la pestaña). '' = vista "Todas".
+export function useSucursalActiva(): string {
+  const [id, setId] = useState<string>('');
+
+  useEffect(() => {
+    setId(getSucursalActivaCliente());
+    const sync = () => setId(getSucursalActivaCliente());
+    window.addEventListener(SUCURSAL_EVENT, sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.removeEventListener(SUCURSAL_EVENT, sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, []);
+
+  return id;
 }

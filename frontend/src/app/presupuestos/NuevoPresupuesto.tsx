@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,6 +173,14 @@ export default function NuevoPresupuesto({
   useEffect(() => {
     if (open) setSucursalId(initialSucursal);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reflejar en vivo el cambio del selector del header, incluso con el modal abierto.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Article search (debounced) ─────────────────────────────────────────────
   useEffect(() => {

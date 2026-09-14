@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -38,6 +38,14 @@ export default function AccionesLicitacion({
   const sucursalDefault = sucursalPorDefecto(sucursales);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState('');
   const [errorAdj, setErrorAdj] = useState('');
+
+  // Reflejar en vivo el cambio del selector del header mientras el modal está abierto.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (showAdjudicar && sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalSeleccionada(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cambiarEstado = async (estado: string) => {
     setLoading(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { SUCURSAL_EVENT } from '@/lib/sucursalActivaCliente';
 
 type Sucursal = { id: string; nombre: string };
 
@@ -24,6 +25,9 @@ export default function SucursalSelector({
     if (id === activaId) return;
     // Cookie accesible al server en cada request; persiste 30 días
     document.cookie = `kp_sucursal_id=${id}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+    // Avisar a los desplegables de sucursal de los formularios (componentes
+    // cliente que no se remontan con el refresh) para que reflejen el cambio.
+    window.dispatchEvent(new Event(SUCURSAL_EVENT));
     router.refresh();
   };
 

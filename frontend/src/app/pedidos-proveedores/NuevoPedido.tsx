@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 type Sucursal   = { id: string; nombre: string };
 type Proveedor  = { id: string; razon_social: string };
@@ -77,6 +77,14 @@ export default function NuevoPedido({
   useEffect(() => {
     if (open) setSucursalId(sucursalPorDefecto(sucursales));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reflejar en vivo el cambio del selector del header, incluso con el modal abierto.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {

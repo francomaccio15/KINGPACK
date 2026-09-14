@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Devolucion, DevItem, FormaDevolucion } from './page';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -171,6 +171,16 @@ export default function NuevaDevolucion({ clientes, sucursales, onCreate, onClos
   const [ventaCargada,  setVentaCargada]  = useState<{ numero: number; cliente: string | null } | null>(null);
   const [buscandoVenta, setBuscandoVenta] = useState(false);
   const [errorVenta,    setErrorVenta]    = useState('');
+
+  // Reflejar en vivo el cambio del selector del header, salvo que ya se haya
+  // cargado una venta (la devolución toma la sucursal de esa venta).
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (ventaCargada) return;
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cargarVenta = (venta: Record<string, unknown>, ventaItems: VentaItem[]) => {
     if (venta.cliente_id)  setClienteId(String(venta.cliente_id));

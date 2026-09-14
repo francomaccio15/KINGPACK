@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/auth';
 import Modal from '@/components/ui/Modal';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 type Tipo = 'recibido' | 'emitido';
 
@@ -72,6 +72,14 @@ export default function AgregarCheque() {
   useEffect(() => {
     if (open && sucursales.length > 0) setSucursalId(sucursalPorDefecto(sucursales));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reflejar en vivo el cambio del selector del header, incluso con el modal abierto.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reajustar estado por defecto al cambiar el tipo
   useEffect(() => {

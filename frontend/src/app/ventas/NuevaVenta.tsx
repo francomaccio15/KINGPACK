@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
-import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
+import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import Modal from '@/components/ui/Modal';
 import { btnPrimary, btnSecondary, cn, selectCls } from '@/lib/ui';
 
@@ -168,6 +168,14 @@ export default function NuevaVenta({
   useEffect(() => {
     if (open) setSucursalId(sucursalPorDefecto(sucursales));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reflejar en vivo el cambio del selector del header, incluso con el modal abierto.
+  const sucursalActiva = useSucursalActiva();
+  useEffect(() => {
+    if (sucursalActiva && sucursales.some(s => s.id === sucursalActiva)) {
+      setSucursalId(sucursalActiva);
+    }
+  }, [sucursalActiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Article search
   const [artQuery, setArtQuery]       = useState('');
