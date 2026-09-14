@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -33,8 +34,8 @@ export default function AccionesLicitacion({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showAdjudicar, setShowAdjudicar] = useState(false);
-  // Sucursal por defecto: Laprida (fallback a la primera)
-  const sucursalDefault = sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '';
+  // Sucursal por defecto: la activa del selector del header (fallback Laprida / primera)
+  const sucursalDefault = sucursalPorDefecto(sucursales);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState('');
   const [errorAdj, setErrorAdj] = useState('');
 

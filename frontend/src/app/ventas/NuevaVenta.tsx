@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 import Modal from '@/components/ui/Modal';
 import { btnPrimary, btnSecondary, cn, selectCls } from '@/lib/ui';
 
@@ -158,8 +159,8 @@ export default function NuevaVenta({
   // este estado se ignora (las clases md: los muestran siempre).
   const [tab, setTab] = useState<'carrito' | 'cobro'>('carrito');
 
-  // ── Sucursal
-  const [sucursalId, setSucursalId] = useState<string>(sucursales[0]?.id ?? '');
+  // ── Sucursal (arranca en la activa del selector del header)
+  const [sucursalId, setSucursalId] = useState<string>(sucursalPorDefecto(sucursales));
 
   // ── Article search
   const [artQuery, setArtQuery]       = useState('');
@@ -297,7 +298,7 @@ export default function NuevaVenta({
     setListaId(listaBaseId);
     setSaveError('');
     setSaving(null);
-    setSucursalId(sucursales[0]?.id ?? '');
+    setSucursalId(sucursalPorDefecto(sucursales));
     setSaldoAFavorAplicado(0);
     setDescExtraStr('');
     setDescExtraModo('pct');

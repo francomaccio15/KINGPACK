@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NumericInput from '@/components/NumericInput';
@@ -218,9 +219,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
     ]).then(([suc, prov, rub, mp, cb]) => {
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
-      // Sucursal por defecto: Laprida (si existe); si no, la primera.
-      const laprida = sArr.find((s: { nombre: string }) => /laprida/i.test(s.nombre));
-      if (sArr.length > 0 && !esEdicion) setSucursalId((laprida ?? sArr[0]).id);
+      // Sucursal por defecto: la activa del selector del header; si es "Todas"
+      // o no hay, Laprida (o la primera).
+      if (sArr.length > 0 && !esEdicion) setSucursalId(sucursalPorDefecto(sArr));
       setProveedores(prov.proveedores ?? []);
       setRubros(rub.rubros ?? []);
       const mediosArr = mp.medios ?? mp.medios_pago ?? [];

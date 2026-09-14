@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export default function NuevoPresupuesto({
 
   const initialSucursal = sucursalDefaultId && sucursales.some(s => s.id === sucursalDefaultId)
     ? sucursalDefaultId
-    : (sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '');
+    : sucursalPorDefecto(sucursales);
 
   const [open, setOpen] = useState(false);
   const [sucursalId, setSucursalId] = useState<string>(initialSucursal);

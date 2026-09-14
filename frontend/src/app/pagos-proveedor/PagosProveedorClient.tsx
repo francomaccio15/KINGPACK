@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -196,8 +197,7 @@ export default function PagosProveedorClient() {
       const sArr = suc.sucursales ?? [];
       setSucursales(sArr);
       if (sArr.length > 0) {
-        const laprida = sArr.find((s: Sucursal) => /laprida/i.test(s.nombre));
-        setSucursalId((laprida ?? sArr[0]).id);
+        setSucursalId(sucursalPorDefecto(sArr));
       }
     });
   }, []);

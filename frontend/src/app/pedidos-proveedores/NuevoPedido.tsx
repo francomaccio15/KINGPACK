@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 type Sucursal   = { id: string; nombre: string };
 type Proveedor  = { id: string; razon_social: string };
@@ -50,8 +51,8 @@ export default function NuevoPedido({
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  // Sucursal por defecto: Laprida (fallback a la primera)
-  const sucursalDefault = sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '';
+  // Sucursal por defecto: la activa del selector del header (fallback Laprida / primera)
+  const sucursalDefault = sucursalPorDefecto(sucursales);
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [sucursalId, setSucursalId]   = useState(sucursalDefault);

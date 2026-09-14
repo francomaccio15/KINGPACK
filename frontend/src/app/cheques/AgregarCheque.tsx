@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/auth';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 type Tipo = 'recibido' | 'emitido';
 
@@ -59,8 +60,7 @@ export default function AgregarCheque() {
       const sArr = (suc.sucursales ?? []).map((s: any) => ({ id: s.id, nombre: s.nombre }));
       setSucursales(sArr);
       if (sArr.length > 0) {
-        const laprida = sArr.find((s: any) => /laprida/i.test(s.nombre));
-        setSucursalId((laprida ?? sArr[0]).id);
+        setSucursalId(sucursalPorDefecto(sArr));
       }
       setClientes((cli.clientes ?? []).map((c: any) => ({ id: c.id, nombre: c.razon_social })));
       setProveedores((prov.proveedores ?? []).map((p: any) => ({ id: p.id, nombre: p.razon_social })));
@@ -81,8 +81,7 @@ export default function AgregarCheque() {
     setEstado('en_cartera'); setClienteId(''); setProveedorId('');
     setObservaciones(''); setError('');
     if (sucursales.length > 0) {
-      const laprida = sucursales.find(s => /laprida/i.test(s.nombre));
-      setSucursalId((laprida ?? sucursales[0]).id);
+      setSucursalId(sucursalPorDefecto(sucursales));
     }
   };
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NotaCredito, NcItem } from './page';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { sucursalPorDefecto } from '@/lib/sucursalActivaCliente';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -159,7 +160,7 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const today = new Date().toISOString().slice(0, 10);
 
   const [clienteId,       setClienteId]       = useState('');
-  const [sucursalId,      setSucursalId]       = useState(sucursales.find(s => /laprida/i.test(s.nombre))?.id ?? sucursales[0]?.id ?? '');
+  const [sucursalId,      setSucursalId]       = useState(sucursalPorDefecto(sucursales));
   const [tipoId,          setTipoId]           = useState(tiposNC[1]?.id ?? ''); // default B
   const [fecha,           setFecha]            = useState(today);
   const [numRef,          setNumRef]           = useState('');
