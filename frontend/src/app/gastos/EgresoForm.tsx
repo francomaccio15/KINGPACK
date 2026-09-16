@@ -360,12 +360,14 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   }, [netoBonificado, tipoOp, tipoComp]);
 
   // Total del comprobante = suma de netos + impuestos (factura en blanco) o el
-  // subtotal de ítems (comprobante informal).
+  // neto de ítems tras bonificaciones (comprobante informal). En ambos casos
+  // las bonificaciones en cascada quedan incluidas (en factura en blanco vía el
+  // neto gravado; en informal, directamente en el neto bonificado).
   useEffect(() => {
     if (tipoOp !== 'compra_mercaderia') return;
-    const t = esFacturaEnBlanco(tipoComp) ? sumaFiscal : totalItems;
+    const t = esFacturaEnBlanco(tipoComp) ? sumaFiscal : netoBonificado;
     setTotalComprobante(t > 0 ? t.toFixed(2) : '');
-  }, [sumaFiscal, totalItems, tipoOp, tipoComp]);
+  }, [sumaFiscal, netoBonificado, tipoOp, tipoComp]);
 
   const fletePctNum = parseFloat(fletePct) || 0;
 
@@ -974,7 +976,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       )}
 
       {/* ── Bonificaciones / descuento extra sobre el subtotal ─── */}
-      {tipoOp === 'compra_mercaderia' && esFacturaEnBlanco(tipoComp) && items.length > 0 && (
+      {tipoOp === 'compra_mercaderia' && items.length > 0 && (
         <div className={sectionCls}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
