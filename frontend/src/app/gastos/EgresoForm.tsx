@@ -189,7 +189,19 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   const [iva105, setIva105] = useState(fiscalInit(edicion?.iva_105));
   const [percepcionesIb, setPercepcionesIb] = useState(fiscalInit(edicion?.percepciones_ib));
   const [otrosImpuestos, setOtrosImpuestos] = useState(fiscalInit(edicion?.otros_impuestos));
-  const [totalComprobante, setTotalComprobante] = useState(toStr(edicion?.total));
+  // Total del comprobante. En Gasto Varios con descuentos en cascada, el campo
+  // representa el importe BRUTO (antes de las bonificaciones): se reconstruye
+  // sumándole al neto guardado el importe de cada bonificación, de modo que al
+  // re-aplicar la cascada se obtenga el mismo neto (sin doble descuento al editar).
+  const [totalComprobante, setTotalComprobante] = useState(() => {
+    const bonifs = edicion?.bonificaciones ?? [];
+    if (edicion?.tipo_operacion === 'compra_gasto' && bonifs.length > 0) {
+      const neto = parseFloat(String(edicion?.total ?? '')) || 0;
+      const bruto = neto + bonifs.reduce((s, b) => s + (Number(b.monto) || 0), 0);
+      return bruto > 0 ? String(+bruto.toFixed(2)) : '';
+    }
+    return toStr(edicion?.total);
+  });
 
   // Flete como % que se traspasa al artículo: al guardar, cada artículo de la
   // compra toma este % como su costo_flete y su margen se ajusta para NO mover el
@@ -261,6 +273,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   useEffect(() => {
     if (skipResetTipo.current) { skipResetTipo.current = false; return; }
     setItems([]);
+    setBonificaciones([]);
     setProveedorId('');
     setNetoGravado('');
     setNetoNoGravado('');
@@ -301,6 +314,11 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   // ── Bonificaciones en cascada sobre el subtotal ───────────────────────────
   // Cada bonificación se aplica sobre el subtotal ya descontado por las
   // anteriores (ej. 6% → luego 3% sobre el resto), igual que en la factura.
+  // Base sobre la que se aplican las bonificaciones en cascada:
+  //   • Compra de Mercadería → subtotal de los ítems.
+  //   • Gasto Varios         → total del comprobante ingresado (importe bruto).
+  const baseBonif = tipoOp === 'compra_gasto' ? (parseFloat(totalComprobante) || 0) : totalItems;
+
   const bonif = bonificaciones.reduce<{ rows: { pct: number; monto: number }[]; neto: number }>(
     (acc, b) => {
       const pct = Math.max(0, Math.min(100, parseFloat(b.pct) || 0));
@@ -311,9 +329,13 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       acc.neto = parseFloat((acc.neto - monto).toFixed(2));
       return acc;
     },
-    { rows: [], neto: totalItems }
+    { rows: [], neto: baseBonif }
   );
   const netoBonificado = bonif.neto;
+
+  // Total efectivo a pagar/registrar. En Gasto Varios es el neto tras las
+  // bonificaciones; en el resto, el total del comprobante tal cual.
+  const totalObjetivo = tipoOp === 'compra_gasto' ? netoBonificado : (parseFloat(totalComprobante) || 0);
 
   const addBonificacion = () => setBonificaciones(prev => [...prev, { pct: '' }]);
   const updBonificacion = (i: number, pct: string) =>
@@ -423,7 +445,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
     setPagoMedios(p => p.map((m, j) => j === i ? { ...m, [f]: v } : m));
   const delMedioPago = (i: number) => setPagoMedios(p => p.length > 1 ? p.filter((_, j) => j !== i) : p);
   const restoMedioPago = (i: number) => {
-    const objetivo = parseFloat(totalComprobante) || 0;
+    const objetivo = totalObjetivo;
     return +(objetivo - pagoMedios.reduce((s, m, j) => s + (j === i ? 0 : montoLinea(m)), 0)).toFixed(2);
   };
 
@@ -453,7 +475,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       if (pagoMedios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setSaveError('Seleccioná la cuenta bancaria del medio correspondiente');
       if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) return setSaveError('Cargá el detalle de los cheques');
       if (totalPagoMedios <= 0) return setSaveError('El monto pagado debe ser mayor a 0');
-      if (totalPagoMedios - parseFloat(totalComprobante) > 0.01) return setSaveError('El pago no puede superar el total del comprobante');
+      if (totalPagoMedios - totalObjetivo > 0.01) return setSaveError('El pago no puede superar el total del comprobante');
     }
 
     const body: Record<string, unknown> = {
@@ -472,7 +494,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       iva_105: parseFloat(iva105) || 0,
       percepciones_ib: parseFloat(percepcionesIb) || 0,
       otros_impuestos: parseFloat(otrosImpuestos) || 0,
-      total: parseFloat(totalComprobante),
+      total: totalObjetivo,
       costo_flete_pct: fletePctNum,
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
@@ -1096,6 +1118,73 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
         </div>
       </div>
 
+      {/* ── Descuentos en cascada (Gasto Varios) ─── */}
+      {tipoOp === 'compra_gasto' && (
+        <div className={sectionCls}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+              Descuentos en cascada
+            </h3>
+            <button
+              type="button"
+              onClick={addBonificacion}
+              className="text-xs font-semibold text-kp-red hover:underline"
+            >
+              + Agregar descuento
+            </button>
+          </div>
+
+          {bonificaciones.length === 0 ? (
+            <p className="text-2xs md:text-[11px] text-kp-gray/70">
+              Descuentos que se aplican sobre el total del comprobante, en cascada y
+              en el orden cargado (ej. 30% y luego 5% sobre el resto). El neto final es
+              lo que se registra como egreso.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-kp-gray">
+                <span>Total del comprobante</span>
+                <span className="tabular-nums">{ars.format(baseBonif)}</span>
+              </div>
+              {bonificaciones.map((b, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs text-kp-gray w-16">Dto. {i + 1}</span>
+                  <div className="relative w-28">
+                    <NumericInput
+                      decimals={2}
+                      value={b.pct}
+                      onChange={e => updBonificacion(i, e.target.value)}
+                      placeholder="0"
+                      className={inputCls + ' pr-6 text-right'}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">%</span>
+                  </div>
+                  <span className="text-sm text-kp-gray-lt tabular-nums flex-1 text-right">
+                    − {ars.format(bonif.rows[i]?.monto ?? 0)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeBonificacion(i)}
+                    className="text-kp-gray hover:text-kp-red text-lg leading-none px-1"
+                    aria-label="Quitar descuento"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-kp-border pt-2 mt-1">
+                <span className="text-xs font-bold uppercase tracking-widest text-kp-gray">
+                  Neto a pagar
+                </span>
+                <span className="text-sm font-bold tabular-nums text-kp-white">
+                  {ars.format(netoBonificado)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Costo de flete al artículo (solo Compra de Mercadería) ── */}
       {tipoOp === 'compra_mercaderia' && (
       <div className={sectionCls}>
@@ -1212,11 +1301,11 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
             <div className="flex items-center justify-between rounded-lg bg-kp-surface2 border border-kp-border px-4 py-2">
               <span className="text-xs uppercase tracking-widest text-kp-gray">Total pagado</span>
               <div className="text-right">
-                <span className={`text-sm font-bold tabular-nums ${totalPagoMedios > 0 && Math.abs(totalPagoMedios - (parseFloat(totalComprobante) || 0)) <= 0.01 ? 'text-green-400' : 'text-kp-white'}`}>
+                <span className={`text-sm font-bold tabular-nums ${totalPagoMedios > 0 && Math.abs(totalPagoMedios - totalObjetivo) <= 0.01 ? 'text-green-400' : 'text-kp-white'}`}>
                   {ars.format(totalPagoMedios)}
                 </span>
-                {parseFloat(totalComprobante) > 0 && totalPagoMedios > 0 && totalPagoMedios < parseFloat(totalComprobante) - 0.01 && (
-                  <span className="block text-2xs md:text-[11px] text-amber-400">Pago parcial — quedan {ars.format(parseFloat(totalComprobante) - totalPagoMedios)}</span>
+                {totalObjetivo > 0 && totalPagoMedios > 0 && totalPagoMedios < totalObjetivo - 0.01 && (
+                  <span className="block text-2xs md:text-[11px] text-amber-400">Pago parcial — quedan {ars.format(totalObjetivo - totalPagoMedios)}</span>
                 )}
               </div>
             </div>
