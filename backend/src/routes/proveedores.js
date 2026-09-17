@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -190,6 +191,85 @@ router.get('/:id/cuenta-corriente', async (req, res, next) => {
       },
     });
   } catch (err) { next(err); }
+});
+
+// ─── POST /api/proveedores/:id/ajuste-cc ──────────────────────────────────────
+// Ajuste manual de saldo de la cuenta corriente (solo administrador).
+// El saldo es derivado (saldo_inicial + Σdebe − Σhaber), así que no se "edita"
+// un número: se registra un movimiento de corrección que lleva el saldo del
+// concepto (facturado / no facturado) al valor objetivo, sin tocar el historial.
+router.post('/:id/ajuste-cc', requireRol('administrador'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { facturado, saldo_objetivo, motivo } = req.body;
+
+    const esFacturado = !!facturado;
+    const objetivo = parseFloat(saldo_objetivo);
+    if (!Number.isFinite(objetivo)) {
+      return res.status(400).json({ error: 'saldo_objetivo debe ser un número' });
+    }
+
+    await client.query('BEGIN');
+
+    // Proveedor + saldo inicial del concepto
+    const { rows: prov } = await client.query(
+      `SELECT id, saldo_inicial_facturado, saldo_inicial_no_facturado
+       FROM proveedores WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [id]
+    );
+    if (!prov[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Proveedor no encontrado' });
+    }
+
+    const ini = parseFloat(
+      esFacturado ? prov[0].saldo_inicial_facturado : prov[0].saldo_inicial_no_facturado
+    ) || 0;
+
+    // Saldo actual del concepto = saldo inicial + Σdebe − Σhaber (filtrado)
+    const { rows: netoRows } = await client.query(
+      `SELECT COALESCE(SUM(debe) - SUM(haber), 0) AS neto
+       FROM cuentas_corrientes_proveedor
+       WHERE proveedor_id = $1 AND facturado = $2`,
+      [id, esFacturado]
+    );
+    const saldoActual = +(ini + (parseFloat(netoRows[0].neto) || 0)).toFixed(2);
+    const delta = +(objetivo - saldoActual).toFixed(2);
+
+    if (Math.abs(delta) < 0.005) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'El saldo ya es igual al valor indicado; no hay nada que ajustar.' });
+    }
+
+    // delta > 0 ⇒ subir la deuda (debe); delta < 0 ⇒ bajarla (haber)
+    const debe  = delta > 0 ? delta : 0;
+    const haber = delta < 0 ? -delta : 0;
+
+    // Saldo running global (mismo criterio que el resto de los movimientos)
+    const { rows: glob } = await client.query(
+      `SELECT COALESCE(SUM(debe) - SUM(haber), 0) AS saldo
+       FROM cuentas_corrientes_proveedor WHERE proveedor_id = $1`,
+      [id]
+    );
+    const saldoPrev = parseFloat(glob[0].saldo) || 0;
+
+    const descripcion = `Ajuste manual de saldo${motivo && motivo.trim() ? ` — ${motivo.trim()}` : ''}`.substring(0, 200);
+
+    await client.query(`
+      INSERT INTO cuentas_corrientes_proveedor
+        (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+      VALUES ($1, $2, $3, $4, 'correccion', $5, $6, $7)
+    `, [id, debe, haber, +(saldoPrev + debe - haber).toFixed(2), id, descripcion, esFacturado]);
+
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, saldo_anterior: saldoActual, saldo_nuevo: objetivo, delta });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── GET /api/proveedores/:id/anticipos ──────────────────────────────────────

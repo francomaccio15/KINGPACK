@@ -230,25 +230,141 @@ function FormProveedor({
   );
 }
 
+// ─── Formulario de ajuste de saldo (dentro del modal de CC) ───────────────────
+function FormAjusteSaldo({
+  proveedorId, saldoFacturado, saldoNoFacturado, onListo, onCancelar,
+}: {
+  proveedorId: string;
+  saldoFacturado: string;
+  saldoNoFacturado: string;
+  onListo: () => void;
+  onCancelar: () => void;
+}) {
+  const [facturado, setFacturado] = useState(true);
+  const actual = facturado ? saldoFacturado : saldoNoFacturado;
+  const [objetivo, setObjetivo]   = useState(String(parseFloat(saldoFacturado || '0')));
+  const [motivo,   setMotivo]     = useState('');
+  const [saving,   setSaving]     = useState(false);
+  const [error,    setError]      = useState<string | null>(null);
+
+  // Al cambiar de concepto, precargar su saldo actual
+  const cambiarConcepto = (f: boolean) => {
+    setFacturado(f);
+    setObjetivo(String(parseFloat((f ? saldoFacturado : saldoNoFacturado) || '0')));
+  };
+
+  const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
+  const labelCls = 'block text-xs font-semibold uppercase tracking-widest text-kp-gray mb-1';
+
+  const nuevo = parseFloat(objetivo);
+  const delta = Number.isFinite(nuevo) ? +(nuevo - (parseFloat(actual) || 0)).toFixed(2) : NaN;
+
+  const handleSubmit = async () => {
+    setError(null);
+    if (!Number.isFinite(nuevo)) return setError('Ingresá un saldo válido');
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.005)
+      return setError('El saldo ya es igual al valor indicado.');
+
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/proveedores/${proveedorId}/ajuste-cc`, {
+        method: 'POST',
+        body: JSON.stringify({ facturado, saldo_objetivo: nuevo, motivo: motivo.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setError(data.error ?? 'Error al ajustar el saldo');
+      onListo();
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-kp-red/30 bg-kp-red/5 p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-kp-white">Ajustar saldo</p>
+
+      <div>
+        <label className={labelCls}>Concepto</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => cambiarConcepto(true)}
+            className={`py-2 rounded-lg text-sm font-semibold border transition-colors ${facturado ? 'bg-blue-500/15 text-blue-300 border-blue-500/40' : 'border-kp-border text-kp-gray hover:text-kp-white'}`}>
+            Facturado
+          </button>
+          <button type="button" onClick={() => cambiarConcepto(false)}
+            className={`py-2 rounded-lg text-sm font-semibold border transition-colors ${!facturado ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' : 'border-kp-border text-kp-gray hover:text-kp-white'}`}>
+            No facturado
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Saldo actual</label>
+          <div className="px-3 py-2 rounded-lg bg-kp-surface2 border border-kp-border text-sm tabular-nums text-kp-gray">{fmt(actual)}</div>
+        </div>
+        <div>
+          <label className={labelCls}>Nuevo saldo</label>
+          <input type="number" step="0.01" value={objetivo} onChange={e => setObjetivo(e.target.value)}
+            placeholder="0.00" className={inputCls} autoFocus />
+        </div>
+      </div>
+
+      {Number.isFinite(delta) && Math.abs(delta) >= 0.005 && (
+        <p className="text-xs text-kp-gray">
+          Se registrará una corrección de{' '}
+          <span className={`font-semibold tabular-nums ${delta > 0 ? 'text-kp-red' : 'text-green-400'}`}>
+            {delta > 0 ? '+' : ''}{fmt(delta)}
+          </span>{' '}
+          ({delta > 0 ? 'aumenta la deuda' : 'reduce la deuda'}).
+        </p>
+      )}
+
+      <div>
+        <label className={labelCls}>Motivo (opcional)</label>
+        <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)}
+          placeholder="Ej: conciliación con resumen del proveedor" className={inputCls} />
+      </div>
+
+      {error && (
+        <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>
+      )}
+
+      <div className="flex gap-3">
+        <button onClick={onCancelar}
+          className="flex-1 py-2 rounded-lg border border-kp-border text-sm text-kp-gray hover:text-kp-white hover:border-kp-gray transition-colors">
+          Cancelar
+        </button>
+        <button onClick={handleSubmit} disabled={saving}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-kp-red text-white text-sm font-semibold hover:bg-kp-red/90 transition-colors disabled:opacity-50">
+          {saving ? <><Spinner /> Guardando…</> : 'Registrar ajuste'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal cuenta corriente ───────────────────────────────────────────────────
-function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; onCerrar: () => void }) {
+function ModalCuentaCorriente({ proveedor, esAdmin, onCambio, onCerrar }: { proveedor: Proveedor; esAdmin: boolean; onCambio: () => void; onCerrar: () => void }) {
   const [loading, setLoading]   = useState(true);
   const [movs, setMovs]         = useState<MovimientoCC[]>([]);
   const [tot, setTot]           = useState<{ saldo_facturado: string; saldo_no_facturado: string; saldo_actual: string } | null>(null);
+  const [ajustando, setAjustando] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res  = await apiFetch(`/api/proveedores/${proveedor.id}/cuenta-corriente?limit=100`);
-        const data = await res.json();
-        setMovs(data.movimientos ?? []);
-        setTot(data.totales ?? null);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await apiFetch(`/api/proveedores/${proveedor.id}/cuenta-corriente?limit=100`);
+      const data = await res.json();
+      setMovs(data.movimientos ?? []);
+      setTot(data.totales ?? null);
+    } finally {
+      setLoading(false);
+    }
   }, [proveedor.id]);
+
+  useEffect(() => { cargar(); }, [cargar]);
 
   const saldoCls = (v?: string) => {
     const n = parseFloat(v ?? '0');
@@ -271,6 +387,28 @@ function ModalCuentaCorriente({ proveedor, onCerrar }: { proveedor: Proveedor; o
           <span className={`text-base font-bold tabular-nums ${saldoCls(tot?.saldo_actual)}`}>{fmt(tot?.saldo_actual ?? '0')}</span>
         </div>
       </div>
+
+      {esAdmin && (
+        ajustando ? (
+          <FormAjusteSaldo
+            proveedorId={proveedor.id}
+            saldoFacturado={tot?.saldo_facturado ?? '0'}
+            saldoNoFacturado={tot?.saldo_no_facturado ?? '0'}
+            onListo={() => { setAjustando(false); cargar(); onCambio(); }}
+            onCancelar={() => setAjustando(false)}
+          />
+        ) : (
+          <div className="flex justify-end">
+            <button onClick={() => setAjustando(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-kp-red/40 text-sm font-semibold text-kp-red hover:bg-kp-red/10 transition-colors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Ajustar saldo
+            </button>
+          </div>
+        )
+      )}
 
       {loading ? (
         <div className="flex justify-center py-10 text-kp-gray"><Spinner /></div>
@@ -675,7 +813,7 @@ export default function ProveedoresClient() {
       {/* Modal Cuenta Corriente */}
       {modalCC && (
         <Modal open title={`Cuenta corriente — ${modalCC.razon_social}`} onClose={() => setModalCC(null)} size="xl">
-          <ModalCuentaCorriente proveedor={modalCC} onCerrar={() => setModalCC(null)} />
+          <ModalCuentaCorriente proveedor={modalCC} esAdmin={esAdmin} onCambio={cargar} onCerrar={() => setModalCC(null)} />
         </Modal>
       )}
 
