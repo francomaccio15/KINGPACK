@@ -503,10 +503,12 @@ router.post('/:id/pagos', async (req, res, next) => {
 //   haber y avisa al admin, sin tocar caja ni banco.
 // • Cambio de medio (ej.: se cargó Efectivo por error y era Transferencia):
 //   revierte el impacto del medio viejo (banco por origen + su fila de caja) y
-//   aplica el medio nuevo con el monto nuevo. Sólo se hace de forma automática si
-//   es seguro; si no, se rechaza con un mensaje para que lo ajuste el admin:
-//     - el pago no tiene guardado su medio (cobro histórico),
-//     - la caja del pago ya está cerrada / no tiene fila de caja abierta,
+//   aplica el medio nuevo con el monto nuevo. La fila de caja del cobro se busca
+//   por origen y, para los cobros viejos que no lo guardaron, por fecha+concepto.
+//   Sólo se hace de forma automática si es seguro; si no, se rechaza con un
+//   mensaje para que lo ajuste el admin:
+//     - la caja del pago ya está cerrada,
+//     - el medio nuevo es efectivo y no hay ninguna caja abierta,
 //     - hay un cheque de por medio (su ciclo se maneja aparte),
 //     - falta la cuenta destino de un medio bancario.
 router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (req, res, next) => {
@@ -527,7 +529,7 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
 
     // El movimiento a editar debe ser un pago de este cliente
     const { rows: [mov] } = await dbClient.query(`
-      SELECT cc.id, cc.haber, cc.medio_pago_id, cc.cuenta_bancaria_id,
+      SELECT cc.id, cc.fecha, cc.haber, cc.medio_pago_id, cc.cuenta_bancaria_id,
              c.razon_social, mp.nombre AS medio_nombre
         FROM cuentas_corrientes_cliente cc
         JOIN clientes c ON c.id = cc.cliente_id
@@ -556,16 +558,40 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
     if (reasignar) {
       // Fila de caja del cobro, si existe. Nos dice con qué medio entró (respaldo
       // cuando el cobro histórico no guardó su medio en la cuenta corriente) y en
-      // qué caja quedó. Puede NO existir: transferencia registrada sin caja abierta,
-      // o cobro histórico. En ese caso el medio nuevo entra en la caja abierta del
-      // operador (igual que al cobrar).
-      const { rows: [cajaMov] } = await dbClient.query(`
+      // qué caja quedó. Puede NO existir: transferencia registrada sin caja abierta.
+      // En ese caso el medio nuevo entra en la caja abierta del operador (igual que
+      // al cobrar).
+      const { rows: [cajaMovLink] } = await dbClient.query(`
         SELECT mc.id, mc.caja_id, cj.estado, mp.nombre AS caja_medio_nombre
           FROM movimientos_caja mc
           JOIN cajas cj ON cj.id = mc.caja_id
           LEFT JOIN medios_pago mp ON mp.id = mc.medio_pago_id
          WHERE mc.origen_tipo = 'pago_cliente' AND mc.origen_id = $1
       `, [movId]);
+
+      // Cobros anteriores a que la fila de caja guardara su origen: quedaron con
+      // origen_tipo/origen_id en NULL, así que hay que reconocerla por sus datos.
+      // La fila se insertó en la MISMA transacción que el cobro, de modo que
+      // comparten el timestamp exacto (`NOW()` es el del inicio de la transacción);
+      // con eso más el concepto la identificación es unívoca. Si apareciera más de
+      // una candidata no se adopta ninguna: mejor dejar la caja quieta que borrar
+      // la fila equivocada.
+      let cajaMov = cajaMovLink ?? null;
+      if (!cajaMov) {
+        const { rows: legacy } = await dbClient.query(`
+          SELECT mc.id, mc.caja_id, cj.estado, mp.nombre AS caja_medio_nombre
+            FROM movimientos_caja mc
+            JOIN cajas cj ON cj.id = mc.caja_id
+            LEFT JOIN medios_pago mp ON mp.id = mc.medio_pago_id
+           WHERE mc.origen_tipo IS NULL
+             AND mc.origen_id IS NULL
+             AND mc.tipo = 'ingreso'
+             AND mc.fecha = $1
+             AND starts_with(mc.concepto, 'Pago cliente — ' || $2)
+           LIMIT 2
+        `, [mov.fecha, mov.razon_social]);
+        if (legacy.length === 1) cajaMov = legacy[0];
+      }
 
       // Si tiene fila de caja pero su caja ya está cerrada, no se toca (arqueo cerrado).
       if (cajaMov && cajaMov.estado !== 'abierta') {
