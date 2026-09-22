@@ -264,7 +264,8 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                           {TIPO_LABEL[m.origen_tipo] ?? m.origen_tipo ?? '—'}
                         </span>
                         {m.origen_tipo === 'pago' && puedeEditarPago && (
-                          <EditarPago clienteId={cliente.id} movId={m.id} montoActual={parseFloat(m.haber) || 0} />
+                          <EditarPago clienteId={cliente.id} movId={m.id} montoActual={parseFloat(m.haber) || 0}
+                            medioActualId={m.medio_pago_id} medioActualNombre={m.medio_nombre} cuentaActualId={m.cuenta_bancaria_id} />
                         )}
                       </span>
                     )}
@@ -333,7 +334,8 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
                 </p>
                 {m.origen_tipo === 'pago' && puedeEditarPago && (
                   <div className="mt-1">
-                    <EditarPago clienteId={cliente.id} movId={m.id} montoActual={haber} />
+                    <EditarPago clienteId={cliente.id} movId={m.id} montoActual={haber}
+                      medioActualId={m.medio_pago_id} medioActualNombre={m.medio_nombre} cuentaActualId={m.cuenta_bancaria_id} />
                   </div>
                 )}
               </div>

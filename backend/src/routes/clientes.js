@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
-const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
+const { registrarMovimientoBancario, revertirMovimientosBancarios } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -260,10 +260,12 @@ router.get('/:id/movimientos', async (req, res, next) => {
 
     const [{ rows: movs }, { rows: corrs }, { rows: cliente }] = await Promise.all([
       pool.query(`
-        SELECT id, debe, haber, saldo, fecha, origen_tipo, origen_id
-          FROM cuentas_corrientes_cliente
-         WHERE cliente_id = $1
-         ORDER BY fecha DESC
+        SELECT cc.id, cc.debe, cc.haber, cc.saldo, cc.fecha, cc.origen_tipo, cc.origen_id,
+               cc.medio_pago_id, mp.nombre AS medio_nombre, cc.cuenta_bancaria_id
+          FROM cuentas_corrientes_cliente cc
+          LEFT JOIN medios_pago mp ON mp.id = cc.medio_pago_id
+         WHERE cc.cliente_id = $1
+         ORDER BY cc.fecha DESC
          LIMIT $2 OFFSET $3
       `, [req.params.id, parseInt(limit), parseInt(offset)]),
 
@@ -394,10 +396,10 @@ router.post('/:id/pagos', async (req, res, next) => {
 
       const { rows: [mov] } = await dbClient.query(`
         INSERT INTO cuentas_corrientes_cliente
-          (cliente_id, debe, haber, saldo, origen_tipo)
-        VALUES ($1, 0, $2, $3, 'pago')
+          (cliente_id, debe, haber, saldo, origen_tipo, medio_pago_id, cuenta_bancaria_id)
+        VALUES ($1, 0, $2, $3, 'pago', $4, $5)
         RETURNING id, haber, saldo, fecha
-      `, [req.params.id, montoNum, saldoDespues]);
+      `, [req.params.id, montoNum, saldoDespues, medio_pago_id || null, cuenta_bancaria_id || null]);
 
       // Si hay concepto, registrar corrección de texto
       if (concepto?.trim()) {
@@ -460,10 +462,11 @@ router.post('/:id/pagos', async (req, res, next) => {
             : `Pago cliente — ${saldoRow.razon_social}`;
           await dbClient.query(`
             INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id)
-            VALUES ($1, 'ingreso', $2, $3, $4, $5, $6)
+              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
+               origen_tipo, origen_id)
+            VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
           `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null,
-              cuenta_bancaria_id || null]);
+              cuenta_bancaria_id || null, mov.id]);
         }
       }
 
@@ -492,14 +495,23 @@ router.post('/:id/pagos', async (req, res, next) => {
 });
 
 // ─── PUT /api/clientes/:id/pagos/:movId ───────────────────────────────────────
-// Editar el monto de un pago ya registrado. El motivo es OBLIGATORIO: queda como
-// nota de equipo (le aparece al administrador en la campanita) y como corrección
-// en la ficha del cliente para dejar traza. Sólo cajero/administrador.
-// No toca la caja del pago (puede estar cerrada); el aviso al admin permite
-// reconciliar si el pago original impactó una caja.
+// Editar un pago ya registrado (monto y/o medio de pago). El motivo es
+// OBLIGATORIO: queda como nota de equipo (campanita del admin) y como corrección
+// en la ficha del cliente. Sólo cajero/administrador.
+//
+// • Monto solamente (sin cambiar el medio): igual que siempre — actualiza el
+//   haber y avisa al admin, sin tocar caja ni banco.
+// • Cambio de medio (ej.: se cargó Efectivo por error y era Transferencia):
+//   revierte el impacto del medio viejo (banco por origen + su fila de caja) y
+//   aplica el medio nuevo con el monto nuevo. Sólo se hace de forma automática si
+//   es seguro; si no, se rechaza con un mensaje para que lo ajuste el admin:
+//     - el pago no tiene guardado su medio (cobro histórico),
+//     - la caja del pago ya está cerrada / no tiene fila de caja abierta,
+//     - hay un cheque de por medio (su ciclo se maneja aparte),
+//     - falta la cuenta destino de un medio bancario.
 router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (req, res, next) => {
   const { id, movId } = req.params;
-  const { monto, motivo } = req.body;
+  const { monto, motivo, medio_pago_id, cuenta_bancaria_id } = req.body;
   const montoNum = parseFloat(monto);
 
   if (!montoNum || montoNum <= 0) {
@@ -515,9 +527,11 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
 
     // El movimiento a editar debe ser un pago de este cliente
     const { rows: [mov] } = await dbClient.query(`
-      SELECT cc.id, cc.haber, c.razon_social
+      SELECT cc.id, cc.haber, cc.medio_pago_id, cc.cuenta_bancaria_id,
+             c.razon_social, mp.nombre AS medio_nombre
         FROM cuentas_corrientes_cliente cc
         JOIN clientes c ON c.id = cc.cliente_id
+        LEFT JOIN medios_pago mp ON mp.id = cc.medio_pago_id
        WHERE cc.id = $1 AND cc.cliente_id = $2 AND cc.origen_tipo = 'pago'
        FOR UPDATE OF cc
     `, [movId, id]);
@@ -529,15 +543,120 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
 
     const montoAnterior = parseFloat(mov.haber) || 0;
 
-    // Actualizar el monto del pago y recalcular los saldos posteriores
-    await dbClient.query(
-      `UPDATE cuentas_corrientes_cliente SET haber = $1 WHERE id = $2`,
-      [montoNum, movId]
-    );
+    // ¿Piden cambiar el medio (o la cuenta destino)?
+    const medioNuevoId  = medio_pago_id || null;
+    const cuentaNuevaId = cuenta_bancaria_id || null;
+    const cambiaMedio   = medioNuevoId && medioNuevoId !== (mov.medio_pago_id || null);
+    const cambiaCuenta  = medioNuevoId && medioNuevoId === (mov.medio_pago_id || null)
+                          && cuentaNuevaId !== (mov.cuenta_bancaria_id || null);
+    const reasignar     = cambiaMedio || cambiaCuenta;
+
+    let detalleMedio = '';
+
+    if (reasignar) {
+      // El pago tiene que tener guardado su medio para saber qué revertir.
+      if (!mov.medio_pago_id) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Este cobro es anterior a esta función y no tiene guardado su medio de pago; el cambio de medio lo tiene que ajustar el administrador.' });
+      }
+
+      // Datos del medio nuevo
+      const { rows: [medioNuevo] } = await dbClient.query(
+        `SELECT id, nombre, requiere_cuenta, caja_fuerte_sucursal_id FROM medios_pago WHERE id = $1`,
+        [medioNuevoId]
+      );
+      if (!medioNuevo) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Medio de pago inválido' });
+      }
+
+      // Los cheques tienen su propio ciclo (cartera → depositado → acreditado):
+      // no se reasignan automáticamente.
+      const esChequeViejo = /cheque/i.test(mov.medio_nombre || '');
+      const esChequeNuevo = /cheque/i.test(medioNuevo.nombre || '');
+      if (esChequeViejo || esChequeNuevo) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Los cobros con cheque se corrigen desde el módulo Cheques o por el administrador.' });
+      }
+
+      // El pago tiene que tener su fila de caja en una caja ABIERTA para poder
+      // moverla sin alterar un arqueo ya cerrado.
+      const { rows: [cajaMov] } = await dbClient.query(`
+        SELECT mc.id, mc.caja_id, cj.estado
+          FROM movimientos_caja mc
+          JOIN cajas cj ON cj.id = mc.caja_id
+         WHERE mc.origen_tipo = 'pago_cliente' AND mc.origen_id = $1
+      `, [movId]);
+
+      if (!cajaMov) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Este cobro no tiene un movimiento de caja asociado; el cambio de medio lo tiene que ajustar el administrador.' });
+      }
+      if (cajaMov.estado !== 'abierta') {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'La caja de este cobro ya está cerrada; el cambio de medio lo tiene que ajustar el administrador.' });
+      }
+
+      // El medio nuevo bancario (Transferencia por su flag; QR / Débito por nombre)
+      // necesita cuenta destino.
+      const requiereCuenta = medioNuevo.requiere_cuenta === true
+        || /qr|tarjeta de d[eé]bito/i.test(medioNuevo.nombre || '');
+      if (requiereCuenta && !cuentaNuevaId) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Seleccioná la cuenta que recibe el pago.' });
+      }
+
+      // ── Revertir el impacto del medio VIEJO ──────────────────────────────────
+      // Banco: borra los movimientos bancarios del pago y devuelve el saldo.
+      await revertirMovimientosBancarios(dbClient, 'pago_cliente', movId);
+      // Caja: borra la fila del pago (arqueo se recalcula solo al cierre).
+      await dbClient.query(`DELETE FROM movimientos_caja WHERE id = $1`, [cajaMov.id]);
+
+      // ── Aplicar el medio NUEVO con el monto nuevo ───────────────────────────
+      const conceptoCaja = `Pago cliente — ${mov.razon_social} (medio corregido)`;
+      const cuentaCajaMov = requiereCuenta ? cuentaNuevaId : null;
+      await dbClient.query(`
+        INSERT INTO movimientos_caja
+          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
+           origen_tipo, origen_id)
+        VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
+      `, [cajaMov.caja_id, conceptoCaja, montoNum, medioNuevoId, req.usuario?.id ?? null,
+          cuentaCajaMov, movId]);
+
+      // Si el medio nuevo va contra el banco, acreditar la cuenta.
+      if (requiereCuenta) {
+        await registrarMovimientoBancario(dbClient, {
+          cuenta_bancaria_id: cuentaNuevaId,
+          tipo: 'ingreso',
+          monto: montoNum,
+          concepto: `Pago cliente — ${mov.razon_social} (medio corregido)`,
+          origen_tipo: 'pago_cliente',
+          origen_id: movId,
+          usuario_id: req.usuario?.id ?? null,
+        });
+      }
+
+      // Guardar el nuevo medio/cuenta en el propio pago.
+      await dbClient.query(
+        `UPDATE cuentas_corrientes_cliente
+            SET haber = $1, medio_pago_id = $2, cuenta_bancaria_id = $3
+          WHERE id = $4`,
+        [montoNum, medioNuevoId, cuentaCajaMov, movId]
+      );
+
+      detalleMedio = ` Medio: ${mov.medio_nombre || '—'} → ${medioNuevo.nombre}.`;
+    } else {
+      // Sólo monto: no toca caja ni banco (comportamiento de siempre).
+      await dbClient.query(
+        `UPDATE cuentas_corrientes_cliente SET haber = $1 WHERE id = $2`,
+        [montoNum, movId]
+      );
+    }
+
     await recomputarSaldosCliente(dbClient, id);
 
     // Traza en la ficha del cliente (monto 0: no altera el saldo, es informativo)
-    const detalle = `Pago editado: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}. Motivo: ${motivo.trim()}`;
+    const detalle = `Pago editado: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}.${detalleMedio} Motivo: ${motivo.trim()}`;
     await dbClient.query(
       `INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
        VALUES ($1, 0, $2)`,
@@ -545,7 +664,7 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
     );
 
     // Aviso al administrador vía nota de equipo (aparece en la campanita)
-    const nota = `✏️ Pago editado — ${mov.razon_social}: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}. Motivo: ${motivo.trim()}`;
+    const nota = `✏️ Pago editado — ${mov.razon_social}: ${fmtMoneda(montoAnterior)} → ${fmtMoneda(montoNum)}.${detalleMedio} Motivo: ${motivo.trim()}`;
     await dbClient.query(
       `INSERT INTO notas_equipo (contenido, tipo, usuario_id)
        VALUES ($1, 'aviso', $2)`,
