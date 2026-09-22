@@ -554,12 +554,11 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
     let detalleMedio = '';
 
     if (reasignar) {
-      // El pago tiene que tener su fila de caja en una caja ABIERTA para poder
-      // moverla sin alterar un arqueo ya cerrado. Esa fila también nos dice con
-      // qué medio entró el cobro: aunque sea un cobro histórico que no guardó su
-      // medio en la cuenta corriente (cc.medio_pago_id NULL, previo a la función),
-      // el movimiento de caja SIEMPRE guardó el medio, así que lo usamos como
-      // respaldo. Con eso podemos reasignar sin depender de cc.medio_pago_id.
+      // Fila de caja del cobro, si existe. Nos dice con qué medio entró (respaldo
+      // cuando el cobro histórico no guardó su medio en la cuenta corriente) y en
+      // qué caja quedó. Puede NO existir: transferencia registrada sin caja abierta,
+      // o cobro histórico. En ese caso el medio nuevo entra en la caja abierta del
+      // operador (igual que al cobrar).
       const { rows: [cajaMov] } = await dbClient.query(`
         SELECT mc.id, mc.caja_id, cj.estado, mp.nombre AS caja_medio_nombre
           FROM movimientos_caja mc
@@ -568,18 +567,15 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
          WHERE mc.origen_tipo = 'pago_cliente' AND mc.origen_id = $1
       `, [movId]);
 
-      if (!cajaMov) {
-        await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: 'Este cobro no tiene un movimiento de caja asociado; el cambio de medio lo tiene que ajustar el administrador.' });
-      }
-      if (cajaMov.estado !== 'abierta') {
+      // Si tiene fila de caja pero su caja ya está cerrada, no se toca (arqueo cerrado).
+      if (cajaMov && cajaMov.estado !== 'abierta') {
         await dbClient.query('ROLLBACK');
         return res.status(400).json({ error: 'La caja de este cobro ya está cerrada; el cambio de medio lo tiene que ajustar el administrador.' });
       }
 
       // Medio viejo: el guardado en el cobro; si es un cobro histórico sin medio,
-      // el de su fila de caja.
-      const medioViejoNombre = mov.medio_nombre || cajaMov.caja_medio_nombre || '';
+      // el de su fila de caja (si la hay).
+      const medioViejoNombre = mov.medio_nombre || cajaMov?.caja_medio_nombre || '';
 
       // Datos del medio nuevo
       const { rows: [medioNuevo] } = await dbClient.query(
@@ -609,22 +605,48 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
         return res.status(400).json({ error: 'Seleccioná la cuenta que recibe el pago.' });
       }
 
+      // Caja donde entra el medio nuevo: la misma fila de caja si el cobro ya la
+      // tenía; si no, la caja abierta del operador (un cajero sólo mueve la suya,
+      // igual que al cobrar). Un medio bancario no necesita caja: va contra el banco.
+      let cajaDestinoId = cajaMov?.caja_id ?? null;
+      if (!cajaDestinoId) {
+        const sucId = req.usuario?.sucursal_default_id || null;
+        if (sucId) {
+          const { rows: [cajaAbierta] } = await dbClient.query(
+            `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+            [sucId]
+          );
+          cajaDestinoId = cajaAbierta?.id ?? null;
+        }
+      }
+
+      // El efectivo tiene que caer en una caja abierta; si no hay, no se puede
+      // registrar el cambio. Un medio bancario sí (va contra el banco).
+      if (!requiereCuenta && !cajaDestinoId) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'No hay una caja abierta para registrar el efectivo del cambio de medio; abrí la caja o que lo ajuste el administrador.' });
+      }
+
       // ── Revertir el impacto del medio VIEJO ──────────────────────────────────
       // Banco: borra los movimientos bancarios del pago y devuelve el saldo.
       await revertirMovimientosBancarios(dbClient, 'pago_cliente', movId);
-      // Caja: borra la fila del pago (arqueo se recalcula solo al cierre).
-      await dbClient.query(`DELETE FROM movimientos_caja WHERE id = $1`, [cajaMov.id]);
+      // Caja: borra la fila del pago si existía (arqueo se recalcula al cierre).
+      if (cajaMov) {
+        await dbClient.query(`DELETE FROM movimientos_caja WHERE id = $1`, [cajaMov.id]);
+      }
 
       // ── Aplicar el medio NUEVO con el monto nuevo ───────────────────────────
       const conceptoCaja = `Pago cliente — ${mov.razon_social} (medio corregido)`;
       const cuentaCajaMov = requiereCuenta ? cuentaNuevaId : null;
-      await dbClient.query(`
-        INSERT INTO movimientos_caja
-          (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
-           origen_tipo, origen_id)
-        VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
-      `, [cajaMov.caja_id, conceptoCaja, montoNum, medioNuevoId, req.usuario?.id ?? null,
-          cuentaCajaMov, movId]);
+      if (cajaDestinoId) {
+        await dbClient.query(`
+          INSERT INTO movimientos_caja
+            (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
+             origen_tipo, origen_id)
+          VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
+        `, [cajaDestinoId, conceptoCaja, montoNum, medioNuevoId, req.usuario?.id ?? null,
+            cuentaCajaMov, movId]);
+      }
 
       // Si el medio nuevo va contra el banco, acreditar la cuenta.
       if (requiereCuenta) {
