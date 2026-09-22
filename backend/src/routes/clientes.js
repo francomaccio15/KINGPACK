@@ -554,11 +554,32 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
     let detalleMedio = '';
 
     if (reasignar) {
-      // El pago tiene que tener guardado su medio para saber qué revertir.
-      if (!mov.medio_pago_id) {
+      // El pago tiene que tener su fila de caja en una caja ABIERTA para poder
+      // moverla sin alterar un arqueo ya cerrado. Esa fila también nos dice con
+      // qué medio entró el cobro: aunque sea un cobro histórico que no guardó su
+      // medio en la cuenta corriente (cc.medio_pago_id NULL, previo a la función),
+      // el movimiento de caja SIEMPRE guardó el medio, así que lo usamos como
+      // respaldo. Con eso podemos reasignar sin depender de cc.medio_pago_id.
+      const { rows: [cajaMov] } = await dbClient.query(`
+        SELECT mc.id, mc.caja_id, cj.estado, mp.nombre AS caja_medio_nombre
+          FROM movimientos_caja mc
+          JOIN cajas cj ON cj.id = mc.caja_id
+          LEFT JOIN medios_pago mp ON mp.id = mc.medio_pago_id
+         WHERE mc.origen_tipo = 'pago_cliente' AND mc.origen_id = $1
+      `, [movId]);
+
+      if (!cajaMov) {
         await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: 'Este cobro es anterior a esta función y no tiene guardado su medio de pago; el cambio de medio lo tiene que ajustar el administrador.' });
+        return res.status(400).json({ error: 'Este cobro no tiene un movimiento de caja asociado; el cambio de medio lo tiene que ajustar el administrador.' });
       }
+      if (cajaMov.estado !== 'abierta') {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'La caja de este cobro ya está cerrada; el cambio de medio lo tiene que ajustar el administrador.' });
+      }
+
+      // Medio viejo: el guardado en el cobro; si es un cobro histórico sin medio,
+      // el de su fila de caja.
+      const medioViejoNombre = mov.medio_nombre || cajaMov.caja_medio_nombre || '';
 
       // Datos del medio nuevo
       const { rows: [medioNuevo] } = await dbClient.query(
@@ -572,29 +593,11 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
 
       // Los cheques tienen su propio ciclo (cartera → depositado → acreditado):
       // no se reasignan automáticamente.
-      const esChequeViejo = /cheque/i.test(mov.medio_nombre || '');
+      const esChequeViejo = /cheque/i.test(medioViejoNombre);
       const esChequeNuevo = /cheque/i.test(medioNuevo.nombre || '');
       if (esChequeViejo || esChequeNuevo) {
         await dbClient.query('ROLLBACK');
         return res.status(400).json({ error: 'Los cobros con cheque se corrigen desde el módulo Cheques o por el administrador.' });
-      }
-
-      // El pago tiene que tener su fila de caja en una caja ABIERTA para poder
-      // moverla sin alterar un arqueo ya cerrado.
-      const { rows: [cajaMov] } = await dbClient.query(`
-        SELECT mc.id, mc.caja_id, cj.estado
-          FROM movimientos_caja mc
-          JOIN cajas cj ON cj.id = mc.caja_id
-         WHERE mc.origen_tipo = 'pago_cliente' AND mc.origen_id = $1
-      `, [movId]);
-
-      if (!cajaMov) {
-        await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: 'Este cobro no tiene un movimiento de caja asociado; el cambio de medio lo tiene que ajustar el administrador.' });
-      }
-      if (cajaMov.estado !== 'abierta') {
-        await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: 'La caja de este cobro ya está cerrada; el cambio de medio lo tiene que ajustar el administrador.' });
       }
 
       // El medio nuevo bancario (Transferencia por su flag; QR / Débito por nombre)
@@ -644,7 +647,7 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
         [montoNum, medioNuevoId, cuentaCajaMov, movId]
       );
 
-      detalleMedio = ` Medio: ${mov.medio_nombre || '—'} → ${medioNuevo.nombre}.`;
+      detalleMedio = ` Medio: ${medioViejoNombre || '—'} → ${medioNuevo.nombre}.`;
     } else {
       // Sólo monto: no toca caja ni banco (comportamiento de siempre).
       await dbClient.query(
