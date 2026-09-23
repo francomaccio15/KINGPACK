@@ -5,6 +5,7 @@ import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaClien
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NumericInput from '@/components/NumericInput';
+import ConfirmarPrecios, { type DecisionPrecio, type LineaPrecio } from './ConfirmarPrecios';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -230,6 +231,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Aviso previo: qué precios cambia esta compra
+  const [preciosOpen, setPreciosOpen] = useState(false);
+
   // ── Cargar catálogos al montar ────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
@@ -371,6 +375,19 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
 
   const fletePctNum = parseFloat(fletePct) || 0;
 
+  // ── Costo que esta compra dejaría en cada artículo ────────────────────────
+  // Precio unitario menos el descuento de la línea y menos las bonificaciones
+  // sobre el subtotal — mismo cálculo que hace el backend al guardar. Alimenta
+  // el aviso previo de cambio de precios.
+  const factorBonif = bonif.rows.filter(b => b.pct > 0).reduce((f, b) => f * (1 - b.pct / 100), 1);
+  const lineasPrecio: LineaPrecio[] = items
+    .filter(i => i.articulo_id)
+    .map(i => ({
+      articulo_id: i.articulo_id,
+      descripcion: i.descripcion,
+      costo_calculado: +(i.precio_unitario * (1 - (i.descuento_pct || 0) / 100) * factorBonif).toFixed(2),
+    }));
+
   // ── Búsqueda de artículos ─────────────────────────────────────────────────
   const searchArticulos = useCallback((q: string) => {
     if (artDebounce.current) clearTimeout(artDebounce.current);
@@ -480,6 +497,18 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       if (totalPagoMedios - totalObjetivo > 0.01) return setSaveError('El pago no puede superar el total del comprobante');
     }
 
+    // Una compra de mercadería pisa el costo de cada artículo y, con él, su
+    // precio de venta y las listas. Se avisa antes de guardar para poder
+    // aceptar, corregir o dejar afuera a algunos artículos.
+    if (tipoOp === 'compra_mercaderia' && items.some(i => i.articulo_id)) {
+      setPreciosOpen(true);
+      return;
+    }
+
+    await guardar(null);
+  };
+
+  const guardar = async (decisiones: Record<string, DecisionPrecio> | null) => {
     const body: Record<string, unknown> = {
       tipo_operacion: tipoOp,
       tipo_comprobante: tipoComp || null,
@@ -501,14 +530,23 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       estado_pago: estadoPago === 'pagado' ? 'pagado' : 'pendiente',
       fecha_vencimiento_pago: fechaVenc || null,
       anticipo_id: vincularAnticipo && anticipoId ? anticipoId : null,
-      items: items.map(i => ({
-        articulo_id: i.articulo_id || null,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precio_unitario: i.precio_unitario,
-        descuento_pct: i.descuento_pct || 0,
-        sucursal_imputacion_id: i.sucursal_imputacion_id || sucursalId,
-      })),
+      items: items.map(i => {
+        // Decisión de precios del aviso previo (sólo compra de mercadería).
+        const d = i.articulo_id ? decisiones?.[i.articulo_id] : undefined;
+        return {
+          articulo_id: i.articulo_id || null,
+          descripcion: i.descripcion,
+          cantidad: i.cantidad,
+          precio_unitario: i.precio_unitario,
+          descuento_pct: i.descuento_pct || 0,
+          sucursal_imputacion_id: i.sucursal_imputacion_id || sucursalId,
+          ...(d && {
+            actualizar_costo: d.actualizar,
+            costo_nuevo: d.actualizar ? d.costo : null,
+            precio_venta_nuevo: d.actualizar ? d.precio_venta : null,
+          }),
+        };
+      }),
       bonificaciones: bonif.rows
         .filter(b => b.pct > 0)
         .map(b => ({ pct: b.pct, monto: parseFloat(b.monto.toFixed(2)) })),
@@ -551,6 +589,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       setSaveError('Error de conexión con el servidor');
     } finally {
       setSaving(false);
+      setPreciosOpen(false);
     }
   };
 
@@ -1392,6 +1431,16 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
           </button>
         </div>
       </div>
+
+      {/* ── Aviso previo: precios que cambia esta compra ─── */}
+      <ConfirmarPrecios
+        open={preciosOpen}
+        lineas={lineasPrecio}
+        fletePct={fletePctNum}
+        saving={saving}
+        onCancel={() => setPreciosOpen(false)}
+        onConfirm={(decisiones) => { void guardar(decisiones); }}
+      />
 
     </div>
   );

@@ -430,41 +430,12 @@ router.post('/', async (req, res, next) => {
         // El costo de compra pasa a ser el costo del artículo: precio unitario
         // (neto) menos el descuento de la línea y menos las bonificaciones sobre
         // el subtotal. Al pisar costo_base, el trigger recalcula precio_madre y
-        // las listas de venta según el margen del artículo. Sólo se actualiza si
-        // el costo efectivo es > 0 para no pisar el costo con un cero accidental.
+        // las listas de venta según el margen del artículo. Cada ítem puede traer
+        // la decisión que el usuario tomó en el aviso previo de la pantalla de
+        // compra: no actualizar, corregir el costo o fijar el precio de venta.
         const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
         const costoEfectivo = +(precio * (1 - descPct / 100) * factorBonif).toFixed(2);
-        if (costoEfectivo > 0) {
-          if (fletePctNum > 0) {
-            // Traspaso del flete al artículo. El flete se absorbe en el MARGEN para
-            // no mover el precio de venta final: se preserva (1+flete)(1+margen), de
-            // modo que precio_madre sólo cambia por el nuevo costo.
-            // margen_nuevo = ((1+flete_viejo)(1+margen_viejo)/(1+flete_nuevo) − 1).
-            const { rows: aRows } = await client.query(
-              `SELECT a.costo_flete::float AS flete_viejo,
-                      COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_viejo
-                 FROM articulos a
-                 JOIN categorias c ON c.id = a.categoria_id
-                WHERE a.id = $1`,
-              [it.articulo_id]
-            );
-            const fleteViejo  = parseFloat(aRows[0]?.flete_viejo)  || 0;
-            const margenViejo = parseFloat(aRows[0]?.margen_viejo) || 0;
-            const factorViejo = (1 + fleteViejo / 100) * (1 + margenViejo / 100);
-            const margenNuevo = +(((factorViejo / (1 + fletePctNum / 100)) - 1) * 100).toFixed(2);
-            await client.query(
-              `UPDATE articulos
-                  SET costo_base = $1, costo_flete = $2, margen_aplicado = $3, updated_at = NOW()
-                WHERE id = $4`,
-              [costoEfectivo, fletePctNum, margenNuevo, it.articulo_id]
-            );
-          } else {
-            await client.query(
-              `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
-              [costoEfectivo, it.articulo_id]
-            );
-          }
-        }
+        await aplicarCostoDeCompra(client, it, costoEfectivo, fletePctNum);
       }
     }
 
@@ -1137,32 +1108,11 @@ router.put('/:id', requireRol('administrador'), async (req, res, next) => {
           DO UPDATE SET cantidad = pedido_items.cantidad + EXCLUDED.cantidad
         `, [pedidoId, it.articulo_id, cant, precio]);
 
+        // Mismo criterio que en el alta: el costo efectivo de la compra pisa el
+        // del artículo, salvo que el ítem traiga otra decisión del usuario.
         const descPct = Math.max(0, Math.min(100, parseFloat(it.descuento_pct) || 0));
         const costoEfectivo = +(precio * (1 - descPct / 100) * factorBonif).toFixed(2);
-        if (costoEfectivo > 0) {
-          if (fletePctNum > 0) {
-            const { rows: aRows } = await client.query(
-              `SELECT a.costo_flete::float AS flete_viejo,
-                      COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_viejo
-                 FROM articulos a JOIN categorias c ON c.id = a.categoria_id
-                WHERE a.id = $1`,
-              [it.articulo_id]
-            );
-            const fleteViejo  = parseFloat(aRows[0]?.flete_viejo)  || 0;
-            const margenViejo = parseFloat(aRows[0]?.margen_viejo) || 0;
-            const factorViejo = (1 + fleteViejo / 100) * (1 + margenViejo / 100);
-            const margenNuevo = +(((factorViejo / (1 + fletePctNum / 100)) - 1) * 100).toFixed(2);
-            await client.query(
-              `UPDATE articulos SET costo_base = $1, costo_flete = $2, margen_aplicado = $3, updated_at = NOW() WHERE id = $4`,
-              [costoEfectivo, fletePctNum, margenNuevo, it.articulo_id]
-            );
-          } else {
-            await client.query(
-              `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
-              [costoEfectivo, it.articulo_id]
-            );
-          }
-        }
+        await aplicarCostoDeCompra(client, it, costoEfectivo, fletePctNum);
       }
     }
 
@@ -1295,6 +1245,84 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// ─── Costo del artículo a partir de una compra de mercadería ─────────────────
+// Pisa `costo_base` con el costo efectivo de la compra; el trigger de `articulos`
+// recalcula precio_madre y las listas de venta según el margen.
+//
+// La pantalla de compra muestra, antes de confirmar, cómo queda el precio de
+// cada artículo, así que cada ítem puede traer la decisión del usuario:
+//   • actualizar_costo === false → el artículo NO se toca (conserva su costo y
+//     su precio de venta actuales).
+//   • costo_nuevo                → costo corregido a mano, en vez del de la compra.
+//   • precio_venta_nuevo         → precio de venta objetivo: se deriva el margen
+//     que lo clava al peso, igual que en PUT /api/articulos/:id.
+//
+// Sin ninguno de esos campos se comporta como siempre: aplica el costo de la
+// compra si es > 0 (para no pisar el costo con un cero accidental).
+async function aplicarCostoDeCompra(client, item, costoCalculado, fletePctNum) {
+  if (item.actualizar_costo === false) return;
+
+  const costoManual = parseFloat(item.costo_nuevo);
+  const costo = Number.isFinite(costoManual) && costoManual > 0
+    ? +costoManual.toFixed(3)
+    : costoCalculado;
+  if (!(costo > 0)) return;
+
+  const { rows } = await client.query(
+    `SELECT a.costo_flete::float                                    AS flete_viejo,
+            COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_viejo,
+            COALESCE(ai.porcentaje, 0)::float                       AS iva_pct
+       FROM articulos a
+       LEFT JOIN categorias c     ON c.id  = a.categoria_id
+       LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+      WHERE a.id = $1 AND a.deleted_at IS NULL`,
+    [item.articulo_id]
+  );
+  if (rows.length === 0) return;
+
+  const fleteViejo  = parseFloat(rows[0].flete_viejo)  || 0;
+  const margenViejo = parseFloat(rows[0].margen_viejo) || 0;
+  const ivaPct      = parseFloat(rows[0].iva_pct)      || 0;
+
+  // Traspaso del flete al artículo: el flete se absorbe en el MARGEN para no
+  // mover el precio de venta final. Se preserva (1+flete)(1+margen), de modo que
+  // precio_madre sólo cambie por el nuevo costo.
+  //   margen_nuevo = ((1+flete_viejo)(1+margen_viejo)/(1+flete_nuevo) − 1)
+  const factorViejo = (1 + fleteViejo / 100) * (1 + margenViejo / 100);
+  const fleteFinal  = fletePctNum > 0 ? fletePctNum : fleteViejo;
+  let margenFinal   = fletePctNum > 0
+    ? +(((factorViejo / (1 + fletePctNum / 100)) - 1) * 100).toFixed(2)
+    : margenViejo;
+
+  // Precio de venta objetivo. Sólo se fuerza si difiere del que sale solo: si
+  // coincide no se toca el margen, así un artículo sin margen propio sigue
+  // heredando el de su categoría. precio_madre va en pesos enteros (mig. 025).
+  const precioObjetivo = parseFloat(item.precio_venta_nuevo);
+  const baseVenta      = costo * (1 + fleteFinal / 100) * (1 + ivaPct / 100);
+  const precioAuto     = Math.round(baseVenta * (1 + margenFinal / 100));
+  const fijarPrecio    = baseVenta > 0
+    && Number.isFinite(precioObjetivo) && precioObjetivo > 0
+    && Math.abs(precioObjetivo - precioAuto) >= 0.5;
+  if (fijarPrecio) {
+    // 6 decimales: sobra para clavar el precio al peso incluso en artículos caros.
+    margenFinal = Math.round(((precioObjetivo / baseVenta) - 1) * 100 * 1e6) / 1e6;
+  }
+
+  if (fletePctNum > 0 || fijarPrecio) {
+    await client.query(
+      `UPDATE articulos
+          SET costo_base = $1, costo_flete = $2, margen_aplicado = $3, updated_at = NOW()
+        WHERE id = $4`,
+      [costo, fleteFinal, margenFinal, item.articulo_id]
+    );
+  } else {
+    await client.query(
+      `UPDATE articulos SET costo_base = $1, updated_at = NOW() WHERE id = $2`,
+      [costo, item.articulo_id]
+    );
+  }
+}
 
 async function calcularSaldoProveedor(client, proveedor_id) {
   const { rows } = await client.query(

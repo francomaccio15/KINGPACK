@@ -191,6 +191,38 @@ router.get('/alicuotas', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/articulos/costos?ids=a,b,c ─────────────────────────────────────
+// Datos de costo/precio de un conjunto de artículos, para previsualizar cómo
+// queda cada precio antes de confirmar una compra de mercadería.
+// Devuelve el margen EFECTIVO (el propio del artículo o, si no tiene, el de su
+// categoría): es el que usa el trigger para recalcular precio_madre.
+router.get('/costos', async (req, res, next) => {
+  try {
+    const ids = String(req.query.ids || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (ids.length === 0) return res.json({ articulos: [] });
+    if (ids.length > 300) return res.status(400).json({ error: 'Demasiados artículos en la consulta' });
+
+    const { rows } = await pool.query(`
+      SELECT a.id, a.codigo, a.nombre,
+             a.costo_base::float                                     AS costo_base,
+             a.costo_flete::float                                    AS costo_flete,
+             a.precio_madre::float                                   AS precio_madre,
+             a.margen_aplicado::float                                AS margen_aplicado,
+             COALESCE(a.margen_aplicado, c.margen_default, 0)::float AS margen_efectivo,
+             COALESCE(ai.porcentaje, 0)::float                       AS alicuota_porcentaje
+        FROM articulos a
+        LEFT JOIN categorias c     ON c.id  = a.categoria_id
+        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
+       WHERE a.id = ANY($1::uuid[]) AND a.deleted_at IS NULL
+    `, [ids]);
+
+    res.json({ articulos: rows });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/articulos/next-codigo ──────────────────────────────────────────
 // Sugiere el siguiente código correlativo (solo número, sin prefijo).
 // Toma el mayor número al final de los códigos existentes y le suma 1.
