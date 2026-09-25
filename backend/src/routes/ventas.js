@@ -449,14 +449,16 @@ router.post('/', async (req, res, next) => {
         if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(`
             INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
-            VALUES ($1, 'venta', $2, $3, $4, $5)
+              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id,
+               origen_tipo, origen_id)
+            VALUES ($1, 'venta', $2, $3, $4, $5, 'venta', $6)
           `, [
             cajaId,
             `Venta #${numero}`,
             parseFloat(pago.monto),
             pago.medio_pago_id || null,
             pago.cuenta_bancaria_id || null,
+            venta.id,
           ]);
         }
 
@@ -732,10 +734,11 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
         if (medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(
             `INSERT INTO movimientos_caja
-               (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
-             VALUES ($1,'venta',$2,$3,$4,$5)`,
+               (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id,
+                origen_tipo, origen_id)
+             VALUES ($1,'venta',$2,$3,$4,$5,'venta',$6)`,
             [cajaId, `Venta #${numero}`, parseFloat(pago.monto), pago.medio_pago_id,
-             pago.cuenta_bancaria_id || null]
+             pago.cuenta_bancaria_id || null, id]
           );
         }
 
@@ -1661,14 +1664,13 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       // NO ser la caja abierta de hoy. Reinsertar el movimiento en la caja del día
       // duplicaba el efectivo (la caja original, ya cerrada, conserva su ingreso) e
       // inflaba el arqueo. Se ubica la caja donde está el movimiento original.
-      const conceptoCaja = `Venta #${ventaNumero}`;
       const { rows: cajasPrevias } = await client.query(
         `SELECT m.caja_id, c.estado, SUM(m.monto)::float AS total_previo
            FROM movimientos_caja m
            JOIN cajas c ON c.id = m.caja_id
-          WHERE m.tipo = 'venta' AND m.concepto = $1 AND c.sucursal_id = $2
+          WHERE m.origen_tipo = 'venta' AND m.origen_id = $1
           GROUP BY m.caja_id, c.estado`,
-        [conceptoCaja, sucursal_id]
+        [id]
       );
 
       // Importe que esta edición quiere asentar en caja: todo menos saldo a favor
@@ -1714,8 +1716,9 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       // Eliminar movimientos anteriores de esta venta en la caja abierta
       if (cajaId) {
         await client.query(
-          `DELETE FROM movimientos_caja WHERE caja_id = $1 AND tipo = 'venta' AND concepto = $2`,
-          [cajaId, `Venta #${ventaNumero}`]
+          `DELETE FROM movimientos_caja
+            WHERE caja_id = $1 AND origen_tipo = 'venta' AND origen_id = $2`,
+          [cajaId, id]
         );
       }
 
@@ -1732,10 +1735,11 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         if (cajaId && medio?.nombre !== 'Saldo a favor' && !esCuentaCorriente) {
           await client.query(`
             INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id)
-            VALUES ($1, 'venta', $2, $3, $4, $5)
+              (caja_id, tipo, concepto, monto, medio_pago_id, cuenta_bancaria_id,
+               origen_tipo, origen_id)
+            VALUES ($1, 'venta', $2, $3, $4, $5, 'venta', $6)
           `, [cajaId, `Venta #${ventaNumero}`, parseFloat(pago.monto), pago.medio_pago_id || null,
-              pago.cuenta_bancaria_id || null]);
+              pago.cuenta_bancaria_id || null, id]);
         }
 
         await registrarMovimientoBancario(client, {
