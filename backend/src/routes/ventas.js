@@ -1657,12 +1657,59 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       // pagos, así que primero se deshacen los anteriores para no duplicarlos.
       await revertirMovimientosBancarios(client, 'venta', id);
 
-      // Obtener caja abierta para reemplazar movimientos
-      const { rows: cajaRows } = await client.query(
-        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
-        [sucursal_id]
+      // El cobro de la venta vive en la caja del día en que se cobró, que puede
+      // NO ser la caja abierta de hoy. Reinsertar el movimiento en la caja del día
+      // duplicaba el efectivo (la caja original, ya cerrada, conserva su ingreso) e
+      // inflaba el arqueo. Se ubica la caja donde está el movimiento original.
+      const conceptoCaja = `Venta #${ventaNumero}`;
+      const { rows: cajasPrevias } = await client.query(
+        `SELECT m.caja_id, c.estado, SUM(m.monto)::float AS total_previo
+           FROM movimientos_caja m
+           JOIN cajas c ON c.id = m.caja_id
+          WHERE m.tipo = 'venta' AND m.concepto = $1 AND c.sucursal_id = $2
+          GROUP BY m.caja_id, c.estado`,
+        [conceptoCaja, sucursal_id]
       );
-      const cajaId = cajaRows[0]?.id ?? null;
+
+      // Importe que esta edición quiere asentar en caja: todo menos saldo a favor
+      // y cuenta corriente (mismo criterio que el INSERT de abajo).
+      const montoCajaNuevo = parseFloat(pagosEfectivos.reduce((acc, p) => {
+        const medio = mediosMap[p.medio_pago_id];
+        const nombreMedio = medio?.nombre?.toLowerCase() ?? '';
+        const esCC = nombreMedio.includes('cuenta corriente')
+          || nombreMedio.includes('cta. cte') || nombreMedio.includes('cta cte');
+        if (medio?.nombre === 'Saldo a favor' || esCC) return acc;
+        return acc + (parseFloat(p.monto) || 0);
+      }, 0).toFixed(2));
+
+      let cajaId;
+      const cajaCerradaPrevia = cajasPrevias.find(c => c.estado !== 'abierta');
+      const cajaAbiertaPrevia = cajasPrevias.find(c => c.estado === 'abierta');
+      if (cajaCerradaPrevia) {
+        // La caja del cobro ya está cerrada: tocar su movimiento descuadraría un
+        // arqueo cerrado y moverlo a la caja de hoy duplicaría el efectivo. Se
+        // permite editar ítems/descuentos solo si el importe cobrado no cambia.
+        const totalPrevio = parseFloat(cajaCerradaPrevia.total_previo.toFixed(2));
+        if (Math.abs(montoCajaNuevo - totalPrevio) > 0.009) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            error: `El cobro de la venta #${ventaNumero} está registrado en una caja ya cerrada `
+              + `($${totalPrevio.toFixed(2)}). No se puede cambiar el importe cobrado desde la edición: `
+              + `usá devolución de mercadería o nota de crédito.`,
+          });
+        }
+        // Importe intacto: se deja el movimiento original donde está.
+        cajaId = null;
+      } else if (cajaAbiertaPrevia) {
+        cajaId = cajaAbiertaPrevia.caja_id;
+      } else {
+        // Sin movimiento previo (venta en CC, preventa, etc.): caja abierta de hoy.
+        const { rows: cajaRows } = await client.query(
+          `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+          [sucursal_id]
+        );
+        cajaId = cajaRows[0]?.id ?? null;
+      }
 
       // Eliminar movimientos anteriores de esta venta en la caja abierta
       if (cajaId) {
