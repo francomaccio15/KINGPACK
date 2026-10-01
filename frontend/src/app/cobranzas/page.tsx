@@ -18,7 +18,7 @@ export default async function CobranzasPage() {
   const sucursalId = cookies().get('kp_sucursal_id')?.value;
 
   const [clientes, cajaAbierta] = await Promise.all([
-    serverFetch('/api/clientes?limit=1000&activo=true', { cache: 'no-store' })
+    serverFetch('/api/clientes?limit=5000&activo=true', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => (d.clientes ?? []) as ClienteCobranza[])
       .catch(() => [] as ClienteCobranza[]),

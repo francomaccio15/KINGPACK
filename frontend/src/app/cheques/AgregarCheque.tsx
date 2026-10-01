@@ -54,7 +54,7 @@ export default function AgregarCheque() {
     if (!open || sucursales.length > 0) return;
     Promise.all([
       apiFetch('/api/sucursales').then(r => r.json()).catch(() => ({ sucursales: [] })),
-      apiFetch('/api/clientes?limit=500').then(r => r.json()).catch(() => ({ clientes: [] })),
+      apiFetch('/api/clientes?limit=5000').then(r => r.json()).catch(() => ({ clientes: [] })),
       apiFetch('/api/proveedores?limit=500').then(r => r.json()).catch(() => ({ proveedores: [] })),
     ]).then(([suc, cli, prov]) => {
       const sArr = (suc.sucursales ?? []).map((s: any) => ({ id: s.id, nombre: s.nombre }));

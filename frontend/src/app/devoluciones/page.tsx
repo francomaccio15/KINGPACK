@@ -58,7 +58,7 @@ async function fetchDevoluciones(params: Record<string, string>) {
 
 async function fetchClientes(): Promise<Cliente[]> {
   try {
-    const r = await serverFetch('/api/clientes?limit=500&activo=true', { cache: 'no-store' });
+    const r = await serverFetch('/api/clientes?limit=5000&activo=true', { cache: 'no-store' });
     if (!r.ok) return [];
     return (await r.json()).clientes ?? [];
   } catch { return []; }

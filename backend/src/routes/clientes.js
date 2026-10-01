@@ -77,7 +77,7 @@ router.get('/', async (req, res, next) => {
     const where = conditions.join(' AND ');
     const countParams = [...params];
 
-    params.push(Math.min(parseInt(limit) || 200, 500));
+    params.push(Math.min(parseInt(limit) || 200, 5000));
     params.push(Math.max(parseInt(offset) || 0, 0));
 
     const [{ rows }, { rows: countRows }] = await Promise.all([

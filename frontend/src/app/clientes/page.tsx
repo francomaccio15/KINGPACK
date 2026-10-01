@@ -17,7 +17,7 @@ const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS',
 const fmt = (v: string | number | null) => { const n = parseFloat(String(v ?? '')); return isNaN(n) ? '—' : ars.format(n); };
 
 async function fetchAll(q?: string, activo?: string) {
-  const params = new URLSearchParams({ limit: '500' });
+  const params = new URLSearchParams({ limit: '5000' });
   if (q)      params.set('q', q);
   if (activo) params.set('activo', activo);
 
