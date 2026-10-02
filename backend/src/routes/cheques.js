@@ -5,6 +5,7 @@ const {
   registrarMovimientoBancario,
   revertirMovimientosBancarios,
   cuentaChequesId,
+  cuentaDestinoCheque,
 } = require('../services/movimientos-bancarios');
 const { validarAltaCheque, CAUSALES_RECHAZO } = require('../services/cheques-validacion');
 
@@ -290,6 +291,11 @@ router.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/cheques/causales-rechazo ────────────────────────────────────────
+router.get('/causales-rechazo', (req, res) => {
+  res.json({ causales: Object.entries(CAUSALES_RECHAZO).map(([value, label]) => ({ value, label })) });
+});
+
 // ─── GET /api/cheques/:tipo/:id ───────────────────────────────────────────────
 router.get('/:tipo/:id', async (req, res, next) => {
   try {
@@ -300,11 +306,16 @@ router.get('/:tipo/:id', async (req, res, next) => {
 
     const [{ rows: chequeRows }, { rows: historialRows }] = await Promise.all([
       pool.query(
-        `SELECT *, CASE
-            WHEN fecha_vencimiento < CURRENT_DATE AND estado NOT IN ('acreditado','debitado','rechazado','anulado')
+        `SELECT vw.*, CASE
+            WHEN vw.fecha_vencimiento < CURRENT_DATE AND vw.estado NOT IN ('acreditado','debitado','rechazado','anulado')
             THEN true ELSE false
-         END AS vencido
-         FROM vw_cheques WHERE tipo = $1 AND id = $2`,
+         END AS vencido,
+         cb.nombre        AS deposito_cuenta_nombre,
+         pe.razon_social  AS endoso_proveedor_nombre
+         FROM vw_cheques vw
+         LEFT JOIN cuentas_bancarias_empresa cb ON cb.id = vw.deposito_cuenta_id
+         LEFT JOIN proveedores               pe ON pe.id = vw.endoso_proveedor_id
+         WHERE vw.tipo = $1 AND vw.id = $2`,
         [tipo, id]
       ),
       pool.query(
@@ -323,12 +334,34 @@ router.get('/:tipo/:id', async (req, res, next) => {
 });
 
 // ─── PATCH /api/cheques/:tipo/:id/estado ──────────────────────────────────────
-// Body: { estado_nuevo, observacion, fecha_estado }
+// Body: { estado_nuevo, observacion, fecha_estado, ...datos de la transición }
+//   depositado (recibido) → deposito_cuenta_id   (opcional: default cuenta de cheques)
+//   endosado   (recibido) → endoso_proveedor_id, endoso_fecha, endoso_comprobante
+//   rechazado             → rechazo_causal  (ver CAUSALES_RECHAZO)
 router.patch('/:tipo/:id/estado', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { tipo, id } = req.params;
-    const { estado_nuevo, observacion, fecha_estado } = req.body;
+    const {
+      estado_nuevo, observacion, fecha_estado,
+      deposito_cuenta_id, endoso_proveedor_id, endoso_fecha, endoso_comprobante,
+      rechazo_causal,
+    } = req.body;
+
+    // Lo que cada transición exige, ANTES de abrir la transacción.
+    if (estado_nuevo === 'endosado') {
+      if (!endoso_proveedor_id)        return res.status(400).json({ error: 'Al endosar, indicá el proveedor que lo recibe' });
+      if (!endoso_fecha)               return res.status(400).json({ error: 'Al endosar, indicá la fecha de entrega' });
+      if (!endoso_comprobante?.trim()) return res.status(400).json({ error: 'Al endosar, indicá la orden de pago o factura que cancela' });
+    }
+    if (estado_nuevo === 'rechazado') {
+      if (!rechazo_causal || !CAUSALES_RECHAZO[rechazo_causal]) {
+        return res.status(400).json({ error: 'Al rechazar, indicá la causal del rechazo' });
+      }
+      if (rechazo_causal === 'otro' && !observacion?.trim()) {
+        return res.status(400).json({ error: 'Causal "Otro": detallá el motivo en la observación' });
+      }
+    }
 
     if (!['recibido','emitido'].includes(tipo)) {
       return res.status(400).json({ error: 'tipo debe ser recibido o emitido' });
@@ -399,20 +432,60 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
     const fechaEstado = fecha_estado || new Date().toISOString().slice(0, 10);
     const usuario_id = req.usuario?.id ?? null;
 
-    // Actualizar estado
+    // Validar los destinos contra la base (no alcanza con que vengan).
+    let cuentaDeposito = null;
+    if (estado_nuevo === 'depositado' && deposito_cuenta_id) {
+      const { rows: cta } = await client.query(
+        `SELECT id FROM cuentas_bancarias_empresa WHERE id = $1 AND activo`, [deposito_cuenta_id]
+      );
+      if (!cta.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'La cuenta de depósito no existe o está inactiva' });
+      }
+      cuentaDeposito = deposito_cuenta_id;
+    }
+    if (estado_nuevo === 'endosado') {
+      const { rows: prov } = await client.query(
+        `SELECT id FROM proveedores WHERE id = $1`, [endoso_proveedor_id]
+      );
+      if (!prov.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'El proveedor del endoso no existe' });
+      }
+    }
+
+    // Actualizar estado (+ el dato propio de la transición; el resto se preserva)
     await client.query(
       `UPDATE ${tabla}
-       SET estado = $1, fecha_estado = $2, observaciones = COALESCE($3, observaciones)
+       SET estado = $1, fecha_estado = $2, observaciones = COALESCE($3, observaciones),
+           deposito_cuenta_id  = COALESCE($5, deposito_cuenta_id),
+           endoso_proveedor_id = COALESCE($6, endoso_proveedor_id),
+           endoso_fecha        = COALESCE($7, endoso_fecha),
+           endoso_comprobante  = COALESCE($8, endoso_comprobante),
+           rechazo_causal      = COALESCE($9, rechazo_causal)
        WHERE id = $4`,
-      [estado_nuevo, fechaEstado, observacion || null, id]
+      [
+        estado_nuevo, fechaEstado, observacion || null, id,
+        cuentaDeposito,
+        estado_nuevo === 'endosado' ? endoso_proveedor_id : null,
+        estado_nuevo === 'endosado' ? endoso_fecha : null,
+        estado_nuevo === 'endosado' ? endoso_comprobante.trim() : null,
+        estado_nuevo === 'rechazado' ? rechazo_causal : null,
+      ]
     );
 
-    // Registrar en historial
+    // Registrar en historial (con la causal / el destino escritos, para que la
+    // auditoría se lea sola sin cruzar tablas)
+    const detalle = [
+      estado_nuevo === 'rechazado' ? CAUSALES_RECHAZO[rechazo_causal] : null,
+      estado_nuevo === 'endosado' ? `Endoso — comprobante ${endoso_comprobante.trim()}` : null,
+      observacion?.trim() || null,
+    ].filter(Boolean).join(' · ') || null;
     await client.query(
       `INSERT INTO cheque_historial_estados
          (cheque_tipo, cheque_id, estado_anterior, estado_nuevo, observacion, usuario_id)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [tipo, id, estadoActual, estado_nuevo, observacion || null, usuario_id]
+      [tipo, id, estadoActual, estado_nuevo, detalle, usuario_id]
     );
 
     // ── Efecto en el banco (mig 049) ───────────────────────────────────────────
@@ -434,7 +507,7 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
         `SELECT 1 FROM movimientos_cuenta_bancaria
           WHERE origen_tipo = 'cheque' AND origen_id = $1 LIMIT 1`, [id]
       );
-      const cuenta = yaMovio.length ? null : await cuentaChequesId(client);
+      const cuenta = yaMovio.length ? null : await cuentaDestinoCheque(client, id);
       if (cuenta) {
         const { rows: chq } = await client.query(
           `SELECT importe, banco, numero_cheque FROM ${tabla} WHERE id = $1`, [id]
@@ -481,9 +554,7 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
           [ch.sucursal_id]
         );
         if (cajaRows[0]) {
-          const motivo = observacion?.trim()
-            ? ` (${observacion.trim()})`
-            : '';
+          const motivo = ` (${[CAUSALES_RECHAZO[rechazo_causal], observacion?.trim()].filter(Boolean).join(' — ')})`;
           await client.query(`
             INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id)
             SELECT $1, 'egreso',

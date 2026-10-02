@@ -133,8 +133,19 @@ async function cuentaChequesId(client) {
   return rows[0]?.id ?? null;
 }
 
+// Cuenta donde impacta un cheque al acreditarse/debitarse: la que se eligió al
+// depositarlo (mig 059, deposito_cuenta_id) o, si no se eligió ninguna —todo el
+// histórico y los emitidos—, la cuenta marcada como de cheques (mig 049).
+async function cuentaDestinoCheque(client, chequeId) {
+  const { rows } = await client.query(
+    `SELECT deposito_cuenta_id FROM vw_cheques WHERE id = $1 LIMIT 1`, [chequeId]
+  );
+  return rows[0]?.deposito_cuenta_id ?? cuentaChequesId(client);
+}
+
 module.exports = {
   registrarMovimientoBancario,
+  cuentaDestinoCheque,
   registrarMovimientosDeMedios,
   revertirMovimientosBancarios,
   fijarSaldoBancario,

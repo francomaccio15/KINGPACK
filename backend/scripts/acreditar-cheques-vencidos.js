@@ -33,7 +33,7 @@
 const { pool } = require('../src/config/db');
 const {
   registrarMovimientoBancario,
-  cuentaChequesId,
+  cuentaDestinoCheque,
 } = require('../src/services/movimientos-bancarios');
 
 const DIAS_GRACIA = 2;
@@ -103,7 +103,7 @@ async function main() {
           `SELECT 1 FROM movimientos_cuenta_bancaria WHERE origen_tipo='cheque' AND origen_id=$1`,
           [ch.id]
         );
-        const cuenta = ya.length ? null : await cuentaChequesId(client);
+        const cuenta = ya.length ? null : await cuentaDestinoCheque(client, ch.id);
         if (cuenta) {
           const esIngreso = ch.tipo === 'recibido';
           await registrarMovimientoBancario(client, {
