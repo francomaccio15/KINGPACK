@@ -719,4 +719,160 @@ router.post('/estado-resultados/cierre/reabrir', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+
+// ─── GET /api/reportes/blanco-negro ──────────────────────────────────────────
+// Comparativo facturado (blanco) vs no facturado (negro), en ventas y compras.
+//
+// Criterio VENTAS:  blanco = la venta tiene una facturación vigente con CAE y ok = true.
+//                   negro  = venta confirmada/facturada sin esa facturación.
+// Criterio COMPRAS: blanco = el egreso tiene tipo_comprobante fiscal (factura /
+//                   nota de débito / nota de crédito A, B o C).
+//                   negro  = sin comprobante, o 'informal'.
+//
+// ?fecha_desde=  ISO date (default: primer día del mes)
+// ?fecha_hasta=  ISO date (default: hoy)
+router.get('/blanco-negro', async (req, res, next) => {
+  try {
+    const { fecha_desde, fecha_hasta } = req.query;
+    const hoy   = new Date().toISOString().slice(0, 10);
+    const desde = fecha_desde || hoy.slice(0, 8) + '01';
+    const hasta = fecha_hasta || hoy;
+
+    const sucId = sucursalEfectiva(req);
+
+    // $1 desde, $2 hasta, $3 sucursal (opcional)
+    const params = sucId ? [desde, hasta, sucId] : [desde, hasta];
+    const sucV = sucId ? 'AND v.sucursal_id = $3' : '';
+    const sucE = sucId ? 'AND e.sucursal_id = $3' : '';
+
+    const esBlancoVenta = `EXISTS (
+      SELECT 1 FROM facturaciones f
+       WHERE f.venta_id = v.id
+         AND f.deleted_at IS NULL
+         AND f.ok = TRUE
+         AND f.cae IS NOT NULL
+    )`;
+
+    const esBlancoEgreso = `(e.tipo_comprobante IS NOT NULL AND e.tipo_comprobante <> 'informal')`;
+
+    const [ventas, compras, ventasMes, comprasMes, detVentas, detCompras] = await Promise.all([
+      // Resumen de ventas
+      pool.query(`
+        SELECT
+          ${esBlancoVenta}                 AS blanco,
+          COUNT(*)::int                    AS cantidad,
+          COALESCE(SUM(v.total), 0)::float AS monto
+        FROM ventas v
+        WHERE v.deleted_at IS NULL
+          AND v.estado IN ('confirmada','facturada')
+          AND v.fecha::date BETWEEN $1 AND $2
+          ${sucV}
+        GROUP BY 1
+      `, params),
+
+      // Resumen de compras / egresos
+      pool.query(`
+        SELECT
+          ${esBlancoEgreso}                AS blanco,
+          COUNT(*)::int                    AS cantidad,
+          COALESCE(SUM(e.total), 0)::float AS monto
+        FROM egresos e
+        WHERE e.deleted_at IS NULL
+          AND e.fecha_emision::date BETWEEN $1 AND $2
+          ${sucE}
+        GROUP BY 1
+      `, params),
+
+      // Ventas por mes
+      pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', v.fecha), 'YYYY-MM') AS periodo,
+          COALESCE(SUM(v.total) FILTER (WHERE ${esBlancoVenta}), 0)::float     AS blanco,
+          COALESCE(SUM(v.total) FILTER (WHERE NOT ${esBlancoVenta}), 0)::float AS negro
+        FROM ventas v
+        WHERE v.deleted_at IS NULL
+          AND v.estado IN ('confirmada','facturada')
+          AND v.fecha::date BETWEEN $1 AND $2
+          ${sucV}
+        GROUP BY 1 ORDER BY 1
+      `, params),
+
+      // Compras por mes
+      pool.query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', e.fecha_emision), 'YYYY-MM') AS periodo,
+          COALESCE(SUM(e.total) FILTER (WHERE ${esBlancoEgreso}), 0)::float     AS blanco,
+          COALESCE(SUM(e.total) FILTER (WHERE NOT ${esBlancoEgreso}), 0)::float AS negro
+        FROM egresos e
+        WHERE e.deleted_at IS NULL
+          AND e.fecha_emision::date BETWEEN $1 AND $2
+          ${sucE}
+        GROUP BY 1 ORDER BY 1
+      `, params),
+
+      // Detalle de ventas en negro (las que falta facturar)
+      pool.query(`
+        SELECT
+          v.id, v.numero, v.fecha, v.total::float AS total,
+          COALESCE(c.razon_social, 'Consumidor final') AS cliente,
+          s.nombre AS sucursal
+        FROM ventas v
+        LEFT JOIN clientes c   ON c.id = v.cliente_id
+        LEFT JOIN sucursales s ON s.id = v.sucursal_id
+        WHERE v.deleted_at IS NULL
+          AND v.estado IN ('confirmada','facturada')
+          AND v.fecha::date BETWEEN $1 AND $2
+          ${sucV}
+          AND NOT ${esBlancoVenta}
+        ORDER BY v.fecha DESC
+        LIMIT 300
+      `, params),
+
+      // Detalle de compras sin comprobante
+      pool.query(`
+        SELECT
+          e.id, e.fecha_emision AS fecha, e.total::float AS total,
+          e.descripcion, e.tipo_operacion,
+          COALESCE(p.razon_social, '—') AS proveedor,
+          s.nombre AS sucursal
+        FROM egresos e
+        LEFT JOIN proveedores p ON p.id = e.proveedor_id
+        LEFT JOIN sucursales s  ON s.id = e.sucursal_id
+        WHERE e.deleted_at IS NULL
+          AND e.fecha_emision::date BETWEEN $1 AND $2
+          ${sucE}
+          AND NOT ${esBlancoEgreso}
+        ORDER BY e.fecha_emision DESC
+        LIMIT 300
+      `, params),
+    ]);
+
+    // Normaliza el GROUP BY booleano a { blanco, negro } + porcentajes
+    const partir = (rows) => {
+      const b = rows.find((r) => r.blanco === true);
+      const n = rows.find((r) => r.blanco === false);
+      const blanco = { cantidad: b ? b.cantidad : 0, monto: b ? b.monto : 0 };
+      const negro  = { cantidad: n ? n.cantidad : 0, monto: n ? n.monto : 0 };
+      const total  = blanco.monto + negro.monto;
+      return {
+        blanco, negro,
+        total_monto:    total,
+        total_cantidad: blanco.cantidad + negro.cantidad,
+        pct_blanco: total > 0 ? (blanco.monto / total) * 100 : 0,
+        pct_negro:  total > 0 ? (negro.monto  / total) * 100 : 0,
+      };
+    };
+
+    res.json({
+      periodo: { desde, hasta },
+      ventas:  partir(ventas.rows),
+      compras: partir(compras.rows),
+      ventas_por_mes:  ventasMes.rows,
+      compras_por_mes: comprasMes.rows,
+      detalle_ventas_negro:  detVentas.rows,
+      detalle_compras_negro: detCompras.rows,
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

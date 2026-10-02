@@ -7,6 +7,7 @@ import ReporteGastos from './ReporteGastos';
 import EstadoResultados from './EstadoResultados';
 import CierreMensual from './CierreMensual';
 import SelectorPeriodoCierre from './SelectorPeriodoCierre';
+import BlancoNegro, { BlancoNegroData } from './BlancoNegro';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,8 +160,13 @@ export default async function ReportesPage({
   let data: ReportesData | null = null;
   let gastosData: any           = null;
   let erData: any               = null;
+  let bnData: BlancoNegroData | null = null;
 
-  if (tab === 'gastos') {
+  if (tab === 'bn') {
+    const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
+    const res = await serverFetch(`/api/reportes/blanco-negro?${qs}`, { cache: 'no-store' });
+    bnData = res.ok ? await res.json() : null;
+  } else if (tab === 'gastos') {
     const qs = new URLSearchParams({ fecha_desde: fechaDesde, fecha_hasta: fechaHasta });
     if (rubroId) qs.set('rubro_id', rubroId);
     const res = await serverFetch(`/api/reportes/gastos?${qs}`, { cache: 'no-store' });
@@ -215,7 +221,9 @@ export default async function ReportesPage({
             Período: {fmtDia(fechaDesde)} — {fmtDia(fechaHasta)}
           </p>
         </div>
-        {tab === 'ventas' && <FiltrosReportes fechaDesde={fechaDesde} fechaHasta={fechaHasta} />}
+        {(tab === 'ventas' || tab === 'bn') && (
+          <FiltrosReportes fechaDesde={fechaDesde} fechaHasta={fechaHasta} tab={tab} />
+        )}
         {tab === 'er' && !searchParams.fecha_desde && !searchParams.fecha_hasta && (
           <SelectorPeriodoCierre
             anio={parseInt(searchParams.anio as string, 10) || new Date().getFullYear()}
@@ -229,6 +237,7 @@ export default async function ReportesPage({
         {[
           { label: 'Ventas',             value: 'ventas' },
           { label: 'Egresos',           value: 'gastos' },
+          { label: 'Blanco / Negro',    value: 'bn'     },
           { label: 'Estado de Resultados', value: 'er'   },
         ].map(t => (
           <Link
@@ -252,6 +261,15 @@ export default async function ReportesPage({
           ? <ReporteGastos data={gastosData} fechaDesde={fechaDesde} fechaHasta={fechaHasta} rubroId={rubroId} />
           : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
               <p className="text-kp-gray text-sm">No se pudo cargar el reporte de gastos.</p>
+            </div>
+      )}
+
+      {/* ── TAB BLANCO / NEGRO ─────────────────────────────────────── */}
+      {tab === 'bn' && (
+        bnData
+          ? <BlancoNegro data={bnData} />
+          : <div className="rounded-xl border border-kp-border bg-kp-surface p-8 text-center">
+              <p className="text-kp-gray text-sm">No se pudo cargar el reporte de blanco / negro.</p>
             </div>
       )}
 
