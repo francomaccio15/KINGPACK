@@ -13,6 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import Modal from '@/components/ui/Modal';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 import { btnPrimary, btnSecondary, cn, selectCls } from '@/lib/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +35,7 @@ interface ArticuloResult {
 interface ClienteResult {
   id: string;
   razon_social: string;
+  cuit?: string | null;
   lista_precio_id: string | null;
   lista_precio: string | null;      // API field name
   descuento_adicional: number;
@@ -53,13 +56,21 @@ interface CuentaBancaria {
   cbu: string | null;
 }
 
-interface Cheque {
+type Cheque = ChequeExtra & {
   banco: string;
   numero_cheque: string;
-  fecha_emision: string;
   fecha_vencimiento: string;
   importe: string;
-}
+};
+const chequeVacio = (): Cheque => ({ ...chequeExtraVacio(), banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
+
+// Lo que viaja al backend por cada cheque de la venta.
+const chequePayload = (c: Cheque) => ({
+  banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
+  fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
+  ...chequeExtraPayload(c, 'recibido'),
+});
+const chequeCargado = (c: Cheque) => !!(c.banco || c.numero_cheque || c.importe);
 
 interface CartItem {
   articulo_id: string;
@@ -211,7 +222,17 @@ export default function NuevaVenta({
   // ── Medios de pago
   const [mediosPago, setMediosPago]       = useState<MedioPago[]>([]);
   const [medioPagoId, setMedioPagoId]     = useState<string>('');
-  const [cheques, setCheques]             = useState<Cheque[]>([{ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }]);
+  const [cheques, setCheques]             = useState<Cheque[]>([chequeVacio()]);
+  // Al elegir cliente se propone como librador en los cheques que no tengan uno:
+  // casi siempre firma el que paga. Si es un cheque de tercero, se pisa a mano.
+  useEffect(() => {
+    if (!selectedClient) return;
+    setCheques(prev => prev.map(c => ({
+      ...c,
+      librador_nombre: c.librador_nombre || selectedClient.razon_social,
+      librador_cuit:   c.librador_cuit   || (selectedClient.cuit ?? ''),
+    })));
+  }, [selectedClient]);
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
   const [cuentaDestinoId, setCuentaDestinoId]   = useState<string>('');
   const [cuentaDestinoId2, setCuentaDestinoId2] = useState<string>('');
@@ -574,6 +595,19 @@ export default function NuevaVenta({
   const handleSave = async (estado: 'preventa' | 'confirmada') => {
     if (cart.length === 0) return;
     setSaveError('');
+
+    // Cheques recibidos: mismas reglas que el módulo Cheques (librador, CUIT,
+    // físico/ECHEQ, vigencia). Mismo criterio de visibilidad que la sección.
+    const hayChequeVenta = (usarSegundoMedio ? (esCheque || esCheque2) : esCheque)
+      && saldoAFavorAplicado < totalConExtra - 0.001;
+    if (hayChequeVenta) {
+      const cargados = cheques.filter(chequeCargado);
+      if (cargados.length === 0) { setSaveError('Cargá el detalle del cheque'); return; }
+      for (const [i, c] of cargados.entries()) {
+        const err = errorCheque(c, 'recibido');
+        if (err) { setSaveError(`Cheque #${i + 1}: ${err}`); return; }
+      }
+    }
     setSaving(estado);
 
     // ── Construir pagos (saldo a favor + medio restante) ─────────────────────
@@ -597,9 +631,7 @@ export default function NuevaVenta({
 
     if (usarSegundoMedio) {
       // Pago dividido: dos medios con montos explícitos
-      const chequesValidos = cheques
-        .filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
-        .map(c => ({ ...c, importe: parseFloat(c.importe) }));
+      const chequesValidos = cheques.filter(chequeCargado).map(chequePayload);
       if (monto1Num > 0.001 && medioPagoId) {
         pagos.push({
           medio_pago_id: medioPagoId,
@@ -615,7 +647,7 @@ export default function NuevaVenta({
           monto: monto2Num,
           cuenta_destino: esTransferencia2 ? (cuentasBancarias.find(c => c.id === cuentaDestinoId2)?.nombre ?? null) : null,
           cuenta_bancaria_id: esTransferencia2 ? (cuentaDestinoId2 || null) : null,
-          cheques: esCheque2 ? chequesValidos : undefined,
+          cheques: esCheque2 && !esCheque ? chequesValidos : undefined,
         });
       }
     } else if (saldoRestante > 0.001 && medioPagoId) {
@@ -626,10 +658,7 @@ export default function NuevaVenta({
           ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
           : null,
         cuenta_bancaria_id: esTransferencia ? (cuentaDestinoId || null) : null,
-        cheques: esCheque
-          ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
-                   .map(c => ({ ...c, importe: parseFloat(c.importe) }))
-          : undefined,
+        cheques: esCheque ? cheques.filter(chequeCargado).map(chequePayload) : undefined,
       });
     }
 
@@ -1517,7 +1546,11 @@ export default function NuevaVenta({
                       <div className="flex items-center justify-between">
                         <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">Cheques</p>
                         <button type="button"
-                          onClick={() => setCheques(prev => [...prev, { banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' }])}
+                          onClick={() => setCheques(prev => [...prev, {
+                            ...chequeVacio(),
+                            librador_nombre: selectedClient?.razon_social ?? '',
+                            librador_cuit: selectedClient?.cuit ?? '',
+                          }])}
                           className="text-xs text-kp-red hover:underline">
                           + Agregar cheque
                         </button>
@@ -1545,7 +1578,7 @@ export default function NuevaVenta({
                                 className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                             <div>
-                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Emisión</p>
+                              <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Fecha de Emisión *</p>
                               <input type="date" value={ch.fecha_emision}
                                 onChange={e => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, fecha_emision: e.target.value } : c))}
                                 className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-kp-red transition-colors" />
@@ -1563,6 +1596,8 @@ export default function NuevaVenta({
                                 className="w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors" />
                             </div>
                           </div>
+                          <ChequeDatosExtra value={ch} tipo="recibido" conEmision={false} fechaVencimiento={ch.fecha_vencimiento}
+                            onChange={cambios => setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, ...cambios } : c))} />
                         </div>
                       ))}
                     </section>

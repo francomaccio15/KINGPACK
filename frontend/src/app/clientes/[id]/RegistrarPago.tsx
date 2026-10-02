@@ -6,6 +6,8 @@ import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { filtrarMediosPorRol } from '@/lib/mediosPago';
 import Modal from '@/components/ui/Modal';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -32,10 +34,15 @@ export default function RegistrarPago({
   clienteId,
   saldoActual,
   sucursalId,
+  clienteNombre,
+  clienteCuit,
 }: {
   clienteId: string;
   saldoActual: number;
   sucursalId?: string;
+  /** Proponen el librador del cheque: casi siempre lo firma quien paga. */
+  clienteNombre?: string;
+  clienteCuit?: string | null;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -55,6 +62,12 @@ export default function RegistrarPago({
   const [chNumero, setChNumero]     = useState('');
   const [chEmision, setChEmision]   = useState('');
   const [chVenc, setChVenc]         = useState('');
+  const extraInicial = (): ChequeExtra => ({
+    ...chequeExtraVacio(),
+    librador_nombre: clienteNombre ?? '',
+    librador_cuit: clienteCuit ?? '',
+  });
+  const [chExtra, setChExtra]       = useState<ChequeExtra>(extraInicial);
 
   const medioElegido = mediosPago.find(m => m.id === medioPagoId);
   const esCheque      = /cheque/i.test(medioElegido?.nombre ?? '');
@@ -97,13 +110,20 @@ export default function RegistrarPago({
     setMedioPagoId('');
     setCuentaId('');
     setChBanco(''); setChNumero(''); setChEmision(''); setChVenc('');
+    setChExtra(extraInicial());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
     if (requiereCuenta && !cuentaId) { setError('Seleccioná la cuenta que recibe el pago'); return; }
-    if (esCheque && !chVenc) { setError('Ingresá la fecha de pago del cheque'); return; }
+    if (esCheque) {
+      const err = errorCheque({
+        ...chExtra, fecha_emision: chEmision,
+        banco: chBanco, numero_cheque: chNumero, fecha_vencimiento: chVenc,
+      }, 'recibido');
+      if (err) { setError(`Cheque: ${err}`); return; }
+    }
     setError('');
     setLoading(true);
     try {
@@ -116,7 +136,10 @@ export default function RegistrarPago({
           sucursal_id: sucursalId,
           cuenta_bancaria_id: cuentaId || null,
           cheque: esCheque
-            ? { banco: chBanco, numero_cheque: chNumero, fecha_emision: chEmision || null, fecha_vencimiento: chVenc }
+            ? {
+                banco: chBanco.trim(), numero_cheque: chNumero.trim(), fecha_vencimiento: chVenc,
+                ...chequeExtraPayload({ ...chExtra, fecha_emision: chEmision }, 'recibido'),
+              }
             : undefined,
         }),
       });
@@ -231,7 +254,7 @@ export default function RegistrarPago({
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión</label>
+                  <label className="block text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest mb-1">Fecha emisión *</label>
                   <input type="date" value={chEmision} onChange={e => setChEmision(e.target.value)}
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
@@ -241,6 +264,8 @@ export default function RegistrarPago({
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors" />
                 </div>
               </div>
+              <ChequeDatosExtra value={chExtra} onChange={c => setChExtra(p => ({ ...p, ...c }))} tipo="recibido"
+                conEmision={false} fechaVencimiento={chVenc} />
               <p className="text-2xs md:text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
             </div>
           )}

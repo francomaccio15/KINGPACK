@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva } = require('../middleware/auth');
+const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 const { registrarMovimientoCajaFuerte } = require('../services/movimientos-caja-fuerte');
 
@@ -216,6 +217,15 @@ router.post('/:id/movimiento', async (req, res, next) => {
     const totalMonto = mediosArr.reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
     if (totalMonto <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
+    // Cheques recibidos en el movimiento: mismas reglas que el alta en Cheques.
+    // Las filas en blanco (importe vacío) se ignoran, como antes.
+    const chequesConImporte = (Array.isArray(chequesBody) ? chequesBody : [])
+      .filter(ch => ch && String(ch.importe ?? '').trim() !== '' && parseFloat(ch.importe) > 0);
+    const vCheques = validarListaCheques(chequesConImporte, 'recibido');
+    if (vCheques.error) return res.status(400).json({ error: vCheques.error });
+    const dupCaja = await errorDuplicados(pool, vCheques.cheques);
+    if (dupCaja) return res.status(409).json({ error: dupCaja });
+
     await client.query('BEGIN');
 
     // Verificar que la caja esté abierta y obtener su sucursal
@@ -300,21 +310,15 @@ router.post('/:id/movimiento', async (req, res, next) => {
     }
 
     // Insertar detalle de cheques si los hay
-    const chequesArr = Array.isArray(chequesBody) ? chequesBody : [];
-    if (chequesArr.length > 0 && movimientoChequId) {
-      for (const ch of chequesArr) {
-        if (!ch.importe || parseFloat(ch.importe) <= 0) continue;
+    if (vCheques.cheques.length > 0 && movimientoChequId) {
+      for (const ch of vCheques.cheques) {
         await client.query(`
           INSERT INTO movimiento_caja_cheques
-            (movimiento_id, banco, numero_cheque, fecha_vencimiento, importe)
-          VALUES ($1, $2, $3, $4, $5)
-        `, [
-          movimientoChequId,
-          ch.banco || null,
-          ch.numero_cheque || null,
-          ch.fecha_vencimiento || null,
-          parseFloat(ch.importe),
-        ]);
+            (movimiento_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe,
+             forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `, [movimientoChequId, ch.banco, ch.numero_cheque, ch.fecha_emision, ch.fecha_vencimiento, ch.importe,
+            ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
       }
     }
 

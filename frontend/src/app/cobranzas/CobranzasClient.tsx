@@ -133,7 +133,7 @@ export default function CobranzasClient({
                     {ars.format(saldo)}
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <RegistrarPago clienteId={c.id} saldoActual={saldo} sucursalId={sucursalId} />
+                    <RegistrarPago clienteId={c.id} saldoActual={saldo} sucursalId={sucursalId} clienteNombre={c.razon_social} clienteCuit={c.cuit} />
                   </td>
                 </tr>
               );
@@ -164,7 +164,7 @@ export default function CobranzasClient({
                 <>
                   <Link href={`/clientes/${c.id}`} className={cn(btnSecondary, 'flex-1')}>Ficha</Link>
                   <div className="flex-1 [&>button]:w-full">
-                    <RegistrarPago clienteId={c.id} saldoActual={saldo} sucursalId={sucursalId} />
+                    <RegistrarPago clienteId={c.id} saldoActual={saldo} sucursalId={sucursalId} clienteNombre={c.razon_social} clienteCuit={c.cuit} />
                   </div>
                 </>
               }

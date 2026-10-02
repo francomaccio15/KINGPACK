@@ -79,3 +79,62 @@ export const formatoFecha = (iso: string | null | undefined) => {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
 };
+
+// ─── Campos de la mig 059 para formularios con cheques embebidos ────────────
+// (venta, egreso, pago a proveedor, movimiento de caja, cobranza). Cada form ya
+// maneja banco/número/vencimiento/importe; esto agrega lo demás.
+
+export interface ChequeExtra {
+  forma: Forma;
+  modalidad: Modalidad;
+  fecha_emision: string;
+  banco_sucursal: string;
+  banco_cbu: string;
+  librador_cuit: string;
+  librador_nombre: string;
+}
+
+export const chequeExtraVacio = (): ChequeExtra => ({
+  forma: 'fisico',
+  modalidad: 'diferido',
+  fecha_emision: '',
+  banco_sucursal: '',
+  banco_cbu: '',
+  librador_cuit: '',
+  librador_nombre: '',
+});
+
+// Primer error del cheque o null. Mismas reglas que el backend.
+export function errorCheque(
+  ch: ChequeExtra & { banco?: string; numero_cheque?: string; fecha_vencimiento?: string; importe?: string | number },
+  tipo: 'recibido' | 'emitido',
+): string | null {
+  if (!ch.banco?.trim()) return 'falta el banco';
+  if (!ch.numero_cheque?.trim()) return ch.forma === 'echeq' ? 'falta el ID del ECHEQ' : 'falta el número';
+  if (!numeroValido(ch.numero_cheque, ch.forma)) {
+    return ch.forma === 'echeq' ? 'ID de ECHEQ inválido' : 'número inválido (solo dígitos, 4 a 12)';
+  }
+  if (!ch.fecha_emision) return 'falta la fecha de emisión';
+  if (!ch.fecha_vencimiento) return 'falta la fecha de vencimiento';
+  const v = errorVigencia(ch.fecha_emision, ch.fecha_vencimiento, ch.modalidad);
+  if (v) return v;
+  if (!ch.banco_sucursal.trim() && !ch.banco_cbu.trim()) return 'falta la sucursal bancaria o el CBU';
+  if (ch.banco_cbu.trim() && !cbuValido(ch.banco_cbu)) return 'CBU inválido';
+  if (tipo === 'recibido') {
+    if (!ch.librador_cuit.trim()) return 'falta el CUIT del librador';
+    if (!cuitValido(ch.librador_cuit)) return 'CUIT del librador inválido';
+    if (!ch.librador_nombre.trim()) return 'falta el nombre del librador';
+  }
+  return null;
+}
+
+// Lo que se manda al backend (además de banco/número/vto/importe).
+export const chequeExtraPayload = (ch: ChequeExtra, tipo: 'recibido' | 'emitido') => ({
+  forma: ch.forma,
+  modalidad: ch.modalidad,
+  fecha_emision: ch.fecha_emision,
+  banco_sucursal: ch.banco_sucursal.trim() || null,
+  banco_cbu: soloDigitos(ch.banco_cbu) || null,
+  librador_cuit: tipo === 'recibido' ? ch.librador_cuit.trim() : null,
+  librador_nombre: tipo === 'recibido' ? ch.librador_nombre.trim() : null,
+});

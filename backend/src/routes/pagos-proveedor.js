@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol } = require('../middleware/auth');
+const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 const {
   registrarMovimientosDeMedios,
   revertirMovimientosBancarios,
@@ -222,6 +223,13 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Para endosar cheques agregá una línea de pago con medio Cheque' });
     }
 
+    // Cheques propios nuevos: antes se descartaban en silencio si venían
+    // incompletos (y el pago quedaba con menos cheques que lo abonado).
+    const vCheques = validarListaCheques(cheques || [], 'emitido');
+    if (vCheques.error) return res.status(400).json({ error: vCheques.error });
+    const dupPP = await errorDuplicados(pool, vCheques.cheques);
+    if (dupPP) return res.status(409).json({ error: dupPP });
+
     const primaryMedioId = mediosLista[0].medio_pago_id;
     const primaryCuenta  = mediosLista[0].cuenta_bancaria_id;
     const usuarioId = req.usuario?.id ?? null;
@@ -343,13 +351,26 @@ router.post('/', async (req, res, next) => {
     }
 
     // 3) Cheques EMITIDOS nuevos del pago
-    for (const ch of cheques) {
-      if (!ch.banco || !ch.numero_cheque || !ch.fecha_vencimiento || !ch.importe) continue;
+    for (const ch of vCheques.cheques) {
       await client.query(`
         INSERT INTO pago_proveedor_cheques
-          (pago_proveedor_id, banco, numero_cheque, fecha_vencimiento, importe)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+          (pago_proveedor_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe,
+           forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `, [pago.id, ch.banco, ch.numero_cheque, ch.fecha_emision, ch.fecha_vencimiento, ch.importe,
+          ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
+    }
+
+    // Comprobante que cancela el endoso (mig 059): los comprobantes imputados,
+    // o "Pago a cuenta" si el pago no se imputó a ninguno.
+    let comprobanteEndoso = null;
+    if ((endosos || []).length > 0) {
+      const { rows: compRows } = await client.query(`
+        SELECT string_agg(COALESCE(NULLIF(e.numero_comprobante, ''), e.descripcion), ', ') AS comps
+          FROM pago_proveedor_aplicaciones a
+          JOIN egresos e ON e.id = a.egreso_id
+         WHERE a.pago_proveedor_id = $1`, [pago.id]);
+      comprobanteEndoso = (compRows[0]?.comps || 'Pago a cuenta').substring(0, 50);
     }
 
     // 4) Cheques ENDOSADOS (recibidos en cartera que se traspasan al proveedor).
@@ -363,10 +384,12 @@ router.post('/', async (req, res, next) => {
       const tipoCond = tabla === 'cheques_manuales' ? " AND tipo = 'recibido'" : '';
       // Marcar endosado de forma atómica: si otro pago ya lo usó, no devuelve fila.
       const { rows: upd } = await client.query(
-        `UPDATE ${tabla} SET estado = 'endosado', fecha_estado = CURRENT_DATE
+        `UPDATE ${tabla} SET estado = 'endosado', fecha_estado = CURRENT_DATE,
+                endoso_proveedor_id = $2, endoso_fecha = COALESCE($3::date, CURRENT_DATE),
+                endoso_comprobante = $4
           WHERE id = $1 AND estado = 'en_cartera'${tipoCond}
         RETURNING importe`,
-        [en.cheque_id]
+        [en.cheque_id, proveedor_id, pago.fecha, comprobanteEndoso]
       );
       if (!upd[0]) throw Object.assign(new Error('Un cheque elegido ya no está disponible en cartera'), { status: 409 });
       if (Math.abs(parseFloat(upd[0].importe) - parseFloat(en.importe)) > 0.01) {

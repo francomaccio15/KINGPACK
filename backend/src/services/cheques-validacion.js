@@ -143,7 +143,60 @@ function validarAltaCheque(body) {
   };
 }
 
+// Valida los cheques que llegan embebidos en otra operación (venta, egreso,
+// pago a proveedor, movimiento de caja). Mismas reglas que el alta manual,
+// más banco/importe, que ahí valida la ruta. Se llama ANTES del BEGIN: un
+// error acá es un 400 limpio, sin transacción que deshacer.
+// Devuelve { error } o { cheques } con cada cheque normalizado.
+function validarListaCheques(lista, tipo) {
+  const salida = [];
+  const vistos = new Set();
+  for (const [i, ch] of (lista || []).entries()) {
+    const ref = (lista.length > 1 ? `Cheque ${i + 1}: ` : '');
+    if (!ch?.banco?.trim()) return { error: `${ref}falta el banco` };
+    const importe = String(ch.importe ?? '').trim();
+    if (!(Number(importe) > 0)) return { error: `${ref}el importe debe ser mayor a 0` };
+    if (!/^\d+(\.\d{1,2})?$/.test(importe)) return { error: `${ref}el importe admite como máximo 2 decimales` };
+
+    const v = validarAltaCheque({ ...ch, tipo });
+    if (v.error) return { error: `${ref}${v.error}` };
+
+    const clave = `${ch.banco.trim().toLowerCase()}|${String(ch.numero_cheque).trim()}`;
+    if (vistos.has(clave)) return { error: `${ref}está repetido en la misma operación` };
+    vistos.add(clave);
+
+    salida.push({
+      ...v.datos,
+      banco: ch.banco.trim(),
+      numero_cheque: String(ch.numero_cheque).trim(),
+      fecha_emision: ch.fecha_emision,
+      fecha_vencimiento: ch.fecha_vencimiento,
+      importe: Number(importe),
+    });
+  }
+  return { cheques: salida };
+}
+
+// ¿Alguno de estos cheques ya existe (no anulado)? Mismo criterio que el alta
+// manual: banco + número, y CUIT si ambos lo tienen. Devuelve el mensaje o null.
+async function errorDuplicados(db, cheques) {
+  for (const ch of cheques) {
+    const { rows } = await db.query(`
+      SELECT origen_nombre, estado FROM vw_cheques
+       WHERE LOWER(TRIM(banco)) = LOWER($1) AND TRIM(numero_cheque) = $2
+         AND ($3::text IS NULL OR librador_cuit IS NULL OR librador_cuit = $3)
+         AND estado <> 'anulado'
+       LIMIT 1`, [ch.banco, ch.numero_cheque, ch.librador_cuit]);
+    if (rows.length) {
+      return `Ya existe el cheque ${ch.banco} #${ch.numero_cheque} (${rows[0].origen_nombre}, ${rows[0].estado})`;
+    }
+  }
+  return null;
+}
+
 module.exports = {
+  validarListaCheques,
+  errorDuplicados,
   FORMAS,
   MODALIDADES,
   CAUSALES_RECHAZO,

@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
+const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 const { registrarMovimientoBancario, revertirMovimientosBancarios } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
@@ -365,6 +366,17 @@ router.post('/:id/pagos', async (req, res, next) => {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
 
+    // El cheque de una cobranza es por el monto cobrado: mismas reglas que el
+    // alta en Cheques (librador, CUIT, físico/ECHEQ, vigencia).
+    let chequeOk = null;
+    if (cheque) {
+      const v = validarListaCheques([{ ...cheque, importe: String(monto) }], 'recibido');
+      if (v.error) return res.status(400).json({ error: v.error });
+      const dup = await errorDuplicados(pool, v.cheques);
+      if (dup) return res.status(409).json({ error: dup });
+      chequeOk = v.cheques[0];
+    }
+
     const dbClient = await pool.connect();
     try {
       await dbClient.query('BEGIN');
@@ -428,7 +440,7 @@ router.post('/:id/pagos', async (req, res, next) => {
         esCheque = /cheque/i.test(mpRows[0]?.nombre || '');
       }
 
-      if (esCheque && cheque && cheque.fecha_vencimiento) {
+      if (esCheque && chequeOk) {
         if (!sucId) {
           await dbClient.query('ROLLBACK');
           return res.status(400).json({ error: 'No se pudo determinar la sucursal para registrar el cheque' });
@@ -436,17 +448,20 @@ router.post('/:id/pagos', async (req, res, next) => {
         await dbClient.query(`
           INSERT INTO cheques_manuales
             (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
-             importe, estado, sucursal_id, cliente_id, observaciones)
-          VALUES ('recibido', $1, $2, $3, $4, $5, 'en_cartera', $6, $7, $8)
+             importe, estado, sucursal_id, cliente_id, observaciones,
+             forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+          VALUES ('recibido', $1, $2, $3, $4, $5, 'en_cartera', $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
-          cheque.banco?.trim() || 'S/D',
-          cheque.numero_cheque?.trim() || 'S/N',
-          cheque.fecha_emision || null,
-          cheque.fecha_vencimiento,
+          chequeOk.banco,
+          chequeOk.numero_cheque,
+          chequeOk.fecha_emision,
+          chequeOk.fecha_vencimiento,
           montoNum,
           sucId,
           req.params.id,
           concepto?.trim() || null,
+          chequeOk.forma, chequeOk.modalidad, chequeOk.librador_cuit, chequeOk.librador_nombre,
+          chequeOk.banco_sucursal, chequeOk.banco_cbu,
         ]);
       }
 

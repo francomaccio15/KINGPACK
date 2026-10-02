@@ -5,6 +5,11 @@ import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaClien
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NumericInput from '@/components/NumericInput';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
+
+type ChequeLinea = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+const chequeVacio = (): ChequeLinea => ({ ...chequeExtraVacio(), banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
 import ConfirmarPrecios, { type DecisionPrecio, type LineaPrecio } from './ConfirmarPrecios';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -215,7 +220,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
     edicion?.fecha_vencimiento_pago ? edicion.fecha_vencimiento_pago.split('T')[0] : ''
   );
   const [pagoMedios, setPagoMedios] = useState<{ medio_pago_id: string; monto: string; cuenta_bancaria_id: string }[]>([]);
-  const [cheques, setCheques] = useState<{ banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string }[]>([]);
+  const [cheques, setCheques] = useState<ChequeLinea[]>([]);
 
   // Anticipo a vincular
   const [anticipoId, setAnticipoId] = useState('');
@@ -299,7 +304,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   useEffect(() => {
     const hayChequeAhora = pagoMedios.some(m => /cheque/i.test(mediosPago.find(mp => mp.id === m.medio_pago_id)?.nombre ?? ''));
     if (hayChequeAhora) {
-      setCheques(prev => prev.length === 0 ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }] : prev);
+      setCheques(prev => prev.length === 0 ? [chequeVacio()] : prev);
     } else {
       setCheques([]);
     }
@@ -440,7 +445,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   const removeItem = (key: number) => setItems(prev => prev.filter(i => i.key !== key));
 
   // ── Cheques ───────────────────────────────────────────────────────────────
-  const addCheque = () => setCheques(p => [...p, { banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]);
+  const addCheque = () => setCheques(p => [...p, chequeVacio()]);
+  const patchCheque = (idx: number, cambios: Partial<ChequeLinea>) => setCheques(p => p.map((c, i) => i === idx ? { ...c, ...cambios } : c));
   const updateCheque = (idx: number, f: string, v: string) => setCheques(p => p.map((c, i) => i === idx ? { ...c, [f]: v } : c));
   const removeCheque = (idx: number) => setCheques(p => p.filter((_, i) => i !== idx));
 
@@ -493,6 +499,12 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       if (pagoMedios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setSaveError('Ingresá el monto de cada medio de pago');
       if (pagoMedios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setSaveError('Seleccioná la cuenta bancaria del medio correspondiente');
       if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) return setSaveError('Cargá el detalle de los cheques');
+      if (hayCheque) {
+        for (const [i, c] of cheques.filter(c => c.banco || c.numero_cheque || c.importe).entries()) {
+          const err = errorCheque(c, 'emitido');
+          if (err) return setSaveError(`Cheque ${i + 1}: ${err}`);
+        }
+      }
       if (totalPagoMedios <= 0) return setSaveError('El monto pagado debe ser mayor a 0');
       if (totalPagoMedios - totalObjetivo > 0.01) return setSaveError('El pago no puede superar el total del comprobante');
     }
@@ -560,7 +572,13 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
           monto: montoLinea(m),
           cuenta_bancaria_id: m.cuenta_bancaria_id || null,
         })),
-        cheques: hayCheque ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe) : [],
+        cheques: hayCheque
+          ? cheques.filter(c => c.banco || c.numero_cheque || c.importe).map(c => ({
+              banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
+              fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
+              ...chequeExtraPayload(c, 'emitido'),
+            }))
+          : [],
       };
     }
 
@@ -1367,7 +1385,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
               </button>
             </div>
             {cheques.map((ch, i) => (
-              <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+              <div key={i} className="space-y-2 rounded-lg border border-kp-border bg-kp-surface2/40 p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
                 <div>
                   <label className={labelCls}>Banco</label>
                   <input type="text" placeholder="Banco" value={ch.banco}
@@ -1396,6 +1415,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
                     </svg>
                   </button>
                 </div>
+              </div>
+              <ChequeDatosExtra value={ch} onChange={c => patchCheque(i, c)} tipo="emitido"
+                fechaVencimiento={ch.fecha_vencimiento} />
               </div>
             ))}
             {cheques.length > 0 && (

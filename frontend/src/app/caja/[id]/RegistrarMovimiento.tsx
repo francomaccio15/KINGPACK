@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -23,7 +25,8 @@ type Subrubro    = { id: string; nombre: string };
 type Rubro       = { id: string; nombre: string; subrubros: Subrubro[] };
 type MedioLinea  = { medio_pago_id: string; monto: string; cuenta_bancaria_id?: string };
 type CuentaBancaria = { id: string; nombre: string; banco?: string | null };
-type ChequeLinea = { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+type ChequeLinea = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+const chequeVacio = (): ChequeLinea => ({ ...chequeExtraVacio(), banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
 
 const TIPOS = [
   { value: 'ingreso', label: 'Ingreso', color: 'border-green-500/40 text-green-400 bg-green-500/5 hover:bg-green-500/15' },
@@ -92,7 +95,7 @@ export default function RegistrarMovimiento({
   useEffect(() => {
     if (hayCheque) {
       setCheques(prev => prev.length === 0
-        ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]
+        ? [chequeVacio()]
         : prev);
     } else {
       setCheques([]);
@@ -121,7 +124,9 @@ export default function RegistrarMovimiento({
 
   // ── Cheques ────────────────────────────────────────────────────────────────
   const addCheque = () =>
-    setCheques(p => [...p, { banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]);
+    setCheques(p => [...p, chequeVacio()]);
+  const patchCheque = (i: number, cambios: Partial<ChequeLinea>) =>
+    setCheques(p => p.map((c, j) => j === i ? { ...c, ...cambios } : c));
   const updCheque = (i: number, f: keyof ChequeLinea, v: string) =>
     setCheques(p => p.map((c, j) => j === i ? { ...c, [f]: v } : c));
   const delCheque = (i: number) =>
@@ -136,6 +141,12 @@ export default function RegistrarMovimiento({
     }
     if (hayCheque && cheques.filter(c => parseFloat(c.importe) > 0).length === 0) {
       setError('Cargá el detalle y el importe de los cheques'); return;
+    }
+    if (hayCheque) {
+      for (const [i, c] of cheques.filter(c => parseFloat(c.importe) > 0).entries()) {
+        const err = errorCheque(c, 'recibido');
+        if (err) { setError(`Cheque ${i + 1}: ${err}`); return; }
+      }
     }
     if (totalMedios <= 0) { setError('El monto total debe ser mayor a 0'); return; }
     if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) {
@@ -155,7 +166,13 @@ export default function RegistrarMovimiento({
         tipo,
         concepto: concepto.trim(),
         medios: mediosPayload,
-        ...(hayCheque && cheques.length > 0 ? { cheques } : {}),
+        ...(hayCheque && cheques.length > 0 ? {
+          cheques: cheques.filter(c => parseFloat(c.importe) > 0).map(c => ({
+            banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
+            fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
+            ...chequeExtraPayload(c, 'recibido'),
+          })),
+        } : {}),
         ...(tipo === 'egreso' && subrubroId ? { subrubro_gasto_id: subrubroId } : {}),
       };
 
@@ -406,6 +423,10 @@ export default function RegistrarMovimiento({
                         >✕</button>
                       )}
                     </div>
+                  </div>
+                  <div className="col-span-2">
+                    <ChequeDatosExtra value={ch} onChange={c => patchCheque(i, c)} tipo="recibido"
+                      fechaVencimiento={ch.fecha_vencimiento} />
                   </div>
                 </div>
               ))}

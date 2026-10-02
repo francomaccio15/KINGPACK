@@ -102,7 +102,8 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           <EstadoCuentaPDF clienteId={cliente.id} />
           <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
           {puedeEditarPago && <AjustarSaldo clienteId={cliente.id} saldoActual={saldoActual} />}
-          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa} />
+          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa}
+            clienteNombre={cliente.razon_social} clienteCuit={cliente.cuit} />
         </div>
       </div>
 

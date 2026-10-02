@@ -4,10 +4,12 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 
 type MedioPago = { id: string; nombre: string };
 type CuentaBancaria = { id: string; nombre: string; banco: string | null };
-type Cheque = { banco: string; numero_cheque: string; fecha_emision: string; fecha_vencimiento: string; importe: string };
+type Cheque = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
 
 type Props = {
   egresoId: string;
@@ -23,7 +25,7 @@ const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !
 const inputCls = 'w-full bg-kp-surface border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder-kp-gray focus:outline-none focus:border-kp-red transition-colors';
 const labelCls = 'block text-xs text-kp-gray font-semibold uppercase tracking-wide mb-1';
 
-const emptyCheque = (): Cheque => ({ banco: '', numero_cheque: '', fecha_emision: '', fecha_vencimiento: '', importe: '' });
+const emptyCheque = (): Cheque => ({ ...chequeExtraVacio(), banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
 
 export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, mediosPago, cuentasBancarias }: Props) {
   const router = useRouter();
@@ -58,6 +60,8 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
   const removeCheque = (i: number) => setCheques(prev => prev.filter((_, idx) => idx !== i));
   const updateCheque = (i: number, field: keyof Cheque, value: string) =>
     setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
+  const patchCheque = (i: number, cambios: Partial<Cheque>) =>
+    setCheques(prev => prev.map((c, idx) => idx === i ? { ...c, ...cambios } : c));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,8 +82,13 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
     };
 
     if (esCheque) {
-      const chequesValidos = cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe);
+      // Una fila con algún dato cargado cuenta como cheque y tiene que estar completa.
+      const chequesValidos = cheques.filter(c => c.banco || c.numero_cheque || c.importe);
       if (chequesValidos.length === 0) { setError('Completá al menos un cheque'); return; }
+      for (const [i, c] of chequesValidos.entries()) {
+        const err = errorCheque(c, 'emitido');
+        if (err) { setError(`Cheque #${i + 1}: ${err}`); return; }
+      }
       // Los cheques cargados tienen que dar el monto del pago, como en Pago a
       // Proveedores: si no, el comprobante queda saldado por un importe y los
       // cheques que vencen dicen otro.
@@ -88,7 +97,11 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
         setError(`Los cheques suman ${sumaCheques.toFixed(2)} y el pago es de ${montoNum.toFixed(2)}`);
         return;
       }
-      body.cheques = chequesValidos.map(c => ({ ...c, importe: parseFloat(c.importe), fecha_emision: c.fecha_emision || null }));
+      body.cheques = chequesValidos.map(c => ({
+        banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
+        fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
+        ...chequeExtraPayload(c, 'emitido'),
+      }));
     }
 
     setLoading(true);
@@ -232,6 +245,8 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
                           className={inputCls} />
                       </div>
                     </div>
+                    <ChequeDatosExtra value={ch} onChange={c => patchCheque(i, c)} tipo="emitido"
+                      conEmision={false} fechaVencimiento={ch.fecha_vencimiento} />
                   </div>
                 ))}
               </div>

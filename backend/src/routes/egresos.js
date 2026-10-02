@@ -12,6 +12,7 @@ const {
 } = require('../services/movimientos-caja-fuerte');
 const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 const { requireRol } = require('../middleware/auth');
+const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 
 const router = express.Router();
 
@@ -337,6 +338,12 @@ router.post('/', async (req, res, next) => {
       }
     }
 
+    // Cheques propios del pago (emitidos): forma, modalidad, vigencia, sucursal/CBU.
+    const vCheques = validarListaCheques(pago?.cheques || [], 'emitido');
+    if (vCheques.error) return res.status(400).json({ error: vCheques.error });
+    const dupEgreso = await errorDuplicados(pool, vCheques.cheques);
+    if (dupEgreso) return res.status(409).json({ error: dupEgreso });
+
     await client.query('BEGIN');
 
     // --- Crear egreso principal ---
@@ -540,12 +547,14 @@ router.post('/', async (req, res, next) => {
 
         // Cheques → atados a la línea de pago con medio cheque
         if (chequePagoId) {
-          for (const ch of (pago.cheques || [])) {
+          for (const ch of vCheques.cheques) {
             await client.query(`
               INSERT INTO egreso_cheques
-                (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
-              VALUES ($1, $2, $3, $4, $5, $6)
-            `, [chequePagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+                (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe,
+                 forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            `, [chequePagoId, ch.banco, ch.numero_cheque, ch.fecha_emision, ch.fecha_vencimiento, ch.importe,
+                ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
           }
         }
 
@@ -686,9 +695,14 @@ router.post('/:id/pago', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { medio_pago_id, monto, cuenta_bancaria_id, observaciones, cheques = [] } = req.body;
+    const { medio_pago_id, monto, cuenta_bancaria_id, observaciones, cheques: chequesBody = [] } = req.body;
 
     if (!medio_pago_id) return res.status(400).json({ error: 'medio_pago_id es requerido' });
+    const vCheques = validarListaCheques(chequesBody, 'emitido');
+    if (vCheques.error) return res.status(400).json({ error: vCheques.error });
+    const cheques = vCheques.cheques;
+    const dupPago = await errorDuplicados(pool, cheques);
+    if (dupPago) return res.status(409).json({ error: dupPago });
     const montoPago = parseFloat(monto);
     if (!montoPago || montoPago <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
 
@@ -766,9 +780,11 @@ router.post('/:id/pago', async (req, res, next) => {
     for (const ch of cheques) {
       await client.query(`
         INSERT INTO egreso_cheques
-          (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+          (egreso_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe,
+           forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `, [pagoId, ch.banco, ch.numero_cheque, ch.fecha_emision, ch.fecha_vencimiento, ch.importe,
+          ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
     }
 
     // Calcular total pagado para determinar nuevo estado

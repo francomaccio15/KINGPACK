@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -29,7 +31,8 @@ interface EgresoPendiente {
 interface MedioPago { id: string; nombre: string; requiere_cuenta: boolean }
 interface Cuenta   { id: string; nombre: string }
 interface Sucursal { id: string; nombre: string }
-interface Cheque   { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string }
+type Cheque = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+const chequeVacio = (): Cheque => ({ ...chequeExtraVacio(), banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' });
 // Cheque recibido en cartera, disponible para endosar a un proveedor.
 interface ChequeCartera {
   id: string; origen_tipo: string; banco: string | null; numero_cheque: string | null;
@@ -300,7 +303,7 @@ export default function PagosProveedorClient() {
   useEffect(() => {
     if (hayCheque && chequeModo === 'nuevo') {
       setCheques(prev => prev.length === 0
-        ? [{ banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]
+        ? [chequeVacio()]
         : prev);
     } else if (!hayCheque) {
       setCheques([]);
@@ -363,7 +366,8 @@ export default function PagosProveedorClient() {
   // Autocompletar el monto de una línea con lo que falta para llegar al total
   const restoMedio = (i: number) => +(totalPago - medios.reduce((s, m, j) => s + (j === i ? 0 : montoLinea(m)), 0)).toFixed(2);
 
-  const addCheque = () => setCheques(p => [...p, { banco: '', numero_cheque: '', fecha_vencimiento: '', importe: '' }]);
+  const addCheque = () => setCheques(p => [...p, chequeVacio()]);
+  const patchCheque = (i: number, cambios: Partial<Cheque>) => setCheques(p => p.map((c, j) => j === i ? { ...c, ...cambios } : c));
   const updCheque = (i: number, f: keyof Cheque, v: string) => setCheques(p => p.map((c, j) => j === i ? { ...c, [f]: v } : c));
   const delCheque = (i: number) => setCheques(p => p.filter((_, j) => j !== i));
 
@@ -407,6 +411,16 @@ export default function PagosProveedorClient() {
 
     if (modo === 'aplicar' && aplicaciones.length === 0) return setError('Seleccioná al menos un comprobante a pagar');
 
+    // Cheques propios: una fila con algún dato es un cheque y tiene que estar
+    // completa (antes las incompletas se descartaban sin aviso).
+    const chequesNuevos = (hayCheque && chequeModo === 'nuevo')
+      ? cheques.filter(c => c.banco || c.numero_cheque || c.importe)
+      : [];
+    for (const [i, c] of chequesNuevos.entries()) {
+      const err = errorCheque(c, 'emitido');
+      if (err) return setError(`Cheque ${i + 1}: ${err}`);
+    }
+
     const body = {
       proveedor_id: proveedorId,
       monto: montoPagado,
@@ -420,9 +434,11 @@ export default function PagosProveedorClient() {
         monto: montoLinea(m),
         cuenta_bancaria_id: m.cuenta_bancaria_id || null,
       })),
-      cheques: (hayCheque && chequeModo === 'nuevo')
-        ? cheques.filter(c => c.banco && c.numero_cheque && c.fecha_vencimiento && c.importe)
-        : [],
+      cheques: chequesNuevos.map(c => ({
+        banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
+        fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
+        ...chequeExtraPayload(c, 'emitido'),
+      })),
       endosos: (hayCheque && chequeModo === 'endoso')
         ? chequesCartera
             .filter(c => endososSel.has(c.id))
@@ -908,6 +924,10 @@ export default function PagosProveedorClient() {
                               <button type="button" onClick={() => delCheque(i)} title="Quitar cheque"
                                 className="self-stretch px-2 text-kp-gray hover:text-kp-red">✕</button>
                             </div>
+                          </div>
+                          <div className="col-span-2 sm:col-span-12">
+                            <ChequeDatosExtra value={ch} onChange={c => patchCheque(i, c)} tipo="emitido"
+                              fechaVencimiento={ch.fecha_vencimiento} />
                           </div>
                         </div>
                       );

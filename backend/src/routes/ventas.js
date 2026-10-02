@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const arca = require('../services/arca');
+const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 const {
   registrarMovimientoBancario,
@@ -207,6 +208,20 @@ router.post('/', async (req, res, next) => {
     if (articuloIds.length !== items.length) {
       return res.status(400).json({ error: 'Todos los ítems deben tener articulo_id' });
     }
+
+    // Cheques recibidos en los pagos: mismas reglas que el alta en Cheques
+    // (librador, CUIT, físico/ECHEQ, vigencia). Se valida todo antes del BEGIN.
+    const chequesPorPago = [];
+    for (const pago of pagos) {
+      const v = validarListaCheques(pago.cheques || [], 'recibido');
+      if (v.error) return res.status(400).json({ error: v.error });
+      chequesPorPago.push(v.cheques);
+    }
+    // El mismo cheque no puede venir en dos pagos de la misma venta.
+    const vTodos = validarListaCheques(pagos.flatMap(p => p.cheques || []), 'recibido');
+    if (vTodos.error) return res.status(400).json({ error: vTodos.error });
+    const dupVenta = await errorDuplicados(pool, chequesPorPago.flat());
+    if (dupVenta) return res.status(409).json({ error: dupVenta });
 
     // Verificar caja abierta antes de confirmar una venta
     let cajaId = null;
@@ -425,20 +440,22 @@ router.post('/', async (req, res, next) => {
         );
       }
 
-      for (const pago of pagos) {
+      for (const [iPago, pago] of pagos.entries()) {
         await client.query(`
           INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino, cuenta_bancaria_id)
           VALUES ($1,$2,$3,$4,$5)
         `, [venta.id, pago.medio_pago_id, parseFloat(pago.monto), pago.cuenta_destino || null,
             pago.cuenta_bancaria_id || null]);
 
-        for (const ch of (pago.cheques || [])) {
+        for (const ch of chequesPorPago[iPago]) {
           await client.query(`
             INSERT INTO venta_cheques
-              (venta_id, medio_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
+              (venta_id, medio_pago_id, banco, numero_cheque, fecha_emision, fecha_vencimiento, importe,
+               forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
           `, [venta.id, pago.medio_pago_id, ch.banco, ch.numero_cheque,
-              ch.fecha_emision || null, ch.fecha_vencimiento, parseFloat(ch.importe)]);
+              ch.fecha_emision, ch.fecha_vencimiento, ch.importe,
+              ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
         }
 
         // Registrar movimiento en la caja
