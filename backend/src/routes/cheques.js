@@ -6,6 +6,7 @@ const {
   revertirMovimientosBancarios,
   cuentaChequesId,
 } = require('../services/movimientos-bancarios');
+const { validarAltaCheque, CAUSALES_RECHAZO } = require('../services/cheques-validacion');
 
 const router = express.Router();
 
@@ -176,8 +177,11 @@ router.get('/', async (req, res, next) => {
 // ─── POST /api/cheques ────────────────────────────────────────────────────────
 // Alta manual de un cheque (no atado a una venta ni a un egreso).
 // Pensado para la carga inicial de cheques de clientes / cheques propios.
-// Body: { tipo, banco, numero_cheque, fecha_emision?, fecha_vencimiento,
-//         importe, estado?, sucursal_id, cliente_id?, proveedor_id?, observaciones? }
+// Body: { tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
+//         importe, estado?, sucursal_id, cliente_id?, proveedor_id?, observaciones?,
+//         forma, modalidad, banco_sucursal | banco_cbu,
+//         librador_cuit + librador_nombre (obligatorios si es recibido) }
+// Las reglas de la mig 059 (CUIT, CBU, vigencia) viven en cheques-validacion.js.
 router.post('/', async (req, res, next) => {
   try {
     const {
@@ -194,6 +198,13 @@ router.post('/', async (req, res, next) => {
     if (!sucursal_id)           return res.status(400).json({ error: 'sucursal_id es requerido' });
     const importeNum = parseFloat(importe);
     if (!importeNum || importeNum <= 0) return res.status(400).json({ error: 'importe debe ser mayor a 0' });
+    if (!/^\d+(\.\d{1,2})?$/.test(String(importe).trim())) {
+      return res.status(400).json({ error: 'El importe admite como máximo 2 decimales' });
+    }
+
+    const validacion = validarAltaCheque(req.body);
+    if (validacion.error) return res.status(400).json({ error: validacion.error });
+    const extra = validacion.datos;
 
     const estadosValidos = tipo === 'recibido' ? ESTADOS_RECIBIDO : ESTADOS_EMITIDO;
     const estadoInicial = estado || (tipo === 'recibido' ? 'en_cartera' : 'emitido');
@@ -205,11 +216,27 @@ router.post('/', async (req, res, next) => {
     try {
       await client.query('BEGIN');
 
+      // Un mismo cheque no puede existir dos veces: banco + número (+ librador si
+      // se conoce). Es el error de carga más caro — duplica cartera y banco.
+      const { rows: dup } = await client.query(`
+        SELECT origen_nombre, estado FROM vw_cheques
+         WHERE LOWER(TRIM(banco)) = LOWER($1) AND TRIM(numero_cheque) = $2
+           AND ($3::text IS NULL OR librador_cuit IS NULL OR librador_cuit = $3)
+           AND estado <> 'anulado'
+         LIMIT 1`, [banco.trim(), numero_cheque.trim(), extra.librador_cuit]);
+      if (dup.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: `Ya existe el cheque ${banco.trim()} #${numero_cheque.trim()} (${dup[0].origen_nombre}, ${dup[0].estado})`,
+        });
+      }
+
       const { rows } = await client.query(`
         INSERT INTO cheques_manuales
           (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
-           importe, estado, fecha_estado, sucursal_id, cliente_id, proveedor_id, observaciones)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           importe, estado, fecha_estado, sucursal_id, cliente_id, proveedor_id, observaciones,
+           forma, modalidad, librador_cuit, librador_nombre, banco_sucursal, banco_cbu)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         RETURNING id
       `, [
         tipo,
@@ -224,6 +251,12 @@ router.post('/', async (req, res, next) => {
         tipo === 'recibido' ? (cliente_id || null) : null,
         tipo === 'emitido'  ? (proveedor_id || null) : null,
         observaciones?.trim() || null,
+        extra.forma,
+        extra.modalidad,
+        extra.librador_cuit,
+        extra.librador_nombre,
+        extra.banco_sucursal,
+        extra.banco_cbu,
       ]);
 
       // Un cheque RECIBIDO impacta el banco recién cuando efectivamente se cobra:
