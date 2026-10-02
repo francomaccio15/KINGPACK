@@ -134,13 +134,13 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
 <table data-rt="1" className="w-full text-xs">
               <thead>
                 <tr className="border-b border-kp-border/60">
-                  <th className="px-8 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Banco / N°</th>
-                  <th className="px-4 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Emisión</th>
-                  <th className="px-4 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Vencimiento</th>
-                  <th className="px-4 py-2 text-right text-kp-gray uppercase tracking-wide font-semibold">Importe</th>
-                  <th className="px-4 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Estado</th>
-                  <th className="px-4 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Venta</th>
-                  <th className="px-4 py-2" />
+                  <th className="px-3 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Banco / N°</th>
+                  <th className="px-3 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Emisión</th>
+                  <th className="px-3 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Vencimiento</th>
+                  <th className="px-3 py-2 text-right text-kp-gray uppercase tracking-wide font-semibold">Importe</th>
+                  <th className="px-3 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Estado</th>
+                  <th className="px-3 py-2 text-left text-kp-gray uppercase tracking-wide font-semibold">Venta</th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-kp-border/40">
@@ -152,27 +152,27 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
                       ch.estado === 'rechazado' ? 'bg-red-950/20' : ch.vencido ? 'bg-amber-950/20' : '',
                     ].join(' ')}
                   >
-                    <td className="px-8 py-2.5">
+                    <td className="px-3 py-2.5">
                       <p className="font-medium text-kp-white">{ch.banco}</p>
                       <p className="font-mono text-kp-gray">{ch.numero_cheque}</p>
                     </td>
-                    <td className="px-4 py-2.5 text-kp-gray">{fmtFecha(ch.fecha_emision)}</td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-2.5 text-kp-gray">{fmtFecha(ch.fecha_emision)}</td>
+                    <td className="px-3 py-2.5">
                       <span className={ch.vencido ? 'text-amber-400 font-semibold' : ch.estado === 'rechazado' ? 'text-red-400' : 'text-kp-white'}>
                         {fmtFecha(ch.fecha_vencimiento)}
                       </span>
                       {ch.vencido && <p className="text-amber-400/70">Vencido</p>}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-kp-white">
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-kp-white">
                       {fmt(ch.importe)}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-2.5">
                       <span className={`px-2 py-0.5 rounded border font-semibold ${BADGE[ch.estado] ?? 'bg-zinc-800 text-zinc-300 border-zinc-600'}`}>
                         {LABEL_ESTADO[ch.estado] ?? ch.estado}
                       </span>
                       {ch.fecha_estado && <p className="text-kp-gray mt-0.5">{fmtFecha(ch.fecha_estado)}</p>}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 py-2.5">
                       <Link
                         href={`/ventas/${ch.venta_id}`}
                         className="text-kp-red hover:text-red-400 font-semibold"
@@ -181,8 +181,8 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
                         #{ch.venta_numero}
                       </Link>
                     </td>
-                    <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1.5">
+                    <td className="px-3 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-col items-stretch gap-1.5 [&>button]:w-full">
                         <CambiarEstado chequeId={ch.id} tipo="recibido" estadoActual={ch.estado} />
                         <CorregirEstado chequeId={ch.id} tipo="recibido" estadoActual={ch.estado} />
                       </div>

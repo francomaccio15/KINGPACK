@@ -241,11 +241,11 @@ export default function MovimientosTabla({
 <table data-rt="1" className="min-w-full text-sm">
           <thead>
             <tr className="bg-kp-surface2/50 border-b border-kp-border">
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Hora</th>
-              <th className="text-center px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Tipo</th>
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Concepto</th>
-              <th className="text-left px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Medio de Pago</th>
-              <th className="text-right px-4 py-3 text-xs text-kp-gray uppercase tracking-widest font-semibold">Monto</th>
+              <th className="text-left px-3 py-2.5 text-xs text-kp-gray uppercase tracking-wide font-semibold whitespace-nowrap">Hora</th>
+              <th className="text-center px-3 py-2.5 text-xs text-kp-gray uppercase tracking-wide font-semibold whitespace-nowrap">Tipo</th>
+              <th className="text-left px-3 py-2.5 text-xs text-kp-gray uppercase tracking-wide font-semibold whitespace-nowrap">Concepto</th>
+              <th className="text-left px-3 py-2.5 text-xs text-kp-gray uppercase tracking-wide font-semibold whitespace-nowrap">Medio de Pago</th>
+              <th className="text-right px-3 py-2.5 text-xs text-kp-gray uppercase tracking-wide font-semibold whitespace-nowrap">Monto</th>
               <th className="w-10 px-2 py-3" />
             </tr>
           </thead>
@@ -254,15 +254,15 @@ export default function MovimientosTabla({
               const esIngreso = ['ingreso', 'venta'].includes(m.tipo);
               return (
                 <tr key={m.id} className="hover:bg-kp-surface2 transition-colors">
-                  <td className="px-4 py-3 text-xs text-kp-gray whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-xs text-kp-gray whitespace-nowrap">
                     {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${TIPO_STYLE[m.tipo] ?? ''}`}>
                       {TIPO_LABEL[m.tipo] ?? m.tipo}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     <span className="block text-kp-white">{m.concepto}</span>
                     {m.empleado_nombre && (
                       <span className="inline-flex items-center gap-1 text-2xs md:text-[11px] text-amber-400/80 mt-0.5">
@@ -281,8 +281,8 @@ export default function MovimientosTabla({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{m.medio_pago ?? '—'}</td>
-                  <td className={`px-4 py-3 text-right tabular-nums font-semibold ${esIngreso ? 'text-green-400' : 'text-kp-red'}`}>
+                  <td className="px-3 py-2.5 text-xs text-kp-gray-lt">{m.medio_pago ?? '—'}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums font-semibold whitespace-nowrap ${esIngreso ? 'text-green-400' : 'text-kp-red'}`}>
                     {esIngreso ? '+' : '−'}{fmt(m.monto)}
                   </td>
                   <td className="px-2 py-3 text-center">
@@ -314,15 +314,15 @@ export default function MovimientosTabla({
           {movimientos.length > 0 && filtro === 'todos' && (
             <tfoot>
               <tr className="bg-kp-surface2 border-t border-kp-border">
-                <td colSpan={3} className="px-4 py-3">
+                <td colSpan={3} className="px-3 py-2.5">
                   <span className="text-xs font-bold uppercase tracking-widest text-kp-gray">Totales</span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-3 py-2.5 text-right">
                   <span className="text-xs text-green-400 font-semibold tabular-nums">+{fmt(totalIngresos)}</span>
                   <span className="text-xs text-kp-gray mx-1">/</span>
                   <span className="text-xs text-kp-red font-semibold tabular-nums">−{fmt(totalEgresos)}</span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-3 py-2.5 text-right">
                   <span className={`text-sm font-bold tabular-nums ${totalIngresos - totalEgresos >= 0 ? 'text-green-400' : 'text-kp-red'}`}>
                     {totalIngresos - totalEgresos >= 0 ? '+' : ''}{fmt(totalIngresos - totalEgresos)}
                   </span>

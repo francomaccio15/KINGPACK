@@ -210,7 +210,7 @@ export default async function CajaPage() {
         }
 
         return (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {Array.from(porSucursal.entries()).map(([sucId, { nombre, cajas }]) => (
               <div key={sucId} className="min-w-0">
                 {/* Header de sucursal */}
@@ -228,12 +228,12 @@ export default async function CajaPage() {
                   <table data-rt="1" className="min-w-full text-sm">
                     <thead>
                       <tr className="bg-kp-surface2 border-b border-kp-border">
-                        <th className="text-left px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Apertura</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. inicial</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. sistema</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">S. real</th>
-                        <th className="text-right px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Dif.</th>
-                        <th className="text-center px-4 py-3 text-kp-gray uppercase tracking-widest text-xs font-semibold">Estado</th>
+                        <th className="text-left px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">Apertura</th>
+                        <th className="text-right px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">S. inicial</th>
+                        <th className="text-right px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">S. sistema</th>
+                        <th className="text-right px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">S. real</th>
+                        <th className="text-right px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">Dif.</th>
+                        <th className="text-center px-3 py-2.5 text-kp-gray uppercase tracking-wide text-xs font-semibold whitespace-nowrap">Estado</th>
                         <th className="px-3 py-3" />
                       </tr>
                     </thead>
@@ -254,11 +254,11 @@ export default async function CajaPage() {
 
                         return (
                           <tr key={c.id} className="hover:bg-kp-surface2 transition-colors group">
-                            <td className="px-4 py-3 text-xs text-kp-gray whitespace-nowrap">{fecha}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-kp-gray-lt">{fmt(c.saldo_inicial)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_sistema)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_real)}</td>
-                            <td className={`px-4 py-3 text-right tabular-nums ${diffColor}`}>
+                            <td className="px-3 py-2.5 text-xs text-kp-gray whitespace-nowrap">{fecha}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums text-kp-gray-lt">{fmt(c.saldo_inicial)}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_sistema)}</td>
+                            <td className="px-3 py-2.5 text-right tabular-nums text-kp-white">{fmt(c.saldo_final_real)}</td>
+                            <td className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${diffColor}`}>
                               {c.diferencia == null ? '—' : (
                                 <span title={diffCuadrada ? 'Caja cuadrada' : diff > 0 ? 'Falta dinero' : 'Sobra dinero'}>
                                   {!diffCuadrada && (diff > 0 ? '−' : '+')}{fmt(Math.abs(diff))}
@@ -266,7 +266,7 @@ export default async function CajaPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="px-3 py-2.5 text-center">
                               {c.estado === 'abierta' ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-green-500/10 text-green-400 border-green-500/30">
                                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -281,7 +281,7 @@ export default async function CajaPage() {
                             <td className="px-3 py-3 text-center">
                               <Link
                                 href={`/caja/${c.id}`}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1
+                                className="inline-flex items-center gap-1
                                   text-xs text-kp-gray hover:text-kp-white px-2 py-1 rounded border border-transparent
                                   hover:border-kp-border hover:bg-kp-surface2"
                               >

@@ -76,20 +76,15 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
   return (
     <div>
       <TableWrap>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
         <thead className="bg-kp-surface2 text-kp-gray text-xs uppercase tracking-wide">
           <tr>
-            {tipoActivo === 'todos' && (
-              <th className="px-4 py-3 text-left font-semibold">Tipo</th>
-            )}
-            <th className="px-4 py-3 text-left font-semibold">Banco / N°</th>
-            <th className="px-4 py-3 text-left font-semibold">Emisión</th>
-            <th className="px-4 py-3 text-left font-semibold">Vencimiento</th>
-            <th className="px-4 py-3 text-right font-semibold">Importe</th>
-            <th className="px-4 py-3 text-left font-semibold">Estado</th>
-            <th className="px-4 py-3 text-left font-semibold">Origen</th>
-            <th className="px-4 py-3 text-left font-semibold">Sucursal</th>
-            <th className="px-4 py-3" />
+            <th className="px-3 py-3 text-left font-semibold">Cheque</th>
+            <th className="w-[118px] px-3 py-3 text-left font-semibold">Vencimiento</th>
+            <th className="w-[140px] px-3 py-3 text-right font-semibold">Importe</th>
+            <th className="w-[130px] px-3 py-3 text-left font-semibold">Estado</th>
+            <th className="w-[22%] px-3 py-3 text-left font-semibold">Origen</th>
+            <th className="w-[124px] px-3 py-3" />
           </tr>
         </thead>
         <tbody className="divide-y divide-kp-border">
@@ -101,20 +96,18 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                 c.vencido ? 'bg-red-950/20' : '',
               ].join(' ')}
             >
-              {tipoActivo === 'todos' && (
-                <td className="px-4 py-3">
-                  <span className={[
-                    'inline-block px-2 py-0.5 text-xs font-semibold rounded border',
-                    c.tipo === 'recibido'
-                      ? 'bg-emerald-900/30 text-emerald-300 border-emerald-700/40'
-                      : 'bg-orange-900/30 text-orange-300 border-orange-700/40',
-                  ].join(' ')}>
-                    {c.tipo === 'recibido' ? 'Recibido' : 'Emitido'}
-                  </span>
-                </td>
-              )}
-              <td className="px-4 py-3">
-                <p className="font-medium text-kp-white">
+              <td className="px-3 py-3 min-w-0">
+                <p className="font-medium text-kp-white truncate">
+                  {tipoActivo === 'todos' && (
+                    <span className={[
+                      'mr-1.5 px-1.5 py-px text-[10px] font-bold rounded border align-middle',
+                      c.tipo === 'recibido'
+                        ? 'bg-emerald-900/30 text-emerald-300 border-emerald-700/40'
+                        : 'bg-orange-900/30 text-orange-300 border-orange-700/40',
+                    ].join(' ')}>
+                      {c.tipo === 'recibido' ? 'REC' : 'EMI'}
+                    </span>
+                  )}
                   {c.banco}
                   {c.forma === 'echeq' && (
                     <span className="ml-1.5 px-1.5 py-px text-[10px] font-bold rounded border border-sky-700/50 bg-sky-900/40 text-sky-300 align-middle">ECHEQ</span>
@@ -125,22 +118,23 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                 </p>
                 <p className="text-xs text-kp-gray font-mono">{c.numero_cheque}</p>
                 {c.librador_cuit && (
-                  <p className="text-[11px] text-kp-gray truncate max-w-[200px]" title={`${c.librador_nombre ?? ''} ${c.librador_cuit}`}>
+                  <p className="text-[11px] text-kp-gray truncate" title={`${c.librador_nombre ?? ''} ${c.librador_cuit}`}>
                     {c.librador_nombre} · <span className="font-mono">{c.librador_cuit}</span>
                   </p>
                 )}
               </td>
-              <td className="px-4 py-3 text-kp-gray">{fmtFecha(c.fecha_emision)}</td>
-              <td className="px-4 py-3">
+              <td className="px-3 py-3 whitespace-nowrap">
                 <span className={c.vencido ? 'text-red-400 font-semibold' : 'text-kp-white'}>
                   {fmtFecha(c.fecha_vencimiento)}
                 </span>
-                {c.vencido && <p className="text-xs text-red-400">Vencido</p>}
+                {c.vencido
+                  ? <p className="text-xs text-red-400">Vencido</p>
+                  : <p className="text-[11px] text-kp-gray">Emi. {fmtFecha(c.fecha_emision)}</p>}
               </td>
-              <td className="px-4 py-3 text-right font-semibold text-kp-white">
+              <td className="px-3 py-3 text-right font-semibold text-kp-white whitespace-nowrap tabular-nums">
                 {fmt(c.importe)}
               </td>
-              <td className="px-4 py-3">
+              <td className="px-3 py-3">
                 <span className={[
                   'inline-block px-2 py-0.5 text-xs font-semibold rounded border',
                   BADGE[c.estado] ?? 'bg-zinc-800 text-zinc-300 border-zinc-600',
@@ -154,10 +148,12 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                   <p className="text-[11px] text-red-400 mt-0.5">{CAUSALES_RECHAZO[c.rechazo_causal] ?? c.rechazo_causal}</p>
                 )}
               </td>
-              <td className="px-4 py-3 text-kp-gray max-w-[160px] truncate">{c.origen_nombre}</td>
-              <td className="px-4 py-3 text-kp-gray text-xs">{c.sucursal_nombre}</td>
-              <td className="px-4 py-3 text-right">
-                <div className="flex justify-end gap-1.5">
+              <td className="px-3 py-3 min-w-0">
+                <p className="text-kp-gray truncate" title={c.origen_nombre}>{c.origen_nombre}</p>
+                <p className="text-[11px] text-kp-gray/70">{c.sucursal_nombre}</p>
+              </td>
+              <td className="px-3 py-3">
+                <div className="flex flex-col items-stretch gap-1.5 [&>button]:w-full">
                   <CambiarEstado
                     chequeId={c.id}
                     tipo={c.tipo}

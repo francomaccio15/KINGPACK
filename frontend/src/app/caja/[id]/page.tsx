@@ -116,7 +116,7 @@ export default async function DetalleCajaPage({ params }: { params: { id: string
   });
 
   return (
-    <section className="space-y-6 max-w-5xl">
+    <section className="space-y-6">
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-kp-gray">
