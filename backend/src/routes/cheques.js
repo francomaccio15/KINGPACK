@@ -159,6 +159,7 @@ router.get('/', async (req, res, next) => {
           importe, estado, fecha_estado, observaciones,
           origen_id, origen_tipo, origen_nombre,
           sucursal_id, sucursal_nombre,
+          forma, modalidad, librador_cuit, librador_nombre, rechazo_causal,
           CASE
             WHEN fecha_vencimiento < CURRENT_DATE AND estado NOT IN ('acreditado','debitado','rechazado','anulado')
             THEN true ELSE false

@@ -1,6 +1,7 @@
 'use client';
 
 import CambiarEstado from './CambiarEstado';
+import { CAUSALES_RECHAZO } from '@/lib/cheques';
 import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 interface Cheque {
@@ -17,6 +18,12 @@ interface Cheque {
   origen_nombre:     string;
   sucursal_nombre:   string;
   vencido:           boolean;
+  // mig 059 — NULL en el histórico
+  forma?:            'fisico' | 'echeq' | null;
+  modalidad?:        'al_dia' | 'diferido' | null;
+  librador_cuit?:    string | null;
+  librador_nombre?:  string | null;
+  rechazo_causal?:   string | null;
 }
 
 const BADGE: Record<string, string> = {
@@ -38,7 +45,7 @@ const LABEL_ESTADO: Record<string, string> = {
 };
 
 function fmt(n: string | number) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(n));
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 }
 
 function fmtFecha(iso: string | null) {
@@ -106,8 +113,21 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                 </td>
               )}
               <td className="px-4 py-3">
-                <p className="font-medium text-kp-white">{c.banco}</p>
+                <p className="font-medium text-kp-white">
+                  {c.banco}
+                  {c.forma === 'echeq' && (
+                    <span className="ml-1.5 px-1.5 py-px text-[10px] font-bold rounded border border-sky-700/50 bg-sky-900/40 text-sky-300 align-middle">ECHEQ</span>
+                  )}
+                  {c.modalidad === 'diferido' && (
+                    <span className="ml-1 px-1.5 py-px text-[10px] font-semibold rounded border border-kp-border text-kp-gray align-middle">CPD</span>
+                  )}
+                </p>
                 <p className="text-xs text-kp-gray font-mono">{c.numero_cheque}</p>
+                {c.librador_cuit && (
+                  <p className="text-[11px] text-kp-gray truncate max-w-[200px]" title={`${c.librador_nombre ?? ''} ${c.librador_cuit}`}>
+                    {c.librador_nombre} · <span className="font-mono">{c.librador_cuit}</span>
+                  </p>
+                )}
               </td>
               <td className="px-4 py-3 text-kp-gray">{fmtFecha(c.fecha_emision)}</td>
               <td className="px-4 py-3">
@@ -128,6 +148,9 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                 </span>
                 {c.fecha_estado && (
                   <p className="text-xs text-kp-gray mt-0.5">{fmtFecha(c.fecha_estado)}</p>
+                )}
+                {c.estado === 'rechazado' && c.rechazo_causal && (
+                  <p className="text-[11px] text-red-400 mt-0.5">{CAUSALES_RECHAZO[c.rechazo_causal] ?? c.rechazo_causal}</p>
                 )}
               </td>
               <td className="px-4 py-3 text-kp-gray max-w-[160px] truncate">{c.origen_nombre}</td>
@@ -151,8 +174,8 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
         {cheques.map(c => (
           <RecordCard
             key={`card-${c.tipo}-${c.id}`}
-            title={c.banco}
-            subtitle={`N° ${c.numero_cheque}${c.origen_nombre ? ' · ' + c.origen_nombre : ''}`}
+            title={`${c.banco}${c.forma === 'echeq' ? ' · ECHEQ' : ''}`}
+            subtitle={`N° ${c.numero_cheque}${c.origen_nombre ? ' · ' + c.origen_nombre : ''}${c.estado === 'rechazado' && c.rechazo_causal ? ' · ' + (CAUSALES_RECHAZO[c.rechazo_causal] ?? c.rechazo_causal) : ''}`}
             badge={{
               label: LABEL_ESTADO[c.estado] ?? c.estado,
               tone: c.vencido ? 'danger' : c.estado === 'acreditado' ? 'ok' : 'neutral',
