@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import CambiarEstado from './CambiarEstado';
+import CorregirEstado from './CorregirEstado';
 
 interface ChequeDetalle {
   id: string;
@@ -181,7 +182,10 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
-                      <CambiarEstado chequeId={ch.id} tipo="recibido" estadoActual={ch.estado} />
+                      <div className="flex justify-end gap-1.5">
+                        <CambiarEstado chequeId={ch.id} tipo="recibido" estadoActual={ch.estado} />
+                        <CorregirEstado chequeId={ch.id} tipo="recibido" estadoActual={ch.estado} />
+                      </div>
                     </td>
                   </tr>
                 ))}

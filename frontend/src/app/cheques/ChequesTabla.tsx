@@ -1,6 +1,7 @@
 'use client';
 
 import CambiarEstado from './CambiarEstado';
+import CorregirEstado from './CorregirEstado';
 import { CAUSALES_RECHAZO } from '@/lib/cheques';
 import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
@@ -156,11 +157,14 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
               <td className="px-4 py-3 text-kp-gray max-w-[160px] truncate">{c.origen_nombre}</td>
               <td className="px-4 py-3 text-kp-gray text-xs">{c.sucursal_nombre}</td>
               <td className="px-4 py-3 text-right">
-                <CambiarEstado
-                  chequeId={c.id}
-                  tipo={c.tipo}
-                  estadoActual={c.estado}
-                />
+                <div className="flex justify-end gap-1.5">
+                  <CambiarEstado
+                    chequeId={c.id}
+                    tipo={c.tipo}
+                    estadoActual={c.estado}
+                  />
+                  <CorregirEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
+                </div>
               </td>
             </tr>
           ))}
@@ -185,8 +189,9 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
               { label: c.vencido ? 'Vencido el' : 'Vence', value: fmtFecha(c.fecha_vencimiento), align: 'right' },
             ]}
             actions={
-              <div className="flex-1 [&>button]:w-full">
+              <div className="flex-1 flex gap-2 [&>button]:flex-1">
                 <CambiarEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
+                <CorregirEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
               </div>
             }
           />

@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
-const { sucursalEfectiva } = require('../middleware/auth');
+const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 const {
   registrarMovimientoBancario,
   revertirMovimientosBancarios,
@@ -10,6 +10,15 @@ const {
 const { validarAltaCheque, CAUSALES_RECHAZO } = require('../services/cheques-validacion');
 
 const router = express.Router();
+
+// Tabla donde vive cada cheque según su origen en vw_cheques.
+const TABLA_POR_ORIGEN = {
+  venta:           'venta_cheques',
+  egreso:          'egreso_cheques',
+  manual:          'cheques_manuales',
+  pago_proveedor:  'pago_proveedor_cheques',
+  movimiento_caja: 'movimiento_caja_cheques',
+};
 
 const ESTADOS_RECIBIDO = ['en_cartera', 'depositado', 'acreditado', 'endosado', 'rechazado', 'anulado'];
 const ESTADOS_EMITIDO  = ['emitido', 'presentado', 'debitado', 'rechazado', 'anulado'];
@@ -584,6 +593,178 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
     res.json({ ok: true, estado_anterior: estadoActual, estado_nuevo });
   } catch (err) {
     await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/cheques/:tipo/:id/corregir-estado ──────────────────────────────
+// Corrección de un estado cargado por error (solo administrador). A diferencia
+// del PATCH /estado —que solo avanza—, permite volver atrás y DESHACE lo que el
+// estado actual había impactado antes de aplicar el nuevo:
+//   acreditado/debitado → se borra el movimiento bancario del cheque
+//   endosado            → se limpian proveedor/fecha/comprobante del endoso
+//   rechazado           → se compensa el egreso de caja del rechazo
+// Endosar y rechazar NO se corrigen acá (piden datos propios): se vuelve a
+// cartera y se usa el flujo normal.
+// Body: { estado_nuevo, motivo }
+const CORREGIBLES = {
+  recibido: ['en_cartera', 'depositado', 'acreditado', 'anulado'],
+  emitido:  ['emitido', 'presentado', 'debitado', 'anulado'],
+};
+
+router.post('/:tipo/:id/corregir-estado', requireRol('administrador'), async (req, res, next) => {
+  const { tipo, id } = req.params;
+  const { estado_nuevo, motivo } = req.body;
+
+  if (!['recibido', 'emitido'].includes(tipo)) {
+    return res.status(400).json({ error: 'tipo debe ser recibido o emitido' });
+  }
+  if (!CORREGIBLES[tipo].includes(estado_nuevo)) {
+    return res.status(400).json({
+      error: estado_nuevo === 'endosado' || estado_nuevo === 'rechazado'
+        ? 'Para endosar o rechazar, volvé el cheque a cartera y usá "Cambiar estado"'
+        : `Estado inválido para un cheque ${tipo}: ${estado_nuevo}`,
+    });
+  }
+  if (!motivo?.trim()) return res.status(400).json({ error: 'Indicá el motivo de la corrección' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [ch] } = await client.query(
+      `SELECT origen_tipo, estado, importe, banco, numero_cheque, sucursal_id
+         FROM vw_cheques WHERE tipo = $1 AND id = $2`, [tipo, id]
+    );
+    if (!ch) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cheque no encontrado' });
+    }
+    const tabla = TABLA_POR_ORIGEN[ch.origen_tipo];
+    const estadoActual = ch.estado;
+    if (estadoActual === estado_nuevo) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'El cheque ya está en ese estado' });
+    }
+    // Bloquea filas para que no corra en paralelo con otro cambio o el cron.
+    await client.query(`SELECT 1 FROM ${tabla} WHERE id = $1 FOR UPDATE`, [id]);
+
+    const usuario_id = req.usuario?.id ?? null;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const efectos = [];
+
+    // ── 1. Deshacer el estado actual ─────────────────────────────────────────
+    if (estadoActual === 'endosado') {
+      // Un endoso hecho desde Pago a Proveedores paga deuda: deshacerlo acá
+      // dejaría el pago saldado con un cheque que ya no está.
+      const { rows: pp } = await client.query(
+        `SELECT 1 FROM pago_proveedor_endosos pe
+           JOIN pagos_proveedor p ON p.id = pe.pago_proveedor_id
+          WHERE pe.cheque_id = $1 AND p.anulado = FALSE LIMIT 1`, [id]
+      );
+      if (pp.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Este cheque se endosó en un Pago a Proveedores: anulá ese pago y el cheque vuelve solo a cartera',
+        });
+      }
+      await client.query(
+        `UPDATE ${tabla} SET endoso_proveedor_id = NULL, endoso_fecha = NULL, endoso_comprobante = NULL WHERE id = $1`, [id]
+      );
+      efectos.push('se deshizo el endoso');
+    }
+
+    if (estadoActual === 'rechazado') {
+      // El rechazo de un cheque de venta dejó un egreso en caja (ver PATCH).
+      // Se compensa: si esa caja sigue abierta se borra el egreso; si ya
+      // cerró, se registra el ingreso inverso en la caja abierta de hoy.
+      if (ch.origen_tipo === 'venta') {
+        const { rows: [mov] } = await client.query(
+          `SELECT mc.id, mc.caja_id, mc.monto, mc.medio_pago_id, c.estado AS caja_estado
+             FROM movimientos_caja mc JOIN cajas c ON c.id = mc.caja_id
+            WHERE mc.tipo = 'egreso' AND mc.concepto LIKE $1
+            ORDER BY mc.fecha DESC LIMIT 1`,
+          [`Cheque rechazado — ${ch.banco} #${ch.numero_cheque} —%`]
+        );
+        if (mov && mov.caja_estado === 'abierta') {
+          await client.query(`DELETE FROM movimientos_caja WHERE id = $1`, [mov.id]);
+          efectos.push('se quitó el egreso de caja del rechazo');
+        } else if (mov) {
+          const { rows: [caja] } = await client.query(
+            `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`, [ch.sucursal_id]
+          );
+          if (!caja) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+              error: 'Para deshacer el rechazo hay que compensar la caja: abrí la caja de la sucursal y volvé a intentar',
+            });
+          }
+          await client.query(
+            `INSERT INTO movimientos_caja (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id)
+             VALUES ($1, 'ingreso', $2, $3, $4, $5)`,
+            [caja.id, `Corrección rechazo cheque — ${ch.banco} #${ch.numero_cheque}`, mov.monto, mov.medio_pago_id, usuario_id]
+          );
+          efectos.push('se compensó en caja el egreso del rechazo');
+        }
+      }
+      await client.query(`UPDATE ${tabla} SET rechazo_causal = NULL WHERE id = $1`, [id]);
+    }
+
+    // Plata en el banco: el estado nuevo decide si tiene que estar o no.
+    const debeTenerBanco =
+      (tipo === 'recibido' && estado_nuevo === 'acreditado') ||
+      (tipo === 'emitido'  && estado_nuevo === 'debitado');
+    const { rows: movBanco } = await client.query(
+      `SELECT 1 FROM movimientos_cuenta_bancaria WHERE origen_tipo = 'cheque' AND origen_id = $1 LIMIT 1`, [id]
+    );
+    if (movBanco.length && !debeTenerBanco) {
+      await revertirMovimientosBancarios(client, 'cheque', id);
+      efectos.push(tipo === 'recibido' ? 'se quitó el ingreso del banco' : 'se devolvió el débito al banco');
+    }
+
+    // Volver a cartera/emitido borra el destino del depósito.
+    if (['en_cartera', 'emitido'].includes(estado_nuevo)) {
+      await client.query(`UPDATE ${tabla} SET deposito_cuenta_id = NULL WHERE id = $1`, [id]);
+    }
+
+    // ── 2. Aplicar el estado nuevo ───────────────────────────────────────────
+    await client.query(
+      `UPDATE ${tabla} SET estado = $1, fecha_estado = $2 WHERE id = $3`,
+      [estado_nuevo, hoy, id]
+    );
+
+    if (debeTenerBanco && !movBanco.length) {
+      const cuenta = await cuentaDestinoCheque(client, id);
+      if (cuenta) {
+        const esIngreso = tipo === 'recibido';
+        await registrarMovimientoBancario(client, {
+          cuenta_bancaria_id: cuenta,
+          tipo: esIngreso ? 'ingreso' : 'egreso',
+          monto: ch.importe,
+          concepto: `Cheque ${esIngreso ? 'acreditado' : 'debitado'} (corrección) — ${ch.banco ?? 's/banco'} #${ch.numero_cheque ?? 's/nro'}`,
+          origen_tipo: 'cheque',
+          origen_id: id,
+          usuario_id,
+          fecha: hoy,
+        });
+        efectos.push(esIngreso ? 'se acreditó en el banco' : 'se debitó del banco');
+      }
+    }
+
+    await client.query(
+      `INSERT INTO cheque_historial_estados
+         (cheque_tipo, cheque_id, estado_anterior, estado_nuevo, observacion, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tipo, id, estadoActual, estado_nuevo,
+       `CORRECCIÓN: ${motivo.trim()}${efectos.length ? ' · ' + efectos.join(' · ') : ''}`, usuario_id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, estado_anterior: estadoActual, estado_nuevo, efectos });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     next(err);
   } finally {
     client.release();
