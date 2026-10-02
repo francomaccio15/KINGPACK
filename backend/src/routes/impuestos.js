@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
+const { pdfLibroVentas, pdfLibroCompras, pdfPosicionIVA } = require('../pdf/impuestos-pdf');
 
 const router = express.Router();
 
@@ -16,11 +17,8 @@ const dateRange = (desde, hasta) => {
 // ─── GET /api/impuestos/libro-iva-ventas ──────────────────────────────────────
 // Libro IVA Ventas: ventas confirmadas/facturadas con desglose por alícuota
 // ?desde= &hasta= &sucursal_id=
-router.get('/libro-iva-ventas', async (req, res, next) => {
-  try {
-    const { desde, hasta } = req.query;
+async function dataLibroVentas({ desde, hasta, sucId }) {
     const { d, h } = dateRange(desde, hasta);
-    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
 
     const conditions = [
       `v.estado IN ('confirmada','facturada')`,
@@ -105,18 +103,21 @@ router.get('/libro-iva-ventas', async (req, res, next) => {
       total:       acc.total       + parseFloat(r.total),
     }), { neto_21: 0, iva_21: 0, neto_105: 0, iva_105: 0, neto_exento: 0, total: 0 });
 
-    res.json({ ventas: rows, totales, desde: d, hasta: h });
+    return { ventas: rows, totales, desde: d, hasta: h };
+}
+
+router.get('/libro-iva-ventas', async (req, res, next) => {
+  try {
+    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
+    res.json(await dataLibroVentas({ desde: req.query.desde, hasta: req.query.hasta, sucId }));
   } catch (err) { next(err); }
 });
 
 // ─── GET /api/impuestos/libro-iva-compras ─────────────────────────────────────
 // Libro IVA Compras: egresos con comprobante y desglose fiscal
 // ?desde= &hasta= &sucursal_id=
-router.get('/libro-iva-compras', async (req, res, next) => {
-  try {
-    const { desde, hasta } = req.query;
+async function dataLibroCompras({ desde, hasta, sucId }) {
     const { d, h } = dateRange(desde, hasta);
-    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
 
     const conditions = [
       `e.tipo_comprobante IS NOT NULL`,
@@ -179,7 +180,13 @@ router.get('/libro-iva-compras', async (req, res, next) => {
       .filter(r => !r.sin_cuit)
       .reduce((s, r) => s + parseFloat(r.iva_21 || 0) + parseFloat(r.iva_105 || 0), 0);
 
-    res.json({ compras: rows, totales, credito_fiscal_valido: creditoFiscalValido, desde: d, hasta: h });
+    return { compras: rows, totales, credito_fiscal_valido: creditoFiscalValido, desde: d, hasta: h };
+}
+
+router.get('/libro-iva-compras', async (req, res, next) => {
+  try {
+    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
+    res.json(await dataLibroCompras({ desde: req.query.desde, hasta: req.query.hasta, sucId }));
   } catch (err) { next(err); }
 });
 
@@ -187,11 +194,7 @@ router.get('/libro-iva-compras', async (req, res, next) => {
 // Posición IVA mensual: Débito Fiscal vs Crédito Fiscal, saldo, YTD
 // ?anio=  (default: año actual)
 // ?sucursal_id=
-router.get('/posicion-iva', async (req, res, next) => {
-  try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
-
+async function dataPosicionIVA({ anio, sucId }) {
     const desdeAnio = `${anio}-01-01`;
     const hastaAnio = `${anio}-12-31`;
 
@@ -290,7 +293,7 @@ router.get('/posicion-iva', async (req, res, next) => {
       ? parseFloat((ultimos3.reduce((s, p) => s + p.saldo_mes, 0) / ultimos3.length).toFixed(2))
       : 0;
 
-    res.json({
+    return {
       posicion,
       ytd: {
         debito_fiscal:  parseFloat(ytd.debito.toFixed(2)),
@@ -299,7 +302,54 @@ router.get('/posicion-iva', async (req, res, next) => {
       },
       proyeccion_proximo_mes: proyeccion,
       anio,
-    });
+    };
+}
+
+router.get('/posicion-iva', async (req, res, next) => {
+  try {
+    const anio  = parseInt(req.query.anio) || new Date().getFullYear();
+    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
+    res.json(await dataPosicionIVA({ anio, sucId }));
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/impuestos/pdf ──────────────────────────────────────────────────
+// Exporta a PDF cualquiera de las tres vistas del módulo.
+// ?tipo= ventas | compras | posicion   (default: ventas)
+// ?desde= &hasta=     — para los libros
+// ?anio=              — para la posición
+// ?sucursal_id=       — opcional; si no viene, usa la sucursal activa
+router.get('/pdf', async (req, res, next) => {
+  try {
+    const tipo  = req.query.tipo || 'ventas';
+    const sucId = req.query.sucursal_id || sucursalEfectiva(req);
+
+    if (!['ventas', 'compras', 'posicion'].includes(tipo)) {
+      return res.status(400).json({ error: 'tipo inválido: usá ventas, compras o posicion' });
+    }
+
+    // Nombre de la sucursal para el encabezado
+    let sucursal = 'Todas las sucursales';
+    if (sucId) {
+      const { rows } = await pool.query('SELECT nombre FROM sucursales WHERE id = $1', [sucId]);
+      if (rows[0]) sucursal = rows[0].nombre;
+    }
+
+    const { desde, hasta } = req.query;
+
+    if (tipo === 'ventas') {
+      const data = await dataLibroVentas({ desde, hasta, sucId });
+      return pdfLibroVentas(res, { ...data, sucursal });
+    }
+
+    if (tipo === 'compras') {
+      const data = await dataLibroCompras({ desde, hasta, sucId });
+      return pdfLibroCompras(res, { ...data, sucursal });
+    }
+
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const data = await dataPosicionIVA({ anio, sucId });
+    return pdfPosicionIVA(res, { ...data, sucursal });
   } catch (err) { next(err); }
 });
 

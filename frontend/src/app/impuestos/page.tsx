@@ -5,6 +5,7 @@ import LibroIVAVentas from './LibroIVAVentas';
 import LibroIVACompras from './LibroIVACompras';
 import PosicionIVA from './PosicionIVA';
 import ImpresionButton from './ImpresionButton';
+import ExportarPDFImpuestos from './ExportarPDFImpuestos';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,7 +112,16 @@ export default async function ImpuestosPage({ searchParams }: PageProps) {
           </div>
           <p className="text-sm text-kp-gray pl-3">Libro IVA Ventas · Libro IVA Compras · Posición Fiscal</p>
         </div>
-        <ImpresionButton />
+        <div className="flex items-start gap-2">
+          <ImpresionButton />
+          <ExportarPDFImpuestos
+            tipo={tab === 'posicion' ? 'posicion' : tab === 'compras' ? 'compras' : 'ventas'}
+            desde={desde}
+            hasta={hasta}
+            anio={anio}
+            sucursalId={sucursalId}
+          />
+        </div>
       </div>
 
       {/* Filtros */}
