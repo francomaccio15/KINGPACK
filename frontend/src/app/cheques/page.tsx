@@ -7,6 +7,7 @@ import FiltrosCheques from './FiltrosCheques';
 import ChequesPorCliente from './ChequesPorCliente';
 import ChequesEmitidosResumen from './ChequesEmitidosResumen';
 import AgregarCheque from './AgregarCheque';
+import CargaRapida from './CargaRapida';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,10 @@ export default async function ChequesPage({ searchParams }: PageProps) {
           <h2 className="text-xl font-bold text-kp-white">Cheques</h2>
           <p className="text-sm text-kp-gray mt-0.5">Gestión de cheques recibidos y emitidos</p>
         </div>
-        <AgregarCheque />
+        <div className="flex flex-wrap gap-2">
+          <CargaRapida />
+          <AgregarCheque />
+        </div>
       </div>
 
       {/* Tarjetas de resumen */}
