@@ -10,6 +10,13 @@ const {
   registrarMovimientoCajaFuerte,
   agruparMediosCajaFuerte,
 } = require('../services/movimientos-caja-fuerte');
+const {
+  registrarEgresosCajaAdministrativaDeMedios,
+  registrarMovimientoCajaAdministrativa,
+  montoCajaAdministrativaDeMedios,
+  exigirAdminSiUsaCajaAdministrativa,
+  revertirMovimientosCajaAdministrativa,
+} = require('../services/movimientos-caja-administrativa');
 const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 const { requireRol } = require('../middleware/auth');
 const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
@@ -578,6 +585,16 @@ router.post('/', async (req, res, next) => {
           usuario_id: req.usuario?.id ?? null,
         }, sucursal_id);
 
+        // Lo pagado con "Caja Administrativa" (solo administradores) sale de esa caja.
+        await exigirAdminSiUsaCajaAdministrativa(client, mediosReales, req.usuario?.rol);
+        await registrarEgresosCajaAdministrativaDeMedios(client, mediosReales, {
+          concepto: `Pago de egreso — ${descripcion.trim()}`,
+          sucursal_id: sucursal_id || null,
+          origen_tipo: 'egreso',
+          origen_id: egreso.id,
+          usuario_id: req.usuario?.id ?? null,
+        });
+
         // Si alguna línea salió de una cuenta bancaria (Transferencia),
         // descontarla de esa cuenta y dejarlo asentado en el ledger.
         await registrarMovimientosDeMedios(client, mediosReales, {
@@ -768,6 +785,16 @@ router.post('/:id/pago', async (req, res, next) => {
       usuario_id: req.usuario?.id ?? null,
     }, egresoRows[0].sucursal_id);
 
+    // Lo pagado con "Caja Administrativa" (solo administradores) sale de esa caja.
+    await exigirAdminSiUsaCajaAdministrativa(client, [{ medio_pago_id, monto: montoPago }], req.usuario?.rol);
+    await registrarEgresosCajaAdministrativaDeMedios(client, [{ medio_pago_id, monto: montoPago }], {
+      concepto: 'Pago de egreso',
+      sucursal_id: egresoRows[0].sucursal_id || null,
+      origen_tipo: 'egreso',
+      origen_id: id,
+      usuario_id: req.usuario?.id ?? null,
+    });
+
     // Si salió de una cuenta bancaria (Transferencia), descontarla también.
     await registrarMovimientosDeMedios(client, [{ cuenta_bancaria_id, monto: montoPago }], {
       tipo: 'egreso',
@@ -891,6 +918,18 @@ router.post('/:id/pagos/:pagoId/anular', async (req, res, next) => {
     for (const [sucursal_id, monto] of porCaja) {
       await registrarMovimientoCajaFuerte(client, {
         sucursal_id, tipo: 'ingreso', monto,
+        concepto: `Anulación de pago de egreso — ${motivo.trim()}`,
+        origen_tipo: 'egreso', origen_id: id, usuario_id: usuarioId,
+      });
+    }
+
+    // 1b) Reponer la Caja Administrativa, si el pago salió de ahí.
+    const montoCajaAdm = await montoCajaAdministrativaDeMedios(
+      client, [{ medio_pago_id: pago.medio_pago_id, monto: montoPago }]
+    );
+    if (montoCajaAdm > 0) {
+      await registrarMovimientoCajaAdministrativa(client, {
+        tipo: 'ingreso', monto: montoCajaAdm, sucursal_id: egreso.sucursal_id || null,
         concepto: `Anulación de pago de egreso — ${motivo.trim()}`,
         origen_tipo: 'egreso', origen_id: id, usuario_id: usuarioId,
       });
@@ -1246,6 +1285,7 @@ router.delete('/:id', async (req, res, next) => {
     // pagos que vinieron de un pago a proveedor tienen origen 'pago_proveedor'
     // y se reponen al anular ese pago, no acá.
     await revertirMovimientosCajaFuerte(client, 'egreso', id);
+    await revertirMovimientosCajaAdministrativa(client, 'egreso', id);
 
     // Devolver a las cuentas bancarias lo que este egreso descontó.
     await revertirMovimientosBancarios(client, 'egreso', id);

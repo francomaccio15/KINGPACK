@@ -195,7 +195,7 @@ export default function PagosProveedorClient() {
   useEffect(() => {
     Promise.all([
       apiFetch('/api/proveedores?limit=500&activo=all').then(r => r.json()).catch(() => ({ proveedores: [] })),
-      apiFetch('/api/ventas/medios-pago').then(r => r.json()).catch(() => ({ medios: [] })),
+      apiFetch('/api/ventas/medios-pago?contexto=pago_proveedor').then(r => r.json()).catch(() => ({ medios: [] })),
       apiFetch('/api/cuentas-bancarias').then(r => r.json()).catch(() => ({ cuentas: [] })),
       apiFetch('/api/sucursales').then(r => r.json()).catch(() => ({ sucursales: [] })),
     ]).then(([prov, mp, cb, suc]) => {

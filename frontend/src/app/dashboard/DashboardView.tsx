@@ -101,6 +101,7 @@ export type DashboardData = {
   caja_fuerte:            CajaFuerteData[];
   movimientos_caja_fuerte: MovimientoCajaFuerteData[];
   saldos_bancarios:       SaldoBancarioData[];
+  caja_administrativa?:   { saldo: number; updated_at: string | null } | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -385,19 +386,20 @@ function CobrosDelDia({
 
 // ─── EstadoCuentasPanel: caja fuerte + saldos bancarios (solo administrador) ───
 function EstadoCuentasPanel({
-  cajas, movimientos, bancos,
+  cajas, movimientos, bancos, cajaAdm,
 }: {
   cajas: CajaFuerteData[];
   movimientos: MovimientoCajaFuerteData[];
   bancos: SaldoBancarioData[];
+  cajaAdm: { saldo: number; updated_at: string | null } | null;
 }) {
   const hayCajas  = cajas && cajas.length > 0;
   const hayBancos = bancos && bancos.length > 0;
-  if (!hayCajas && !hayBancos) return null;
+  if (!hayCajas && !hayBancos && !cajaAdm) return null;
 
   const totalCajas  = (cajas  ?? []).reduce((a, c) => a + c.saldo, 0);
   const totalBancos = (bancos ?? []).reduce((a, c) => a + c.saldo, 0);
-  const total       = totalCajas + totalBancos;
+  const total       = totalCajas + totalBancos + (cajaAdm?.saldo ?? 0);
 
   return (
     <section className="space-y-3">
@@ -412,6 +414,24 @@ function EstadoCuentasPanel({
           Total: <span className="text-kp-white font-bold">{fmt(total)}</span>
         </span>
       </div>
+
+      {/* Caja Administrativa: recibe los cierres de caja de todas las sucursales */}
+      {cajaAdm && (
+        <Link href="/caja-administrativa" className="rounded-xl border border-emerald-500/20 bg-kp-surface p-5 flex items-center gap-4 hover:bg-kp-surface2 transition-colors">
+          <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
+            <span className="text-emerald-400"><IcoVault /></span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xs md:text-[11px] font-bold uppercase tracking-widest text-kp-gray mb-1">Caja Administrativa</p>
+            <p className={`text-xl md:text-2xl font-bold leading-none tabular-nums ${cajaAdm.saldo < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{fmt(cajaAdm.saldo)}</p>
+            {cajaAdm.updated_at && (
+              <p className="text-2xs md:text-[10px] text-kp-gray mt-1.5">
+                Últ. movimiento: {new Date(cajaAdm.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+        </Link>
+      )}
 
       {/* Caja fuerte */}
       {hayCajas && (
@@ -863,6 +883,7 @@ export default function DashboardView({
           cajas={d.caja_fuerte ?? []}
           movimientos={d.movimientos_caja_fuerte ?? []}
           bancos={d.saldos_bancarios ?? []}
+          cajaAdm={d.caja_administrativa ?? null}
         />
       )}
 

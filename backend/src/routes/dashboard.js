@@ -299,6 +299,12 @@ router.get('/', async (req, res, next) => {
       caja_fuerte:            cajaFuerte.rows,
       movimientos_caja_fuerte: movimientosCajaFuerte.rows,
       saldos_bancarios:       saldosBancarios.rows,
+      // Caja única de la empresa (mig 061): solo para el administrador.
+      caja_administrativa: req.usuario?.rol === 'administrador'
+        ? (await pool.query(
+            `SELECT saldo::float AS saldo, updated_at FROM caja_administrativa WHERE id = 1`
+          )).rows[0] ?? null
+        : null,
     });
   } catch (err) { next(err); }
 });

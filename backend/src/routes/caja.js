@@ -3,7 +3,7 @@ const { pool } = require('../config/db');
 const { sucursalEfectiva } = require('../middleware/auth');
 const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
 const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
-const { registrarMovimientoCajaFuerte } = require('../services/movimientos-caja-fuerte');
+const { registrarMovimientoCajaAdministrativa } = require('../services/movimientos-caja-administrativa');
 
 const router = express.Router();
 
@@ -172,6 +172,7 @@ router.get('/:id', async (req, res, next) => {
         `SELECT id, nombre FROM medios_pago
           WHERE activo = true AND caja_fuerte_sucursal_id IS NULL
             AND nombre NOT ILIKE '%caja fuerte%'
+            AND NOT es_caja_administrativa
             AND nombre <> 'ERROR REDONDEO'
           ORDER BY nombre`
       ),
@@ -256,9 +257,17 @@ router.post('/:id/movimiento', async (req, res, next) => {
     let mediosNombres = {};
     if (medioIds.length > 0) {
       const { rows: mpRows } = await client.query(
-        `SELECT id, nombre FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
+        `SELECT id, nombre, es_caja_administrativa FROM medios_pago WHERE id = ANY($1::uuid[])`, [medioIds]
       );
       mediosNombres = Object.fromEntries(mpRows.map(m => [m.id, m.nombre]));
+
+      // La Caja Administrativa tampoco: se usa desde egresos / pago a proveedor.
+      if (mpRows.some(m => m.es_caja_administrativa)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'La Caja Administrativa no se puede usar en un movimiento de caja. Registralo como gasto o pago a proveedor.',
+        });
+      }
 
       // La caja fuerte no se toca desde acá: descontarla además del cajón sería
       // contar el gasto dos veces (el arqueo ya resta todos los egresos).
@@ -427,14 +436,18 @@ router.post('/:id/cerrar', async (req, res, next) => {
       RETURNING id, estado, fecha_cierre, saldo_final_sistema, saldo_final_real, diferencia
     `, [saldoSistema.toFixed(2), saldoReal.toFixed(2), diferencia.toFixed(2), id]);
 
-    // El efectivo real contado entra a la caja fuerte de la sucursal. Se acumula
-    // sobre el saldo previo (idempotente: el cierre solo corre una vez porque
-    // exige estado = 'abierta') y queda asentado en el ledger.
-    await registrarMovimientoCajaFuerte(client, {
+    // El efectivo real contado entra a la Caja Administrativa (desde la mig 061;
+    // antes iba a la caja fuerte de la sucursal). Se acumula sobre el saldo
+    // previo (idempotente: el cierre solo corre una vez porque exige
+    // estado = 'abierta') y queda asentado en el ledger con su sucursal.
+    const { rows: [suc] } = await client.query(
+      `SELECT nombre FROM sucursales WHERE id = $1`, [caja.sucursal_id]
+    );
+    await registrarMovimientoCajaAdministrativa(client, {
       sucursal_id: caja.sucursal_id,
       tipo: 'ingreso',
       monto: saldoReal,
-      concepto: 'Cierre de caja — efectivo contado',
+      concepto: `Cierre de caja ${suc?.nombre ?? ''} — efectivo contado`.replace('  ', ' '),
       origen_tipo: 'cierre_caja',
       origen_id: id,
       usuario_id: req.usuario?.id ?? null,

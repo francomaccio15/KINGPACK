@@ -209,6 +209,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Transporte',            href: '/transporte',           icon: <IcoTransporte /> },
       { label: 'Traspasos',             href: '/traspasos',            icon: <IcoTraspasos /> },
       { label: 'Caja',                  href: '/caja',                 icon: <IcoCaja /> },
+      { label: 'Caja Administrativa',   href: '/caja-administrativa',  icon: <IcoCaja /> },
       { label: 'Cheques',               href: '/cheques',              icon: <IcoCheques /> },
       { label: 'Notas de equipo',       href: '/notas',                icon: <IcoNotas /> },
       { label: 'Notas de Crédito',      href: '/notas-credito',        icon: <IcoNC /> },

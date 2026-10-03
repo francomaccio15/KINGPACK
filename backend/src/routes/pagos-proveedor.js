@@ -10,6 +10,10 @@ const {
   registrarEgresosCajaFuerteDeMedios,
   revertirMovimientosCajaFuerte,
 } = require('../services/movimientos-caja-fuerte');
+const {
+  registrarEgresosCajaAdministrativaDeMedios,
+  revertirMovimientosCajaAdministrativa,
+} = require('../services/movimientos-caja-administrativa');
 
 const router = express.Router();
 
@@ -266,6 +270,16 @@ router.post('/', async (req, res, next) => {
       usuario_id: usuarioId,
       fecha: pago.fecha,
     }, sucursal_id);
+
+    // 1c') Las líneas pagadas con "Caja Administrativa" salen de esa caja.
+    await registrarEgresosCajaAdministrativaDeMedios(client, mediosLista, {
+      concepto: 'Pago a proveedor',
+      sucursal_id: sucursal_id || null,
+      origen_tipo: 'pago_proveedor',
+      origen_id: pago.id,
+      usuario_id: usuarioId,
+      fecha: pago.fecha,
+    });
 
     // 1d) Las líneas pagadas desde una cuenta bancaria (Transferencia) se
     //     descuentan de esa cuenta y quedan asentadas en el ledger.
@@ -586,6 +600,7 @@ router.post('/:id/anular', async (req, res, next) => {
     // 1b) Reponer en la caja fuerte lo que este pago descontó (medios "Efectivo
     //     Caja Fuerte"), según lo asentado en el ledger.
     await revertirMovimientosCajaFuerte(client, 'pago_proveedor', id);
+    await revertirMovimientosCajaAdministrativa(client, 'pago_proveedor', id);
 
     // 1c) Devolver a las cuentas bancarias lo que este pago descontó.
     await revertirMovimientosBancarios(client, 'pago_proveedor', id);

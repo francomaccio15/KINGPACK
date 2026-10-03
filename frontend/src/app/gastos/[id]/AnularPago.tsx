@@ -68,7 +68,7 @@ export default function AnularPago({ egresoId, pagoId, monto, medioNombre }: Pro
             {medioNombre ? ` (${medioNombre})` : ''}.
           </p>
           <p className="text-xs text-amber-400/80">
-            La plata vuelve a la caja fuerte o a la cuenta bancaria de donde salió, la deuda con el
+            La plata vuelve a la caja (fuerte o administrativa) o a la cuenta bancaria de donde salió, la deuda con el
             proveedor se restablece y el comprobante vuelve a figurar impago. Los cheques emitidos en
             este pago se eliminan.
           </p>

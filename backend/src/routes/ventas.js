@@ -47,9 +47,14 @@ router.get('/medios-pago', async (req, res, next) => {
     // en egresos: no mueve caja/banco/CC. Solo se ofrece en el contexto egreso;
     // en ventas y caja queda oculto para no usarlo por error.
     const incluirFicticios = req.query.contexto === 'egreso';
+    // "Caja Administrativa" sale plata de la caja de la empresa: solo para pagar
+    // (egresos / pago a proveedor) y solo la ve el administrador.
+    const incluirCajaAdm = ['egreso', 'pago_proveedor'].includes(req.query.contexto)
+      && req.usuario?.rol === 'administrador';
     const { rows } = await pool.query(
       `SELECT id, nombre, requiere_cuenta FROM medios_pago
         WHERE activo = true ${incluirFicticios ? '' : `AND nombre <> 'ERROR REDONDEO'`}
+          ${incluirCajaAdm ? '' : 'AND NOT es_caja_administrativa'}
         ORDER BY nombre`
     );
     res.json({ medios_pago: rows });
