@@ -39,7 +39,7 @@ const pagoClientesRouter      = require('./routes/pago-clientes');
 const pagosProveedorRouter    = require('./routes/pagos-proveedor');
 const licitacionesRouter      = require('./routes/licitaciones');
 const transportesRouter       = require('./routes/transportes');
-const { verifyToken }         = require('./middleware/auth');
+const { verifyToken, soloRutasComercial } = require('./middleware/auth');
 
 const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 3001;
@@ -62,6 +62,7 @@ app.use('/api/sucursales', sucursalesRouter); // necesario para el layout server
 
 // Todas las rutas siguientes requieren JWT válido
 app.use(verifyToken);
+app.use(soloRutasComercial);
 
 app.use('/api/articulos',             articulosRouter);
 app.use('/api/categorias',            categoriasRouter);

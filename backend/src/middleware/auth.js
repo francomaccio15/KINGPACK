@@ -49,6 +49,28 @@ function requireRol(...roles) {
 }
 
 /**
+ * Rol "comercial" (redes + presupuestos): lista blanca de endpoints. Consulta
+ * artículos/precios/stock, carga y edita clientes (sin cuenta corriente) y arma
+ * presupuestos. Todo lo demás (ventas confirmadas, caja, CC, cobros) → 403.
+ */
+const RUTAS_COMERCIAL = [
+  ['GET',  /^\/api\/(articulos|categorias|listas-precios)(\/|$)/],
+  ['GET',  /^\/api\/clientes(\/cond-iva|\/[^/]+(\/compras-mensuales)?)?\/?$/],
+  ['POST', /^\/api\/clientes\/?$/],
+  ['PUT',  /^\/api\/clientes\/[^/]+\/?$/],
+  ['GET',  /^\/api\/ventas(\/|$)/],
+  ['POST', /^\/api\/ventas\/?$/], // forzado a preventa en routes/ventas.js
+];
+
+function soloRutasComercial(req, res, next) {
+  if (req.usuario?.rol !== 'comercial') return next();
+  const path = (req.originalUrl || req.url || '').split('?')[0];
+  const ok = RUTAS_COMERCIAL.some(([m, re]) => m === req.method && re.test(path));
+  if (!ok) return res.status(403).json({ error: 'Sin permiso para esta acción' });
+  next();
+}
+
+/**
  * Para cajeros devuelve siempre su sucursal del JWT (ignora query params).
  * Si el cajero no tiene sucursal asignada en el JWT devuelve un UUID imposible
  * para que ninguna query retorne datos en lugar de devolver todo.
@@ -61,4 +83,4 @@ function sucursalEfectiva(req) {
   return req.query?.sucursal_id ?? null;
 }
 
-module.exports = { verifyToken, requireRol, sucursalEfectiva };
+module.exports = { verifyToken, requireRol, soloRutasComercial, sucursalEfectiva };

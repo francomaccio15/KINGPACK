@@ -27,12 +27,14 @@ type Cliente = {
 };
 
 export default function EditarCliente({
-  cliente, condIva, listas, sucursales,
+  cliente, condIva, listas, sucursales, sinCC = false,
 }: {
   cliente: Cliente;
   condIva: CondIva[];
   listas: Lista[];
   sucursales: Sucursal[];
+  /** Rol sin cuenta corriente (comercial): oculta el límite de crédito. */
+  sinCC?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen]       = useState(false);
@@ -209,8 +211,8 @@ export default function EditarCliente({
           </div>
 
           {/* Límite crédito + Descuento */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className={`grid gap-3 ${sinCC ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {!sinCC && <div>
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
@@ -220,7 +222,7 @@ export default function EditarCliente({
                     focus:outline-none focus:border-kp-red transition-colors"
                 />
               </div>
-            </div>
+            </div>}
             <div>
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Descuento %</label>
               <div className="relative">

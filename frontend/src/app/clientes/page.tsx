@@ -39,13 +39,15 @@ export default async function ClientesPage({
 }) {
   const user = requireAuth('/clientes');
   const esAdmin = user.rol === 'administrador';
+  // El comercial carga clientes pero no maneja cuentas corrientes.
+  const sinCC = user.rol === 'comercial';
   const { clientes, condIva, listas, sucursales } = await fetchAll(
     searchParams.q,
     searchParams.activo,
   );
 
   const hayFiltros = !!(searchParams.q || searchParams.activo);
-  const tab = searchParams.tab === 'deuda' ? 'deuda' : 'todos';
+  const tab = searchParams.tab === 'deuda' && !sinCC ? 'deuda' : 'todos';
   const cantDeudores = (clientes as Cliente[]).filter(c => parseFloat(c.saldo_actual || '0') > 0).length;
 
   return (
@@ -63,7 +65,7 @@ export default async function ClientesPage({
             {hayFiltros && <span className="ml-1 text-kp-gray/60">(filtrado)</span>}
           </p>
         </div>
-        <NuevoCliente condIva={condIva} listas={listas} sucursales={sucursales} />
+        <NuevoCliente condIva={condIva} listas={listas} sucursales={sucursales} sinCC={sinCC} />
       </div>
 
       {/* Pestañas */}
@@ -78,7 +80,7 @@ export default async function ClientesPage({
         >
           Todos
         </Link>
-        <Link
+        {!sinCC && <Link
           href="/clientes?tab=deuda"
           className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
             tab === 'deuda'
@@ -92,7 +94,7 @@ export default async function ClientesPage({
               {cantDeudores}
             </span>
           )}
-        </Link>
+        </Link>}
       </div>
 
       {/* ── Pestaña: Con deuda ── */}

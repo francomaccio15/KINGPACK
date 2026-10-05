@@ -122,9 +122,13 @@ router.post('/', async (req, res, next) => {
     const {
       razon_social, cuit, cond_iva_id, telefono, direccion,
       sucursal_default_id, lista_precio_id,
-      limite_credito = 0, descuento_adicional = 0, saldo_inicial = 0,
+      descuento_adicional = 0,
       forzar_cuit_duplicado = false,
     } = req.body;
+    // El comercial no maneja cuenta corriente: el cliente nace sin crédito ni saldo.
+    const esComercial = req.usuario?.rol === 'comercial';
+    const limite_credito = esComercial ? 0 : (req.body.limite_credito ?? 0);
+    const saldo_inicial  = esComercial ? 0 : (req.body.saldo_inicial ?? 0);
 
     if (!razon_social || !cond_iva_id) {
       return res.status(400).json({ error: 'razon_social y cond_iva_id son requeridos' });
@@ -227,7 +231,9 @@ router.put('/:id', async (req, res, next) => {
 
     const fields = ['razon_social','cuit','cond_iva_id','telefono','direccion',
                     'sucursal_default_id','lista_precio_id','limite_credito',
-                    'descuento_adicional','activo'];
+                    'descuento_adicional','activo']
+      // El comercial no maneja cuenta corriente: no toca el límite de crédito.
+      .filter(f => !(f === 'limite_credito' && req.usuario?.rol === 'comercial'));
     const updates = [];
     const params  = [];
     let idx = 1;

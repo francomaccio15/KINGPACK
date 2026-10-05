@@ -16,6 +16,9 @@ const PERMISOS: Record<Rol, string[] | '*'> = {
   cajero:        ['/caja', '/ventas', '/presupuestos', '/clientes', '/cobranzas', '/notas', '/notas-credito', '/devoluciones', '/pedidos-proveedores', '/traspasos', '/articulos'],
   // Repartidor: arma presupuestos (preventas) y consulta productos. No opera caja ni cobra.
   vendedor:      ['/presupuestos', '/articulos'],
+  // Comercial (redes + presupuestos): consulta precios/stock, carga clientes y
+  // arma presupuestos. Sin ventas, caja ni cuentas corrientes.
+  comercial:     ['/presupuestos', '/articulos', '/clientes'],
 };
 
 /**
@@ -51,6 +54,6 @@ export function modulosPermitidos(rol: Rol): string[] | '*' {
  */
 export function landingPath(rol: Rol): string {
   if (rol === 'cajero')   return '/ventas';
-  if (rol === 'vendedor') return '/presupuestos';
+  if (rol === 'vendedor' || rol === 'comercial') return '/presupuestos';
   return '/dashboard';
 }

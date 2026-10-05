@@ -2,7 +2,7 @@ export interface AuthUser {
   id: string;
   email: string;
   nombre: string;
-  rol: 'administrador' | 'supervisor' | 'cajero' | 'vendedor';
+  rol: 'administrador' | 'supervisor' | 'cajero' | 'vendedor' | 'comercial';
   sucursal_default_id: string | null;
   sucursal_default_nombre?: string | null;
 }

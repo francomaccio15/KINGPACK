@@ -57,7 +57,7 @@ export default async function PresupuestosPage({
   searchParams: { q?: string; fecha_desde?: string; fecha_hasta?: string };
 }) {
   const user = requireAuth('/presupuestos');
-  const esRepartidor = user.rol === 'vendedor';
+  const esRepartidor = user.rol === 'vendedor' || user.rol === 'comercial';
 
   const { presupuestos, count, sucursales: todasSucursales, listas } =
     await fetchData(searchParams, esRepartidor);

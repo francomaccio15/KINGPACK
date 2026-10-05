@@ -6,7 +6,7 @@ import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/
 import { btnSecondary, cn } from '@/lib/ui';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type Rol = 'administrador' | 'supervisor' | 'cajero' | 'vendedor';
+type Rol = 'administrador' | 'supervisor' | 'cajero' | 'vendedor' | 'comercial';
 
 interface Usuario {
   id: string;
@@ -41,6 +41,7 @@ const ROL_LABELS: Record<Rol, string> = {
   supervisor:    'Supervisor',
   cajero:        'Cajero',
   vendedor:      'Preventista',
+  comercial:     'Comercial',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
@@ -48,6 +49,7 @@ const ROL_COLORS: Record<Rol, string> = {
   supervisor:    'bg-blue-500/20 text-blue-400 border-blue-500/30',
   cajero:        'bg-amber-500/20 text-amber-400 border-amber-500/30',
   vendedor:      'bg-green-500/20 text-green-400 border-green-500/30',
+  comercial:     'bg-purple-500/20 text-purple-400 border-purple-500/30',
 };
 
 function Spinner() {
@@ -150,6 +152,7 @@ function FormUsuario({
             <option value="supervisor">Supervisor</option>
             <option value="cajero">Cajero</option>
             <option value="vendedor">Preventista</option>
+            <option value="comercial">Comercial (redes y presupuestos)</option>
           </select>
         </div>
         <div>

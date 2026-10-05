@@ -20,13 +20,17 @@ export const dynamic = 'force-dynamic';
 export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
   const user = requireAuth('/clientes');
   const puedeEditarPago = user.rol === 'cajero' || user.rol === 'administrador';
+  // El comercial ve y edita los datos del cliente, pero no su cuenta corriente
+  // (saldo, movimientos, pagos) ni sus ventas.
+  const sinCC = user.rol === 'comercial';
+  const noFetch = Promise.resolve(new Response(null, { status: 404 }));
   const [clienteRes, movsRes, condIvaRes, listasRes, sucursalesRes, ventasRes, comprasMensualesRes] = await Promise.all([
     serverFetch(`/api/clientes/${params.id}`,              { cache: 'no-store' }),
-    serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
+    sinCC ? noFetch : serverFetch(`/api/clientes/${params.id}/movimientos?limit=100`, { cache: 'no-store' }),
     serverFetch(`/api/clientes/cond-iva`,                 { cache: 'no-store' }),
     serverFetch(`/api/listas-precios`,                    { cache: 'no-store' }),
     serverFetch(`/api/sucursales`,                        { cache: 'no-store' }),
-    serverFetch(`/api/ventas?cliente_id=${params.id}&limit=50`, { cache: 'no-store' }),
+    sinCC ? noFetch : serverFetch(`/api/ventas?cliente_id=${params.id}&limit=50`, { cache: 'no-store' }),
     serverFetch(`/api/clientes/${params.id}/compras-mensuales`, { cache: 'no-store' }),
   ]);
 
@@ -99,16 +103,16 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           )}
         </div>
         <div className="flex items-center gap-2">
-          <EstadoCuentaPDF clienteId={cliente.id} />
-          <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} />
+          {!sinCC && <EstadoCuentaPDF clienteId={cliente.id} />}
+          <EditarCliente cliente={cliente} condIva={condIva} listas={listas} sucursales={sucursales} sinCC={sinCC} />
           {puedeEditarPago && <AjustarSaldo clienteId={cliente.id} saldoActual={saldoActual} />}
-          <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa}
-            clienteNombre={cliente.razon_social} clienteCuit={cliente.cuit} />
+          {!sinCC && <RegistrarPago clienteId={cliente.id} saldoActual={saldoActual} sucursalId={sucursalOperativa}
+            clienteNombre={cliente.razon_social} clienteCuit={cliente.cuit} />}
         </div>
       </div>
 
       {/* Banner alerta crédito excedido */}
-      {excedeCredito && (
+      {excedeCredito && !sinCC && (
         <div className="flex items-center gap-3 rounded-xl border border-kp-red/50 bg-kp-red/10 px-4 py-3">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-kp-red flex-shrink-0">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -123,7 +127,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         {/* Saldo: split en Deuda vs Saldo a Favor */}
-        {saldoActual > 0 ? (
+        {sinCC ? null : saldoActual > 0 ? (
           <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/50' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex items-center gap-1.5 mb-1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3 text-amber-400">
@@ -157,7 +161,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           </div>
         )}
 
-        <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
+        {!sinCC && <div className={`rounded-xl border px-5 py-4 ${excedeCredito ? 'bg-kp-red/10 border-kp-red/40' : 'bg-kp-surface border-kp-border'}`}>
           <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">Límite Crédito</p>
           <p className={`text-lg font-bold tabular-nums ${excedeCredito ? 'text-kp-red' : 'text-kp-white'}`}>
             {fmt(limiteCredito)}
@@ -165,7 +169,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
           {excedeCredito && limiteCredito > 0 && (
             <p className="text-2xs md:text-[10px] text-kp-red mt-1">excedido en {fmt(saldoActual - limiteCredito)}</p>
           )}
-        </div>
+        </div>}
 
         {[
           { label: 'Descuento Extra', value: `${parseFloat(cliente.descuento_adicional || '0').toFixed(1)}%`, color: 'text-kp-white' },
@@ -191,7 +195,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             { label: 'Sucursal', value: cliente.sucursal_nombre },
             { label: 'Dirección', value: cliente.direccion },
             // Saldo al alta solo si es distinto de 0 (migración de deuda/crédito inicial)
-            ...(saldo_inicial !== 0
+            ...(saldo_inicial !== 0 && !sinCC
               ? [{ label: 'Saldo al alta', value: fmt(saldo_inicial) }]
               : []),
             { label: 'Cliente desde', value: new Date(cliente.created_at).toLocaleDateString('es-AR') },
@@ -205,7 +209,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
       </div>
 
       {/* Cuenta Corriente */}
-      <div className="space-y-3">
+      {!sinCC && <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="w-1 h-4 bg-kp-red rounded-full block" />
           <h3 className="font-bold uppercase tracking-wide text-sm">Cuenta Corriente</h3>
@@ -343,7 +347,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* Ventas del cliente */}
       {ventasCliente.length > 0 && (
@@ -412,7 +416,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
       )}
 
       {/* Correcciones */}
-      {correcciones.length > 0 && (
+      {correcciones.length > 0 && !sinCC && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-1 h-4 bg-kp-border rounded-full block" />

@@ -158,9 +158,9 @@ export default async function ArticulosPage({
   searchParams: Record<string, string>;
 }) {
   const user = requireAuth('/articulos');
-  // Cajero y repartidor (vendedor) ven artículos en modo solo-lectura:
+  // Cajero, repartidor (vendedor) y comercial ven artículos en modo solo-lectura:
   // sin alta, sin columna de precio base, sin acciones de edición.
-  const esCajero = user.rol === 'cajero' || user.rol === 'vendedor';
+  const esCajero = user.rol === 'cajero' || user.rol === 'vendedor' || user.rol === 'comercial';
   const esAdmin  = user.rol === 'administrador';
   // El cajero está fijado a su sucursal por cookie, pero en artículos debe ver
   // el stock de AMBAS sucursales (vista "Todas"): ignoramos su sucursal activa

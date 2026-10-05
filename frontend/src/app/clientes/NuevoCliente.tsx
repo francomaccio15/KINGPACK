@@ -21,9 +21,11 @@ const EMPTY = {
 };
 
 export default function NuevoCliente({
-  condIva, listas, sucursales,
+  condIva, listas, sucursales, sinCC = false,
 }: {
   condIva: CondIva[]; listas: Lista[]; sucursales: Sucursal[];
+  /** Rol sin cuenta corriente (comercial): oculta límite de crédito y saldo inicial. */
+  sinCC?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen]       = useState(false);
@@ -183,8 +185,8 @@ export default function NuevoCliente({
         </div>
 
         {/* Límite crédito + Descuento + Saldo inicial */}
-        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
-          <div>
+        <div className={cn('grid grid-cols-1 gap-3', !sinCC && 'xs:grid-cols-3')}>
+          {!sinCC && <div>
             <label className={labelCls}>Límite Crédito</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs pointer-events-none">$</span>
@@ -194,7 +196,7 @@ export default function NuevoCliente({
                 className={cn(inputCls, 'pl-7')}
               />
             </div>
-          </div>
+          </div>}
           <div>
             <label className={labelCls}>Descuento %</label>
             <div className="relative">
@@ -206,7 +208,7 @@ export default function NuevoCliente({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs pointer-events-none">%</span>
             </div>
           </div>
-          <div>
+          {!sinCC && <div>
             <label className={labelCls}>Saldo Inicial</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs pointer-events-none">$</span>
@@ -216,7 +218,7 @@ export default function NuevoCliente({
                 className={cn(inputCls, 'pl-7')}
               />
             </div>
-          </div>
+          </div>}
         </div>
 
         {error && <p className={errorCls}>{error}</p>}

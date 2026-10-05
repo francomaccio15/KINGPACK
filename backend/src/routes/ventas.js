@@ -195,8 +195,8 @@ router.post('/', async (req, res, next) => {
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
 
     // El repartidor (vendedor) solo puede generar presupuestos (preventas);
-    // nunca confirmar una venta, que mueve stock y caja.
-    if (req.usuario?.rol === 'vendedor') {
+    // nunca confirmar una venta, que mueve stock y caja. Igual el comercial.
+    if (req.usuario?.rol === 'vendedor' || req.usuario?.rol === 'comercial') {
       estado = 'preventa';
       pagos = [];
     }

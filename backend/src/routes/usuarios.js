@@ -55,7 +55,7 @@ router.post('/', soloAdmin, async (req, res, next) => {
     if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
     if (!nombre?.trim())   return res.status(400).json({ error: 'Nombre requerido' });
 
-    const roles = ['administrador', 'supervisor', 'cajero', 'vendedor'];
+    const roles = ['administrador', 'supervisor', 'cajero', 'vendedor', 'comercial'];
     if (!roles.includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
 
     const emailNorm = email.toLowerCase().trim();
@@ -80,7 +80,7 @@ router.patch('/:id', soloAdmin, async (req, res, next) => {
     const { id } = req.params;
     const { nombre, telefono, rol, sucursal_default_id, activo } = req.body;
 
-    const roles = ['administrador', 'supervisor', 'cajero', 'vendedor'];
+    const roles = ['administrador', 'supervisor', 'cajero', 'vendedor', 'comercial'];
     if (rol && !roles.includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
 
     // Evitar que el admin se baje el rol a sí mismo
