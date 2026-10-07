@@ -133,7 +133,7 @@ router.get('/', async (req, res, next) => {
     if (despacho_pendiente === '1') conditions.push('v.despacho_pendiente');
     const sucId = sucursalEfectiva(req);
     if (sucId) {
-      conditions.push(`v.sucursal_id = ${idx++}`);
+      conditions.push(`v.sucursal_id = $${idx++}`);
       params.push(sucId);
     }
     if (fecha_desde) {
