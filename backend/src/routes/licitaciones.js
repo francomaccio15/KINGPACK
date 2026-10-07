@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { unidadesPorBultoDe, cantidadStock, formatoStock } = require('../services/unidades');
 
 const router = express.Router();
 
@@ -267,8 +268,10 @@ router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
       total.toFixed(2),
     ]);
 
-    // Descontar stock
+    // Descontar stock. Las licitaciones se adjudican siempre por bulto:
+    // al stock salen bultos × factor.
     for (const it of itemsCalc) {
+      it.factor = await unidadesPorBultoDe(client, it.articulo_id);
       const { rows: stockRows } = await client.query(
         `SELECT cantidad FROM stock
          WHERE articulo_id = $1 AND sucursal_id = $2
@@ -276,11 +279,12 @@ router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
         [it.articulo_id, sucursal_id]
       );
       const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
-      if (stockActual < it.cantidad) {
+      const sale = cantidadStock(it.cantidad, it.factor);
+      if (stockActual < sale) {
         await client.query('ROLLBACK');
         return res.status(409).json({
-          error: `Stock insuficiente para "${it.nombre}"`,
-          detalle: { articulo_id: it.articulo_id, nombre: it.nombre, disponible: stockActual, solicitado: it.cantidad },
+          error: `Stock insuficiente para "${it.nombre}": hay ${formatoStock(stockActual, it.factor)}, se pidió ${formatoStock(sale, it.factor)}`,
+          detalle: { articulo_id: it.articulo_id, nombre: it.nombre, disponible: stockActual, solicitado: sale },
         });
       }
       await client.query(
@@ -288,7 +292,7 @@ router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
          VALUES ($1, $2, $3, NOW())
          ON CONFLICT (articulo_id, sucursal_id)
          DO UPDATE SET cantidad = EXCLUDED.cantidad, ultima_actualizacion = NOW()`,
-        [it.articulo_id, sucursal_id, parseFloat((stockActual - it.cantidad).toFixed(3))]
+        [it.articulo_id, sucursal_id, parseFloat((stockActual - sale).toFixed(3))]
       );
     }
 
@@ -296,9 +300,10 @@ router.post('/:id/adjudicar', adminOLaprida, async (req, res, next) => {
     for (const it of itemsCalc) {
       await client.query(`
         INSERT INTO venta_items
-          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      `, [venta.id, it.articulo_id, it.cantidad, it.precio, it.precio, 0, it.precio, it.iva_monto]);
+          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto,
+           unidad_venta, factor)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'bulto',$9)
+      `, [venta.id, it.articulo_id, it.cantidad, it.precio, it.precio, 0, it.precio, it.iva_monto, it.factor]);
     }
 
     // Vincular venta a la licitación y marcarla adjudicada

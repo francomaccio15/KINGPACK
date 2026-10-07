@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol } = require('../middleware/auth');
+const { resolverUnidades, cantidadStock } = require('../services/unidades');
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ router.get('/', async (req, res, next) => {
           sd.nombre AS sucursal_destino_nombre,
           u.nombre  AS usuario_nombre,
           (SELECT COUNT(*) FROM traspaso_items ti WHERE ti.traspaso_id = t.id) AS items_count,
-          (SELECT COALESCE(SUM(ti2.cantidad), 0) FROM traspaso_items ti2 WHERE ti2.traspaso_id = t.id) AS unidades_total
+          (SELECT COALESCE(SUM(ti2.cantidad * ti2.factor), 0) FROM traspaso_items ti2 WHERE ti2.traspaso_id = t.id) AS unidades_total
         FROM traspasos t
         JOIN sucursales so ON so.id = t.sucursal_origen_id
         JOIN sucursales sd ON sd.id = t.sucursal_destino_id
@@ -98,8 +99,9 @@ router.get('/resumen-mensual', requireRol('administrador'), async (req, res, nex
           t.id      AS traspaso_id,
           a.nombre  AS articulo_nombre,
           a.codigo  AS articulo_codigo,
-          ti.cantidad::float                 AS cantidad,
-          (ti.cantidad * a.costo_base)::float AS costo
+          -- En bultos equivalentes: costo_base es el costo del bulto.
+          (ti.cantidad * ti.factor / a.unidades_por_bulto)::float              AS cantidad,
+          (ti.cantidad * ti.factor / a.unidades_por_bulto * a.costo_base)::float AS costo
         FROM traspasos t
         JOIN sucursales so     ON so.id = t.sucursal_origen_id
         JOIN sucursales sd     ON sd.id = t.sucursal_destino_id
@@ -167,14 +169,33 @@ router.post('/', async (req, res, next) => {
 
     const traspaso = tRows[0];
 
-    for (const item of items) {
-      if (!item.articulo_id || !(parseFloat(item.cantidad) > 0)) continue;
+    const validos = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
+    const r = await resolverUnidades(client, validos);
+    if (r.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: r.error });
+    }
+
+    // Una línea por artículo (PK). Si el mismo artículo viene por bulto y suelto,
+    // se junta todo en unidades sueltas para no perder ninguna.
+    const porArticulo = new Map();
+    for (const it of r.items) {
+      const cant = parseFloat(it.cantidad);
+      const prev = porArticulo.get(it.articulo_id);
+      if (!prev) { porArticulo.set(it.articulo_id, { ...it, cantidad: cant }); continue; }
+      if (prev.unidad_venta === it.unidad_venta) { prev.cantidad += cant; continue; }
+      porArticulo.set(it.articulo_id, {
+        ...it,
+        unidad_venta: 'unidad', factor: 1,
+        cantidad: cantidadStock(prev.cantidad, prev.factor) + cantidadStock(cant, it.factor),
+      });
+    }
+
+    for (const item of porArticulo.values()) {
       await client.query(`
-        INSERT INTO traspaso_items (traspaso_id, articulo_id, cantidad)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (traspaso_id, articulo_id)
-        DO UPDATE SET cantidad = traspaso_items.cantidad + EXCLUDED.cantidad
-      `, [traspaso.id, item.articulo_id, parseFloat(item.cantidad)]);
+        INSERT INTO traspaso_items (traspaso_id, articulo_id, cantidad, unidad_venta, factor)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [traspaso.id, item.articulo_id, item.cantidad, item.unidad_venta, item.factor]);
     }
 
     await client.query('COMMIT');
@@ -208,7 +229,7 @@ router.get('/:id', async (req, res, next) => {
       `, [id]),
       pool.query(`
         SELECT
-          ti.articulo_id, ti.cantidad,
+          ti.articulo_id, ti.cantidad, ti.unidad_venta, ti.factor, a.unidades_por_bulto,
           a.nombre AS articulo_nombre,
           a.codigo AS articulo_codigo,
           COALESCE(
@@ -268,8 +289,10 @@ router.patch('/:id/estado', async (req, res, next) => {
       });
     }
 
+    // `cantidad` sale en unidades de stock (cantidad × factor congelado), que es
+    // lo que se mueve en origen y destino.
     const { rows: items } = await client.query(
-      `SELECT articulo_id, cantidad FROM traspaso_items WHERE traspaso_id = $1`,
+      `SELECT articulo_id, (cantidad * factor)::numeric AS cantidad FROM traspaso_items WHERE traspaso_id = $1`,
       [id]
     );
 

@@ -5,6 +5,7 @@ import PrintTrigger from './PrintTrigger';
 
 import { serverFetch } from '@/lib/serverFetch';
 import { requireAuth } from '@/lib/requireAuth';
+import { formatoStock } from '@/lib/unidades';
 
 const ESTADO_STYLE: Record<string, string> = {
   pendiente:   'bg-amber-500/10 text-amber-400 border-amber-500/30',
@@ -76,7 +77,8 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
     day: '2-digit', month: 'long', year: 'numeric',
   });
 
-  const totalUnidades = items.reduce((s: number, i: any) => s + parseFloat(i.cantidad ?? 0), 0);
+  // En unidades de stock (sueltas): cada línea × su factor congelado.
+  const totalUnidades = items.reduce((s: number, i: any) => s + parseFloat(i.cantidad ?? 0) * (i.factor ?? 1), 0);
 
   const formatCantidad = (v: any) =>
     parseFloat(v ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
@@ -231,15 +233,15 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
                 <tr key={item.articulo_id} className="hover:bg-kp-surface2 transition-colors">
                   <td className="px-4 py-3 font-medium text-kp-white">{item.articulo_nombre}</td>
                   <td className="px-4 py-3 text-xs text-kp-gray font-mono">{item.articulo_codigo}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-kp-white">{formatCantidad(item.cantidad)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-kp-white">{formatoStock(parseFloat(item.cantidad) * (item.factor ?? 1), item.unidades_por_bulto)}</td>
                   {esAdmin && (
                     <td className={`px-4 py-3 text-right tabular-nums text-sm ${
-                      parseFloat(item.stock_origen) < parseFloat(item.cantidad)
+                      parseFloat(item.stock_origen) < parseFloat(item.cantidad) * (item.factor ?? 1)
                         ? 'text-kp-red font-semibold'
                         : 'text-kp-gray-lt'
                     }`}>
-                      {parseFloat(item.stock_origen ?? 0).toFixed(0)}
-                      {parseFloat(item.stock_origen) < parseFloat(item.cantidad) && (
+                      {formatoStock(item.stock_origen ?? 0, item.unidades_por_bulto)}
+                      {parseFloat(item.stock_origen) < parseFloat(item.cantidad) * (item.factor ?? 1) && (
                         <span className="ml-1 text-xs text-kp-red/70">(insuficiente)</span>
                       )}
                     </td>
@@ -360,7 +362,7 @@ export default async function DetalleTraspasoPage({ params }: { params: { id: st
                   <tr key={item.articulo_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-3 py-2 border-b border-gray-100 font-medium">{item.articulo_nombre}</td>
                     <td className="px-3 py-2 border-b border-gray-100 font-mono text-xs text-gray-500">{item.articulo_codigo}</td>
-                    <td className="px-3 py-2 border-b border-gray-100 text-right tabular-nums font-semibold">{formatCantidad(item.cantidad)}</td>
+                    <td className="px-3 py-2 border-b border-gray-100 text-right tabular-nums font-semibold">{formatoStock(parseFloat(item.cantidad) * (item.factor ?? 1), item.unidades_por_bulto)}</td>
                   </tr>
                 ))}
                 {items.length === 0 && (

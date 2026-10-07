@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol } = require('../middleware/auth');
+const { resolverUnidades, factoresGuardados, cantidadStock } = require('../services/unidades');
 
 const router = express.Router();
 
@@ -154,6 +155,15 @@ router.post('/', async (req, res, next) => {
 
     await client.query('BEGIN');
 
+    // Unidad de cada ítem (bulto o suelto) y su factor, congelados en el JSONB:
+    // una devolución de 20 sueltas devuelve 20, no 20 bultos.
+    const ru = await resolverUnidades(client, items, { esDevolucion: true });
+    if (ru.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: ru.error });
+    }
+    const itemsU = ru.items;
+
     // Para efectivo: necesitamos la caja abierta de la sucursal
     let cajaId = null;
     if (formaDev === 'efectivo' && totalNum > 0) {
@@ -191,7 +201,7 @@ router.post('/', async (req, res, next) => {
         sucursal_id || null,
         numero_referencia || null,
         motivo.trim(),
-        items.length ? JSON.stringify(items) : null,
+        itemsU.length ? JSON.stringify(itemsU) : null,
         parseFloat(subtotal) || 0,
         totalNum,
         formaDev,
@@ -202,7 +212,7 @@ router.post('/', async (req, res, next) => {
     const devId = rows[0].id;
 
     // ── 1. Restaurar stock ────────────────────────────────────────────────────
-    const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
+    const itemsConArticulo = itemsU.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
     if (itemsConArticulo.length > 0 && sucursal_id) {
       for (const item of itemsConArticulo) {
         await client.query(
@@ -212,7 +222,7 @@ router.post('/', async (req, res, next) => {
            DO UPDATE SET
              cantidad = GREATEST(0, stock.cantidad + $3::numeric),
              ultima_actualizacion = NOW()`,
-          [item.articulo_id, sucursal_id, parseFloat(item.cantidad)]
+          [item.articulo_id, sucursal_id, cantidadStock(item.cantidad, item.factor)]
         );
       }
     }
@@ -274,7 +284,7 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
     }
     const dev = rows[0];
     const totalNum = parseFloat(dev.total) || 0;
-    const items = dev.items || [];
+    const items = await factoresGuardados(client, dev.items || []);
 
     // ── 1. Revertir stock (quitar lo que se había devuelto) ───────────────────
     const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
@@ -287,7 +297,7 @@ router.patch('/:id/anular', requireRol('administrador'), async (req, res, next) 
            DO UPDATE SET
              cantidad = GREATEST(0, stock.cantidad - $3::numeric),
              ultima_actualizacion = NOW()`,
-          [item.articulo_id, dev.sucursal_id, parseFloat(item.cantidad)]
+          [item.articulo_id, dev.sucursal_id, cantidadStock(item.cantidad, item.factor)]
         );
       }
     }

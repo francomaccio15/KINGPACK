@@ -47,6 +47,8 @@ export type NcItem = {
   precio_unitario: number;
   subtotal: number;
   articulo_id?: string; // presente si fue seleccionado del buscador (permite restaurar stock)
+  unidad_venta?: 'bulto' | 'unidad'; // unidad de la venta original: 20 sueltas devuelven 20, no 20 bultos
+  factor?: number;      // lo congela el backend al emitir
 };
 
 type TipoComprobante = { id: string; codigo_afip: number; letra: string; descripcion: string };

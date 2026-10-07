@@ -16,6 +16,7 @@ import Modal from '@/components/ui/Modal';
 import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
 import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 import { btnPrimary, btnSecondary, cn, selectCls } from '@/lib/ui';
+import { type UnidadVenta, formatoStock, unidadesPorBulto, vendePorUnidad, factorLinea } from '@/lib/unidades';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,9 @@ interface ArticuloResult {
   precio_lista: number; // resolved by backend when lista_id is passed
   stock_total: number;
   stock_bajo: boolean;
+  vende_por_unidad?: boolean;
+  unidades_por_bulto?: number;
+  precio_unidad?: number | null;
 }
 
 interface ClienteResult {
@@ -73,7 +77,11 @@ const chequePayload = (c: Cheque) => ({
 const chequeCargado = (c: Cheque) => !!(c.banco || c.numero_cheque || c.importe);
 
 interface CartItem {
+  key: string;                 // articulo_id|unidad: el mismo artículo puede ir por bulto y suelto
   articulo_id: string;
+  unidad_venta: UnidadVenta;
+  factor: number;              // unidades de stock por cada una de esta línea
+  upb: number;                 // unidades por bulto del artículo (para mostrar el stock)
   nombre: string;
   codigo: string;
   cantidad: number;
@@ -439,9 +447,10 @@ export default function NuevaVenta({
   }, [listaId, selectedClient?.id]);
 
   // ─── Add article to cart ───────────────────────────────────────────────────
-  const addToCart = useCallback((art: ArticuloResult) => {
+  const addToCart = useCallback((art: ArticuloResult, unidad: UnidadVenta = 'bulto') => {
+    const key = `${art.id}|${unidad}`;
     setCart(prev => {
-      const existing = prev.findIndex(i => i.articulo_id === art.id);
+      const existing = prev.findIndex(i => i.key === key);
       if (existing !== -1) {
         return prev.map((item, idx) =>
           idx === existing
@@ -453,13 +462,20 @@ export default function NuevaVenta({
       // madre con el descuento de la lista (todas las listas son % sobre el madre),
       // y sobre eso el descuento adicional del cliente. Así, si después se cambia la
       // lista o el cliente, recalcItem re-precia el ítem con el descuento correcto.
-      const madre        = art.precio_madre ?? art.precio_lista ?? 0;
+      // Suelta: precio por unidad propio, con el mismo descuento de lista/cliente.
+      const madre        = unidad === 'unidad'
+        ? Number(art.precio_unidad) || 0
+        : art.precio_madre ?? art.precio_lista ?? 0;
       const precio_lista = calcFinalPrice(madre, descuentoLista);
       const descuento    = descuentoCliente;
       const finalPrice   = calcFinalPrice(precio_lista, descuento);
       // El último agregado va arriba de todo, así queda a la vista sin scrollear.
       return [
         {
+          key,
+          unidad_venta:          unidad,
+          factor:                factorLinea(art, unidad),
+          upb:                   unidadesPorBulto(art),
           articulo_id:           art.id,
           nombre:                art.nombre,
           codigo:                art.codigo,
@@ -488,7 +504,7 @@ export default function NuevaVenta({
     }
     setCart(prev =>
       prev.map(item =>
-        item.articulo_id === articuloId
+        item.key === articuloId
           ? recalcItem({ ...item, descuento_manual: manual }, descuentoLista, descuentoCliente)
           : item
       )
@@ -499,7 +515,7 @@ export default function NuevaVenta({
   const updateQty = useCallback((articuloId: string, delta: number) => {
     setCart(prev =>
       prev.map(item =>
-        item.articulo_id === articuloId
+        item.key === articuloId
           ? { ...item, cantidad: Math.max(1, item.cantidad + delta) }
           : item
       )
@@ -512,14 +528,14 @@ export default function NuevaVenta({
       // Permite borrar el campo temporalmente (lo guardamos como string vacío via trick)
       setCart(prev =>
         prev.map(item =>
-          item.articulo_id === articuloId ? { ...item, cantidad: 0 } : item
+          item.key === articuloId ? { ...item, cantidad: 0 } : item
         )
       );
       return;
     }
     setCart(prev =>
       prev.map(item =>
-        item.articulo_id === articuloId
+        item.key === articuloId
           ? { ...item, cantidad: Math.max(1, val) }
           : item
       )
@@ -529,7 +545,7 @@ export default function NuevaVenta({
   const commitQty = useCallback((articuloId: string) => {
     setCart(prev =>
       prev.map(item =>
-        item.articulo_id === articuloId
+        item.key === articuloId
           ? { ...item, cantidad: Math.max(1, item.cantidad || 1) }
           : item
       )
@@ -538,7 +554,7 @@ export default function NuevaVenta({
 
   // ─── Remove from cart ──────────────────────────────────────────────────────
   const removeFromCart = useCallback((articuloId: string) => {
-    setCart(prev => prev.filter(i => i.articulo_id !== articuloId));
+    setCart(prev => prev.filter(i => i.key !== articuloId));
   }, []);
 
   // ─── Totals ────────────────────────────────────────────────────────────────
@@ -672,6 +688,7 @@ export default function NuevaVenta({
       // extra NO se reparte acá: viaja aparte y el backend lo resta del total.
       items: cart.map(i => ({
         articulo_id:           i.articulo_id,
+        unidad_venta:          i.unidad_venta,
         cantidad:              i.cantidad,
         precio_lista:          i.precio_lista,
         descuento_pct:         i.descuento_pct,
@@ -877,8 +894,8 @@ export default function NuevaVenta({
                       const stockBadge = sinStock
                         ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/20',  label: 'Sin stock' }
                         : art.stock_bajo
-                          ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` }
-                          : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` };
+                          ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${formatoStock(art.stock_total, art.unidades_por_bulto)}` }
+                          : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${formatoStock(art.stock_total, art.unidades_por_bulto)}` };
                       return (
                         <div
                           key={art.id}
@@ -904,6 +921,28 @@ export default function NuevaVenta({
                               </p>
                             )}
                           </div>
+                          {vendePorUnidad(art) ? (
+                            // Se vende por bulto o suelto: un botón para cada uno.
+                            <div className="flex flex-col gap-1 shrink-0">
+                              <button
+                                onClick={() => addToCart(art, 'bulto')}
+                                aria-label={`Agregar ${art.nombre} por bulto`}
+                                className="text-xs font-semibold rounded-lg min-h-[2.25rem] md:min-h-0 px-2.5 md:py-1
+                                  border border-kp-red text-kp-red hover:bg-kp-red hover:text-white transition-colors"
+                              >
+                                + Bulto ×{unidadesPorBulto(art)}
+                              </button>
+                              <button
+                                onClick={() => addToCart(art, 'unidad')}
+                                aria-label={`Agregar ${art.nombre} por unidad`}
+                                title={`Precio por unidad: ${ars.format(calcFinalPrice(Number(art.precio_unidad) || 0, descuentoLista))}`}
+                                className="text-xs font-semibold rounded-lg min-h-[2.25rem] md:min-h-0 px-2.5 md:py-1
+                                  border border-kp-border text-kp-white hover:border-kp-red hover:text-kp-red transition-colors"
+                              >
+                                + Unidad {ars.format(calcFinalPrice(Number(art.precio_unidad) || 0, descuentoLista))}
+                              </button>
+                            </div>
+                          ) : (
                           <button
                             onClick={() => addToCart(art)}
                             aria-label={`Agregar ${art.nombre}`}
@@ -916,6 +955,7 @@ export default function NuevaVenta({
                             <span className="md:hidden text-lg leading-none">+</span>
                             <span className="hidden md:inline">+ Agregar</span>
                           </button>
+                          )}
                         </div>
                       );
                     })}
@@ -967,7 +1007,7 @@ export default function NuevaVenta({
                         const subtotalLine = item.precio_unitario_final * item.cantidad;
                         return (
                           <div
-                            key={item.articulo_id}
+                            key={item.key}
                             className={`relative flex flex-wrap md:flex-nowrap items-center gap-2 py-3 md:py-2.5 ${
                               idx < cart.length - 1 ? 'border-b border-kp-border' : ''
                             }`}
@@ -979,6 +1019,15 @@ export default function NuevaVenta({
                               </p>
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                                 <span className="text-2xs md:text-[10px] text-kp-gray">{item.codigo}</span>
+                                {item.upb > 1 && (
+                                  <span className={`text-2xs md:text-[10px] font-semibold rounded border px-1 py-0.5 leading-none ${
+                                    item.unidad_venta === 'unidad'
+                                      ? 'text-sky-400 bg-sky-500/10 border-sky-500/20'
+                                      : 'text-kp-gray bg-kp-surface2 border-kp-border'
+                                  }`}>
+                                    {item.unidad_venta === 'unidad' ? 'Por unidad' : `Bulto ×${item.upb}`}
+                                  </span>
+                                )}
                                 {hasDiscount && (
                                   <>
                                     <span className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
@@ -1004,7 +1053,7 @@ export default function NuevaVenta({
                             {/* Qty controls */}
                             <div className="order-3 flex items-center gap-0.5 shrink-0">
                               <button
-                                onClick={() => updateQty(item.articulo_id, -1)}
+                                onClick={() => updateQty(item.key, -1)}
                                 className="w-10 h-10 md:w-7 md:h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
                                   hover:bg-kp-surface2 flex items-center justify-center text-base md:text-sm leading-none
                                   transition-colors"
@@ -1015,20 +1064,20 @@ export default function NuevaVenta({
                               <NumericInput
                                 decimals={0}
                                 value={item.cantidad === 0 ? '' : item.cantidad}
-                                onChange={e => setQty(item.articulo_id, e.target.value)}
-                                onBlur={() => commitQty(item.articulo_id)}
+                                onChange={e => setQty(item.key, e.target.value)}
+                                onBlur={() => commitQty(item.key)}
                                 className={[
                                   'w-14 text-center text-base md:text-sm font-semibold tabular-nums',
                                   'bg-kp-surface2 border-y border-kp-border outline-none h-10 md:h-auto md:py-1',
                                   'focus:border-kp-red focus:bg-kp-surface transition-colors',
-                                  item.stock_disponible > 0 && item.cantidad > item.stock_disponible
+                                  item.stock_disponible > 0 && item.cantidad * item.factor > item.stock_disponible
                                     ? 'text-amber-400'
                                     : 'text-kp-white',
                                 ].join(' ')}
                                 aria-label="Cantidad"
                               />
                               <button
-                                onClick={() => updateQty(item.articulo_id, 1)}
+                                onClick={() => updateQty(item.key, 1)}
                                 className="w-10 h-10 md:w-7 md:h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
                                   hover:bg-kp-surface2 flex items-center justify-center text-base md:text-sm leading-none
                                   transition-colors"
@@ -1038,9 +1087,9 @@ export default function NuevaVenta({
                               </button>
                             </div>
                             {/* Aviso stock insuficiente inline */}
-                            {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
+                            {item.stock_disponible > 0 && item.cantidad * item.factor > item.stock_disponible && (
                               <span className="text-2xs md:text-[9px] text-amber-400 font-semibold absolute bottom-0.5 md:-bottom-3.5 right-10 whitespace-nowrap">
-                                Stock: {item.stock_disponible}
+                                Stock: {formatoStock(item.stock_disponible, item.upb)}
                               </span>
                             )}
 
@@ -1050,7 +1099,7 @@ export default function NuevaVenta({
                                 decimals={1}
                                 placeholder={descuentoBase > 0 ? String(descuentoBase) : '0'}
                                 value={item.descuento_manual != null ? item.descuento_manual : ''}
-                                onChange={e => setDescuentoItem(item.articulo_id, e.target.value)}
+                                onChange={e => setDescuentoItem(item.key, e.target.value)}
                                 className={[
                                   'w-12 text-center text-sm md:text-xs tabular-nums h-10 md:h-auto md:py-1 outline-none rounded-l',
                                   'bg-kp-surface2 border border-kp-border focus:border-kp-red focus:bg-kp-surface transition-colors',
@@ -1072,7 +1121,7 @@ export default function NuevaVenta({
 
                             {/* Remove button */}
                             <button
-                              onClick={() => removeFromCart(item.articulo_id)}
+                              onClick={() => removeFromCart(item.key)}
                               className="order-2 md:order-none w-10 h-10 md:w-7 md:h-7 flex items-center justify-center rounded text-kp-gray
                                 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
                               aria-label={`Eliminar ${item.nombre}`}

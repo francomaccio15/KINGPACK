@@ -7,8 +7,37 @@ const {
   registrarMovimientoBancario,
   revertirMovimientosBancarios,
 } = require('../services/movimientos-bancarios');
+const {
+  normalizarUnidad, puedeVenderPorUnidad, factorDe, cantidadStock, formatoStock, unidadesPorBulto,
+} = require('../services/unidades');
 
 const router = express.Router();
+
+// Precios de una línea según su unidad. Bulto: madre y lista del artículo.
+// Unidad: el precio por unidad propio (no bulto ÷ factor) con el mismo
+// descuento que la lista le da al bulto (decisión del 06/10/2026).
+function preciosDeLinea(art, unidad) {
+  const listaBulto = parseFloat(art.precio_lista) || 0;
+  const madreBulto = parseFloat(art.precio_madre) || listaBulto;
+  if (normalizarUnidad(unidad) !== 'unidad') {
+    return { precio_lista: listaBulto, precio_madre: madreBulto };
+  }
+  const madreUnidad = parseFloat(art.precio_unidad) || 0;
+  const ratio = madreBulto > 0 ? listaBulto / madreBulto : 1;
+  return {
+    precio_lista: parseFloat((madreUnidad * ratio).toFixed(3)),
+    precio_madre: madreUnidad,
+  };
+}
+
+// 409 de stock insuficiente, con las cantidades en «bultos + u.».
+function errorStock(res, art, articulo_id, disponible, solicitado) {
+  const upb = unidadesPorBulto(art);
+  return res.status(409).json({
+    error: `Stock insuficiente para "${art?.nombre ?? articulo_id}": hay ${formatoStock(disponible, upb)}, se pidió ${formatoStock(solicitado, upb)}`,
+    detalle: { articulo_id, nombre: art?.nombre, disponible, solicitado },
+  });
+}
 
 // Recalcula la columna `saldo` (saldo acumulado por renglón) de toda la cuenta
 // corriente de un cliente en orden cronológico. Se usa después de editar una
@@ -246,7 +275,7 @@ router.post('/', async (req, res, next) => {
     // Fetchear precios reales desde la DB — no confiar en el cliente
     const precioQuery = lista_precio_id
       ? `SELECT a.id, a.nombre, a.alicuota_iva_id, ai.porcentaje AS iva_pct,
-                a.precio_madre,
+                a.precio_madre, a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad,
                 COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista
          FROM articulos a
          LEFT JOIN lista_precio_items lpi
@@ -254,7 +283,7 @@ router.post('/', async (req, res, next) => {
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
          WHERE a.id = ANY($1) AND a.deleted_at IS NULL`
       : `SELECT a.id, a.nombre, a.precio_madre, a.precio_madre AS precio_lista, a.alicuota_iva_id,
-                ai.porcentaje AS iva_pct
+                ai.porcentaje AS iva_pct, a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad
          FROM articulos a
          LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
          WHERE a.id = ANY($1) AND a.deleted_at IS NULL`;
@@ -262,11 +291,30 @@ router.post('/', async (req, res, next) => {
     const precioParams = lista_precio_id ? [articuloIds, lista_precio_id] : [articuloIds];
     const { rows: artRows } = await client.query(precioQuery, precioParams);
 
-    if (artRows.length !== articuloIds.length) {
+    // Un mismo artículo puede venir dos veces (una por bulto y otra suelta).
+    if (artRows.length !== new Set(articuloIds).size) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Uno o más artículos no existen o están inactivos' });
     }
     const artMap = Object.fromEntries(artRows.map(a => [a.id, a]));
+
+    // Unidad de cada línea: 'unidad' solo en artículos marcados; la misma
+    // unidad del mismo artículo no se repite (es la PK de venta_items).
+    const lineasVistas = new Set();
+    for (const item of items) {
+      item.unidad_venta = normalizarUnidad(item.unidad_venta);
+      const nombre = artMap[item.articulo_id].nombre;
+      if (item.unidad_venta === 'unidad' && !puedeVenderPorUnidad(artMap[item.articulo_id])) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `"${nombre}" no se vende por unidad` });
+      }
+      const clave = `${item.articulo_id}|${item.unidad_venta}`;
+      if (lineasVistas.has(clave)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `"${nombre}" está repetido en la venta` });
+      }
+      lineasVistas.add(clave);
+    }
 
     // Recalcular precios y totales con datos de la DB
     let subtotal = 0;
@@ -274,8 +322,8 @@ router.post('/', async (req, res, next) => {
     let subtotal_bruto = 0; // Σ precio madre · cant — base del descuento extra en %
     const itemsCalculados = items.map(item => {
       const art        = artMap[item.articulo_id];
-      const precio_lista  = parseFloat(art.precio_lista) || 0;
-      const precio_madre  = parseFloat(art.precio_madre) || precio_lista;
+      const { precio_lista, precio_madre } = preciosDeLinea(art, item.unidad_venta);
+      const factor        = factorDe(art, item.unidad_venta);
       const descuento_pct = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
       const precio_final  = parseFloat((precio_lista * (1 - descuento_pct / 100)).toFixed(3));
       const cantidad      = Math.max(0, parseFloat(item.cantidad) || 1);
@@ -290,7 +338,7 @@ router.post('/', async (req, res, next) => {
       descuento_total += (precio_lista - precio_final) * cantidad;
       subtotal_bruto  += precio_madre * cantidad;
 
-      return { ...item, precio_lista, precio_madre, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad };
+      return { ...item, precio_lista, precio_madre, descuento_pct, precio_unitario_final: precio_final, iva_monto, cantidad, factor };
     });
     const subtotalNeto = subtotal - descuento_total; // Σ precio final · cant
 
@@ -346,20 +394,12 @@ router.post('/', async (req, res, next) => {
           [item.articulo_id, sucursal_id]
         );
         const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
-        if (stockActual < item.cantidad) {
+        const mueve = cantidadStock(item.cantidad, item.factor);
+        if (stockActual < mueve) {
           await client.query('ROLLBACK');
-          const art = artMap[item.articulo_id];
-          return res.status(409).json({
-            error: `Stock insuficiente para "${art.nombre}"`,
-            detalle: {
-              articulo_id: item.articulo_id,
-              nombre: art.nombre,
-              disponible: stockActual,
-              solicitado: item.cantidad,
-            },
-          });
+          return errorStock(res, artMap[item.articulo_id], item.articulo_id, stockActual, mueve);
         }
-        const nuevaCantidad = parseFloat((stockActual - item.cantidad).toFixed(3));
+        const nuevaCantidad = parseFloat((stockActual - mueve).toFixed(3));
         await client.query(
           `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
            VALUES ($1, $2, $3, NOW())
@@ -374,8 +414,9 @@ router.post('/', async (req, res, next) => {
     for (const item of itemsCalculados) {
       await client.query(`
         INSERT INTO venta_items
-          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto,
+           unidad_venta, factor)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       `, [
         venta.id,
         item.articulo_id,
@@ -385,6 +426,8 @@ router.post('/', async (req, res, next) => {
         item.descuento_pct,
         item.precio_unitario_final,
         item.iva_monto,
+        item.unidad_venta,
+        item.factor,
       ]);
     }
 
@@ -579,14 +622,15 @@ router.get('/:id', async (req, res, next) => {
         SELECT
           vi.articulo_id, vi.cantidad, vi.precio_lista,
           vi.descuento_pct, vi.precio_unitario_final, vi.iva_monto,
-          a.nombre, a.codigo,
+          vi.unidad_venta, vi.factor,
+          a.nombre, a.codigo, a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad,
           COALESCE(vi.precio_madre, a.precio_madre) AS precio_madre,
           COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
         WHERE vi.venta_id = $1
-        ORDER BY a.nombre
+        ORDER BY a.nombre, vi.unidad_venta
       `, [id]),
       pool.query(`
         SELECT
@@ -671,9 +715,21 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
     }
     const cajaId = cajaRows[0].id;
 
+    // La preventa no movió stock: el factor de las líneas por bulto se toma del
+    // artículo de HOY (pudo haberse convertido el stock desde que se armó).
+    await client.query(
+      `UPDATE venta_items vi
+          SET factor = CASE WHEN vi.unidad_venta = 'unidad' THEN 1 ELSE a.unidades_por_bulto END
+         FROM articulos a
+        WHERE a.id = vi.articulo_id AND vi.venta_id = $1`,
+      [id]
+    );
+
     // Obtener items y descontar stock
     const { rows: itemRows } = await client.query(
-      `SELECT articulo_id, cantidad FROM venta_items WHERE venta_id = $1`,
+      `SELECT vi.articulo_id, vi.cantidad, vi.factor, a.nombre, a.unidades_por_bulto
+         FROM venta_items vi JOIN articulos a ON a.id = vi.articulo_id
+        WHERE vi.venta_id = $1`,
       [id]
     );
     for (const item of itemRows) {
@@ -682,14 +738,10 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
         [item.articulo_id, sucursal_id]
       );
       const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
-      const cantidad = parseFloat(item.cantidad);
+      const cantidad = cantidadStock(item.cantidad, item.factor);
       if (stockActual < cantidad) {
-        const { rows: artRows } = await client.query(`SELECT nombre FROM articulos WHERE id = $1`, [item.articulo_id]);
         await client.query('ROLLBACK');
-        return res.status(409).json({
-          error: `Stock insuficiente para "${artRows[0]?.nombre ?? item.articulo_id}"`,
-          detalle: { articulo_id: item.articulo_id, disponible: stockActual, solicitado: cantidad },
-        });
+        return errorStock(res, item, item.articulo_id, stockActual, cantidad);
       }
       await client.query(
         `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
@@ -844,16 +896,17 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     // Las preventas nunca descuentan stock, así que anularlas no debe devolver nada.
     if (estado === 'anulada' && ['confirmada', 'facturada'].includes(venta.estado)) {
       const { rows: itemRows } = await client.query(
-        `SELECT articulo_id, cantidad FROM venta_items WHERE venta_id = $1`,
+        `SELECT articulo_id, cantidad, factor FROM venta_items WHERE venta_id = $1`,
         [id]
       );
       for (const item of itemRows) {
+        // Devuelve en la unidad de la venta: 20 sueltas son 20, no 20 bultos.
         await client.query(
           `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
            VALUES ($1, $2, $3::numeric, NOW())
            ON CONFLICT (articulo_id, sucursal_id)
            DO UPDATE SET cantidad = stock.cantidad + $3::numeric, ultima_actualizacion = NOW()`,
-          [item.articulo_id, venta.sucursal_id, parseFloat(item.cantidad)]
+          [item.articulo_id, venta.sucursal_id, cantidadStock(item.cantidad, item.factor)]
         );
       }
 
@@ -1133,13 +1186,14 @@ router.get('/:id/pdf', async (req, res, next) => {
       pool.query(`
         SELECT vi.cantidad, vi.precio_lista, vi.descuento_pct,
                vi.precio_unitario_final, vi.iva_monto,
-               a.nombre, a.codigo,
+               CASE WHEN vi.unidad_venta = 'unidad' THEN a.nombre || ' (POR UNIDAD)' ELSE a.nombre END AS nombre,
+               a.codigo,
                COALESCE(vi.precio_madre, a.precio_madre) AS precio_madre,
                COALESCE(ai.porcentaje, 21)::float AS alicuota
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
-        WHERE vi.venta_id = $1 ORDER BY a.nombre
+        WHERE vi.venta_id = $1 ORDER BY a.nombre, vi.unidad_venta
       `, [id]),
       pool.query(`
         SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,
@@ -1472,7 +1526,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     const { rows: itemsAnteriores } = await client.query(
       `SELECT vi.articulo_id, a.nombre, a.codigo, vi.cantidad::float,
               vi.precio_lista::float, vi.descuento_pct::float,
-              vi.precio_unitario_final::float
+              vi.precio_unitario_final::float, vi.unidad_venta, vi.factor
        FROM venta_items vi
        JOIN articulos a ON a.id = vi.articulo_id
        WHERE vi.venta_id = $1`,
@@ -1486,7 +1540,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         await client.query(
           `UPDATE stock SET cantidad = cantidad + $1::numeric, ultima_actualizacion = NOW()
            WHERE articulo_id = $2 AND sucursal_id = $3`,
-          [item.cantidad, item.articulo_id, sucursal_id]
+          [cantidadStock(item.cantidad, item.factor), item.articulo_id, sucursal_id]
         );
       }
     }
@@ -1495,7 +1549,8 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     const articuloIds = items.map(i => i.articulo_id);
     const { rows: artRows } = await client.query(
       `SELECT a.id, a.nombre, a.codigo, a.precio_madre::float, a.margen_aplicado::float,
-              ai.porcentaje::float AS iva_pct
+              ai.porcentaje::float AS iva_pct,
+              a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad::float
        FROM articulos a
        LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
        WHERE a.id = ANY($1) AND a.deleted_at IS NULL`,
@@ -1503,10 +1558,30 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     );
     const artMap = Object.fromEntries(artRows.map(a => [a.id, a]));
 
+    const lineasVistas = new Set();
+    for (const item of items) {
+      const art = artMap[item.articulo_id];
+      if (!art) continue; // lo rechaza el map de abajo
+      item.unidad_venta = normalizarUnidad(item.unidad_venta);
+      if (item.unidad_venta === 'unidad' && !puedeVenderPorUnidad(art)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `"${art.nombre}" no se vende por unidad` });
+      }
+      const clave = `${item.articulo_id}|${item.unidad_venta}`;
+      if (lineasVistas.has(clave)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `"${art.nombre}" está repetido en la venta` });
+      }
+      lineasVistas.add(clave);
+    }
+
     const itemsCalculados = items.map(item => {
       const art = artMap[item.articulo_id];
       if (!art) throw new Error(`Artículo ${item.articulo_id} no encontrado`);
-      const precioLista = parseFloat(item.precio_lista) || art.precio_madre;
+      // Precio madre congelado de la línea: el del bulto o el de la unidad.
+      const madreLinea  = item.unidad_venta === 'unidad' ? art.precio_unidad : art.precio_madre;
+      const factor      = factorDe(art, item.unidad_venta);
+      const precioLista = parseFloat(item.precio_lista) || madreLinea;
       const descPct     = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
       const precioFinal = +(precioLista * (1 - descPct / 100)).toFixed(4);
       const cantidad    = parseFloat(item.cantidad) || 1;
@@ -1514,7 +1589,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       const ivaPct      = art.iva_pct || 0;
       const lineaBruta  = precioFinal * cantidad;
       const ivaMonto    = +(lineaBruta - lineaBruta / (1 + ivaPct / 100)).toFixed(4);
-      return { ...item, cantidad, precioLista, descPct, precioFinal, ivaMonto, art };
+      return { ...item, cantidad, precioLista, descPct, precioFinal, ivaMonto, art, madreLinea, factor };
     });
 
     // Eliminar items anteriores e insertar nuevos
@@ -1522,9 +1597,11 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
 
     for (const item of itemsCalculados) {
       await client.query(
-        `INSERT INTO venta_items (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [id, item.articulo_id, item.cantidad, item.precioLista, (parseFloat(item.art.precio_madre) || item.precioLista), item.descPct, item.precioFinal, item.ivaMonto]
+        `INSERT INTO venta_items (venta_id, articulo_id, cantidad, precio_lista, precio_madre, descuento_pct, precio_unitario_final, iva_monto,
+                                  unidad_venta, factor)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, item.articulo_id, item.cantidad, item.precioLista, (parseFloat(item.madreLinea) || item.precioLista), item.descPct, item.precioFinal, item.ivaMonto,
+         item.unidad_venta, item.factor]
       );
     }
 
@@ -1537,22 +1614,15 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
           [item.articulo_id, sucursal_id]
         );
         const stockActual = parseFloat(stockRows[0]?.cantidad ?? 0);
-        if (stockActual < item.cantidad) {
+        const mueve = cantidadStock(item.cantidad, item.factor);
+        if (stockActual < mueve) {
           await client.query('ROLLBACK');
-          return res.status(409).json({
-            error: `Stock insuficiente para "${item.art.nombre}"`,
-            detalle: {
-              articulo_id: item.articulo_id,
-              nombre: item.art.nombre,
-              disponible: stockActual,
-              solicitado: item.cantidad,
-            },
-          });
+          return errorStock(res, item.art, item.articulo_id, stockActual, mueve);
         }
         await client.query(
           `UPDATE stock SET cantidad = cantidad - $1::numeric, ultima_actualizacion = NOW()
            WHERE articulo_id = $2 AND sucursal_id = $3`,
-          [item.cantidad, item.articulo_id, sucursal_id]
+          [mueve, item.articulo_id, sucursal_id]
         );
       }
     }
@@ -1560,7 +1630,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     // Recalcular totales de la venta
     const subtotal       = itemsCalculados.reduce((s, i) => s + i.precioFinal * i.cantidad, 0);
     const totalDescuento = itemsCalculados.reduce((s, i) => s + (i.precioLista - i.precioFinal) * i.cantidad, 0);
-    const subtotalBruto  = itemsCalculados.reduce((s, i) => s + (parseFloat(i.art.precio_madre) || i.precioLista) * i.cantidad, 0);
+    const subtotalBruto  = itemsCalculados.reduce((s, i) => s + (parseFloat(i.madreLinea) || i.precioLista) * i.cantidad, 0);
 
     // ── Descuento extra a nivel venta (no se reparte en los ítems) ──────────────
     const descExtraPct = Math.max(0, Math.min(100, parseFloat(descuento_extra_pct) || 0));

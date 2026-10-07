@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../config/db');
 const arca = require('../services/arca');
 const { requireRol } = require('../middleware/auth');
+const { resolverUnidades, factoresGuardados, cantidadStock } = require('../services/unidades');
 
 const router = express.Router();
 
@@ -232,6 +233,15 @@ router.post('/', async (req, res, next) => {
       sucursalNombre = sucRows[0]?.nombre || null;
     }
 
+    // Unidad de cada ítem (bulto o suelto) y su factor, congelados en el JSONB:
+    // una NC de 20 sueltas devuelve 20 al stock, no 20 bultos. Va ANTES de ARCA.
+    const ru = await resolverUnidades(client, items, { esDevolucion: true });
+    if (ru.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: ru.error });
+    }
+    const itemsU = ru.items;
+
     // Discrimina el IVA por ítem usando la alícuota real del artículo (igual que
     // /api/ventas/:id/facturar); los ítems sin articulo_id asumen 21%.
     const articuloIds = items.filter(it => it.articulo_id).map(it => it.articulo_id);
@@ -300,7 +310,7 @@ router.post('/', async (req, res, next) => {
         resultadoArca.nroComprobante,
         numero_referencia || null,
         motivo.trim(),
-        items.length ? JSON.stringify(items) : null,
+        itemsU.length ? JSON.stringify(itemsU) : null,
         parseFloat(subtotal) || 0,
         parseFloat(iva_pct) || 21,
         parseFloat(iva_monto) || 0,
@@ -315,7 +325,7 @@ router.post('/', async (req, res, next) => {
     const ncId = rows[0].id;
 
     // ── 1. Restaurar stock para ítems con articulo_id ─────────────────────────
-    const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
+    const itemsConArticulo = itemsU.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
     if (itemsConArticulo.length > 0 && sucursal_id) {
       for (const item of itemsConArticulo) {
         await client.query(
@@ -325,7 +335,7 @@ router.post('/', async (req, res, next) => {
            DO UPDATE SET
              cantidad = GREATEST(0, stock.cantidad + $3::numeric),
              ultima_actualizacion = NOW()`,
-          [item.articulo_id, sucursal_id, parseFloat(item.cantidad)]
+          [item.articulo_id, sucursal_id, cantidadStock(item.cantidad, item.factor)]
         );
       }
     }
@@ -398,7 +408,7 @@ router.patch('/:id/anular', requireRol('administrador', 'cajero'), async (req, r
     }
     const nc = rows[0];
     const totalNum = parseFloat(nc.total) || 0;
-    const items = nc.items || [];
+    const items = await factoresGuardados(client, nc.items || []);
 
     // ── 1. Revertir stock (quitar lo que se había devuelto) ───────────────────
     const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
@@ -411,7 +421,7 @@ router.patch('/:id/anular', requireRol('administrador', 'cajero'), async (req, r
            DO UPDATE SET
              cantidad = GREATEST(0, stock.cantidad - $3::numeric),
              ultima_actualizacion = NOW()`,
-          [item.articulo_id, nc.sucursal_id, parseFloat(item.cantidad)]
+          [item.articulo_id, nc.sucursal_id, cantidadStock(item.cantidad, item.factor)]
         );
       }
     }

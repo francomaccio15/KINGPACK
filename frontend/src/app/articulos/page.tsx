@@ -3,6 +3,7 @@ import Link from 'next/link';
 import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
+import ExportarFactores from './ExportarFactores';
 import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
@@ -295,6 +296,7 @@ export default async function ArticulosPage({
           {!esCajero && (
             <NuevoArticulo categorias={categorias} alicuotas={alicuotas} />
           )}
+          {esAdmin && <ExportarFactores />}
           {listaActiva && (
             <ExportarPDF lista={listaActiva} categorias={categorias} />
           )}

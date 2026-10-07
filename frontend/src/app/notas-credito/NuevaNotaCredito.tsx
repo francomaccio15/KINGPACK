@@ -134,6 +134,7 @@ type VentaItem = {
   precio_unitario_final: string | number;
   iva_monto: string | number;
   nombre: string;
+  unidad_venta?: 'bulto' | 'unidad';
 };;
 
 const MOTIVOS_PRESET = [
@@ -210,11 +211,12 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
     setFacturaId(facturacion?.id ? String(facturacion.id) : '');
 
     setItems(ventaItems.map(it => ({
-      descripcion:     it.nombre,
+      descripcion:     it.unidad_venta === 'unidad' ? `${it.nombre} (por unidad)` : it.nombre,
       cantidad:        parseFloat(String(it.cantidad)),
       precio_unitario: parseFloat(String(it.precio_unitario_final)),
       subtotal:        parseFloat(String(it.cantidad)) * parseFloat(String(it.precio_unitario_final)),
       articulo_id:     it.articulo_id,
+      unidad_venta:    it.unidad_venta,
     })));
 
     setVentaCargada({ numero: Number(venta.numero), cliente: (venta.cliente_nombre as string | null) ?? null, letra: letraFactura ?? null });
@@ -272,7 +274,8 @@ export default function NuevaNotaCredito({ clientes, sucursales, tiposNC, onCrea
   const selectArticulo = (i: number, art: ArtResult) => {
     setItems(prev => prev.map((it, idx) => {
       if (idx !== i) return it;
-      const updated = { ...it, descripcion: art.nombre, precio_unitario: art.precio_madre, articulo_id: art.id };
+      // Elegido a mano del buscador: va por bulto (precio del bulto).
+      const updated = { ...it, descripcion: art.nombre, precio_unitario: art.precio_madre, articulo_id: art.id, unidad_venta: 'bulto' as const };
       updated.subtotal = updated.cantidad * updated.precio_unitario;
       return updated;
     }));

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import EditarArticulo from './EditarArticulo';
+import { formatoStock } from '@/lib/unidades';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => { const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null; return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers as Record<string, string> || {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) } }); };
@@ -27,6 +28,10 @@ export type ArticuloRow = {
   stock_bajo: boolean;
   stock_minimo: number;
   stock_detalle: StockDetalle[] | null;
+  vende_por_unidad?: boolean;
+  unidades_por_bulto?: number;
+  precio_unidad?: string | null;
+  precio_lista_unidad?: string | null;
 };
 
 type Categoria = { id: string; nombre: string; margen_default: string };
@@ -214,9 +219,7 @@ export default function ArticulosTabla({
                       <span className="text-2xs md:text-[10px] text-kp-gray font-semibold uppercase">
                         {sd.nombre[0]}:
                       </span>
-                      {sd.cantidad % 1 === 0
-                        ? sd.cantidad.toFixed(0)
-                        : sd.cantidad.toFixed(1)}
+                      {formatoStock(sd.cantidad, a.unidades_por_bulto)}
                       {sd.stock_bajo && (
                         <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
                       )}
@@ -226,7 +229,7 @@ export default function ArticulosTabla({
               ) : stock > 0 ? (
                 <span className={`text-xs font-semibold tabular-nums
                   ${a.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
-                  {stock % 1 === 0 ? stock.toFixed(0) : stock.toFixed(1)}
+                  {formatoStock(stock, a.unidades_por_bulto)}
                   {a.stock_bajo && (
                     <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block align-middle" />
                   )}
@@ -259,6 +262,7 @@ export default function ArticulosTabla({
                     categorias={categorias}
                     alicuotas={alicuotas}
                     onSave={handleSave}
+                    esAdmin={esAdmin}
                   />
                   {esAdmin && (
                     <button

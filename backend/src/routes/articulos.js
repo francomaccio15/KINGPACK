@@ -1,8 +1,122 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol, sucursalEfectiva } = require('../middleware/auth');
+const { unidadesPorBulto, cantidadStock } = require('../services/unidades');
 
 const router = express.Router();
+
+// Columnas de venta por unidad (mig 063). `precio_lista_unidad` = precio por
+// unidad con el mismo descuento que la lista le da al bulto (igual que ventas).
+function columnasUnidad(precioListaVal) {
+  return `a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad,
+          CASE WHEN a.precio_unidad IS NULL THEN NULL
+               WHEN a.precio_madre > 0 THEN ROUND(a.precio_unidad * ${precioListaVal} / a.precio_madre, 3)
+               ELSE a.precio_unidad END AS precio_lista_unidad`;
+}
+
+// Factor sugerido a partir del nombre: «BANDEJA CARTON GRIS N1 X 100UNID.» → 100.
+// Toma el número pegado a la palabra de unidad (en «615X50UNID.» es 50, no 615)
+// y tolera erratas como «NUD». Es SOLO una sugerencia: la verifica una persona.
+function factorSugerido(nombre) {
+  const s = String(nombre || '').toUpperCase();
+  const matches = [...s.matchAll(/(\d+)\s*(UNIDADES|UNIDAD|UNID|UNI|UDS|UN|NUD|U)\b\.?/g)];
+  if (matches.length === 0) {
+    // «VASO X100» sin la palabra de unidad: se sugiere, pero a revisar.
+    const x = s.match(/X\s*(\d+)\s*\.?\s*$/);
+    const nx = x ? parseInt(x[1], 10) : 0;
+    return nx > 1 ? { factor: nx, confianza: 'revisar' } : { factor: '', confianza: 'sin_dato' };
+  }
+  const n = parseInt(matches[matches.length - 1][1], 10);
+  if (!(n > 1)) return { factor: '', confianza: 'sin_dato' };
+  return { factor: n, confianza: matches.length === 1 ? 'alta' : 'revisar' };
+}
+
+function csvCelda(v) {
+  const t = v === null || v === undefined ? '' : String(v);
+  return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
+// ─── GET /api/articulos/export/factores — planilla de factores (CSV) ─────────
+// Paso 1 del plan de venta por unidad: el depósito verifica el factor sugerido
+// y completa `factor_verificado`. Separador «;» para que Excel en español lo
+// abra en columnas. Solo admin.
+router.get('/export/factores', requireRol('administrador'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.codigo, a.nombre, c.nombre AS categoria,
+             a.unidades_por_bulto, a.vende_por_unidad, a.precio_madre, a.precio_unidad,
+             COALESCE(json_object_agg(s.nombre, st.cantidad) FILTER (WHERE s.id IS NOT NULL), '{}') AS stock
+        FROM articulos a
+        LEFT JOIN categorias c ON c.id = a.categoria_id
+        LEFT JOIN stock st ON st.articulo_id = a.id
+        LEFT JOIN sucursales s ON s.id = st.sucursal_id AND s.activo = TRUE
+       WHERE a.deleted_at IS NULL AND a.activo = TRUE
+       GROUP BY a.id, c.nombre
+       ORDER BY c.nombre, a.nombre
+    `);
+    const { rows: sucs } = await pool.query(`SELECT nombre FROM sucursales WHERE activo = TRUE ORDER BY nombre`);
+    const sucNombres = sucs.map(s => s.nombre);
+
+    const cab = ['codigo', 'nombre', 'categoria', 'factor_sugerido', 'confianza', 'factor_verificado',
+      'unidades_por_bulto_actual', 'vende_por_unidad', 'precio_bulto', 'precio_unidad',
+      ...sucNombres.map(n => `stock_${n}`)];
+    const lineas = [cab.join(';')];
+    for (const r of rows) {
+      const sug = factorSugerido(r.nombre);
+      lineas.push([
+        r.codigo, r.nombre, r.categoria, sug.factor, sug.confianza, '',
+        r.unidades_por_bulto, r.vende_por_unidad ? 'SI' : 'NO',
+        r.precio_madre, r.precio_unidad ?? '',
+        ...sucNombres.map(n => r.stock?.[n] ?? 0),
+      ].map(csvCelda).join(';'));
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="factores-articulos.csv"');
+    res.send('﻿' + lineas.join('\r\n'));
+  } catch (err) { next(err); }
+});
+
+// ─── PATCH /api/articulos/:id/venta-por-unidad — solo admin ──────────────────
+// Marca si el artículo se vende suelto y su precio por unidad (precio propio,
+// no bulto ÷ factor). Las unidades por bulto NO se tocan acá: cambiarlas sin
+// convertir el stock lo descuadra (lo hace scripts/convertir-stock-por-unidad.js).
+// Body: { vende_por_unidad: boolean, precio_unidad: number|null }
+router.patch('/:id/venta-por-unidad', requireRol('administrador'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { vende_por_unidad, precio_unidad } = req.body ?? {};
+    if (typeof vende_por_unidad !== 'boolean') {
+      return res.status(400).json({ error: 'vende_por_unidad debe ser true o false' });
+    }
+    let precio = null;
+    if (precio_unidad !== null && precio_unidad !== undefined && precio_unidad !== '') {
+      precio = parseFloat(precio_unidad);
+      if (!Number.isFinite(precio) || precio <= 0) {
+        return res.status(400).json({ error: 'El precio por unidad debe ser mayor a 0' });
+      }
+      precio = parseFloat(precio.toFixed(3));
+    }
+
+    const { rows: actual } = await pool.query(
+      `SELECT unidades_por_bulto FROM articulos WHERE id = $1 AND deleted_at IS NULL`, [id]
+    );
+    if (!actual[0]) return res.status(404).json({ error: 'Artículo no encontrado' });
+    if (vende_por_unidad && unidadesPorBulto(actual[0]) <= 1) {
+      return res.status(400).json({ error: 'El artículo todavía no tiene unidades por bulto cargadas: primero hay que convertir su stock' });
+    }
+    if (vende_por_unidad && !precio) {
+      return res.status(400).json({ error: 'Para vender por unidad hay que cargar el precio por unidad' });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE articulos SET vende_por_unidad = $1, precio_unidad = $2
+        WHERE id = $3 AND deleted_at IS NULL
+      RETURNING id, vende_por_unidad, unidades_por_bulto, precio_unidad`,
+      [vende_por_unidad, precio, id]
+    );
+    res.json({ articulo: rows[0] });
+  } catch (err) { next(err); }
+});
 
 // ─── PUT /api/articulos/:id ───────────────────────────────────────────────────
 router.put('/:id', async (req, res, next) => {
@@ -114,31 +228,39 @@ router.patch('/:id/stock-minimo', async (req, res, next) => {
 // ubicaciones (adelante + depósito). El total es la suma de ambas y es lo que
 // usa el resto del sistema. Registra el ajuste (delta del total) en
 // ajustes_stock para auditoría.
-// Body: { sucursal_id, cantidad_adelante, cantidad_deposito, motivo? }
+// Body: { sucursal_id, cantidad_adelante, cantidad_deposito, unidad_carga?, motivo? }
 //   (compat: si viene solo `cantidad`, se toma como depósito y adelante = 0)
+//   unidad_carga: 'unidad' (default, unidades de stock) | 'bulto' (se multiplica
+//   por unidades_por_bulto).
 router.put('/:id/stock', requireRol('administrador', 'supervisor'), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { sucursal_id, cantidad_adelante, cantidad_deposito, cantidad, motivo } = req.body;
+    const { sucursal_id, cantidad_adelante, cantidad_deposito, cantidad, motivo, unidad_carga } = req.body;
 
     if (!sucursal_id) return res.status(400).json({ error: 'Se requiere sucursal_id' });
 
     // Compat hacia atrás: si mandan solo `cantidad`, va todo al depósito.
     const legacy   = cantidad_adelante === undefined && cantidad_deposito === undefined;
-    const adelante = parseFloat(legacy ? 0 : cantidad_adelante);
-    const deposito = parseFloat(legacy ? cantidad : cantidad_deposito);
+    let adelante = parseFloat(legacy ? 0 : cantidad_adelante);
+    let deposito = parseFloat(legacy ? cantidad : cantidad_deposito);
 
     if (!Number.isFinite(adelante) || adelante < 0 ||
         !Number.isFinite(deposito) || deposito < 0) {
       return res.status(400).json({ error: 'Cantidad inválida' });
     }
-    const nueva = parseFloat((adelante + deposito).toFixed(3));
 
     await client.query('BEGIN');
 
-    const art = await client.query('SELECT id FROM articulos WHERE id = $1 AND deleted_at IS NULL', [id]);
+    const art = await client.query('SELECT id, unidades_por_bulto FROM articulos WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (!art.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Artículo no encontrado' }); }
+
+    if (unidad_carga === 'bulto') {
+      const upb = unidadesPorBulto(art.rows[0]);
+      adelante = cantidadStock(adelante, upb);
+      deposito = cantidadStock(deposito, upb);
+    }
+    const nueva = parseFloat((adelante + deposito).toFixed(3));
 
     const suc = await client.query('SELECT id FROM sucursales WHERE id = $1', [sucursal_id]);
     if (!suc.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Sucursal no encontrada' }); }
@@ -696,7 +818,7 @@ router.get('/:id/ventas', async (req, res, next) => {
         v.numero,
         v.fecha,
         v.estado,
-        vi.cantidad,
+        vi.cantidad, vi.unidad_venta,
         vi.precio_unitario_final,
         (vi.cantidad * vi.precio_unitario_final) AS importe,
         c.id                 AS cliente_id,
@@ -757,11 +879,11 @@ router.get('/', async (req, res, next) => {
 
     // JOIN condicional para lista de precios
     let listaJoin = '';
-    let precioListaExpr = 'a.precio_madre AS precio_lista';
+    let precioListaVal = 'a.precio_madre';
     if (lista_id) {
       params.push(lista_id);
       listaJoin = `LEFT JOIN lista_precio_items lpi ON lpi.articulo_id = a.id AND lpi.lista_id = $${idx++}`;
-      precioListaExpr = 'COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista';
+      precioListaVal = 'COALESCE(lpi.precio_efectivo, a.precio_madre)';
       joinParamCount++;
     }
 
@@ -824,7 +946,8 @@ router.get('/', async (req, res, next) => {
           ai.porcentaje  AS alicuota_porcentaje,
           c.id           AS categoria_id,
           c.nombre       AS categoria,
-          ${precioListaExpr},
+          ${precioListaVal} AS precio_lista,
+          ${columnasUnidad(precioListaVal)},
           COALESCE(st.cantidad_total, 0)::numeric  AS stock_total,
           COALESCE(st.cantidad_adelante, 0)::numeric AS stock_adelante,
           COALESCE(st.cantidad_deposito, 0)::numeric AS stock_deposito,
@@ -875,7 +998,7 @@ router.get('/ranking', async (req, res, next) => {
           a.nombre,
           a.codigo,
           COALESCE(cat.nombre, 'Sin categoría') AS categoria,
-          SUM(vi.cantidad)::float                AS total_unidades,
+          SUM(vi.cantidad * vi.factor / a.unidades_por_bulto)::float AS total_unidades,
           SUM(vi.cantidad * vi.precio_unitario_final)::float AS total_ingresos
         FROM venta_items vi
         JOIN articulos a  ON a.id = vi.articulo_id
@@ -899,7 +1022,7 @@ router.get('/ranking', async (req, res, next) => {
           a.nombre,
           a.codigo,
           COALESCE(cat.nombre, 'Sin categoría') AS categoria,
-          COALESCE(SUM(vi.cantidad), 0)::float   AS total_unidades,
+          COALESCE(SUM(vi.cantidad * vi.factor / a.unidades_por_bulto), 0)::float AS total_unidades,
           COALESCE(SUM(vi.cantidad * vi.precio_unitario_final), 0)::float AS total_ingresos
         FROM articulos a
         LEFT JOIN categorias cat ON cat.id = a.categoria_id
@@ -936,9 +1059,9 @@ router.get('/:id', async (req, res, next) => {
     const listaJoin       = lista_id
       ? `LEFT JOIN lista_precio_items lpi ON lpi.articulo_id = a.id AND lpi.lista_id = $2`
       : '';
-    const precioListaExpr = lista_id
-      ? 'COALESCE(lpi.precio_efectivo, a.precio_madre) AS precio_lista'
-      : 'a.precio_madre AS precio_lista';
+    const precioListaVal = lista_id
+      ? 'COALESCE(lpi.precio_efectivo, a.precio_madre)'
+      : 'a.precio_madre';
     const params = lista_id ? [id, lista_id] : [id];
 
     const { rows } = await pool.query(`
@@ -949,7 +1072,8 @@ router.get('/:id', async (req, res, next) => {
         ai.porcentaje  AS alicuota_porcentaje,
         c.id           AS categoria_id,
         c.nombre       AS categoria,
-        ${precioListaExpr},
+        ${precioListaVal} AS precio_lista,
+        ${columnasUnidad(precioListaVal)},
         COALESCE(st.stock_total, 0)::numeric AS stock_total,
         COALESCE(st.stock_bajo, FALSE)        AS stock_bajo,
         st.stock_detalle

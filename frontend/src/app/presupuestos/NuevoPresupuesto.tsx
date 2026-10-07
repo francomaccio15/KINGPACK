@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
+import { type UnidadVenta, formatoStock, unidadesPorBulto, vendePorUnidad, factorLinea } from '@/lib/unidades';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,10 @@ interface ArticuloResult {
   precio_lista: number;
   stock_total: number;
   stock_bajo: boolean;
+  vende_por_unidad?: boolean;
+  unidades_por_bulto?: number;
+  precio_unidad?: number | null;
+  precio_lista_unidad?: number | null; // precio por unidad con el descuento de la lista
 }
 
 interface ClienteResult {
@@ -36,7 +41,11 @@ interface ClienteResult {
 }
 
 interface CartItem {
+  key: string;                 // articulo_id|unidad: el mismo artículo puede ir por bulto y suelto
   articulo_id: string;
+  unidad_venta: UnidadVenta;
+  factor: number;
+  upb: number;
   nombre: string;
   codigo: string;
   cantidad: number;
@@ -268,9 +277,10 @@ export default function NuevoPresupuesto({
   }, [listaId, selectedClient?.id]);
 
   // ─── Cart ops ───────────────────────────────────────────────────────────────
-  const addToCart = useCallback((art: ArticuloResult) => {
+  const addToCart = useCallback((art: ArticuloResult, unidad: UnidadVenta = 'bulto') => {
+    const key = `${art.id}|${unidad}`;
     setCart(prev => {
-      const existing = prev.findIndex(i => i.articulo_id === art.id);
+      const existing = prev.findIndex(i => i.key === key);
       if (existing !== -1) {
         return prev.map((item, idx) => idx === existing ? { ...item, cantidad: item.cantidad + 1 } : item);
       }
@@ -278,18 +288,27 @@ export default function NuevoPresupuesto({
       // la lista incorporado). Sobre ese precio se aplica SOLO el descuento
       // adicional del cliente — igual que el backend. Aplicar acá el descuento
       // combinado (lista + cliente) duplicaba el descuento de la lista.
-      const precioEfectivo = art.precio_lista ?? art.precio_madre;
+      // Suelta: precio por unidad propio, con el mismo descuento de la lista.
+      const suelta         = unidad === 'unidad';
+      const madre          = suelta ? Number(art.precio_unidad) || 0 : art.precio_madre;
+      const precioEfectivo = suelta
+        ? Number(art.precio_lista_unidad ?? art.precio_unidad) || 0
+        : art.precio_lista ?? art.precio_madre;
       const descuento      = descuentoCliente;
       const finalPrice     = calcFinalPrice(precioEfectivo, descuento);
       return [
         ...prev,
         {
+          key,
+          unidad_venta:          unidad,
+          factor:                factorLinea(art, unidad),
+          upb:                   unidadesPorBulto(art),
           articulo_id:           art.id,
           nombre:                art.nombre,
           codigo:                art.codigo,
           cantidad:              1,
           precio_lista:          precioEfectivo,
-          precio_madre:          art.precio_madre,
+          precio_madre:          madre,
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
@@ -300,27 +319,27 @@ export default function NuevoPresupuesto({
 
   const updateQty = useCallback((articuloId: string, delta: number) => {
     setCart(prev => prev.map(item =>
-      item.articulo_id === articuloId ? { ...item, cantidad: Math.max(1, item.cantidad + delta) } : item
+      item.key === articuloId ? { ...item, cantidad: Math.max(1, item.cantidad + delta) } : item
     ));
   }, []);
 
   const setQty = useCallback((articuloId: string, raw: string) => {
     const val = parseInt(raw, 10);
     if (isNaN(val) || raw === '') {
-      setCart(prev => prev.map(item => item.articulo_id === articuloId ? { ...item, cantidad: 0 } : item));
+      setCart(prev => prev.map(item => item.key === articuloId ? { ...item, cantidad: 0 } : item));
       return;
     }
-    setCart(prev => prev.map(item => item.articulo_id === articuloId ? { ...item, cantidad: Math.max(1, val) } : item));
+    setCart(prev => prev.map(item => item.key === articuloId ? { ...item, cantidad: Math.max(1, val) } : item));
   }, []);
 
   const commitQty = useCallback((articuloId: string) => {
     setCart(prev => prev.map(item =>
-      item.articulo_id === articuloId ? { ...item, cantidad: Math.max(1, item.cantidad || 1) } : item
+      item.key === articuloId ? { ...item, cantidad: Math.max(1, item.cantidad || 1) } : item
     ));
   }, []);
 
   const removeFromCart = useCallback((articuloId: string) => {
-    setCart(prev => prev.filter(i => i.articulo_id !== articuloId));
+    setCart(prev => prev.filter(i => i.key !== articuloId));
   }, []);
 
   // ─── Totals ─────────────────────────────────────────────────────────────────
@@ -376,6 +395,7 @@ export default function NuevoPresupuesto({
         }
         return {
           articulo_id:           i.articulo_id,
+          unidad_venta:          i.unidad_venta,
           cantidad:              i.cantidad,
           precio_lista:          i.precio_lista,
           descuento_pct:         descPctConExtra,
@@ -467,8 +487,8 @@ export default function NuevoPresupuesto({
                   const stockBadge = sinStock
                     ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/20',  label: 'Sin stock' }
                     : art.stock_bajo
-                      ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` }
-                      : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${Number(art.stock_total).toLocaleString('es-AR')}` };
+                      ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20', label: `Stock: ${formatoStock(art.stock_total, art.unidades_por_bulto)}` }
+                      : { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', label: `Stock: ${formatoStock(art.stock_total, art.unidades_por_bulto)}` };
                   return (
                     <div
                       key={art.id}
@@ -494,6 +514,24 @@ export default function NuevoPresupuesto({
                           </p>
                         )}
                       </div>
+                      {vendePorUnidad(art) ? (
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <button
+                            onClick={() => addToCart(art, 'bulto')}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-lg
+                              border border-kp-red text-kp-red hover:bg-kp-red hover:text-white transition-colors"
+                          >
+                            + Bulto ×{unidadesPorBulto(art)}
+                          </button>
+                          <button
+                            onClick={() => addToCart(art, 'unidad')}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-lg
+                              border border-kp-border text-kp-white hover:border-kp-red hover:text-kp-red transition-colors"
+                          >
+                            + Unidad {ars.format(Number(art.precio_lista_unidad ?? art.precio_unidad) || 0)}
+                          </button>
+                        </div>
+                      ) : (
                       <button
                         onClick={() => addToCart(art)}
                         className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg
@@ -502,6 +540,7 @@ export default function NuevoPresupuesto({
                       >
                         + Agregar
                       </button>
+                      )}
                     </div>
                   );
                 })}
@@ -548,7 +587,7 @@ export default function NuevoPresupuesto({
                     const subtotalLine = item.precio_unitario_final * item.cantidad;
                     return (
                       <div
-                        key={item.articulo_id}
+                        key={item.key}
                         className={`relative flex items-center gap-2 py-2.5 ${
                           idx < cart.length - 1 ? 'border-b border-kp-border' : ''
                         }`}
@@ -559,6 +598,15 @@ export default function NuevoPresupuesto({
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-2xs md:text-[10px] text-kp-gray">{item.codigo}</span>
+                            {item.upb > 1 && (
+                              <span className={`text-2xs md:text-[10px] font-semibold rounded border px-1 py-0.5 leading-none ${
+                                item.unidad_venta === 'unidad'
+                                  ? 'text-sky-400 bg-sky-500/10 border-sky-500/20'
+                                  : 'text-kp-gray bg-kp-surface2 border-kp-border'
+                              }`}>
+                                {item.unidad_venta === 'unidad' ? 'Por unidad' : `Bulto ×${item.upb}`}
+                              </span>
+                            )}
                             {hasDiscount && (
                               <>
                                 <span className="text-2xs md:text-[10px] text-kp-gray line-through tabular-nums">
@@ -583,7 +631,7 @@ export default function NuevoPresupuesto({
 
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button
-                            onClick={() => updateQty(item.articulo_id, -1)}
+                            onClick={() => updateQty(item.key, -1)}
                             className="w-7 h-7 rounded-l border border-kp-border text-kp-gray hover:text-kp-white
                               hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
                               transition-colors"
@@ -594,20 +642,20 @@ export default function NuevoPresupuesto({
                           <NumericInput
                             decimals={0}
                             value={item.cantidad === 0 ? '' : item.cantidad}
-                            onChange={e => setQty(item.articulo_id, e.target.value)}
-                            onBlur={() => commitQty(item.articulo_id)}
+                            onChange={e => setQty(item.key, e.target.value)}
+                            onBlur={() => commitQty(item.key)}
                             className={[
                               'w-14 text-center text-sm font-semibold tabular-nums',
                               'bg-kp-surface2 border-y border-kp-border outline-none py-1',
                               'focus:border-kp-red focus:bg-kp-surface transition-colors',
-                              item.stock_disponible > 0 && item.cantidad > item.stock_disponible
+                              item.stock_disponible > 0 && item.cantidad * item.factor > item.stock_disponible
                                 ? 'text-amber-400'
                                 : 'text-kp-white',
                             ].join(' ')}
                             aria-label="Cantidad"
                           />
                           <button
-                            onClick={() => updateQty(item.articulo_id, 1)}
+                            onClick={() => updateQty(item.key, 1)}
                             className="w-7 h-7 rounded-r border border-kp-border text-kp-gray hover:text-kp-white
                               hover:bg-kp-surface2 flex items-center justify-center text-sm leading-none
                               transition-colors"
@@ -616,9 +664,9 @@ export default function NuevoPresupuesto({
                             +
                           </button>
                         </div>
-                        {item.stock_disponible > 0 && item.cantidad > item.stock_disponible && (
+                        {item.stock_disponible > 0 && item.cantidad * item.factor > item.stock_disponible && (
                           <span className="text-2xs md:text-[9px] text-amber-400 font-semibold absolute -bottom-3.5 right-10 whitespace-nowrap">
-                            Stock: {item.stock_disponible}
+                            Stock: {formatoStock(item.stock_disponible, item.upb)}
                           </span>
                         )}
 
@@ -629,7 +677,7 @@ export default function NuevoPresupuesto({
                         </div>
 
                         <button
-                          onClick={() => removeFromCart(item.articulo_id)}
+                          onClick={() => removeFromCart(item.key)}
                           className="w-7 h-7 flex items-center justify-center rounded text-kp-gray
                             hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
                           aria-label={`Eliminar ${item.nombre}`}

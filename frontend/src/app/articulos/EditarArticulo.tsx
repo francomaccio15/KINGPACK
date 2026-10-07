@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ArticuloRow } from './ArticulosTabla';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { unidadesPorBulto } from '@/lib/unidades';
 
 type Categoria = { id: string; nombre: string; margen_default: string };
 type Alicuota  = { id: string; porcentaje: string; descripcion: string };
@@ -20,6 +21,9 @@ type Articulo = {
   alicuota_porcentaje?: string;
   categoria_id: string;
   stock_minimo?: number;
+  vende_por_unidad?: boolean;
+  unidades_por_bulto?: number;
+  precio_unidad?: string | null;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -34,13 +38,21 @@ export default function EditarArticulo({
   categorias,
   alicuotas,
   onSave,
+  esAdmin = false,
 }: {
   articulo: Articulo;
   categorias: Categoria[];
   alicuotas: Alicuota[];
   onSave?: (updated: Partial<ArticuloRow> & { id: string }) => void;
+  esAdmin?: boolean;
 }) {
   const [open, setOpen]       = useState(false);
+
+  // Venta por unidad (solo admin). Las unidades por bulto NO se editan acá:
+  // cambiarlas sin convertir el stock lo descuadra (lo hace el script de conversión).
+  const upb = unidadesPorBulto(articulo);
+  const [porUnidad, setPorUnidad]       = useState(!!articulo.vende_por_unidad);
+  const [precioUnidad, setPrecioUnidad] = useState(articulo.precio_unidad != null ? String(parseFloat(articulo.precio_unidad)) : '');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
@@ -170,6 +182,24 @@ export default function EditarArticulo({
         });
       }
 
+      // Venta por unidad (admin), solo si cambió algo.
+      let unidadGuardada: { vende_por_unidad: boolean; precio_unidad: string | null } | null = null;
+      const precioUnidadNum = parseFloat(precioUnidad.replace(',', '.'));
+      const precioUnidadAntes = articulo.precio_unidad != null ? parseFloat(articulo.precio_unidad) : null;
+      const precioUnidadNuevo = Number.isFinite(precioUnidadNum) && precioUnidadNum > 0 ? precioUnidadNum : null;
+      if (esAdmin && upb > 1 && (porUnidad !== !!articulo.vende_por_unidad || precioUnidadNuevo !== precioUnidadAntes)) {
+        const r = await apiFetch(`/api/articulos/${articulo.id}/venta-por-unidad`, {
+          method: 'PATCH',
+          body: JSON.stringify({ vende_por_unidad: porUnidad, precio_unidad: precioUnidadNuevo }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error ?? 'No se pudo guardar la venta por unidad');
+        unidadGuardada = {
+          vende_por_unidad: d.articulo.vende_por_unidad,
+          precio_unidad: d.articulo.precio_unidad != null ? String(d.articulo.precio_unidad) : null,
+        };
+      }
+
       // Actualización optimista: propagar el nuevo precio_madre al padre inmediatamente.
       // NO llamamos router.refresh() aquí porque causaría que useEffect sobreescriba
       // el estado local con datos potencialmente desactualizados.
@@ -186,6 +216,7 @@ export default function EditarArticulo({
             : null,
           categoria_id:    data.articulo.categoria_id,
           activo:          data.articulo.activo,
+          ...(unidadGuardada ?? {}),
         });
       }
 
@@ -373,6 +404,46 @@ export default function EditarArticulo({
               Recibirás una alerta cuando el stock caiga por debajo de este valor.
             </p>
           </div>
+
+          {/* Venta por unidad — solo admin */}
+          {esAdmin && (
+            <fieldset className="rounded-lg border border-kp-border p-3 space-y-3">
+              <legend className="px-1 text-xs text-kp-gray uppercase tracking-widest">Venta por unidad</legend>
+              {upb > 1 ? (
+                <>
+                  <p className="text-xs text-kp-gray">
+                    Bulto de <span className="font-semibold text-kp-white">{upb} unidades</span>.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-kp-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={porUnidad}
+                      onChange={e => setPorUnidad(e.target.checked)}
+                      className="w-4 h-4 accent-kp-red"
+                    />
+                    Se vende también por unidad suelta
+                  </label>
+                  <div>
+                    <label className={labelCls}>Precio por unidad</label>
+                    <NumericInput
+                      decimals={3}
+                      value={precioUnidad}
+                      onChange={e => setPrecioUnidad(e.target.value)}
+                      placeholder="0"
+                      className={inputCls}
+                    />
+                    <p className="text-xs text-kp-gray/60 mt-1">
+                      Precio propio de la unidad (no el del bulto dividido). Las listas le aplican el mismo descuento que al bulto.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-kp-gray">
+                  Todavía no tiene unidades por bulto cargadas. Se definen al convertir su stock a unidades sueltas.
+                </p>
+              )}
+            </fieldset>
+          )}
 
           {error && (
             <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">

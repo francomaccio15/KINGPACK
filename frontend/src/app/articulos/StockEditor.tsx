@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
+import { formatoStock, unidadesPorBulto } from '@/lib/unidades';
 
 type Sucursal = { id: string; nombre: string };
 type Art = {
   id: string; codigo: string; nombre: string;
   stock_total: string; stock_adelante: string; stock_deposito: string;
+  unidades_por_bulto?: number;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -35,11 +37,18 @@ function FilaStock({
    */
   modo?: 'fila' | 'card';
 }) {
+  // Valores crudos de la base: unidades sueltas.
   const adeActual = parseFloat(art.stock_adelante) || 0;
   const depActual = parseFloat(art.stock_deposito) || 0;
 
-  const [ade, setAde]       = useState(String(adeActual));
-  const [dep, setDep]       = useState(String(depActual));
+  // Artículo con bulto: el conteo se puede cargar en bultos o en unidades.
+  // Arranca en bultos solo si no hay sueltas (si no, no se pueden escribir).
+  const upb = unidadesPorBulto(art);
+  const [enBultos, setEnBultos] = useState(upb > 1 && adeActual % upb === 0 && depActual % upb === 0);
+  const div = enBultos ? upb : 1;
+
+  const [ade, setAde]       = useState(String(adeActual / div));
+  const [dep, setDep]       = useState(String(depActual / div));
   const [saving, setSaving] = useState(false);
   const [estado, setEstado] = useState<'idle' | 'ok' | 'err'>('idle');
   const [msg, setMsg]       = useState('');
@@ -48,10 +57,38 @@ function FilaStock({
   const nDep = parseFloat(dep);
   const adeOk = Number.isFinite(nAde) && nAde >= 0;
   const depOk = Number.isFinite(nDep) && nDep >= 0;
-  const total = (adeOk ? nAde : 0) + (depOk ? nDep : 0);
+  const total = (adeOk ? nAde : 0) + (depOk ? nDep : 0);   // en la unidad de carga
+  const totalTexto = Number.isFinite(total) ? formatoStock(total * div, upb) : '—';
 
   const cambio = adeOk && depOk &&
-    (Math.abs(nAde - adeActual) > 0.0001 || Math.abs(nDep - depActual) > 0.0001);
+    (Math.abs(nAde * div - adeActual) > 0.0001 || Math.abs(nDep * div - depActual) > 0.0001);
+
+  const cambiarUnidad = (bultos: boolean) => {
+    if (bultos === enBultos) return;
+    const desde = enBultos ? upb : 1;
+    const hasta = bultos ? upb : 1;
+    const conv = (v: string) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? String(+(n * desde / hasta).toFixed(3)) : v;
+    };
+    setAde(conv(ade)); setDep(conv(dep)); setEnBultos(bultos); setEstado('idle');
+  };
+
+  const selectorUnidad = upb > 1 && (
+    <div className="inline-flex rounded-md border border-kp-border overflow-hidden text-2xs font-semibold" role="group" aria-label="Unidad de carga">
+      {([[true, `Bultos ×${upb}`], [false, 'Unidades']] as const).map(([b, label]) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => cambiarUnidad(b)}
+          aria-pressed={enBultos === b}
+          className={`px-2 py-1 transition-colors ${enBultos === b ? 'bg-kp-red text-white' : 'text-kp-gray hover:text-kp-white'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   const guardar = async () => {
     if (!cambio) return;
@@ -63,6 +100,7 @@ function FilaStock({
           sucursal_id: sucursalId,
           cantidad_adelante: nAde,
           cantidad_deposito: nDep,
+          unidad_carga:      enBultos ? 'bulto' : 'unidad',
         }),
       });
       const d = await r.json();
@@ -84,6 +122,7 @@ function FilaStock({
       <div className="rounded-xl border border-kp-border bg-kp-surface p-3">
         <p className="text-sm font-medium text-kp-white leading-tight">{art.nombre}</p>
         <p className="text-2xs text-kp-gray font-mono mt-0.5">{art.codigo}</p>
+        {selectorUnidad && <div className="mt-2">{selectorUnidad}</div>}
 
         <div className="grid grid-cols-2 gap-2 mt-3">
           <div>
@@ -112,7 +151,7 @@ function FilaStock({
           <p className="text-2xs text-kp-gray">
             Stock actual{' '}
             <span className="text-sm font-bold text-kp-white tabular-nums">
-              {Number.isFinite(total) ? total : '—'}
+              {totalTexto}
             </span>
           </p>
           <button
@@ -132,7 +171,10 @@ function FilaStock({
   return (
     <tr className="border-b border-kp-border/40 hover:bg-kp-surface2/30 transition-colors">
       <td className="px-4 py-2 font-mono text-xs text-kp-gray whitespace-nowrap">{art.codigo}</td>
-      <td className="px-4 py-2 text-kp-white">{art.nombre}</td>
+      <td className="px-4 py-2 text-kp-white">
+        {art.nombre}
+        {selectorUnidad && <div className="mt-1">{selectorUnidad}</div>}
+      </td>
       <td className="px-4 py-2">
         <div className="flex justify-end">
           <NumericInput
@@ -156,7 +198,7 @@ function FilaStock({
         </div>
       </td>
       <td className="px-4 py-2 text-center tabular-nums font-semibold text-kp-white whitespace-nowrap">
-        {Number.isFinite(total) ? total : '—'}
+        {totalTexto}
       </td>
       <td className="px-4 py-2">
         <div className="flex items-center justify-end">

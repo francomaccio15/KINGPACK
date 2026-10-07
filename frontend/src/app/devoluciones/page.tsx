@@ -37,6 +37,8 @@ export type DevItem = {
   precio_unitario: number;
   subtotal: number;
   articulo_id?: string; // presente si fue del buscador (permite restaurar stock)
+  unidad_venta?: 'bulto' | 'unidad'; // unidad de la venta original: 20 sueltas devuelven 20, no 20 bultos
+  factor?: number;      // lo congela el backend al emitir
 };
 
 type Cliente  = { id: string; razon_social: string; cuit: string | null };

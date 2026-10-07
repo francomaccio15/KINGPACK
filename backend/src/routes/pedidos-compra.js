@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/db');
+const { unidadesPorBultoDe, cantidadStock } = require('../services/unidades');
 
 const router = express.Router();
 
@@ -342,17 +343,19 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
     }
 
     for (const item of itemsToProcess) {
+      // Las compras son siempre por bulto: al stock entran bultos × factor.
+      const entra = cantidadStock(item.cantidad, await unidadesPorBultoDe(client, item.articulo_id));
       await client.query(`
         INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
         VALUES ($1, $2, $3, 0)
         ON CONFLICT (articulo_id, sucursal_id)
         DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
-      `, [item.articulo_id, item.sucursal_id, item.cantidad]);
+      `, [item.articulo_id, item.sucursal_id, entra]);
 
       await client.query(`
         INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
         VALUES ($1, $2, $3, $4, $5)
-      `, [item.articulo_id, item.sucursal_id, item.cantidad, `Recepción — pedido ${id}`, usuario_id]);
+      `, [item.articulo_id, item.sucursal_id, entra, `Recepción — pedido ${id}`, usuario_id]);
     }
 
     await client.query(`
@@ -445,18 +448,19 @@ router.patch('/:id/recibir', async (req, res, next) => {
         return res.status(400).json({ error: `Cantidad recibida (${cantRec}) supera la pendiente (${pendiente.toFixed(2)}) para artículo ${articulo_id}` });
       }
 
-      // Acreditar stock
+      // Acreditar stock (bultos recibidos × factor)
+      const entra = cantidadStock(cantRec, await unidadesPorBultoDe(client, articulo_id));
       await client.query(`
         INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
         VALUES ($1, $2, $3, 0)
         ON CONFLICT (articulo_id, sucursal_id)
         DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
-      `, [articulo_id, itemPedido.sucursal_id, cantRec]);
+      `, [articulo_id, itemPedido.sucursal_id, entra]);
 
       await client.query(`
         INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
         VALUES ($1, $2, $3, $4, $5)
-      `, [articulo_id, itemPedido.sucursal_id, cantRec, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`, usuario_id]);
+      `, [articulo_id, itemPedido.sucursal_id, entra, `Recepción${cantRec < pendiente ? ' parcial' : ''} — pedido ${id}`, usuario_id]);
 
       // Actualizar cantidad_recibida en pedido_items
       if (itemPedido.item_exists) {
@@ -600,18 +604,19 @@ router.patch('/:id/corregir-recepcion', async (req, res, next) => {
       const delta  = nueva - actual; // negativo = revertir stock cargado de más
       if (Math.abs(delta) < 0.0001) continue;
 
-      // Ajustar stock por la diferencia
+      // Ajustar stock por la diferencia (en bultos → × factor)
+      const deltaStock = cantidadStock(delta, await unidadesPorBultoDe(client, articulo_id));
       await client.query(`
         INSERT INTO stock (articulo_id, sucursal_id, cantidad, stock_minimo)
         VALUES ($1, $2, $3, 0)
         ON CONFLICT (articulo_id, sucursal_id)
         DO UPDATE SET cantidad = stock.cantidad + $3, ultima_actualizacion = NOW()
-      `, [articulo_id, ip.sucursal_id, delta]);
+      `, [articulo_id, ip.sucursal_id, deltaStock]);
 
       await client.query(`
         INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo, usuario_id)
         VALUES ($1, $2, $3, $4, $5)
-      `, [articulo_id, ip.sucursal_id, delta, `Corrección de recepción — pedido ${id} (recibido ${actual} → ${nueva})`, usuario_id]);
+      `, [articulo_id, ip.sucursal_id, deltaStock, `Corrección de recepción — pedido ${id} (recibido ${actual} → ${nueva})`, usuario_id]);
 
       // Fijar la cantidad recibida corregida en pedido_items
       if (ip.item_exists) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { formatoStock, unidadesPorBulto } from '@/lib/unidades';
 
 type StockDetalle = { nombre: string; cantidad: number; stock_bajo: boolean };
 
@@ -13,6 +14,7 @@ type ArticuloVal = {
   costo_flete: string;
   stock_total: string;
   stock_detalle: StockDetalle[] | null;
+  unidades_por_bulto?: number;
 };
 
 const ars = new Intl.NumberFormat('es-AR', {
@@ -41,17 +43,22 @@ export default function StockValorizado({
   // Orden estable de columnas de sucursal según las sucursales activas.
   const nombresSuc = sucursales.map(s => s.nombre);
 
-  const cantEnSuc = (a: ArticuloVal, nombre: string): number => {
+  // Stock crudo (unidades sueltas) de una sucursal.
+  const crudoEnSuc = (a: ArticuloVal, nombre: string): number => {
     const sd = a.stock_detalle?.find(d => d.nombre === nombre);
     return sd ? Number(sd.cantidad) : 0;
   };
+  // En bultos equivalentes: el costo es por bulto, así que el valor sale de acá.
+  const cantEnSuc = (a: ArticuloVal, nombre: string): number =>
+    crudoEnSuc(a, nombre) / unidadesPorBulto(a);
 
   // Todas las filas valorizadas (base para los totales, no depende de la búsqueda).
   const filas = useMemo(() => articulos.map(a => {
     const costoBase   = parseFloat(a.costo_base)  || 0;
     const fletePct    = parseFloat(a.costo_flete) || 0;
     const costoUnit   = costoBase * (1 + fletePct / 100);
-    const stockTotal  = parseFloat(a.stock_total) || 0;
+    // costo_base es por bulto y el stock está en sueltas: se pasa a bultos.
+    const stockTotal  = (parseFloat(a.stock_total) || 0) / unidadesPorBulto(a);
     const valor       = costoUnit * stockTotal;
     // Valor del stock discriminado por sucursal: costo unitario × cantidad en esa
     // sucursal. Permite ver el capital inmovilizado en Huaico y en Laprida por separado.
@@ -187,11 +194,11 @@ export default function StockValorizado({
                 <td className="px-3 py-2 text-right whitespace-nowrap font-medium">{ars.format(costoUnit)}</td>
                 {nombresSuc.map(n => (
                   <td key={n} className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="font-medium">{num.format(cantEnSuc(a, n))}</span>
+                    <span className="font-medium">{formatoStock(crudoEnSuc(a, n), a.unidades_por_bulto)}</span>
                     <span className="block text-2xs md:text-[11px] text-kp-red/80">{ars.format(valorPorSuc[n])}</span>
                   </td>
                 ))}
-                <td className="px-3 py-2 text-center whitespace-nowrap font-semibold">{num.format(stockTotal)}</td>
+                <td className="px-3 py-2 text-center whitespace-nowrap font-semibold">{formatoStock(parseFloat(a.stock_total) || 0, a.unidades_por_bulto)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-kp-red">{ars.format(valor)}</td>
               </tr>
             ))}

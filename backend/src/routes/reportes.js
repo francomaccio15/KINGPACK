@@ -108,7 +108,8 @@ router.get('/ventas', async (req, res, next) => {
         SELECT
           a.nombre,
           a.codigo,
-          SUM(vi.cantidad)::float AS cantidad_total,
+          -- En bultos equivalentes: las sueltas suman su fracción de bulto (mig 063).
+          SUM(vi.cantidad * vi.factor / a.unidades_por_bulto)::float AS cantidad_total,
           COALESCE(SUM(vi.precio_unitario_final * vi.cantidad), 0)::float AS monto_total,
           COUNT(DISTINCT v.id)::int AS en_ventas
         FROM venta_items vi
@@ -408,7 +409,8 @@ router.get('/estado-resultados', async (req, res, next) => {
       // NO se incluye acá: se imputa aparte como gasto operativo en el subrubro
       // "Transporte de carga", así que sumarlo al COGS lo duplicaría.
       pool.query(`
-        SELECT COALESCE(SUM(vi.cantidad * a.costo_base), 0)::float AS cogs
+        -- costo_base es por bulto: la línea se pasa a bultos equivalentes (mig 063).
+        SELECT COALESCE(SUM(vi.cantidad * vi.factor / a.unidades_por_bulto * a.costo_base), 0)::float AS cogs
         FROM venta_items vi
         JOIN ventas v    ON v.id = vi.venta_id
         JOIN articulos a ON a.id = vi.articulo_id
@@ -422,7 +424,9 @@ router.get('/estado-resultados', async (req, res, next) => {
       // Se resta del COGS: "costo de vendidos menos devueltos". Las NC guardan
       // los ítems en jsonb con articulo_id + cantidad.
       pool.query(`
-        SELECT COALESCE(SUM((it->>'cantidad')::numeric * a.costo_base), 0)::float AS cogs_dev
+        SELECT COALESCE(SUM((it->>'cantidad')::numeric
+                            * COALESCE((it->>'factor')::numeric, a.unidades_por_bulto) / a.unidades_por_bulto
+                            * a.costo_base), 0)::float AS cogs_dev
         FROM notas_credito nc
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(nc.items, '[]'::jsonb)) it
         JOIN articulos a ON a.id = (it->>'articulo_id')::uuid

@@ -183,9 +183,9 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                     const { base, descPct, tieneDesc } = desglosePrecio(item);
                     const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                     return (
-                      <tr key={item.articulo_id} className="hover:bg-kp-surface2 transition-colors">
+                      <tr key={`${item.articulo_id}|${item.unidad_venta}`} className="hover:bg-kp-surface2 transition-colors">
                         <td className="px-5 py-3">
-                          <p className="font-medium text-kp-white">{item.nombre}</p>
+                          <p className="font-medium text-kp-white">{item.nombre}{item.unidad_venta === 'unidad' && <span className="ml-1.5 text-xs font-semibold text-sky-400">por unidad</span>}</p>
                           <p className="text-xs text-kp-gray font-mono">{item.codigo}</p>
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-kp-gray-lt">
@@ -218,10 +218,10 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
                   const { base, descPct, tieneDesc } = desglosePrecio(item);
                   const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
                   return (
-                    <div key={item.articulo_id} className="px-4 py-3">
+                    <div key={`${item.articulo_id}|${item.unidad_venta}`} className="px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-kp-white">{item.nombre}</p>
+                          <p className="text-sm font-medium text-kp-white">{item.nombre}{item.unidad_venta === 'unidad' && <span className="ml-1.5 text-2xs font-semibold text-sky-400">por unidad</span>}</p>
                           <p className="text-2xs text-kp-gray font-mono">{item.codigo}</p>
                         </div>
                         <p className="text-sm font-bold text-kp-white tabular-nums shrink-0">{fmt(subtotalItem)}</p>
@@ -558,8 +558,8 @@ export default async function VentaDetallePage({ params }: { params: { id: strin
               const { base, descPct, tieneDesc } = desglosePrecio(item);
               const subtotalItem = parseFloat(item.precio_unitario_final) * parseFloat(item.cantidad);
               return (
-                <tr key={item.articulo_id} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
-                  <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}</td>
+                <tr key={`${item.articulo_id}|${item.unidad_venta}`} style={{ borderBottom: '1px solid #bbb', background: i % 2 === 0 ? 'white' : '#f4f4f4' }}>
+                  <td style={{ padding: '2px 5px', fontWeight: '600', borderRight: '1px solid #ccc' }}>{item.nombre}{item.unidad_venta === 'unidad' ? ' (POR UNIDAD)' : ''}</td>
                   <td style={{ padding: '2px 4px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRight: '1px solid #ccc' }}>{parseFloat(item.cantidad).toFixed(0)}</td>
                   {!esPresupuesto && (
                     <>

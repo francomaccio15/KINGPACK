@@ -5,15 +5,22 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
 import { useSucursalActiva } from '@/lib/sucursalActivaCliente';
+import { type UnidadVenta, unidadesPorBulto, vendePorUnidad } from '@/lib/unidades';
 
 type Sucursal = { id: string; nombre: string };
-type Articulo = { id: string; nombre: string; codigo: string };
+type Articulo = {
+  id: string; nombre: string; codigo: string;
+  vende_por_unidad?: boolean; unidades_por_bulto?: number; precio_unidad?: number | null;
+};
 
 interface LineItem {
   articulo_id: string;
   nombre: string;
   codigo: string;
   cantidad: number;
+  unidad_venta: UnidadVenta;
+  upb: number;
+  sePuedeSuelto: boolean;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -110,7 +117,10 @@ export default function NuevoTraspaso({
       if (existing) {
         return prev.map(i => i.articulo_id === art.id ? { ...i, cantidad: i.cantidad + 1 } : i);
       }
-      return [...prev, { articulo_id: art.id, nombre: art.nombre, codigo: art.codigo, cantidad: 1 }];
+      return [...prev, {
+        articulo_id: art.id, nombre: art.nombre, codigo: art.codigo, cantidad: 1,
+        unidad_venta: 'bulto', upb: unidadesPorBulto(art), sePuedeSuelto: vendePorUnidad(art),
+      }];
     });
     setArtQ('');
     setDropOpen(false);
@@ -122,11 +132,16 @@ export default function NuevoTraspaso({
     ));
   };
 
+  const updateUnidad = (idx: number, unidad: UnidadVenta) => {
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, unidad_venta: unidad } : item));
+  };
+
   const removeItem = (idx: number) => {
     setItems(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0);
+  // En unidades sueltas: un bulto cuenta por todas las que trae.
+  const totalUnidades = items.reduce((s, i) => s + i.cantidad * (i.unidad_venta === 'unidad' ? 1 : i.upb), 0);
 
   const handleSubmit = async () => {
     if (!origenId)  { setSaveError('Seleccioná una sucursal de origen'); return; }
@@ -142,7 +157,7 @@ export default function NuevoTraspaso({
           sucursal_origen_id: origenId,
           sucursal_destino_id: destinoId,
           notas: notas || null,
-          items: items.map(i => ({ articulo_id: i.articulo_id, cantidad: i.cantidad })),
+          items: items.map(i => ({ articulo_id: i.articulo_id, cantidad: i.cantidad, unidad_venta: i.unidad_venta })),
         }),
       });
       const data = await res.json();
@@ -288,6 +303,19 @@ export default function NuevoTraspaso({
                               onChange={e => updateCantidad(idx, e.target.value)}
                               className="w-full text-right bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                             />
+                            {item.sePuedeSuelto ? (
+                              <select
+                                value={item.unidad_venta}
+                                onChange={e => updateUnidad(idx, e.target.value as UnidadVenta)}
+                                aria-label={`Unidad de ${item.nombre}`}
+                                className="mt-1 w-full bg-kp-surface2 border border-kp-border rounded px-1.5 py-0.5 text-xs text-kp-white focus:outline-none focus:border-kp-red"
+                              >
+                                <option value="bulto">Bultos ×{item.upb}</option>
+                                <option value="unidad">Unidades</option>
+                              </select>
+                            ) : item.upb > 1 && (
+                              <div className="mt-1 text-right text-2xs text-kp-gray">bultos ×{item.upb}</div>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-center">
                             <button

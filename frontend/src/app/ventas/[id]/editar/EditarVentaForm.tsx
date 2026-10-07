@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
+import { type UnidadVenta, formatoStock, unidadesPorBulto, vendePorUnidad } from '@/lib/unidades';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -22,6 +23,8 @@ interface ItemVenta {
   precio_madre?: number | string;
   descuento_pct: number;
   precio_unitario_final: number;
+  unidad_venta?: UnidadVenta;
+  unidades_por_bulto?: number;
 }
 
 interface ArticuloResult {
@@ -31,10 +34,17 @@ interface ArticuloResult {
   precio_madre: number;
   precio_lista: number;
   stock_total: number;
+  vende_por_unidad?: boolean;
+  unidades_por_bulto?: number;
+  precio_unidad?: number | null;
+  precio_lista_unidad?: number | null;
 }
 
 interface CartItem {
+  key: string;                      // articulo_id|unidad: el mismo artículo puede ir por bulto y suelto
   articulo_id: string;
+  unidad_venta: UnidadVenta;
+  upb: number;
   nombre: string;
   codigo: string;
   cantidad: number;
@@ -79,8 +89,12 @@ export default function EditarVentaForm({
     itemsIniciales.map(i => {
       const saved = parseFloat(String(i.descuento_pct)) || 0;
       const lista = parseFloat(String(i.precio_lista)) || 0;
+      const unidad: UnidadVenta = i.unidad_venta === 'unidad' ? 'unidad' : 'bulto';
       return {
+        key: `${i.articulo_id}|${unidad}`,
         articulo_id: i.articulo_id,
+        unidad_venta: unidad,
+        upb: unidadesPorBulto(i),
         nombre: i.nombre,
         codigo: i.codigo,
         cantidad: parseFloat(String(i.cantidad)),
@@ -201,11 +215,12 @@ export default function EditarVentaForm({
     }, 300);
   }, []);
 
-  const agregarArticulo = (art: ArticuloResult) => {
+  const agregarArticulo = (art: ArticuloResult, unidad: UnidadVenta = 'bulto') => {
+    const key = `${art.id}|${unidad}`;
     setCart(prev => {
-      const existe = prev.find(i => i.articulo_id === art.id);
+      const existe = prev.find(i => i.key === key);
       if (existe) {
-        return prev.map(i => i.articulo_id === art.id
+        return prev.map(i => i.key === key
           ? { ...i, cantidad: i.cantidad + 1, precio_unitario_final: +(i.precio_lista * (1 - i.descuento_pct / 100)).toFixed(4) }
           : i
         );
@@ -214,13 +229,19 @@ export default function EditarVentaForm({
       // pasar lista_id (ya trae aplicado el descuento de la lista). Encima hereda el
       // descuento de la venta (cliente/manual). Así el artículo nuevo entra con el
       // descuento de la lista ya puesto, sin tener que cargarlo a mano.
-      const precioLista = art.precio_lista || art.precio_madre;
+      // Suelta: precio por unidad propio, con el mismo descuento de la lista.
+      const suelta = unidad === 'unidad';
+      const madre = suelta ? Number(art.precio_unidad) || 0 : art.precio_madre;
+      const precioLista = suelta
+        ? Number(art.precio_lista_unidad ?? art.precio_unidad) || 0
+        : art.precio_lista || art.precio_madre;
       const eff = descuentoVenta;
       const precioFinal = +(precioLista * (1 - eff / 100)).toFixed(4);
       return [...prev, {
-        articulo_id: art.id, nombre: art.nombre, codigo: art.codigo,
+        key, articulo_id: art.id, unidad_venta: unidad, upb: unidadesPorBulto(art),
+        nombre: art.nombre, codigo: art.codigo,
         cantidad: 1, precio_lista: precioLista,
-        precio_madre: art.precio_madre || precioLista,
+        precio_madre: madre || precioLista,
         descuento_manual: null, descuento_pct: eff,
         precio_unitario_final: precioFinal,
       }];
@@ -232,7 +253,7 @@ export default function EditarVentaForm({
   const actualizarCantidad = (articulo_id: string, val: string) => {
     const n = parseFloat(val);
     if (isNaN(n) || n <= 0) return;
-    setCart(prev => prev.map(i => i.articulo_id === articulo_id ? { ...i, cantidad: n } : i));
+    setCart(prev => prev.map(i => i.key === articulo_id ? { ...i, cantidad: n } : i));
   };
 
   // Vacío = el ítem vuelve a heredar el descuento de la venta.
@@ -245,7 +266,7 @@ export default function EditarVentaForm({
       manual = isNaN(v) ? null : Math.min(100, Math.max(0, v));
     }
     setCart(prev => prev.map(i => {
-      if (i.articulo_id !== articulo_id) return i;
+      if (i.key !== articulo_id) return i;
       const eff = manual != null ? manual : descuentoVenta;
       return {
         ...i,
@@ -257,7 +278,7 @@ export default function EditarVentaForm({
   };
 
   const eliminarItem = (articulo_id: string) => {
-    setCart(prev => prev.filter(i => i.articulo_id !== articulo_id));
+    setCart(prev => prev.filter(i => i.key !== articulo_id));
   };
 
   // Subtotal de los ítems (con su descuento de lista/cliente/ítem, sin el extra).
@@ -355,7 +376,31 @@ export default function EditarVentaForm({
           )}
           {resultados.length > 0 && (
             <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-kp-surface2 border border-kp-border rounded-lg shadow-xl max-h-72 overflow-y-auto">
-              {resultados.map(art => (
+              {resultados.map(art => vendePorUnidad(art) ? (
+                // Se vende por bulto o suelto: un botón para cada uno.
+                <div key={art.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-kp-white truncate">{art.nombre}</p>
+                    <p className="text-xs text-kp-gray font-mono">
+                      {art.codigo} · Stock: {formatoStock(art.stock_total, art.unidades_por_bulto)}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => agregarArticulo(art, 'bulto')}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-kp-red text-kp-red hover:bg-kp-red hover:text-white transition-colors"
+                    >
+                      Bulto ×{unidadesPorBulto(art)} · {fmt(art.precio_lista || art.precio_madre)}
+                    </button>
+                    <button
+                      onClick={() => agregarArticulo(art, 'unidad')}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-kp-border text-kp-white hover:border-kp-red hover:text-kp-red transition-colors"
+                    >
+                      Unidad · {fmt(Number(art.precio_lista_unidad ?? art.precio_unidad) || 0)}
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <button
                   key={art.id}
                   onClick={() => agregarArticulo(art)}
@@ -367,7 +412,7 @@ export default function EditarVentaForm({
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
                     <p className="text-sm font-bold text-kp-white">{fmt(art.precio_lista || art.precio_madre)}</p>
-                    <p className="text-xs text-kp-gray">Stock: {art.stock_total ?? '—'}</p>
+                    <p className="text-xs text-kp-gray">Stock: {art.stock_total != null ? formatoStock(art.stock_total, art.unidades_por_bulto) : '—'}</p>
                   </div>
                 </button>
               ))}
@@ -439,12 +484,19 @@ export default function EditarVentaForm({
         ) : (
           <div className="divide-y divide-kp-border">
             {cart.map(item => (
-              <div key={item.articulo_id} className="px-5 py-3 flex items-center gap-3 hover:bg-kp-surface2 transition-colors">
+              <div key={item.key} className="px-5 py-3 flex items-center gap-3 hover:bg-kp-surface2 transition-colors">
 
                 {/* Info artículo */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-kp-white truncate">{item.nombre}</p>
-                  <p className="text-xs text-kp-gray font-mono">{item.codigo}</p>
+                  <p className="text-xs text-kp-gray font-mono">
+                    {item.codigo}
+                    {item.upb > 1 && (
+                      <span className={`ml-2 font-sans font-semibold ${item.unidad_venta === 'unidad' ? 'text-sky-400' : ''}`}>
+                        {item.unidad_venta === 'unidad' ? 'Por unidad' : `Bulto ×${item.upb}`}
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 {/* Cantidad */}
@@ -455,7 +507,7 @@ export default function EditarVentaForm({
                     min="1"
                     step="1"
                     value={item.cantidad}
-                    onChange={e => actualizarCantidad(item.articulo_id, e.target.value)}
+                    onChange={e => actualizarCantidad(item.key, e.target.value)}
                     className="w-16 text-center bg-kp-surface2 border border-kp-border rounded px-2 py-1 text-sm text-kp-white focus:outline-none focus:border-kp-red"
                   />
                 </div>
@@ -468,7 +520,7 @@ export default function EditarVentaForm({
                       decimals={1}
                       placeholder={descuentoVenta > 0 ? String(descuentoVenta) : '0'}
                       value={item.descuento_manual != null ? item.descuento_manual : ''}
-                      onChange={e => actualizarDescuento(item.articulo_id, e.target.value)}
+                      onChange={e => actualizarDescuento(item.key, e.target.value)}
                       className={`w-12 text-center bg-kp-surface2 border rounded-l px-2 py-1 text-sm tabular-nums focus:outline-none transition-colors ${
                         item.descuento_pct > 0
                           ? 'border-kp-red text-kp-red font-semibold focus:border-kp-red'
@@ -494,7 +546,7 @@ export default function EditarVentaForm({
 
                 {/* Eliminar */}
                 <button
-                  onClick={() => eliminarItem(item.articulo_id)}
+                  onClick={() => eliminarItem(item.key)}
                   className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-kp-gray hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                   title="Quitar artículo"
                 >
