@@ -18,7 +18,11 @@ function columnasUnidad(precioListaVal) {
 // Toma el número pegado a la palabra de unidad (en «615X50UNID.» es 50, no 615)
 // y tolera erratas como «NUD». Es SOLO una sugerencia: la verifica una persona.
 function factorSugerido(nombre) {
-  const s = String(nombre || '').toUpperCase();
+  // Errata frecuente: letra O en lugar de cero pegada a un dígito
+  // («X1OOU» → «X100U», «5OUNID» → «50UNID»). Cuenta como dudoso.
+  const crudo = String(nombre || '').toUpperCase();
+  const s = crudo.replace(/(\d)(O+)/g, (m, d, o) => d + '0'.repeat(o.length));
+  const errata = s !== crudo;
   const matches = [...s.matchAll(/(\d+)\s*(UNIDADES|UNIDAD|UNID|UNI|UDS|UN|NUD|U)\b\.?/g)];
   if (matches.length === 0) {
     // «VASO X100» sin la palabra de unidad: se sugiere, pero a revisar.
@@ -28,7 +32,7 @@ function factorSugerido(nombre) {
   }
   const n = parseInt(matches[matches.length - 1][1], 10);
   if (!(n > 1)) return { factor: '', confianza: 'sin_dato' };
-  return { factor: n, confianza: matches.length === 1 ? 'alta' : 'revisar' };
+  return { factor: n, confianza: matches.length === 1 && !errata ? 'alta' : 'revisar' };
 }
 
 function csvCelda(v) {
