@@ -29,9 +29,14 @@ const esMedioTransferencia = (nombre?: string) =>
   !!nombre && ['transferencia', 'mercado pago', 'qr'].some(k => nombre.toLowerCase().includes(k));
 
 export default function AccionesVenta({
-  ventaId, estado, total, facturacion, observaciones,
+  ventaId, numero, estado, total, facturacion, observaciones,
+  soloPreventista = false, clienteNombre = null,
 }: {
   ventaId: string;
+  numero?: number;
+  /** Preventista: solo PDF, imprimir y confirmar su presupuesto en Cta. Cte. */
+  soloPreventista?: boolean;
+  clienteNombre?: string | null;
   estado: string;
   total: string;
   facturacion: Facturacion;
@@ -204,6 +209,86 @@ export default function AccionesVenta({
 
   const yaFacturada = !!(facturacion?.cae);
 
+  // PDF del comprobante (en presupuestos sale sin precio de lista ni % de desc.).
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const abrirPdf = async () => {
+    setPdfLoading(true);
+    // La pestaña se abre ya (en el click) para que el celular no la bloquee.
+    const win = window.open('', '_blank');
+    try {
+      const r = await apiFetch(`/api/ventas/${ventaId}/pdf`);
+      if (!r.ok) throw new Error('No se pudo generar el PDF');
+      const url = URL.createObjectURL(await r.blob());
+      if (win) win.location.href = url;
+      else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      win?.close();
+      alert(err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const [ccLoading, setCcLoading] = useState(false);
+  const confirmarCC = async () => {
+    if (!window.confirm(
+      `¿Confirmar el presupuesto${numero ? ` #${numero}` : ''} como venta en la cuenta corriente de ${clienteNombre}? ` +
+      'Se descuenta el stock y se le avisa al cajero para que la despache.'
+    )) return;
+    setCcLoading(true);
+    try {
+      const r = await apiFetch(`/api/ventas/${ventaId}/confirmar-preventa`, { method: 'PATCH', body: JSON.stringify({}) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.error ?? 'No se pudo confirmar'); return; }
+      router.refresh();
+    } finally {
+      setCcLoading(false);
+    }
+  };
+
+  const btnSec = `inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+    border border-kp-border text-kp-gray hover:text-kp-white hover:border-kp-gray
+    transition-colors disabled:opacity-50 disabled:cursor-not-allowed`;
+  const botonPdf = (
+    <button onClick={abrirPdf} disabled={pdfLoading} className={btnSec}>
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      {pdfLoading ? 'Generando…' : 'PDF'}
+    </button>
+  );
+  const botonImprimir = (
+    <button onClick={() => window.print()} className={btnSec}>
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      Imprimir
+    </button>
+  );
+
+  if (soloPreventista) {
+    return (
+      <div className="flex flex-wrap gap-2 print:hidden">
+        {estado === 'preventa' && (
+          <button
+            onClick={confirmarCC}
+            disabled={ccLoading || !clienteNombre}
+            title={clienteNombre ? 'Confirmar en cuenta corriente' : 'El presupuesto no tiene cliente: no se puede pasar a cuenta corriente'}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+              bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {ccLoading ? 'Confirmando…' : 'Confirmar venta (Cta. Cte.)'}
+          </button>
+        )}
+        {botonPdf}
+        {botonImprimir}
+      </div>
+    );
+  }
+
   return (
     <>
     <div className="flex flex-col items-end gap-3 print:hidden">
@@ -268,6 +353,8 @@ export default function AccionesVenta({
             Observaciones
           </button>
         )}
+
+        {botonPdf}
 
         {/* Imprimir venta */}
         <button

@@ -80,14 +80,21 @@ export default function PresupuestosTable({
     ? <span className="px-2 py-1 rounded-md text-2xs md:text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">Pendiente de despacho</span>
     : <span className="px-2 py-1 rounded-md text-2xs md:text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">{p.despachada_at ? 'Despachada' : 'Confirmada'}</span>;
 
-  // Acciones por fila según rol y solapa. El preventista no entra a /ventas/[id]
-  // (no tiene permiso): ve el detalle desplegando la fila.
+  // Acciones por fila según rol y solapa. El preventista no tiene /ventas: su
+  // detalle (con PDF e impresión) está en /presupuestos/[id].
   const acciones = (p: Presupuesto, mobile = false) => {
     const ocupado = accionId === p.id;
     const full = mobile ? 'flex-1' : '';
     if (esRepartidor) {
-      if (vista === 'confirmados') return estadoDespacho(p);
+      const verP = (
+        <Link href={`/presupuestos/${p.id}`} className={mobile ? cn(btnSecondary, 'flex-1') : cn(btnBase, 'bg-kp-surface2 hover:bg-kp-border text-kp-gray-lt border border-kp-border')}>
+          Ver
+        </Link>
+      );
+      if (vista === 'confirmados') return <>{verP}{estadoDespacho(p)}</>;
       return (
+        <>
+        {verP}
         <button
           type="button"
           onClick={() => ejecutar(p, 'confirmar')}
@@ -97,6 +104,7 @@ export default function PresupuestosTable({
         >
           {ocupado ? 'Confirmando…' : 'Confirmar venta (Cta. Cte.)'}
         </button>
+        </>
       );
     }
     const ver = (
