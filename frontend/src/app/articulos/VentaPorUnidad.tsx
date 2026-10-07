@@ -37,9 +37,9 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 const ETIQUETA_CONFIANZA: Record<Art['confianza'], { txt: string; cls: string }> = {
-  alta:     { txt: 'del nombre',      cls: 'text-emerald-400' },
-  revisar:  { txt: 'revisar',         cls: 'text-amber-400' },
-  sin_dato: { txt: 'sin dato',        cls: 'text-kp-gray' },
+  alta:     { txt: '',                    cls: '' },
+  revisar:  { txt: 'confirmar cantidad', cls: 'text-amber-400' },
+  sin_dato: { txt: 'completar',          cls: 'text-kp-gray' },
 };
 
 function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
