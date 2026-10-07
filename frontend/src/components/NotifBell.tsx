@@ -24,6 +24,8 @@ type Alerta = {
 
 type NotifData = {
   no_leidas:    number;
+  // Ventas de preventistas sin despachar: suman al badge hasta que se despachan.
+  pendientes_despacho?: number;
   notas_nuevas: NotaItem[];
   alertas:      Alerta[];
   ultima_vista: string;
@@ -105,7 +107,7 @@ export default function NotifBell() {
       const r = await apiFetch('/api/notificaciones');
       if (r.ok) {
         const d: NotifData = await r.json();
-        setCount(d.no_leidas);
+        setCount(d.no_leidas + (d.pendientes_despacho ?? 0));
         // Si el panel está abierto, actualizar data también
         if (open) setData(d);
       }
@@ -146,8 +148,8 @@ export default function NotifBell() {
         // Si hay notas nuevas, marcarlas como leídas
         if (d.no_leidas > 0) {
           await apiFetch('/api/notificaciones/leer', { method: 'POST' });
-          setCount(0);
         }
+        setCount(d.pendientes_despacho ?? 0);
       }
     } finally { setLoading(false); }
   };

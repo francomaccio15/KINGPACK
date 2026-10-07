@@ -2,6 +2,7 @@
 
 import { useState, useCallback, Fragment } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 import { btnSecondary, cn } from '@/lib/ui';
 
@@ -24,6 +25,8 @@ type Presupuesto = {
   lista_precio: string | null;
   vendedor_nombre: string | null;
   items_count: number;
+  despacho_pendiente?: boolean;
+  despachada_at?: string | null;
 };
 
 type Item = {
@@ -40,12 +43,91 @@ export default function PresupuestosTable({
   presupuestos,
   hayFiltros,
   esRepartidor,
+  vista = 'pendientes',
 }: {
   presupuestos: Presupuesto[];
   hayFiltros: boolean;
   esRepartidor: boolean;
+  vista?: 'pendientes' | 'despachar' | 'confirmados';
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [accionId, setAccionId] = useState<string | null>(null);
+
+  // Preventista: confirma su presupuesto como venta en cuenta corriente.
+  // Staff: marca como despachada una venta que confirmó un preventista.
+  const ejecutar = async (p: Presupuesto, tipo: 'confirmar' | 'despachar') => {
+    const msg = tipo === 'confirmar'
+      ? `¿Confirmar el presupuesto #${p.numero} como venta en la cuenta corriente de ${p.cliente_nombre}? Se descuenta el stock y se le avisa al cajero para que la despache.`
+      : `¿Marcar la venta #${p.numero} como despachada?`;
+    if (!window.confirm(msg)) return;
+    setAccionId(p.id);
+    try {
+      const r = await apiFetch(
+        tipo === 'confirmar' ? `/api/ventas/${p.id}/confirmar-preventa` : `/api/ventas/${p.id}/despachar`,
+        { method: 'PATCH', body: JSON.stringify({}) },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { window.alert(d.error ?? 'No se pudo completar la acción'); return; }
+      router.refresh();
+    } finally {
+      setAccionId(null);
+    }
+  };
+
+  const btnBase = 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+  const estadoDespacho = (p: Presupuesto) => p.despacho_pendiente
+    ? <span className="px-2 py-1 rounded-md text-2xs md:text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">Pendiente de despacho</span>
+    : <span className="px-2 py-1 rounded-md text-2xs md:text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">{p.despachada_at ? 'Despachada' : 'Confirmada'}</span>;
+
+  // Acciones por fila según rol y solapa. El preventista no entra a /ventas/[id]
+  // (no tiene permiso): ve el detalle desplegando la fila.
+  const acciones = (p: Presupuesto, mobile = false) => {
+    const ocupado = accionId === p.id;
+    const full = mobile ? 'flex-1' : '';
+    if (esRepartidor) {
+      if (vista === 'confirmados') return estadoDespacho(p);
+      return (
+        <button
+          type="button"
+          onClick={() => ejecutar(p, 'confirmar')}
+          disabled={ocupado || !p.cliente_nombre}
+          title={p.cliente_nombre ? 'Confirmar en cuenta corriente' : 'El presupuesto no tiene cliente: no se puede pasar a cuenta corriente'}
+          className={cn(btnBase, full, 'bg-green-600 hover:bg-green-500 text-white')}
+        >
+          {ocupado ? 'Confirmando…' : 'Confirmar venta (Cta. Cte.)'}
+        </button>
+      );
+    }
+    const ver = (
+      <Link href={`/ventas/${p.id}`} className={mobile ? cn(btnSecondary, 'flex-1') : cn(btnBase, 'bg-kp-surface2 hover:bg-kp-border text-kp-gray-lt border border-kp-border')}>
+        Ver
+      </Link>
+    );
+    if (vista === 'despachar') {
+      return (
+        <>
+          {ver}
+          <button
+            type="button"
+            onClick={() => ejecutar(p, 'despachar')}
+            disabled={ocupado}
+            className={cn(btnBase, full, 'bg-green-600 hover:bg-green-500 text-white')}
+          >
+            {ocupado ? 'Guardando…' : 'Despachado'}
+          </button>
+        </>
+      );
+    }
+    return (
+      <>
+        {ver}
+        <Link href={`/ventas/${p.id}`} className={cn(btnBase, full, 'bg-green-600 hover:bg-green-500 text-white')}>
+          Confirmar
+        </Link>
+      </>
+    );
+  };
   const [itemsCache, setItemsCache] = useState<Record<string, Item[]>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
@@ -71,9 +153,13 @@ export default function PresupuestosTable({
           📄
         </div>
         <p className="text-sm text-kp-gray">
-          {hayFiltros ? 'No hay presupuestos que coincidan con el filtro.' : 'Todavía no hay presupuestos.'}
+          {hayFiltros
+            ? 'No hay registros que coincidan con el filtro.'
+            : vista === 'despachar' ? 'No hay ventas pendientes de despacho.'
+            : vista === 'confirmados' ? 'Todavía no confirmaste ventas.'
+            : 'Todavía no hay presupuestos.'}
         </p>
-        {esRepartidor && !hayFiltros && (
+        {esRepartidor && !hayFiltros && vista === 'pendientes' && (
           <p className="text-xs text-kp-gray/60 mt-1">Creá uno con el botón “Nuevo Presupuesto”.</p>
         )}
       </div>
@@ -125,28 +211,7 @@ export default function PresupuestosTable({
                   <td className="px-4 py-3 text-right font-bold text-kp-white tabular-nums">{ars.format(parseFloat(p.total) || 0)}</td>
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/ventas/${p.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                          bg-kp-surface2 hover:bg-kp-border text-kp-gray-lt border border-kp-border transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        Ver
-                      </Link>
-                      {!esRepartidor && (
-                        <Link
-                          href={`/ventas/${p.id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                            bg-green-600 hover:bg-green-500 text-white transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                          Confirmar
-                        </Link>
-                      )}
+                      {acciones(p)}
                     </div>
                   </td>
                 </tr>
@@ -216,11 +281,7 @@ export default function PresupuestosTable({
               expandable
               expanded={abierto}
               onToggle={() => toggle(p.id)}
-              actions={
-                <Link href={`/ventas/${p.id}`} className={cn(btnSecondary, 'flex-1')}>
-                  Ver presupuesto
-                </Link>
-              }
+              actions={acciones(p, true)}
             >
               {items.length === 0 ? (
                 <p className="text-2xs text-kp-gray">Sin ítems.</p>

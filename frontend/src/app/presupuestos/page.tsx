@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import NuevoPresupuesto from './NuevoPresupuesto';
 import PresupuestosTable from './PresupuestosTable';
 import FiltrosPresupuestos from './FiltrosPresupuestos';
@@ -18,15 +19,23 @@ type Presupuesto = {
   lista_precio: string | null;
   vendedor_nombre: string | null;
   items_count: number;
+  despacho_pendiente?: boolean;
+  despachada_at?: string | null;
 };
 
-async function fetchData(params: Record<string, string | undefined>, soloMias: boolean) {
+// pendientes → presupuestos sin confirmar (todos).
+// despachar  → staff: ventas que confirmó un preventista y faltan enviar.
+// confirmados → preventista: sus ventas ya confirmadas (cta. cte.).
+type Vista = 'pendientes' | 'despachar' | 'confirmados';
+
+async function fetchData(params: Record<string, string | undefined>, soloMias: boolean, vista: Vista) {
   const q = new URLSearchParams();
   if (params.q)           q.set('q', params.q);
   if (params.fecha_desde) q.set('fecha_desde', params.fecha_desde);
   if (params.fecha_hasta) q.set('fecha_hasta', params.fecha_hasta);
   // Un presupuesto es una venta en estado "preventa".
-  q.set('estado', 'preventa');
+  if (vista === 'pendientes') q.set('estado', 'preventa');
+  if (vista === 'despachar') { q.set('estado', 'confirmada'); q.set('despacho_pendiente', '1'); }
   if (soloMias) q.set('mias', '1');
   q.set('limit', '100');
 
@@ -38,8 +47,11 @@ async function fetchData(params: Record<string, string | undefined>, soloMias: b
 
   const rawListas = listasRes.listas ?? [];
   return {
-    presupuestos: (ventasRes.ventas ?? []) as Presupuesto[],
-    count:        ventasRes.count ?? 0,
+    // "confirmados" trae todas las del preventista y se queda con las que ya
+    // no son presupuesto (confirmada o facturada; anuladas afuera).
+    presupuestos: ((ventasRes.ventas ?? []) as Presupuesto[]).filter(v =>
+      vista !== 'confirmados' || (v.estado !== 'preventa' && v.estado !== 'anulada')),
+    count:        vista === 'confirmados' ? undefined : (ventasRes.count ?? 0),
     sucursales:   sucursalesRes.sucursales ?? [],
     listas:       rawListas.map((l: any) => ({
       id: l.id,
@@ -54,13 +66,27 @@ export const dynamic = 'force-dynamic';
 export default async function PresupuestosPage({
   searchParams,
 }: {
-  searchParams: { q?: string; fecha_desde?: string; fecha_hasta?: string };
+  searchParams: { q?: string; fecha_desde?: string; fecha_hasta?: string; vista?: string };
 }) {
   const user = requireAuth('/presupuestos');
   const esRepartidor = user.rol === 'vendedor' || user.rol === 'comercial';
 
-  const { presupuestos, count, sucursales: todasSucursales, listas } =
-    await fetchData(searchParams, esRepartidor);
+  const vistas: { id: Vista; label: string }[] = esRepartidor
+    ? [{ id: 'pendientes', label: 'Presupuestos' }, { id: 'confirmados', label: 'Ventas confirmadas' }]
+    : [{ id: 'pendientes', label: 'Presupuestos' }, { id: 'despachar', label: 'Para despachar' }];
+  const vista: Vista = vistas.some(v => v.id === searchParams.vista)
+    ? (searchParams.vista as Vista)
+    : 'pendientes';
+
+  const { presupuestos, count: countApi, sucursales: todasSucursales, listas } =
+    await fetchData(searchParams, esRepartidor, vista);
+  const count = countApi ?? presupuestos.length;
+
+  const subtitulo = vista === 'despachar'
+    ? 'Ventas de preventistas para enviar (cuenta corriente)'
+    : vista === 'confirmados'
+      ? 'Tus ventas confirmadas en cuenta corriente'
+      : esRepartidor ? 'Tus presupuestos' : 'Presupuestos pendientes de confirmar';
 
   const hayFiltros = !!(searchParams.q || searchParams.fecha_desde || searchParams.fecha_hasta);
 
@@ -78,7 +104,7 @@ export default async function PresupuestosPage({
             <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Presupuestos</h2>
           </div>
           <p className="text-sm text-kp-gray pl-3">
-            {esRepartidor ? 'Tus presupuestos' : 'Presupuestos pendientes de confirmar'}
+            {subtitulo}
             {' · '}
             {count} {count === 1 ? 'registro' : 'registros'}
             {hayFiltros && <span className="ml-1 text-kp-gray/60">(filtrado)</span>}
@@ -90,7 +116,25 @@ export default async function PresupuestosPage({
           sucursales={todasSucursales}
           listas={listas}
           sucursalDefaultId={sucursalDefault}
+          puedeConfirmarCC={esRepartidor}
         />
+      </div>
+
+      {/* Solapas */}
+      <div className="flex gap-1 border-b border-kp-border overflow-x-auto">
+        {vistas.map(v => (
+          <Link
+            key={v.id}
+            href={v.id === 'pendientes' ? '/presupuestos' : `/presupuestos?vista=${v.id}`}
+            className={`px-4 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              vista === v.id
+                ? 'border-kp-red text-kp-white'
+                : 'border-transparent text-kp-gray hover:text-kp-white'
+            }`}
+          >
+            {v.label}
+          </Link>
+        ))}
       </div>
 
       {/* Filtros: búsqueda + rango de fechas */}
@@ -103,6 +147,7 @@ export default async function PresupuestosPage({
         presupuestos={presupuestos}
         hayFiltros={hayFiltros}
         esRepartidor={esRepartidor}
+        vista={vista}
       />
 
     </section>

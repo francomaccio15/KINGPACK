@@ -103,7 +103,7 @@ router.get('/', async (req, res, next) => {
   try {
     const {
       q, estado, cliente_id, fecha_desde, fecha_hasta,
-      mias, vendedor_id,
+      mias, vendedor_id, despacho_pendiente,
       limit = 100, offset = 0,
     } = req.query;
 
@@ -128,9 +128,12 @@ router.get('/', async (req, res, next) => {
       conditions.push(`v.vendedor_id = $${idx++}`);
       params.push(vendedor_id);
     }
+    // despacho_pendiente=1 → ventas confirmadas por un preventista que el cajero
+    // todavía no marcó como despachadas.
+    if (despacho_pendiente === '1') conditions.push('v.despacho_pendiente');
     const sucId = sucursalEfectiva(req);
     if (sucId) {
-      conditions.push(`v.sucursal_id = $${idx++}`);
+      conditions.push(`v.sucursal_id = ${idx++}`);
       params.push(sucId);
     }
     if (fecha_desde) {
@@ -166,6 +169,7 @@ router.get('/', async (req, res, next) => {
           v.vendedor_id    AS vendedor_id,
           u.nombre         AS vendedor_nombre,
           u.rol            AS vendedor_rol,
+          v.despacho_pendiente, v.despachada_at,
           f.cae            AS cae,
           f.ok             AS facturada_ok,
           (SELECT COUNT(*) FROM venta_items vi WHERE vi.venta_id = v.id) AS items_count,
@@ -683,13 +687,18 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { pagos = [] } = req.body;
+    let { pagos = [] } = req.body;
+    // El preventista (vendedor/comercial) confirma su propio presupuesto, pero
+    // siempre en CUENTA CORRIENTE: no cobra ni toca la caja. La venta queda
+    // pendiente de despacho y le avisa al cajero de la sucursal (campanita),
+    // que la envía y después cobra por Cobranzas.
+    const esPreventista = req.usuario?.rol === 'vendedor' || req.usuario?.rol === 'comercial';
 
     await client.query('BEGIN');
 
     // Verificar que la venta existe y es una preventa
     const { rows: ventaRows } = await client.query(
-      `SELECT v.id, v.numero, v.estado, v.sucursal_id, v.cliente_id, v.total
+      `SELECT v.id, v.numero, v.estado, v.sucursal_id, v.cliente_id, v.total, v.vendedor_id
        FROM ventas v WHERE v.id = $1 AND v.deleted_at IS NULL FOR UPDATE`,
       [id]
     );
@@ -704,16 +713,40 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
 
     const { sucursal_id, cliente_id, numero } = ventaRows[0];
 
-    // Verificar caja abierta
-    const { rows: cajaRows } = await client.query(
-      `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
-      [sucursal_id]
-    );
-    if (!cajaRows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja antes de confirmar la venta.' });
+    let cajaId = null;
+    if (esPreventista) {
+      if (ventaRows[0].vendedor_id !== req.usuario.id) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Solo podés confirmar tus propios presupuestos' });
+      }
+      if (!cliente_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Para confirmar en cuenta corriente el presupuesto tiene que tener un cliente' });
+      }
+      const { rows: [medioCC] } = await client.query(
+        `SELECT id FROM medios_pago
+          WHERE activo = TRUE
+            AND (nombre ILIKE '%cuenta corriente%' OR nombre ILIKE '%cta. cte%' OR nombre ILIKE '%cta cte%')
+          ORDER BY nombre LIMIT 1`
+      );
+      if (!medioCC) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'No hay un medio de pago "Cuenta Corriente" activo' });
+      }
+      // Lo que mande el front se ignora: todo el total va a la cuenta corriente.
+      pagos = [{ medio_pago_id: medioCC.id, monto: parseFloat(ventaRows[0].total) }];
+    } else {
+      // Verificar caja abierta
+      const { rows: cajaRows } = await client.query(
+        `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
+        [sucursal_id]
+      );
+      if (!cajaRows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'La caja está cerrada. Abrí la caja antes de confirmar la venta.' });
+      }
+      cajaId = cajaRows[0].id;
     }
-    const cajaId = cajaRows[0].id;
 
     // La preventa no movió stock: el factor de las líneas por bulto se toma del
     // artículo de HOY (pudo haberse convertido el stock desde que se armó).
@@ -849,10 +882,13 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
       }
     }
 
-    // Confirmar la venta
+    // Confirmar la venta. Si la confirmó el preventista queda pendiente de
+    // despacho (aviso al cajero de la sucursal en la campanita).
     await client.query(
-      `UPDATE ventas SET estado = 'confirmada', updated_at = NOW() WHERE id = $1`,
-      [id]
+      `UPDATE ventas
+          SET estado = 'confirmada', confirmada_por = $2, despacho_pendiente = $3, updated_at = NOW()
+        WHERE id = $1`,
+      [id, req.usuario?.id ?? null, esPreventista]
     );
 
     await client.query('COMMIT');
@@ -863,6 +899,33 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// ─── PATCH /api/ventas/:id/despachar ─────────────────────────────────────────
+// El cajero marca como enviada una venta que confirmó un preventista (apaga el
+// aviso de la campanita). No toca caja ni cuenta corriente: el cobro se hace
+// después por Cobranzas.
+router.patch('/:id/despachar', requireRol('administrador', 'supervisor', 'cajero'), async (req, res, next) => {
+  try {
+    const { rows: [venta] } = await pool.query(
+      `SELECT id, sucursal_id, despacho_pendiente FROM ventas WHERE id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+    if (req.usuario.rol === 'cajero' && venta.sucursal_id !== req.usuario.sucursal_default_id) {
+      return res.status(403).json({ error: 'La venta es de otra sucursal' });
+    }
+    if (!venta.despacho_pendiente) {
+      return res.status(400).json({ error: 'La venta no está pendiente de despacho' });
+    }
+    await pool.query(
+      `UPDATE ventas
+          SET despacho_pendiente = FALSE, despachada_at = NOW(), despachada_por = $2, updated_at = NOW()
+        WHERE id = $1`,
+      [venta.id, req.usuario.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // ─── PATCH /api/ventas/:id/estado ────────────────────────────────────────────
@@ -992,7 +1055,10 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     }
 
     const { rows } = await client.query(
-      `UPDATE ventas SET estado = $1, observaciones = $3 WHERE id = $2 RETURNING id, estado`,
+      `UPDATE ventas
+          SET estado = $1, observaciones = $3,
+              despacho_pendiente = CASE WHEN $1::text = 'anulada' THEN FALSE ELSE despacho_pendiente END
+        WHERE id = $2 RETURNING id, estado`,
       [estado, id, nuevaObs]
     );
 

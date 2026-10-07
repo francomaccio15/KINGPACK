@@ -104,10 +104,13 @@ export default function NuevoPresupuesto({
   sucursales,
   listas,
   sucursalDefaultId,
+  puedeConfirmarCC = false,
 }: {
   sucursales: Sucursal[];
   listas: Lista[];
   sucursalDefaultId: string | null;
+  /** Preventista: puede guardar y confirmar al instante en cuenta corriente. */
+  puedeConfirmarCC?: boolean;
 }) {
   const router = useRouter();
 
@@ -365,9 +368,17 @@ export default function NuevoPresupuesto({
   const extraFrac     = subtotalFinal > 0 ? descExtraMonto / subtotalFinal : 0; // sólo para modo $ (fold proporcional)
 
   // ─── Save (siempre como preventa = presupuesto) ─────────────────────────────
-  const handleSave = async () => {
+  const handleSave = async (confirmarCC = false) => {
     if (cart.length === 0) return;
     if (!sucursalId) { setSaveError('Seleccioná una sucursal'); return; }
+    if (confirmarCC && !selectedClient) {
+      setSaveError('Para confirmar la venta en cuenta corriente elegí un cliente');
+      return;
+    }
+    if (confirmarCC && !window.confirm(
+      `¿Confirmar la venta en la cuenta corriente de ${selectedClient!.razon_social}? ` +
+      'Se descuenta el stock y se le avisa al cajero para que la despache.'
+    )) return;
     setSaveError('');
     setSaving(true);
 
@@ -414,6 +425,20 @@ export default function NuevoPresupuesto({
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? 'Error al guardar el presupuesto');
+      if (confirmarCC) {
+        const rc = await apiFetch(`/api/ventas/${data.venta.id}/confirmar-preventa`, {
+          method: 'PATCH',
+          body:   JSON.stringify({}),
+        });
+        const dc = await rc.json().catch(() => ({}));
+        if (!rc.ok) {
+          // El presupuesto quedó guardado: se puede confirmar después desde la lista.
+          cerrar();
+          router.refresh();
+          window.alert(`El presupuesto se guardó pero no se pudo confirmar: ${dc.error ?? 'error desconocido'}`);
+          return;
+        }
+      }
       cerrar();
       router.refresh();
     } catch (err: any) {
@@ -954,8 +979,18 @@ export default function NuevoPresupuesto({
                 </p>
               )}
 
+              {puedeConfirmarCC && (
+                <button
+                  onClick={() => handleSave(true)}
+                  disabled={cartEmpty || saving}
+                  className="w-full bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2.5 rounded-lg
+                    transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Guardar y confirmar venta (Cta. Cte.)
+                </button>
+              )}
               <button
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={cartEmpty || saving}
                 className="w-full bg-kp-red hover:bg-kp-red-dark text-white font-semibold px-4 py-2.5 rounded-lg
                   transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed

@@ -31,8 +31,27 @@ router.get('/', async (req, res, next) => {
        LIMIT 15
     `, [ultimaVista]);
 
-    // Alertas de gestión — solo para administradores. El cajero solo ve notas.
     const alertas = [];
+
+    // Ventas confirmadas por un preventista (en cuenta corriente) que todavía no
+    // se despacharon. El cajero ve las de su sucursal; el admin, todas.
+    const { rows: [desp] } = await pool.query(`
+      SELECT COUNT(*)::int AS count
+        FROM ventas
+       WHERE despacho_pendiente AND deleted_at IS NULL
+         AND ($1::uuid IS NULL OR sucursal_id = $1::uuid)
+    `, [esAdmin ? null : (req.usuario.sucursal_default_id || '00000000-0000-0000-0000-000000000000')]);
+    const pendientesDespacho = desp.count;
+    if (pendientesDespacho > 0) alertas.push({
+      tipo: 'despacho_pendiente',
+      nivel: 'error',
+      count: pendientesDespacho,
+      href: '/presupuestos?vista=despachar',
+      label: `${pendientesDespacho} venta${pendientesDespacho !== 1 ? 's' : ''} de preventista para despachar (cta. cte.)`,
+    });
+
+    // Alertas de gestión — solo para administradores. El cajero solo ve notas
+    // y los despachos pendientes.
     if (esAdmin) {
       const [
         stockBajo,
@@ -222,6 +241,7 @@ router.get('/', async (req, res, next) => {
 
     res.json({
       no_leidas:    notasNuevas.rows.length,
+      pendientes_despacho: pendientesDespacho,
       notas_nuevas: notasNuevas.rows,
       alertas,
       ultima_vista: ultimaVista,

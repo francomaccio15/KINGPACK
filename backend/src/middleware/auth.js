@@ -60,6 +60,8 @@ const RUTAS_COMERCIAL = [
   ['PUT',  /^\/api\/clientes\/[^/]+\/?$/],
   ['GET',  /^\/api\/ventas(\/|$)/],
   ['POST', /^\/api\/ventas\/?$/], // forzado a preventa en routes/ventas.js
+  // Confirma su propio presupuesto, siempre en cuenta corriente (routes/ventas.js).
+  ['PATCH', /^\/api\/ventas\/[^/]+\/confirmar-preventa\/?$/],
 ];
 
 function soloRutasComercial(req, res, next) {
