@@ -16,14 +16,14 @@ pool.on('error', (err) => {
 });
 
 /**
- * Ejecuta una query con SET LOCAL app.usuario_id para que los triggers
+ * Ejecuta una query con app.usuario_id seteado (set_config local) para que los triggers
  * de auditoría puedan registrar qué usuario hizo el cambio.
  */
 async function queryWithUser(sql, params, usuarioId) {
   const client = await pool.connect();
   try {
     if (usuarioId) {
-      await client.query('SET LOCAL app.usuario_id = $1', [String(usuarioId)]);
+      await client.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuarioId)]);
     }
     const result = await client.query(sql, params);
     return result;

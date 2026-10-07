@@ -150,7 +150,7 @@ router.post('/', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { sucursal_origen_id, sucursal_destino_id, items = [], notas } = req.body;
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     if (!sucursal_origen_id)  return res.status(400).json({ error: 'sucursal_origen_id es requerido' });
     if (!sucursal_destino_id) return res.status(400).json({ error: 'sucursal_destino_id es requerido' });

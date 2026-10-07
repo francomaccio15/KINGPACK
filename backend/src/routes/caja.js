@@ -354,7 +354,7 @@ router.patch('/movimiento/:movId', async (req, res, next) => {
     // Setear el usuario en la sesión para que el trigger de auditoría lo capture
     const usuario_id = req.usuario?.id ?? null;
     if (usuario_id) {
-      await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+      await client.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuario_id)]);
     }
 
     const { rows } = await client.query(`

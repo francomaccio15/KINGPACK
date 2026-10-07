@@ -98,7 +98,7 @@ router.post('/', async (req, res, next) => {
       numero_factura_prov, costo_flete_total = 0,
       items = [],
     } = req.body;
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     if (!proveedor_id) return res.status(400).json({ error: 'proveedor_id es requerido' });
     if (!sucursal_id)  return res.status(400).json({ error: 'sucursal_id es requerido' });
@@ -301,7 +301,7 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, egreso_id, sucursal_id, stock_acreditado
@@ -319,7 +319,7 @@ router.patch('/:id/confirmar-recepcion', async (req, res, next) => {
     }
 
     await client.query('BEGIN');
-    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+    if (usuario_id) await client.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuario_id)]);
 
     // Obtener ítems con la sucursal de imputación correcta
     let itemsToProcess = [];
@@ -385,14 +385,14 @@ router.patch('/:id/recibir', async (req, res, next) => {
   try {
     const { id }    = req.params;
     const { items } = req.body;
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem con cantidad recibida' });
     }
 
     await client.query('BEGIN');
-    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+    if (usuario_id) await client.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuario_id)]);
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, sucursal_id, egreso_id FROM pedidos_compra WHERE id = $1`,
@@ -541,14 +541,14 @@ router.patch('/:id/corregir-recepcion', async (req, res, next) => {
   try {
     const { id }    = req.params;
     const { items } = req.body;
-    const usuario_id = req.user?.id ?? null;
+    const usuario_id = req.usuario?.id ?? null;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Se requiere al menos un ítem a corregir' });
     }
 
     await client.query('BEGIN');
-    if (usuario_id) await client.query('SET LOCAL app.usuario_id = $1', [String(usuario_id)]);
+    if (usuario_id) await client.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuario_id)]);
 
     const { rows: pedidoRows } = await client.query(
       `SELECT id, estado, sucursal_id, egreso_id FROM pedidos_compra WHERE id = $1`,
