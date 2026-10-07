@@ -19,7 +19,21 @@ type Art = {
   stock: StockSuc[];
   factor_sugerido: number | null; confianza: 'alta' | 'revisar' | 'sin_dato';
 };
-type Filtro = 'sugeridos' | 'habilitados' | 'todos';
+type Filtro = 'inicial' | 'sugeridos' | 'habilitados' | 'todos';
+
+// Lista inicial que pasó el negocio el 07/10/2026 (lo que la gente pide suelto):
+// bandejas de aluminio, cajas de pizza y de lomo, bandejas de tergopol, bandejas
+// redondas de cartón, vasos plásticos, bandejas 105 y budinera de aluminio.
+// Es solo un filtro: cada artículo se habilita igual, tildándolo.
+const LISTA_INICIAL = new Set([
+  'KP00042', 'KP00043', 'KP00020', 'KP00021', 'KP00022', 'KP00044', 'KP00045', 'KP00046', 'KP00023', 'KP00024',
+  'KP00144', 'KP00038', 'KP00037', 'KP00039',
+  'KP00047', 'KP00048', 'KP00049', 'KP00025', 'KP00030',
+  'KP00148', 'KP00149', 'KP00150', 'KP00184', 'KP00185', 'KP00186', 'KP00194',
+  'KP00175', 'KP00176', 'KP00177', 'KP00192', 'KP00193',
+  'KP00011', 'KP00012', 'KP00013', 'KP00014', 'KP00015',
+  'KP00356', 'KP00357', 'KP00358', 'KP00359', 'KP00360', 'KP00361', 'KP00362', 'KP00363', 'KP00365', 'KP00364',
+]);
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -207,7 +221,7 @@ export default function VentaPorUnidad() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
-  const [filtro, setFiltro] = useState<Filtro>('sugeridos');
+  const [filtro, setFiltro] = useState<Filtro>('inicial');
 
   const cargar = useCallback(async () => {
     setLoading(true); setError('');
@@ -230,6 +244,7 @@ export default function VentaPorUnidad() {
   const visibles = useMemo(() => {
     const t = q.trim().toLowerCase();
     return arts.filter(a => {
+      if (filtro === 'inicial' && !LISTA_INICIAL.has(a.codigo)) return false;
       if (filtro === 'habilitados' && !a.vende_por_unidad) return false;
       if (filtro === 'sugeridos' && !a.vende_por_unidad && !a.factor_sugerido && a.unidades_por_bulto <= 1) return false;
       if (!t) return true;
@@ -238,6 +253,7 @@ export default function VentaPorUnidad() {
   }, [arts, q, filtro]);
 
   const filtros: { key: Filtro; label: string }[] = [
+    { key: 'inicial',     label: `Lista inicial (${arts.filter(a => LISTA_INICIAL.has(a.codigo)).length})` },
     { key: 'sugeridos',   label: 'Con bulto en el nombre' },
     { key: 'habilitados', label: `Habilitados (${habilitados})` },
     { key: 'todos',       label: 'Todos' },
