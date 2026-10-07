@@ -30,6 +30,7 @@
 
 const fs = require('fs');
 const { pool } = require('../src/config/db');
+const { convertirArticuloAUnidades } = require('../src/services/conversion-unidades');
 
 const log = (...a) => console.log(...a);
 
@@ -127,67 +128,8 @@ async function main() {
 
     for (const f of factores) {
       const art = porCodigo[f.codigo];
-      const { rows: stocks } = await client.query(
-        `SELECT sucursal_id, cantidad FROM stock WHERE articulo_id = $1`, [art.id]
-      );
-      // Se fijan los componentes: el trigger de ubicaciones recalcula el total.
-      await client.query(`
-        UPDATE stock
-           SET cantidad_adelante = cantidad_adelante * $2,
-               cantidad_deposito = cantidad_deposito * $2,
-               stock_minimo      = stock_minimo * $2,
-               ultima_actualizacion = NOW()
-         WHERE articulo_id = $1
-      `, [art.id, f.factor]);
-      for (const s of stocks) {
-        const antes = parseFloat(s.cantidad);
-        const delta = parseFloat((antes * (f.factor - 1)).toFixed(3));
-        if (Math.abs(delta) > 0.0001) {
-          await client.query(`
-            INSERT INTO ajustes_stock (articulo_id, sucursal_id, cantidad_delta, motivo)
-            VALUES ($1, $2, $3, $4)
-          `, [art.id, s.sucursal_id, delta, `Conversión a unidades sueltas: ${antes} bultos × ${f.factor}`]);
-        }
-      }
-
-      await client.query(`UPDATE articulos SET unidades_por_bulto = $2 WHERE id = $1`, [art.id, f.factor]);
-
-      await client.query(
-        `UPDATE venta_items SET factor = $2 WHERE articulo_id = $1 AND unidad_venta = 'bulto'`,
-        [art.id, f.factor]
-      );
-      await client.query(
-        `UPDATE traspaso_items SET factor = $2 WHERE articulo_id = $1 AND unidad_venta = 'bulto'`,
-        [art.id, f.factor]
-      );
-      for (const tabla of ['devoluciones_mercaderia', 'notas_credito']) {
-        await client.query(`
-          UPDATE ${tabla} t
-             SET items = (
-               SELECT jsonb_agg(
-                        CASE WHEN it->>'articulo_id' = $1::text
-                                  AND COALESCE(it->>'unidad_venta', 'bulto') = 'bulto'
-                             THEN it || jsonb_build_object('unidad_venta', 'bulto', 'factor', $2::int)
-                             ELSE it END
-                        ORDER BY ord)
-                 FROM jsonb_array_elements(t.items) WITH ORDINALITY AS e(it, ord)
-             )
-           WHERE jsonb_typeof(t.items) = 'array'
-             AND t.items @> jsonb_build_array(jsonb_build_object('articulo_id', $1::text))
-        `, [art.id, f.factor]);
-      }
-
-      // Control: el total de cada sucursal quedó exactamente × factor.
-      const { rows: despues } = await client.query(
-        `SELECT sucursal_id, cantidad FROM stock WHERE articulo_id = $1`, [art.id]
-      );
-      for (const s of stocks) {
-        const d = despues.find(x => x.sucursal_id === s.sucursal_id);
-        const esperado = parseFloat((parseFloat(s.cantidad) * f.factor).toFixed(3));
-        if (!d || Math.abs(parseFloat(d.cantidad) - esperado) > 0.0005) {
-          throw new Error(`${f.codigo}: el stock no quedó × ${f.factor} (esperado ${esperado}, quedó ${d?.cantidad}). ¿adelante + depósito no sumaban el total?`);
-        }
-      }
+      // Misma conversión que la pantalla Artículos → Venta por unidad.
+      await convertirArticuloAUnidades(client, art.id, f.factor);
       log(`  ${f.codigo.padEnd(14)} × ${String(f.factor).padStart(4)}  ${art.nombre}`);
     }
 

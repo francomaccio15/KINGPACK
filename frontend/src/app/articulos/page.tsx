@@ -4,6 +4,7 @@ import FiltrosArticulos from './FiltrosArticulos';
 import TabsListas from './TabsListas';
 import ExportarPDF from './ExportarPDF';
 import ExportarFactores from './ExportarFactores';
+import VentaPorUnidad from './VentaPorUnidad';
 import NuevoArticulo from './NuevoArticulo';
 import ArticulosTabla from './ArticulosTabla';
 import RankingArticulos from './RankingArticulos';
@@ -186,7 +187,21 @@ export default async function ArticulosPage({
   const vista =
     searchParams.vista === 'stock' && puedeEditarStock ? 'stock'
     : searchParams.vista === 'valorizado' && esAdmin    ? 'valorizado'
+    : searchParams.vista === 'unidad' && esAdmin        ? 'unidad'
     : 'precios';
+
+  if (vista === 'unidad') {
+    return (
+      <section className="space-y-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1 h-6 bg-kp-red rounded-full block" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide">Artículos</h2>
+        </div>
+        <VistaTabs vista="unidad" puedeEditarStock={puedeEditarStock} esAdmin={esAdmin} />
+        <VentaPorUnidad />
+      </section>
+    );
+  }
 
   if (vista === 'valorizado') {
     const articulosVal = await fetchArticulosValorizado();

@@ -8,11 +8,11 @@ import Link from 'next/link';
 export default function VistaTabs({
   vista, puedeEditarStock, esAdmin = false,
 }: {
-  vista: 'precios' | 'stock' | 'valorizado';
+  vista: 'precios' | 'stock' | 'valorizado' | 'unidad';
   puedeEditarStock: boolean;
   esAdmin?: boolean;
 }) {
-  const tabs: { label: string; href: string; key: 'precios' | 'stock' | 'valorizado' }[] = [
+  const tabs: { label: string; href: string; key: 'precios' | 'stock' | 'valorizado' | 'unidad' }[] = [
     { label: 'Precios', href: '/articulos', key: 'precios' },
   ];
   if (puedeEditarStock) {
@@ -21,6 +21,7 @@ export default function VistaTabs({
   // Stock valorizado (costo del inventario) — solo administradores
   if (esAdmin) {
     tabs.push({ label: 'Stock Valorizado', href: '/articulos?vista=valorizado', key: 'valorizado' });
+    tabs.push({ label: 'Venta por unidad', href: '/articulos?vista=unidad', key: 'unidad' });
   }
 
   return (

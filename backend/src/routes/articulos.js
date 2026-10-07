@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol, sucursalEfectiva } = require('../middleware/auth');
 const { unidadesPorBulto, cantidadStock } = require('../services/unidades');
+const { factorSugerido, convertirArticuloAUnidades } = require('../services/conversion-unidades');
 
 const router = express.Router();
 
@@ -12,27 +13,6 @@ function columnasUnidad(precioListaVal) {
           CASE WHEN a.precio_unidad IS NULL THEN NULL
                WHEN a.precio_madre > 0 THEN ROUND(a.precio_unidad * ${precioListaVal} / a.precio_madre, 3)
                ELSE a.precio_unidad END AS precio_lista_unidad`;
-}
-
-// Factor sugerido a partir del nombre: «BANDEJA CARTON GRIS N1 X 100UNID.» → 100.
-// Toma el número pegado a la palabra de unidad (en «615X50UNID.» es 50, no 615)
-// y tolera erratas como «NUD». Es SOLO una sugerencia: la verifica una persona.
-function factorSugerido(nombre) {
-  // Errata frecuente: letra O en lugar de cero pegada a un dígito
-  // («X1OOU» → «X100U», «5OUNID» → «50UNID»). Cuenta como dudoso.
-  const crudo = String(nombre || '').toUpperCase();
-  const s = crudo.replace(/(\d)(O+)/g, (m, d, o) => d + '0'.repeat(o.length));
-  const errata = s !== crudo;
-  const matches = [...s.matchAll(/(\d+)\s*(UNIDADES|UNIDAD|UNID|UNI|UDS|UN|NUD|U)\b\.?/g)];
-  if (matches.length === 0) {
-    // «VASO X100» sin la palabra de unidad: se sugiere, pero a revisar.
-    const x = s.match(/X\s*(\d+)\s*\.?\s*$/);
-    const nx = x ? parseInt(x[1], 10) : 0;
-    return nx > 1 ? { factor: nx, confianza: 'revisar' } : { factor: '', confianza: 'sin_dato' };
-  }
-  const n = parseInt(matches[matches.length - 1][1], 10);
-  if (!(n > 1)) return { factor: '', confianza: 'sin_dato' };
-  return { factor: n, confianza: matches.length === 1 && !errata ? 'alta' : 'revisar' };
 }
 
 function csvCelda(v) {
@@ -80,10 +60,90 @@ router.get('/export/factores', requireRol('administrador'), async (req, res, nex
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/articulos/venta-por-unidad — pantalla de tildado (solo admin) ──
+// Todos los artículos activos con su estado de venta por unidad, el factor
+// sugerido desde el nombre y el stock de cada sucursal (crudo, en sueltas).
+router.get('/venta-por-unidad', requireRol('administrador'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, a.codigo, a.nombre, c.nombre AS categoria,
+             a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad, a.precio_madre,
+             COALESCE(json_agg(json_build_object('sucursal', s.nombre, 'cantidad', st.cantidad)
+                               ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '[]') AS stock
+        FROM articulos a
+        LEFT JOIN categorias c ON c.id = a.categoria_id
+        LEFT JOIN stock st ON st.articulo_id = a.id
+        LEFT JOIN sucursales s ON s.id = st.sucursal_id AND s.activo = TRUE
+       WHERE a.deleted_at IS NULL AND a.activo = TRUE
+       GROUP BY a.id, c.nombre
+       ORDER BY c.nombre, a.nombre
+    `);
+    res.json({
+      articulos: rows.map(r => {
+        const sug = factorSugerido(r.nombre);
+        return { ...r, factor_sugerido: sug.factor || null, confianza: sug.confianza };
+      }),
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/articulos/:id/activar-unidad — solo admin ─────────────────────
+// Habilita la venta por unidad AL INSTANTE. Si el artículo todavía está en
+// bultos (unidades_por_bulto = 1), convierte su stock a sueltas en la misma
+// transacción (services/conversion-unidades.js). Si ya estaba convertido, las
+// unidades por bulto quedan fijas y solo se marca y se actualiza el precio.
+// Body: { unidades_por_bulto: entero > 1, precio_unidad: number > 0 }
+router.post('/:id/activar-unidad', requireRol('administrador'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const factor = Number(req.body?.unidades_por_bulto);
+    const precio = parseFloat(req.body?.precio_unidad);
+    if (!Number.isInteger(factor) || factor <= 1) {
+      return res.status(400).json({ error: 'Las unidades por bulto tienen que ser un número entero mayor a 1' });
+    }
+    if (!Number.isFinite(precio) || precio <= 0) {
+      return res.status(400).json({ error: 'El precio por unidad debe ser mayor a 0' });
+    }
+
+    await client.query('BEGIN');
+    const { rows: [art] } = await client.query(
+      `SELECT unidades_por_bulto FROM articulos WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id]
+    );
+    if (!art) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Artículo no encontrado' }); }
+
+    let conversion = null;
+    if (art.unidades_por_bulto === 1) {
+      conversion = await convertirArticuloAUnidades(client, id, factor, req.usuario?.id || null);
+    } else if (art.unidades_por_bulto !== factor) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `Este artículo ya está convertido con bulto de ${art.unidades_por_bulto}: las unidades por bulto no se pueden cambiar`,
+      });
+    }
+
+    const { rows: [actualizado] } = await client.query(
+      `UPDATE articulos SET vende_por_unidad = TRUE, precio_unidad = $2
+        WHERE id = $1
+      RETURNING id, vende_por_unidad, unidades_por_bulto, precio_unidad`,
+      [id, parseFloat(precio.toFixed(3))]
+    );
+    await client.query('COMMIT');
+    res.json({ articulo: actualizado, conversion });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PATCH /api/articulos/:id/venta-por-unidad — solo admin ──────────────────
 // Marca si el artículo se vende suelto y su precio por unidad (precio propio,
-// no bulto ÷ factor). Las unidades por bulto NO se tocan acá: cambiarlas sin
-// convertir el stock lo descuadra (lo hace scripts/convertir-stock-por-unidad.js).
+// no bulto ÷ factor). Destildar solo saca el «+ Unidad» de ventas: el stock
+// sigue en sueltas. Las unidades por bulto NO se tocan acá: la primera vez se
+// fijan con POST /:id/activar-unidad, que convierte el stock.
 // Body: { vende_por_unidad: boolean, precio_unidad: number|null }
 router.patch('/:id/venta-por-unidad', requireRol('administrador'), async (req, res, next) => {
   try {

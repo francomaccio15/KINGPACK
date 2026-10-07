@@ -439,7 +439,7 @@ export default function EditarArticulo({
                 </>
               ) : (
                 <p className="text-xs text-kp-gray">
-                  Todavía no tiene unidades por bulto cargadas. Se definen al convertir su stock a unidades sueltas.
+                  Todavía se vende solo por bulto. Para venderlo suelto, tildalo en Artículos → Venta por unidad.
                 </p>
               )}
             </fieldset>
