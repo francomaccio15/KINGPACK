@@ -62,12 +62,23 @@ function cbuValido(valor) {
       && dv(b2, [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]) === Number(b2[13]);
 }
 
-// Número de cheque físico: solo dígitos (los bancos argentinos usan 8).
-// ID de ECHEQ: alfanumérico, lo asigna la red (COELSA).
+// Número de cheque físico: solo dígitos. ECHEQ: alfanumérico.
+// Sin mínimo de largo: el número que figura puede ser corto y exigir 4-6
+// caracteres trababa cargas legítimas (oct 2026).
 function numeroValido(numero, forma) {
   const n = String(numero ?? '').trim();
-  if (forma === 'echeq') return /^[A-Za-z0-9-]{6,30}$/.test(n);
-  return /^\d{4,12}$/.test(n);
+  if (forma === 'echeq') return /^[A-Za-z0-9-]{1,30}$/.test(n);
+  return /^\d{1,12}$/.test(n);
+}
+
+// Por qué no cierra un CBU, en palabras del usuario (null si está bien).
+// Caso típico: pegaron el CUIT (11 dígitos) en el campo del CBU.
+function errorCbu(valor) {
+  const d = soloDigitos(valor);
+  if (cbuValido(d)) return null;
+  if (d.length === 11) return 'Eso parece un CUIT, no un CBU (el CBU tiene 22 dígitos). Si no lo tenés, dejalo vacío.';
+  if (d.length !== 22) return `El CBU tiene 22 dígitos (se cargaron ${d.length}). Si no lo tenés, dejalo vacío.`;
+  return 'CBU mal copiado: no cierran los dígitos verificadores.';
 }
 
 function diasEntre(desdeISO, hastaISO) {
@@ -105,8 +116,8 @@ function validarAltaCheque(body) {
 
   if (!numeroValido(body.numero_cheque, forma)) {
     return { error: forma === 'echeq'
-      ? 'ID de ECHEQ inválido (6 a 30 caracteres alfanuméricos)'
-      : 'Número de cheque inválido (solo dígitos, 4 a 12)' };
+      ? 'N° de ECHEQ inválido (solo letras, números o guiones, hasta 30)'
+      : 'N° de cheque inválido (solo dígitos, hasta 12)' };
   }
 
   if (!esFechaISO(body.fecha_emision))     return { error: 'La fecha de emisión es obligatoria' };
@@ -117,7 +128,7 @@ function validarAltaCheque(body) {
   // Sucursal bancaria o CBU: alcanza con uno. El CBU, si viene, tiene que cerrar.
   const bancoSucursal = body.banco_sucursal?.trim() || null;
   const cbuDig = soloDigitos(body.banco_cbu);
-  if (body.banco_cbu && !cbuValido(cbuDig)) return { error: 'CBU inválido (no cierran los dígitos verificadores)' };
+  if (body.banco_cbu) { const e = errorCbu(cbuDig); if (e) return { error: e }; }
   if (!bancoSucursal && !cbuDig) return { error: 'Indicá la sucursal bancaria o el CBU del cheque' };
 
   // Librador: solo se exige en los RECIBIDOS. En los emitidos el librador es

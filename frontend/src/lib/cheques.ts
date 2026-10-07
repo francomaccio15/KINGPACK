@@ -50,10 +50,27 @@ export function cbuValido(valor: string): boolean {
       && dv(b2, [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]) === Number(b2[13]);
 }
 
+// Por qué no cierra un CBU, en palabras del usuario ('' si está bien o vacío).
+// Caso típico: pegaron el CUIT (11 dígitos) en el campo del CBU.
+export function avisoCbu(valor: string): string {
+  const d = soloDigitos(valor);
+  if (!valor.trim() || cbuValido(valor)) return '';
+  if (d.length === 11) return 'Eso parece un CUIT, no un CBU (el CBU tiene 22 dígitos). Si no lo tenés, dejalo vacío.';
+  if (d.length !== 22) return `El CBU tiene 22 dígitos (cargaste ${d.length}). Si no lo tenés, dejalo vacío.`;
+  return 'CBU mal copiado: no cierran los dígitos verificadores.';
+}
+
+// Sin mínimo de largo: el número que figura en el cheque/ECHEQ puede ser corto
+// y exigir 4-6 caracteres trababa cargas legítimas.
 export function numeroValido(numero: string, forma: Forma): boolean {
   const n = numero.trim();
-  return forma === 'echeq' ? /^[A-Za-z0-9-]{6,30}$/.test(n) : /^\d{4,12}$/.test(n);
+  return forma === 'echeq' ? /^[A-Za-z0-9-]{1,30}$/.test(n) : /^\d{1,12}$/.test(n);
 }
+
+export const MSG_NUMERO: Record<Forma, string> = {
+  echeq:  'N° de ECHEQ inválido (solo letras, números o guiones, hasta 30)',
+  fisico: 'N° de cheque inválido (solo dígitos, hasta 12)',
+};
 
 export function diasEntre(desdeISO: string, hastaISO: string): number {
   return Math.round((Date.parse(hastaISO + 'T00:00:00Z') - Date.parse(desdeISO + 'T00:00:00Z')) / 86_400_000);
@@ -111,15 +128,14 @@ export function errorCheque(
 ): string | null {
   if (!ch.banco?.trim()) return 'falta el banco';
   if (!ch.numero_cheque?.trim()) return ch.forma === 'echeq' ? 'falta el ID del ECHEQ' : 'falta el número';
-  if (!numeroValido(ch.numero_cheque, ch.forma)) {
-    return ch.forma === 'echeq' ? 'ID de ECHEQ inválido' : 'número inválido (solo dígitos, 4 a 12)';
-  }
+  if (!numeroValido(ch.numero_cheque, ch.forma)) return MSG_NUMERO[ch.forma];
   if (!ch.fecha_emision) return 'falta la fecha de emisión';
   if (!ch.fecha_vencimiento) return 'falta la fecha de vencimiento';
   const v = errorVigencia(ch.fecha_emision, ch.fecha_vencimiento, ch.modalidad);
   if (v) return v;
   if (!ch.banco_sucursal.trim() && !ch.banco_cbu.trim()) return 'falta la sucursal bancaria o el CBU';
-  if (ch.banco_cbu.trim() && !cbuValido(ch.banco_cbu)) return 'CBU inválido';
+  const cbu = avisoCbu(ch.banco_cbu);
+  if (cbu) return cbu;
   if (tipo === 'recibido') {
     if (!ch.librador_cuit.trim()) return 'falta el CUIT del librador';
     if (!cuitValido(ch.librador_cuit)) return 'CUIT del librador inválido';

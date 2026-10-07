@@ -7,7 +7,7 @@ import Modal from '@/components/ui/Modal';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import {
   type Forma, type Modalidad, FORMA_LABEL, MODALIDAD_LABEL,
-  cuitValido, cbuValido, numeroValido, errorVigencia, formatearCuit,
+  cuitValido, avisoCbu as textoAvisoCbu, numeroValido, MSG_NUMERO, errorVigencia, formatearCuit,
   formatoMonto, formatoFecha, soloDigitos,
 } from '@/lib/cheques';
 
@@ -113,9 +113,9 @@ export default function AgregarCheque() {
 
   // Avisos en vivo, campo por campo (no bloquean el tipeo).
   const avisoNumero = numero && !numeroValido(numero, forma)
-    ? (forma === 'echeq' ? 'ID ECHEQ: 6 a 30 caracteres alfanuméricos' : 'Solo dígitos (4 a 12)') : '';
+    ? MSG_NUMERO[forma] : '';
   const avisoCuit = libradorCuit && !cuitValido(libradorCuit) ? 'No cierra el dígito verificador' : '';
-  const avisoCbu = cbu && !cbuValido(cbu) ? 'CBU inválido (22 dígitos, verificadores)' : '';
+  const avisoCbu = textoAvisoCbu(cbu);
   const avisoVigencia = errorVigencia(fechaEmision, fechaVenc, modalidad) ?? '';
 
   const reset = () => {

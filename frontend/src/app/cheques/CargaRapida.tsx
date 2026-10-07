@@ -7,7 +7,7 @@ import Modal from '@/components/ui/Modal';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import {
   type Forma, type Modalidad, FORMA_LABEL, MODALIDAD_LABEL,
-  cuitValido, cbuValido, numeroValido, errorVigencia, formatearCuit,
+  cuitValido, avisoCbu, numeroValido, MSG_NUMERO, errorVigencia, formatearCuit,
   formatoMonto, soloDigitos,
 } from '@/lib/cheques';
 import { type BorradorCheque, type ClienteRef, parsearTexto } from '@/lib/cheques-parser';
@@ -29,14 +29,15 @@ function errores(f: Fila): string[] {
   const e: string[] = [];
   if (!f.banco.trim()) e.push('Falta banco');
   if (!f.numero.trim()) e.push(f.forma === 'echeq' ? 'Falta ID ECHEQ' : 'Falta N° de cheque');
-  else if (!numeroValido(f.numero, f.forma)) e.push('Número con formato inválido');
+  else if (!numeroValido(f.numero, f.forma)) e.push(MSG_NUMERO[f.forma]);
   if (!f.importe || Number(f.importe) <= 0) e.push('Falta importe');
   if (!f.fechaEmision) e.push('Falta emisión');
   if (!f.fechaVencimiento) e.push('Falta vencimiento');
   const v = errorVigencia(f.fechaEmision, f.fechaVencimiento, f.modalidad);
   if (v) e.push(v);
   if (!f.bancoSucursal.trim() && !f.cbu.trim()) e.push('Falta sucursal o CBU');
-  if (f.cbu.trim() && !cbuValido(f.cbu)) e.push('CBU inválido');
+  const cbu = avisoCbu(f.cbu);
+  if (cbu) e.push(cbu);
   if (!f.libradorCuit.trim()) e.push('Falta CUIT librador');
   else if (!cuitValido(f.libradorCuit)) e.push('CUIT inválido');
   if (!f.libradorNombre.trim()) e.push('Falta nombre librador');

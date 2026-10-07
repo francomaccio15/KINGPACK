@@ -121,13 +121,22 @@ export default function ConfirmarPrecios({
   const ids = lineas.map(l => l.articulo_id).filter(Boolean);
   const idsKey = ids.join(',');
 
+  // Se incrementa con "Reintentar" para volver a disparar la lectura.
+  const [intento, setIntento] = useState(0);
+
   useEffect(() => {
     if (!open || ids.length === 0) return;
     let cancelado = false;
     setLoading(true);
     setError(null);
-    apiFetch(`/api/articulos/costos?ids=${encodeURIComponent(idsKey)}`)
-      .then(r => r.json())
+    // POST con los ids en el cuerpo: el GET con la tira de UUIDs en la URL lo
+    // frenaba Cloudflare y el modal quedaba sin precios.
+    apiFetch('/api/articulos/costos', { method: 'POST', body: JSON.stringify({ ids: idsKey.split(',') }) })
+      .then(async r => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok || !d) throw new Error(d?.error || `Error ${r.status} al leer los precios actuales`);
+        return d;
+      })
       .then((d: { articulos?: ArticuloCosto[] }) => {
         if (cancelado) return;
         const mapa: Record<string, ArticuloCosto> = {};
@@ -154,10 +163,14 @@ export default function ConfirmarPrecios({
           };
         }));
       })
-      .catch(() => { if (!cancelado) setError('No se pudieron leer los precios actuales'); })
+      .catch((e: unknown) => {
+        if (cancelado) return;
+        const msg = e instanceof Error && !/fetch|network|load failed/i.test(e.message) ? e.message : '';
+        setError(`No se pudieron leer los precios actuales${msg ? ` (${msg})` : ''}. Revisá la conexión y reintentá.`);
+      })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [open, idsKey, fletePct]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, idsKey, fletePct, intento]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setFila = (id: string, cambio: Partial<Fila>) =>
     setFilas(prev => prev.map(f => f.articulo_id === id ? { ...f, ...cambio } : f));
@@ -228,7 +241,16 @@ export default function ConfirmarPrecios({
       )}
 
       {error && (
-        <p className="text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-3">{error}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-sm text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-3">
+          <p className="flex-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => setIntento(n => n + 1)}
+            className="shrink-0 px-4 py-1.5 rounded-lg border border-kp-red/50 text-kp-white text-xs font-semibold hover:bg-kp-red/20 transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
       )}
 
       {!loading && filas.length > 0 && (

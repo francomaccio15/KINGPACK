@@ -6,7 +6,7 @@
 
 import {
   type ChequeExtra, type Forma, type Modalidad,
-  cuitValido, cbuValido, formatearCuit, errorVigencia,
+  cuitValido, avisoCbu, formatearCuit, errorVigencia,
 } from '@/lib/cheques';
 
 interface Props {
@@ -29,7 +29,7 @@ export default function ChequeDatosExtra({
   inputCls = INPUT, labelCls = LABEL,
 }: Props) {
   const avisoCuit = value.librador_cuit && !cuitValido(value.librador_cuit) ? 'CUIT inválido' : '';
-  const avisoCbu = value.banco_cbu && !cbuValido(value.banco_cbu) ? 'CBU inválido' : '';
+  const avisoCbuTxt = avisoCbu(value.banco_cbu);
   const avisoVig = fechaVencimiento ? errorVigencia(value.fecha_emision, fechaVencimiento, value.modalidad) : null;
 
   return (
@@ -61,7 +61,7 @@ export default function ChequeDatosExtra({
       <div className="flex flex-col gap-1">
         <label className={labelCls}>CBU</label>
         <input value={value.banco_cbu} onChange={e => onChange({ banco_cbu: e.target.value })} inputMode="numeric" placeholder="o sucursal" className={`${inputCls} font-mono`} />
-        {avisoCbu && <span className="text-[10px] text-amber-400">{avisoCbu}</span>}
+        {avisoCbuTxt && <span className="text-[10px] text-amber-400">{avisoCbuTxt}</span>}
       </div>
       {tipo === 'recibido' && (
         <>

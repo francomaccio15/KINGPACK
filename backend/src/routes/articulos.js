@@ -377,19 +377,26 @@ router.get('/alicuotas', async (req, res, next) => {
   }
 });
 
-// ─── GET /api/articulos/costos?ids=a,b,c ─────────────────────────────────────
+// ─── POST /api/articulos/costos  { ids: [...] } ──────────────────────────────
+// ─── GET  /api/articulos/costos?ids=a,b,c  (compat) ──────────────────────────
 // Datos de costo/precio de un conjunto de artículos, para previsualizar cómo
 // queda cada precio antes de confirmar una compra de mercadería.
 // Devuelve el margen EFECTIVO (el propio del artículo o, si no tiene, el de su
 // categoría): es el que usa el trigger para recalcular precio_madre.
-router.get('/costos', async (req, res, next) => {
+//
+// El front usa POST: el GET con la tira de UUIDs en la URL lo empezó a frenar
+// Cloudflare antes de llegar al servidor (oct 2026).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function costosArticulos(req, res, next) {
   try {
-    const ids = String(req.query.ids || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
+    const crudos = Array.isArray(req.body?.ids)
+      ? req.body.ids
+      : String(req.query.ids || '').split(',');
+    const ids = [...new Set(crudos.map(s => String(s ?? '').trim()).filter(Boolean))];
     if (ids.length === 0) return res.json({ articulos: [] });
     if (ids.length > 300) return res.status(400).json({ error: 'Demasiados artículos en la consulta' });
+    if (!ids.every(id => UUID_RE.test(id))) return res.status(400).json({ error: 'Id de artículo inválido' });
 
     const { rows } = await pool.query(`
       SELECT a.id, a.codigo, a.nombre,
@@ -407,7 +414,10 @@ router.get('/costos', async (req, res, next) => {
 
     res.json({ articulos: rows });
   } catch (err) { next(err); }
-});
+}
+
+router.post('/costos', costosArticulos);
+router.get('/costos', costosArticulos);
 
 // ─── GET /api/articulos/next-codigo ──────────────────────────────────────────
 // Sugiere el siguiente código correlativo (solo número, sin prefijo).
