@@ -37,6 +37,8 @@ const LISTA_INICIAL = new Set([
   'KP00207', 'KP00295', 'KP00296', 'KP00297', 'KP00298', 'KP00299', 'KP00300', 'KP00301',
   'KP00302', 'KP00303', 'KP00304', 'KP00305', 'KP00306', 'KP00307', 'KP00308', 'KP00309',
   '389', '390', '391', '392',
+  // Tapas de potes (088, 1 kg y 088 ensobradas).
+  '377', '378', '393',
 ]);
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
