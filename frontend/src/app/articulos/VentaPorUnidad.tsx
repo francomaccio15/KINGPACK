@@ -23,7 +23,7 @@ type Filtro = 'inicial' | 'sugeridos' | 'habilitados' | 'todos';
 
 // Lista inicial que pasó el negocio el 07/10/2026 (lo que la gente pide suelto):
 // bandejas de aluminio, cajas de pizza y de lomo, bandejas de tergopol, bandejas
-// redondas de cartón, vasos plásticos, bandejas 105 y budinera de aluminio.
+// redondas de cartón, vasos plásticos, bandejas 105, budinera de aluminio y potes.
 // Es solo un filtro: cada artículo se habilita igual, tildándolo.
 const LISTA_INICIAL = new Set([
   'KP00042', 'KP00043', 'KP00020', 'KP00021', 'KP00022', 'KP00044', 'KP00045', 'KP00046', 'KP00023', 'KP00024',
@@ -33,6 +33,10 @@ const LISTA_INICIAL = new Set([
   'KP00175', 'KP00176', 'KP00177', 'KP00192', 'KP00193',
   'KP00011', 'KP00012', 'KP00013', 'KP00014', 'KP00015',
   'KP00356', 'KP00357', 'KP00358', 'KP00359', 'KP00360', 'KP00361', 'KP00362', 'KP00363', 'KP00365', 'KP00364',
+  // Potes (agregados el 09/10/2026): todos los que llevan "pote" en el nombre.
+  'KP00207', 'KP00295', 'KP00296', 'KP00297', 'KP00298', 'KP00299', 'KP00300', 'KP00301',
+  'KP00302', 'KP00303', 'KP00304', 'KP00305', 'KP00306', 'KP00307', 'KP00308', 'KP00309',
+  '389', '390', '391', '392',
 ]);
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
