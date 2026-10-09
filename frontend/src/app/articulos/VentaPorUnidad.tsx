@@ -41,6 +41,14 @@ const LISTA_INICIAL = new Set([
   '377', '378', '393',
 ]);
 
+// Margen de la venta suelta para la Lista inicial (pedido del 09/10/2026): el
+// precio por unidad es el del bulto prorrateado × 2 (100%), redondeado siempre
+// para arriba a pesos enteros. El precio del bulto no cambia. Los que ya tenían
+// bulto definido se actualizaron con la migración 065.
+const MARGEN_UNIDAD_INICIAL = 1;
+const precioUnidadInicial = (precioBulto: number, factor: number) =>
+  Math.ceil(precioBulto / factor * (1 + MARGEN_UNIDAD_INICIAL));
+
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
   const t = typeof window !== 'undefined' ? localStorage.getItem('kp_token') : null;
@@ -64,8 +72,16 @@ const ETIQUETA_CONFIANZA: Record<Art['confianza'], { txt: string; cls: string }>
 
 function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
   const convertido = art.unidades_por_bulto > 1;
+  const inicial = LISTA_INICIAL.has(art.codigo);
+  const madre = parseFloat(art.precio_madre);
+  const sugerido = (f: string) => {
+    const n = parseInt(f, 10);
+    return inicial && Number.isInteger(n) && n > 1 && madre > 0 ? String(precioUnidadInicial(madre, n)) : '';
+  };
   const [factor, setFactor] = useState(String(convertido ? art.unidades_por_bulto : art.factor_sugerido ?? ''));
-  const [precio, setPrecio] = useState(art.precio_unidad != null ? String(parseFloat(art.precio_unidad)) : '');
+  const [precio, setPrecio] = useState(art.precio_unidad != null ? String(parseFloat(art.precio_unidad)) : sugerido(factor));
+  // Mientras el precio sea el sugerido (no lo tocaron a mano), sigue al factor.
+  const [precioManual, setPrecioManual] = useState(art.precio_unidad != null);
   const [confirmar, setConfirmar] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -146,7 +162,7 @@ function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
           decimals={0}
           value={factor}
           disabled={convertido || guardando}
-          onChange={e => { setFactor(e.target.value); setError(''); }}
+          onChange={e => { setFactor(e.target.value); if (!precioManual) setPrecio(sugerido(e.target.value)); setError(''); }}
           placeholder="—"
           aria-label={`Unidades por bulto de ${art.nombre}`}
           className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5 text-sm text-right text-kp-white focus:outline-none focus:border-kp-red disabled:opacity-60"
@@ -160,13 +176,17 @@ function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
           decimals={3}
           value={precio}
           disabled={guardando}
-          onChange={e => { setPrecio(e.target.value); setError(''); }}
+          onChange={e => { setPrecio(e.target.value); setPrecioManual(true); setError(''); }}
           placeholder="0"
           aria-label={`Precio por unidad de ${art.nombre}`}
           className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-2 py-1.5 text-sm text-right text-kp-white focus:outline-none focus:border-kp-red"
         />
         <p className="text-2xs text-kp-gray mt-0.5 text-right">
-          {referencia != null ? `bulto ÷ ${nFactor}: ${ars.format(referencia)}` : `bulto: ${ars.format(parseFloat(art.precio_madre))}`}
+          {referencia == null
+            ? `bulto: ${ars.format(madre)}`
+            : inicial
+              ? `bulto ÷ ${nFactor} × 2: ${ars.format(precioUnidadInicial(madre, nFactor))}`
+              : `bulto ÷ ${nFactor}: ${ars.format(referencia)}`}
         </p>
       </td>
       <td className="px-3 py-2.5 w-24 text-right">
