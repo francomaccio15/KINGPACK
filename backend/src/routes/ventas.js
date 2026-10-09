@@ -1054,12 +1054,15 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
       nuevaObs = `[Anulada: ${motivoAnulacion}]` + (nuevaObs ? '\n' + nuevaObs : '');
     }
 
+    // La condición va como parámetro aparte: reusar $1 como varchar (SET estado) y
+    // como $1::text en el CASE hace que Postgres deduzca dos tipos para el mismo
+    // parámetro (42P08) y la anulación falla con 500. Ya pasó dos veces.
     const { rows } = await client.query(
       `UPDATE ventas
           SET estado = $1, observaciones = $3,
-              despacho_pendiente = CASE WHEN $1::text = 'anulada' THEN FALSE ELSE despacho_pendiente END
+              despacho_pendiente = CASE WHEN $4::boolean THEN FALSE ELSE despacho_pendiente END
         WHERE id = $2 RETURNING id, estado`,
-      [estado, id, nuevaObs]
+      [estado, id, nuevaObs, estado === 'anulada']
     );
 
     await client.query('COMMIT');
