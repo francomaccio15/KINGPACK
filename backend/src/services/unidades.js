@@ -93,6 +93,15 @@ async function unidadesPorBultoDe(db, articuloId) {
   return unidadesPorBulto(rows[0]);
 }
 
+// ¿La sucursal vende suelto? (mig 067: Laprida no, solo por bulto.)
+async function sucursalVendePorUnidad(db, sucursalId) {
+  if (!sucursalId) return true;
+  const { rows } = await db.query(
+    `SELECT vende_por_unidad FROM sucursales WHERE id = $1`, [sucursalId]
+  );
+  return rows[0]?.vende_por_unidad !== false;
+}
+
 // Formato «7 bultos + 20 u.» para mensajes del backend (stock insuficiente).
 function formatoStock(cantidad, upb) {
   const n = parseFloat(cantidad) || 0;
@@ -117,5 +126,6 @@ module.exports = {
   resolverUnidades,
   factoresGuardados,
   unidadesPorBultoDe,
+  sucursalVendePorUnidad,
   formatoStock,
 };

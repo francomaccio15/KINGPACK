@@ -963,8 +963,12 @@ router.get('/', async (req, res, next) => {
 
     // Subquery de stock — filtrado por sucursal o agregado total con detalle
     let stockSubquery;
+    // Sucursal que solo vende por bulto (mig 067: Laprida): el artículo llega
+    // como no vendible suelto, así ventas/presupuestos no muestran «+ Unidad».
+    let vendeUnidadSuc = 'TRUE';
     if (sucursal_id) {
       params.push(sucursal_id);
+      vendeUnidadSuc = `COALESCE((SELECT vende_por_unidad FROM sucursales WHERE id = $${idx}), TRUE)`;
       stockSubquery = `
         SELECT articulo_id,
                COALESCE(cantidad, 0)                                            AS cantidad_total,
@@ -1022,6 +1026,7 @@ router.get('/', async (req, res, next) => {
           c.nombre       AS categoria,
           ${precioListaVal} AS precio_lista,
           ${columnasUnidad(precioListaVal)},
+          (a.vende_por_unidad AND ${vendeUnidadSuc}) AS vende_por_unidad_suc,
           COALESCE(st.cantidad_total, 0)::numeric  AS stock_total,
           COALESCE(st.cantidad_adelante, 0)::numeric AS stock_adelante,
           COALESCE(st.cantidad_deposito, 0)::numeric AS stock_deposito,

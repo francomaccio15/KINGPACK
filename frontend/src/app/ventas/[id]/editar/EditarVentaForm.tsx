@@ -69,6 +69,7 @@ export default function EditarVentaForm({
   pagosIniciales = [],
   ventaEstado,
   listaPrecioId,
+  sucursalId = null,
   observacionesActuales,
   descuentoExtraPctInicial = 0,
   descuentoExtraMontoInicial = 0,
@@ -78,6 +79,7 @@ export default function EditarVentaForm({
   pagosIniciales?: { medio_pago: string; monto: string; cuenta_bancaria_id?: string | null; }[];
   ventaEstado?: string;
   listaPrecioId: string | null;
+  sucursalId?: string | null;
   observacionesActuales: string;
   descuentoExtraPctInicial?: number;
   descuentoExtraMontoInicial?: number;
@@ -208,7 +210,8 @@ export default function EditarVentaForm({
       setBuscando(true);
       try {
         const listaParam = listaPrecioId ? `&lista_id=${listaPrecioId}` : '';
-        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&activo=true&limit=8${listaParam}`);
+        const sucParam   = sucursalId ? `&sucursal_id=${sucursalId}` : '';
+        const res = await apiFetch(`/api/articulos?q=${encodeURIComponent(q)}&activo=true&limit=8${listaParam}${sucParam}`);
         const data = await res.json();
         setResultados(data.articulos ?? []);
       } finally { setBuscando(false); }

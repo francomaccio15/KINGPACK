@@ -9,6 +9,7 @@ const {
 } = require('../services/movimientos-bancarios');
 const {
   normalizarUnidad, puedeVenderPorUnidad, factorDe, cantidadStock, formatoStock, unidadesPorBulto,
+  sucursalVendePorUnidad,
 } = require('../services/unidades');
 
 const router = express.Router();
@@ -318,6 +319,11 @@ router.post('/', async (req, res, next) => {
         return res.status(400).json({ error: `"${nombre}" está repetido en la venta` });
       }
       lineasVistas.add(clave);
+    }
+    // Hay sucursales que solo venden por bulto (mig 067: Laprida).
+    if (items.some(i => i.unidad_venta === 'unidad') && !(await sucursalVendePorUnidad(client, sucursal_id))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'En esta sucursal no se vende por unidad, solo por bulto' });
     }
 
     // Recalcular precios y totales con datos de la DB
@@ -1642,6 +1648,14 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
         return res.status(400).json({ error: `"${art.nombre}" está repetido en la venta` });
       }
       lineasVistas.add(clave);
+    }
+    // Sucursal que solo vende por bulto (mig 067): no se agregan sueltas nuevas;
+    // las que la venta ya tenía de antes se pueden conservar.
+    const sueltasPrevias = new Set(itemsAnteriores.filter(i => i.unidad_venta === 'unidad').map(i => i.articulo_id));
+    if (items.some(i => i.unidad_venta === 'unidad' && !sueltasPrevias.has(i.articulo_id))
+        && !(await sucursalVendePorUnidad(client, sucursal_id))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'En esta sucursal no se vende por unidad, solo por bulto' });
     }
 
     const itemsCalculados = items.map(item => {

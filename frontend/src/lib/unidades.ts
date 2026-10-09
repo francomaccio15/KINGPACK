@@ -10,6 +10,8 @@ export interface ArticuloUnidad {
   vende_por_unidad?: boolean | null;
   unidades_por_bulto?: number | string | null;
   precio_unidad?: number | string | null;
+  /** Viene de /api/articulos?sucursal_id=…: FALSE si esa sucursal solo vende por bulto (Laprida). */
+  vende_por_unidad_suc?: boolean | null;
 }
 
 export function unidadesPorBulto(art?: ArticuloUnidad | null): number {
@@ -17,9 +19,10 @@ export function unidadesPorBulto(art?: ArticuloUnidad | null): number {
   return Number.isFinite(n) && n > 1 ? n : 1;
 }
 
-/** Marcado por el admin, con bulto real y precio por unidad propio. */
+/** Marcado por el admin, con bulto real y precio por unidad propio, y la sucursal lo permite. */
 export function vendePorUnidad(art?: ArticuloUnidad | null): boolean {
-  return !!art?.vende_por_unidad && unidadesPorBulto(art) > 1 && Number(art?.precio_unidad) > 0;
+  return !!art?.vende_por_unidad && art?.vende_por_unidad_suc !== false
+    && unidadesPorBulto(art) > 1 && Number(art?.precio_unidad) > 0;
 }
 
 /** Unidades de stock que vale una línea (bulto → factor; suelta → 1). */
