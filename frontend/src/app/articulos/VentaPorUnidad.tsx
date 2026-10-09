@@ -15,7 +15,7 @@ type StockSuc = { sucursal: string; cantidad: string | number };
 type Art = {
   id: string; codigo: string; nombre: string; categoria: string | null;
   vende_por_unidad: boolean; unidades_por_bulto: number;
-  precio_unidad: string | null; precio_madre: string;
+  precio_unidad: string | null; precio_madre: string; margen_unidad_pct: string | null;
   stock: StockSuc[];
   factor_sugerido: number | null; confianza: 'alta' | 'revisar' | 'sin_dato';
 };
@@ -41,13 +41,12 @@ const LISTA_INICIAL = new Set([
   '377', '378', '393',
 ]);
 
-// Margen de la venta suelta para la Lista inicial (pedido del 09/10/2026): el
-// precio por unidad es el del bulto prorrateado × 2 (100%), redondeado siempre
-// para arriba a pesos enteros. El precio del bulto no cambia. Los que ya tenían
-// bulto definido se actualizaron con la migración 065.
-const MARGEN_UNIDAD_INICIAL = 1;
-const precioUnidadInicial = (precioBulto: number, factor: number) =>
-  Math.ceil(precioBulto / factor * (1 + MARGEN_UNIDAD_INICIAL));
+// Margen de la venta suelta (margen_unidad_pct; la Lista inicial tiene 100%,
+// mig 066): precio por unidad = bulto ÷ unidades × (1 + margen), redondeado
+// siempre para arriba a pesos enteros. Mismo cálculo que el trigger de la base,
+// que lo recalcula solo cada vez que cambia el precio del bulto.
+const precioUnidadConMargen = (precioBulto: number, factor: number, margenPct: number) =>
+  Math.ceil(precioBulto / factor * (1 + margenPct / 100));
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -72,11 +71,11 @@ const ETIQUETA_CONFIANZA: Record<Art['confianza'], { txt: string; cls: string }>
 
 function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
   const convertido = art.unidades_por_bulto > 1;
-  const inicial = LISTA_INICIAL.has(art.codigo);
+  const margen = art.margen_unidad_pct != null ? parseFloat(art.margen_unidad_pct) : null;
   const madre = parseFloat(art.precio_madre);
   const sugerido = (f: string) => {
     const n = parseInt(f, 10);
-    return inicial && Number.isInteger(n) && n > 1 && madre > 0 ? String(precioUnidadInicial(madre, n)) : '';
+    return margen != null && Number.isInteger(n) && n > 1 && madre > 0 ? String(precioUnidadConMargen(madre, n, margen)) : '';
   };
   const [factor, setFactor] = useState(String(convertido ? art.unidades_por_bulto : art.factor_sugerido ?? ''));
   const [precio, setPrecio] = useState(art.precio_unidad != null ? String(parseFloat(art.precio_unidad)) : sugerido(factor));
@@ -184,8 +183,8 @@ function Fila({ art, onCambio }: { art: Art; onCambio: (a: Art) => void }) {
         <p className="text-2xs text-kp-gray mt-0.5 text-right">
           {referencia == null
             ? `bulto: ${ars.format(madre)}`
-            : inicial
-              ? `bulto ÷ ${nFactor} × 2: ${ars.format(precioUnidadInicial(madre, nFactor))}`
+            : margen != null
+              ? `bulto ÷ ${nFactor} + ${margen}% (automático): ${ars.format(precioUnidadConMargen(madre, nFactor, margen))}`
               : `bulto ÷ ${nFactor}: ${ars.format(referencia)}`}
         </p>
       </td>

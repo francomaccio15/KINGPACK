@@ -67,7 +67,7 @@ router.get('/venta-por-unidad', requireRol('administrador'), async (req, res, ne
   try {
     const { rows } = await pool.query(`
       SELECT a.id, a.codigo, a.nombre, c.nombre AS categoria,
-             a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad, a.precio_madre,
+             a.vende_por_unidad, a.unidades_por_bulto, a.precio_unidad, a.precio_madre, a.margen_unidad_pct,
              COALESCE(json_agg(json_build_object('sucursal', s.nombre, 'cantidad', st.cantidad)
                                ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '[]') AS stock
         FROM articulos a
