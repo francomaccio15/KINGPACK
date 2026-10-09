@@ -217,7 +217,7 @@ export default function ArticulosTabla({
                       className={`inline-flex items-center gap-1 text-xs tabular-nums
                         ${sd.stock_bajo ? 'text-amber-400' : 'text-kp-gray-lt'}`}>
                       <span className="text-2xs md:text-[10px] text-kp-gray font-semibold uppercase">
-                        {sd.nombre[0]}:
+                        {sd.nombre?.[0] ?? '?'}:
                       </span>
                       {formatoStock(sd.cantidad, a.unidades_por_bulto)}
                       {sd.stock_bajo && (

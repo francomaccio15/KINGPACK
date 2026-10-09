@@ -1160,14 +1160,18 @@ router.get('/:id', async (req, res, next) => {
           s.articulo_id,
           SUM(s.cantidad)::numeric                                              AS stock_total,
           BOOL_OR(s.cantidad <= s.stock_minimo AND s.stock_minimo > 0)         AS stock_bajo,
+          -- Mismas claves que el listado (nombre, cantidad, stock_bajo): la tabla
+          -- mezcla esta respuesta con la fila tras editar y lee sd.nombre.
           JSON_AGG(JSON_BUILD_OBJECT(
             'sucursal_id', s.sucursal_id,
+            'nombre', su.nombre,
             'sucursal_nombre', su.nombre,
-            'cantidad', s.cantidad,
-            'stock_minimo', s.stock_minimo
+            'cantidad', COALESCE(s.cantidad, 0)::numeric,
+            'stock_minimo', s.stock_minimo,
+            'stock_bajo', (s.cantidad <= s.stock_minimo AND s.stock_minimo > 0)
           ) ORDER BY su.nombre)                                                 AS stock_detalle
         FROM stock s
-        JOIN sucursales su ON su.id = s.sucursal_id
+        JOIN sucursales su ON su.id = s.sucursal_id AND su.activo = true
         WHERE s.articulo_id = $1
         GROUP BY s.articulo_id
       ) st ON st.articulo_id = a.id
