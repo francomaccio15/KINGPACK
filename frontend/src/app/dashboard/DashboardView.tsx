@@ -384,6 +384,10 @@ function CobrosDelDia({
   );
 }
 
+// Las cajas fuertes por sucursal quedan ocultas (y fuera del total) mientras los
+// cierres de caja van a la Caja Administrativa. Volver a `true` para mostrarlas.
+const MOSTRAR_CAJAS_FUERTES = false;
+
 // ─── EstadoCuentasPanel: caja fuerte + saldos bancarios (solo administrador) ───
 function EstadoCuentasPanel({
   cajas, movimientos, bancos, cajaAdm,
@@ -393,11 +397,11 @@ function EstadoCuentasPanel({
   bancos: SaldoBancarioData[];
   cajaAdm: { saldo: number; updated_at: string | null } | null;
 }) {
-  const hayCajas  = cajas && cajas.length > 0;
+  const hayCajas  = MOSTRAR_CAJAS_FUERTES && cajas && cajas.length > 0;
   const hayBancos = bancos && bancos.length > 0;
   if (!hayCajas && !hayBancos && !cajaAdm) return null;
 
-  const totalCajas  = (cajas  ?? []).reduce((a, c) => a + c.saldo, 0);
+  const totalCajas  = hayCajas ? cajas.reduce((a, c) => a + c.saldo, 0) : 0;
   const totalBancos = (bancos ?? []).reduce((a, c) => a + c.saldo, 0);
   const total       = totalCajas + totalBancos + (cajaAdm?.saldo ?? 0);
 
