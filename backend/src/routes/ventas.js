@@ -81,10 +81,13 @@ router.get('/medios-pago', async (req, res, next) => {
     // (egresos / pago a proveedor) y solo la ve el administrador.
     const incluirCajaAdm = ['egreso', 'pago_proveedor'].includes(req.query.contexto)
       && req.usuario?.rol === 'administrador';
+    // Los medios "Efectivo Caja Fuerte …" quedan ocultos en todos los selectores:
+    // los cierres van a la Caja Administrativa y los pagos salen de ahí.
     const { rows } = await pool.query(
       `SELECT id, nombre, requiere_cuenta FROM medios_pago
         WHERE activo = true ${incluirFicticios ? '' : `AND nombre <> 'ERROR REDONDEO'`}
           ${incluirCajaAdm ? '' : 'AND NOT es_caja_administrativa'}
+          AND caja_fuerte_sucursal_id IS NULL
         ORDER BY nombre`
     );
     res.json({ medios_pago: rows });
