@@ -6,7 +6,7 @@ import EditarVentaForm from './EditarVentaForm';
 export const dynamic = 'force-dynamic';
 
 export default async function EditarVentaPage({ params }: { params: { id: string } }) {
-  requireAuth('/ventas');
+  const user = requireAuth('/ventas');
 
   const res = await serverFetch(`/api/ventas/${params.id}`, { cache: 'no-store' });
   if (!res.ok) {
@@ -52,6 +52,7 @@ export default async function EditarVentaPage({ params }: { params: { id: string
         itemsIniciales={items}
         pagosIniciales={pagos}
         ventaEstado={venta.estado}
+        esAdmin={user.rol === 'administrador'}
         listaPrecioId={venta.lista_precio_id ?? null}
         sucursalId={venta.sucursal_id ?? null}
         observacionesActuales={venta.observaciones ?? ''}

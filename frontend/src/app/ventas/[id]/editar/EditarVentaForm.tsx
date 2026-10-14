@@ -68,6 +68,7 @@ export default function EditarVentaForm({
   itemsIniciales,
   pagosIniciales = [],
   ventaEstado,
+  esAdmin = false,
   listaPrecioId,
   sucursalId = null,
   observacionesActuales,
@@ -78,6 +79,7 @@ export default function EditarVentaForm({
   itemsIniciales: ItemVenta[];
   pagosIniciales?: { medio_pago: string; monto: string; cuenta_bancaria_id?: string | null; }[];
   ventaEstado?: string;
+  esAdmin?: boolean;
   listaPrecioId: string | null;
   sucursalId?: string | null;
   observacionesActuales: string;
@@ -141,6 +143,8 @@ export default function EditarVentaForm({
       : []
   );
   const [editarPagos, setEditarPagos] = useState(false);
+  // Corrección de medio sin asentar el cobro en la caja abierta de hoy (solo admin).
+  const [sinCaja, setSinCaja]         = useState(false);
 
   useEffect(() => {
     if (!esConfirmada) return;
@@ -335,6 +339,7 @@ export default function EditarVentaForm({
             cuenta_destino: cuenta ? (cuentasBancarias.find(c => c.id === cuenta)?.nombre ?? null) : null,
           };
         });
+        if (esAdmin && sinCaja) body.sin_caja = true;
       }
       const res = await apiFetch(`/api/ventas/${ventaId}/items`, {
         method: 'PUT',
@@ -712,6 +717,22 @@ export default function EditarVentaForm({
                   </div>
                 )}
               </div>
+
+              {esAdmin && (
+                <label className="flex items-start gap-2.5 pt-3 border-t border-kp-border cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={sinCaja}
+                    onChange={e => setSinCaja(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-kp-red"
+                  />
+                  <span className="text-xs text-kp-gray leading-snug">
+                    <span className="text-kp-white font-semibold">Corregir sin tocar la caja</span>
+                    {' '}— para una venta cargada en cuenta corriente que se cobró otro día.
+                    El cobro no entra en la caja abierta de hoy; la deuda del cliente se ajusta igual.
+                  </span>
+                </label>
+              )}
             </div>
           )}
         </div>
