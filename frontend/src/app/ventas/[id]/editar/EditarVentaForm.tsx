@@ -68,7 +68,7 @@ export default function EditarVentaForm({
   itemsIniciales,
   pagosIniciales = [],
   ventaEstado,
-  esAdmin = false,
+  puedeSinCaja = false,
   listaPrecioId,
   sucursalId = null,
   observacionesActuales,
@@ -79,7 +79,7 @@ export default function EditarVentaForm({
   itemsIniciales: ItemVenta[];
   pagosIniciales?: { medio_pago: string; monto: string; cuenta_bancaria_id?: string | null; }[];
   ventaEstado?: string;
-  esAdmin?: boolean;
+  puedeSinCaja?: boolean;
   listaPrecioId: string | null;
   sucursalId?: string | null;
   observacionesActuales: string;
@@ -143,7 +143,7 @@ export default function EditarVentaForm({
       : []
   );
   const [editarPagos, setEditarPagos] = useState(false);
-  // Corrección de medio sin asentar el cobro en la caja abierta de hoy (solo admin).
+  // Corrección de medio sin asentar el cobro en la caja abierta de hoy (admin y supervisor).
   const [sinCaja, setSinCaja]         = useState(false);
 
   useEffect(() => {
@@ -339,7 +339,7 @@ export default function EditarVentaForm({
             cuenta_destino: cuenta ? (cuentasBancarias.find(c => c.id === cuenta)?.nombre ?? null) : null,
           };
         });
-        if (esAdmin && sinCaja) body.sin_caja = true;
+        if (puedeSinCaja && sinCaja) body.sin_caja = true;
       }
       const res = await apiFetch(`/api/ventas/${ventaId}/items`, {
         method: 'PUT',
@@ -718,7 +718,7 @@ export default function EditarVentaForm({
                 )}
               </div>
 
-              {esAdmin && (
+              {puedeSinCaja && (
                 <label className="flex items-start gap-2.5 pt-3 border-t border-kp-border cursor-pointer select-none">
                   <input
                     type="checkbox"

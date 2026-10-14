@@ -52,7 +52,7 @@ export default async function EditarVentaPage({ params }: { params: { id: string
         itemsIniciales={items}
         pagosIniciales={pagos}
         ventaEstado={venta.estado}
-        esAdmin={user.rol === 'administrador'}
+        puedeSinCaja={user.rol === 'administrador' || user.rol === 'supervisor'}
         listaPrecioId={venta.lista_precio_id ?? null}
         sucursalId={venta.sucursal_id ?? null}
         observacionesActuales={venta.observaciones ?? ''}

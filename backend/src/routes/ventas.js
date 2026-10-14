@@ -1587,10 +1587,10 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     if (items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un artículo' });
     // "Corregir sin tocar la caja": para una venta cargada en cuenta corriente que
     // en realidad se cobró en efectivo otro día. La plata ya entró (o no) en una
-    // caja vieja, así que no se asienta en la caja abierta de hoy. Solo admin.
+    // caja vieja, así que no se asienta en la caja abierta de hoy. Admin y supervisor.
     const sinCaja = sin_caja === true;
-    if (sinCaja && req.usuario?.rol !== 'administrador') {
-      return res.status(403).json({ error: 'Solo un administrador puede corregir el medio de pago sin tocar la caja' });
+    if (sinCaja && !['administrador', 'supervisor'].includes(req.usuario?.rol)) {
+      return res.status(403).json({ error: 'Solo un administrador o supervisor puede corregir el medio de pago sin tocar la caja' });
     }
 
     await client.query('BEGIN');
@@ -1891,7 +1891,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
       } else if (cajaAbiertaPrevia) {
         cajaId = cajaAbiertaPrevia.caja_id;
       } else if (sinCaja) {
-        // Sin movimiento previo y el admin pidió no tocar la caja: el cobro no se
+        // Sin movimiento previo y se pidió no tocar la caja: el cobro no se
         // asienta en ninguna caja (los medios bancarios igual van a su cuenta).
         cajaId = null;
       } else {
