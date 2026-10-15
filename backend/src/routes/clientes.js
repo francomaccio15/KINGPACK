@@ -365,6 +365,10 @@ router.get('/:id/compras-mensuales', async (req, res, next) => {
 });
 
 // ─── POST /api/clientes/:id/pagos ─────────────────────────────────────────────
+// Cobro de cuenta corriente. Con cheque, el mismo cheque puede pagar a varios
+// clientes a la vez (ej.: una empresa que paga lo de otra): `otros_clientes`
+// trae [{ cliente_id, monto }]. Se registra UN solo cheque por el total y a cada
+// cliente se le asienta su haber (y su ingreso de caja) por su parte.
 router.post('/:id/pagos', async (req, res, next) => {
   try {
     const { monto, concepto, medio_pago_id, sucursal_id, cheque, cuenta_bancaria_id } = req.body;
@@ -372,11 +376,32 @@ router.post('/:id/pagos', async (req, res, next) => {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
 
-    // El cheque de una cobranza es por el monto cobrado: mismas reglas que el
-    // alta en Cheques (librador, CUIT, físico/ECHEQ, vigencia).
+    const otros = Array.isArray(req.body.otros_clientes) ? req.body.otros_clientes : [];
+    if (otros.length && !cheque) {
+      return res.status(400).json({ error: 'Solo un cobro con cheque puede repartirse entre varios clientes' });
+    }
+    const imputaciones = [{ cliente_id: req.params.id, monto: parseFloat(monto) }];
+    for (const [i, o] of otros.entries()) {
+      const ref = `Cliente adicional ${i + 1}`;
+      if (!o?.cliente_id) return res.status(400).json({ error: `${ref}: falta el cliente` });
+      const m = String(o.monto ?? '').trim();
+      if (!(Number(m) > 0) || !/^\d+(\.\d{1,2})?$/.test(m)) {
+        return res.status(400).json({ error: `${ref}: el monto debe ser mayor a 0 y con 2 decimales como máximo` });
+      }
+      if (imputaciones.some(x => x.cliente_id === o.cliente_id)) {
+        return res.status(400).json({ error: `${ref}: el cliente está repetido` });
+      }
+      imputaciones.push({ cliente_id: o.cliente_id, monto: Number(m) });
+    }
+    const compartido  = imputaciones.length > 1;
+    const totalCheque = Math.round(imputaciones.reduce((s, x) => s + x.monto, 0) * 100) / 100;
+
+    // El cheque de una cobranza es por el monto cobrado (la suma de todas las
+    // partes si se reparte): mismas reglas que el alta en Cheques (librador,
+    // CUIT, físico/ECHEQ, vigencia).
     let chequeOk = null;
     if (cheque) {
-      const v = validarListaCheques([{ ...cheque, importe: String(monto) }], 'recibido');
+      const v = validarListaCheques([{ ...cheque, importe: totalCheque.toFixed(2) }], 'recibido');
       if (v.error) return res.status(400).json({ error: v.error });
       const dup = await errorDuplicados(pool, v.cheques);
       if (dup) return res.status(409).json({ error: dup });
@@ -387,37 +412,55 @@ router.post('/:id/pagos', async (req, res, next) => {
     try {
       await dbClient.query('BEGIN');
 
-      // Saldo actual antes del pago
-      const { rows: [saldoRow] } = await dbClient.query(`
-        SELECT c.saldo_inicial
-               + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
-               + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual,
-               c.razon_social
-          FROM clientes c
-          LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
-          LEFT JOIN (
-            SELECT cliente_id, SUM(monto) AS total_correcciones
-              FROM correcciones_saldo_cliente GROUP BY cliente_id
-          ) cs_agg ON cs_agg.cliente_id = c.id
-         WHERE c.id = $1 AND c.deleted_at IS NULL
-         GROUP BY c.id, c.saldo_inicial, c.razon_social, cs_agg.total_correcciones
-      `, [req.params.id]);
-
-      if (!saldoRow) {
+      // ¿El medio de pago es cheque? En ese caso registramos el cheque recibido en
+      // el módulo de cheques (en cartera) para poder seguir su vencimiento/estado.
+      let esCheque = false;
+      if (medio_pago_id) {
+        const { rows: mpRows } = await dbClient.query(
+          `SELECT nombre FROM medios_pago WHERE id = $1`, [medio_pago_id]
+        );
+        esCheque = /cheque/i.test(mpRows[0]?.nombre || '');
+      }
+      if (compartido && !(esCheque && chequeOk)) {
         await dbClient.query('ROLLBACK');
-        return res.status(404).json({ error: 'Cliente no encontrado' });
+        return res.status(400).json({ error: 'Solo un cobro con cheque puede repartirse entre varios clientes' });
       }
 
-      const saldoAntes   = parseFloat(saldoRow.saldo_actual) || 0;
-      const montoNum     = parseFloat(monto);
-      const saldoDespues = saldoAntes - montoNum;
+      // Saldo actual de cada cliente antes del pago
+      for (const imp of imputaciones) {
+        const { rows: [saldoRow] } = await dbClient.query(`
+          SELECT c.saldo_inicial
+                 + COALESCE(SUM(cc.debe) - SUM(cc.haber), 0)
+                 + COALESCE(cs_agg.total_correcciones, 0) AS saldo_actual,
+                 c.razon_social
+            FROM clientes c
+            LEFT JOIN cuentas_corrientes_cliente cc ON cc.cliente_id = c.id
+            LEFT JOIN (
+              SELECT cliente_id, SUM(monto) AS total_correcciones
+                FROM correcciones_saldo_cliente GROUP BY cliente_id
+            ) cs_agg ON cs_agg.cliente_id = c.id
+           WHERE c.id = $1 AND c.deleted_at IS NULL
+           GROUP BY c.id, c.saldo_inicial, c.razon_social, cs_agg.total_correcciones
+        `, [imp.cliente_id]);
 
-      const { rows: [mov] } = await dbClient.query(`
-        INSERT INTO cuentas_corrientes_cliente
-          (cliente_id, debe, haber, saldo, origen_tipo, medio_pago_id, cuenta_bancaria_id)
-        VALUES ($1, 0, $2, $3, 'pago', $4, $5)
-        RETURNING id, haber, saldo, fecha
-      `, [req.params.id, montoNum, saldoDespues, medio_pago_id || null, cuenta_bancaria_id || null]);
+        if (!saldoRow) {
+          await dbClient.query('ROLLBACK');
+          return res.status(404).json({ error: 'Cliente no encontrado' });
+        }
+        imp.razon_social = saldoRow.razon_social;
+        imp.saldoDespues = (parseFloat(saldoRow.saldo_actual) || 0) - imp.monto;
+      }
+      const principal = imputaciones[0];
+
+      for (const imp of imputaciones) {
+        const { rows: [mov] } = await dbClient.query(`
+          INSERT INTO cuentas_corrientes_cliente
+            (cliente_id, debe, haber, saldo, origen_tipo, medio_pago_id, cuenta_bancaria_id)
+          VALUES ($1, 0, $2, $3, 'pago', $4, $5)
+          RETURNING id, haber, saldo, fecha
+        `, [imp.cliente_id, imp.monto, imp.saldoDespues, medio_pago_id || null, cuenta_bancaria_id || null]);
+        imp.mov = mov;
+      }
 
       // Si hay concepto, registrar corrección de texto
       if (concepto?.trim()) {
@@ -425,6 +468,14 @@ router.post('/:id/pagos', async (req, res, next) => {
           INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
           VALUES ($1, 0, $2)
         `, [req.params.id, concepto.trim()]);
+      }
+      // En la ficha de los demás clientes queda anotado de dónde vino el pago.
+      for (const imp of imputaciones.slice(1)) {
+        await dbClient.query(`
+          INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
+          VALUES ($1, 0, $2)
+        `, [imp.cliente_id,
+            `Pagado con cheque ${chequeOk.banco} #${chequeOk.numero_cheque} junto a ${principal.razon_social}: ${fmtMoneda(imp.monto)}`]);
       }
 
       // Sucursal operativa del pago. El efectivo/cheque entra en la caja del
@@ -436,21 +487,17 @@ router.post('/:id/pagos', async (req, res, next) => {
         ? (req.usuario.sucursal_default_id || null)
         : (sucursal_id || req.usuario?.sucursal_default_id || null);
 
-      // ¿El medio de pago es cheque? En ese caso registramos el cheque recibido en
-      // el módulo de cheques (en cartera) para poder seguir su vencimiento/estado.
-      let esCheque = false;
-      if (medio_pago_id) {
-        const { rows: mpRows } = await dbClient.query(
-          `SELECT nombre FROM medios_pago WHERE id = $1`, [medio_pago_id]
-        );
-        esCheque = /cheque/i.test(mpRows[0]?.nombre || '');
-      }
-
       if (esCheque && chequeOk) {
         if (!sucId) {
           await dbClient.query('ROLLBACK');
           return res.status(400).json({ error: 'No se pudo determinar la sucursal para registrar el cheque' });
         }
+        // Un solo cheque por el total; si se repartió, el detalle queda en las
+        // observaciones (el cliente del cheque es el que lo entregó).
+        const reparto = compartido
+          ? 'Repartido: ' + imputaciones.map(x => `${x.razon_social} ${fmtMoneda(x.monto)}`).join(' · ')
+          : null;
+        const obs = [concepto?.trim(), reparto].filter(Boolean).join(' — ') || null;
         await dbClient.query(`
           INSERT INTO cheques_manuales
             (tipo, banco, numero_cheque, fecha_emision, fecha_vencimiento,
@@ -462,50 +509,58 @@ router.post('/:id/pagos', async (req, res, next) => {
           chequeOk.numero_cheque,
           chequeOk.fecha_emision,
           chequeOk.fecha_vencimiento,
-          montoNum,
+          totalCheque,
           sucId,
           req.params.id,
-          concepto?.trim() || null,
+          obs,
           chequeOk.forma, chequeOk.modalidad, chequeOk.librador_cuit, chequeOk.librador_nombre,
           chequeOk.banco_sucursal, chequeOk.banco_cbu,
         ]);
       }
 
-      // Registrar en caja si hay medio_pago_id y caja abierta.
+      // Registrar en caja si hay medio_pago_id y caja abierta: un ingreso por
+      // cliente, cada uno atado a su movimiento de cuenta corriente.
       if (medio_pago_id && sucId) {
         const { rows: cajaRows } = await dbClient.query(
           `SELECT id FROM cajas WHERE sucursal_id = $1 AND estado = 'abierta' LIMIT 1`,
           [sucId]
         );
         if (cajaRows[0]) {
-          const conceptoCaja = concepto?.trim()
-            ? `Pago cliente — ${saldoRow.razon_social} (${concepto.trim()})`
-            : `Pago cliente — ${saldoRow.razon_social}`;
-          await dbClient.query(`
-            INSERT INTO movimientos_caja
-              (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
-               origen_tipo, origen_id)
-            VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
-          `, [cajaRows[0].id, conceptoCaja, montoNum, medio_pago_id, req.usuario?.id ?? null,
-              cuenta_bancaria_id || null, mov.id]);
+          for (const imp of imputaciones) {
+            const compartidoCon = compartido
+              ? 'cheque compartido con ' + imputaciones.filter(x => x !== imp).map(x => x.razon_social).join(', ')
+              : null;
+            const detalle = [concepto?.trim(), compartidoCon].filter(Boolean).join('; ');
+            const conceptoCaja = detalle
+              ? `Pago cliente — ${imp.razon_social} (${detalle})`
+              : `Pago cliente — ${imp.razon_social}`;
+            await dbClient.query(`
+              INSERT INTO movimientos_caja
+                (caja_id, tipo, concepto, monto, medio_pago_id, usuario_id, cuenta_bancaria_id,
+                 origen_tipo, origen_id)
+              VALUES ($1, 'ingreso', $2, $3, $4, $5, $6, 'pago_cliente', $7)
+            `, [cajaRows[0].id, conceptoCaja, imp.monto, medio_pago_id, req.usuario?.id ?? null,
+                cuenta_bancaria_id || null, imp.mov.id]);
+          }
         }
       }
 
       // Si el cobro entró por transferencia, acreditar la cuenta bancaria. Va
       // fuera del bloque de caja a propósito: que la plata entre al banco no
-      // depende de que haya una caja abierta en la sucursal.
+      // depende de que haya una caja abierta en la sucursal. Un cobro repartido
+      // es siempre con cheque (no acredita acá), así que hay un único cliente.
       await registrarMovimientoBancario(dbClient, {
         cuenta_bancaria_id: cuenta_bancaria_id || null,
         tipo: 'ingreso',
-        monto: montoNum,
-        concepto: `Pago cliente — ${saldoRow.razon_social}`,
+        monto: principal.monto,
+        concepto: `Pago cliente — ${principal.razon_social}`,
         origen_tipo: 'pago_cliente',
-        origen_id: mov.id,
+        origen_id: principal.mov.id,
         usuario_id: req.usuario?.id ?? null,
       });
 
       await dbClient.query('COMMIT');
-      res.status(201).json({ movimiento: mov, saldo_nuevo: saldoDespues });
+      res.status(201).json({ movimiento: principal.mov, saldo_nuevo: principal.saldoDespues });
     } catch (err) {
       await dbClient.query('ROLLBACK');
       throw err;

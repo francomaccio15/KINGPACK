@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +29,52 @@ const MEDIOS_REQUIEREN_CUENTA = ['qr', 'tarjeta de débito', 'tarjeta de debito'
 
 interface MedioPago { id: string; nombre: string; requiere_cuenta?: boolean }
 interface CuentaBancaria { id: string; nombre: string; banco?: string | null }
+interface ClienteBusqueda { id: string; razon_social: string; cuit?: string | null; saldo_actual?: string | number }
+/** Otro cliente al que el mismo cheque le paga una parte. */
+interface OtroCliente { key: number; cliente: ClienteBusqueda | null; monto: string }
+
+const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors';
+
+// Buscador de cliente para una fila del reparto del cheque.
+function BuscarCliente({ excluir, onElegir }: { excluir: string[]; onElegir: (c: ClienteBusqueda) => void }) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<ClienteBusqueda[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (q.trim().length < 2) { setRes([]); return; }
+    timer.current = setTimeout(async () => {
+      setBuscando(true);
+      try {
+        const params = new URLSearchParams({ q: q.trim(), limit: '10', sucursal_id: '' });
+        const r = await apiFetch(`/api/clientes?${params}`);
+        const d = r.ok ? await r.json() : { clientes: [] };
+        setRes((d.clientes ?? []).filter((c: ClienteBusqueda) => !excluir.includes(c.id)));
+      } catch { setRes([]); } finally { setBuscando(false); }
+    }, 300);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [q]);
+
+  return (
+    <div className="relative">
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente por nombre o CUIT…" className={inputCls} />
+      {(res.length > 0 || buscando) && (
+        <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-kp-border bg-kp-surface shadow-lg">
+          {buscando && <div className="px-3 py-2 text-xs text-kp-gray">Buscando…</div>}
+          {res.map(c => (
+            <button key={c.id} type="button" onClick={() => { onElegir(c); setQ(''); setRes([]); }}
+              className="block w-full text-left px-3 py-2 text-sm text-kp-white hover:bg-kp-surface2">
+              {c.razon_social}
+              {c.cuit && <span className="ml-2 text-xs text-kp-gray">{c.cuit}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function RegistrarPago({
   clienteId,
@@ -68,6 +114,10 @@ export default function RegistrarPago({
     librador_cuit: clienteCuit ?? '',
   });
   const [chExtra, setChExtra]       = useState<ChequeExtra>(extraInicial);
+  // Reparto del mismo cheque entre otros clientes (ej.: una empresa que paga
+  // también lo de otra). Cada fila es la parte que le corresponde a ese cliente.
+  const [otros, setOtros]           = useState<OtroCliente[]>([]);
+  const otrosKey                    = useRef(0);
 
   const medioElegido = mediosPago.find(m => m.id === medioPagoId);
   const esCheque      = /cheque/i.test(medioElegido?.nombre ?? '');
@@ -111,7 +161,13 @@ export default function RegistrarPago({
     setCuentaId('');
     setChBanco(''); setChNumero(''); setChEmision(''); setChVenc('');
     setChExtra(extraInicial());
+    setOtros([]);
   };
+
+  const agregarOtro = () => setOtros(p => [...p, { key: ++otrosKey.current, cliente: null, monto: '' }]);
+  const cambiarOtro = (key: number, c: Partial<OtroCliente>) =>
+    setOtros(p => p.map(o => o.key === key ? { ...o, ...c } : o));
+  const quitarOtro = (key: number) => setOtros(p => p.filter(o => o.key !== key));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +179,10 @@ export default function RegistrarPago({
         banco: chBanco, numero_cheque: chNumero, fecha_vencimiento: chVenc,
       }, 'recibido');
       if (err) { setError(`Cheque: ${err}`); return; }
+      for (const [i, o] of otros.entries()) {
+        if (!o.cliente) { setError(`Cliente adicional ${i + 1}: elegí el cliente`); return; }
+        if (!(parseFloat(o.monto) > 0)) { setError(`${o.cliente.razon_social}: ingresá el monto que le corresponde`); return; }
+      }
     }
     setError('');
     setLoading(true);
@@ -141,6 +201,9 @@ export default function RegistrarPago({
                 ...chequeExtraPayload({ ...chExtra, fecha_emision: chEmision }, 'recibido'),
               }
             : undefined,
+          otros_clientes: esCheque && otros.length
+            ? otros.map(o => ({ cliente_id: o.cliente!.id, monto: (parseFloat(o.monto) || 0).toFixed(2) }))
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -156,6 +219,8 @@ export default function RegistrarPago({
 
   const montoNum   = parseFloat(monto) || 0;
   const saldoNuevo = saldoActual - montoNum;
+  const repartido  = esCheque && otros.length > 0;
+  const totalCheque = montoNum + otros.reduce((s, o) => s + (parseFloat(o.monto) || 0), 0);
 
   return (
     <>
@@ -185,7 +250,9 @@ export default function RegistrarPago({
 
           {/* Monto */}
           <div>
-            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Monto *</label>
+            <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">
+              {repartido ? `Monto para ${clienteNombre ?? 'este cliente'} *` : 'Monto *'}
+            </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
               <NumericInput
@@ -266,7 +333,56 @@ export default function RegistrarPago({
               </div>
               <ChequeDatosExtra value={chExtra} onChange={c => setChExtra(p => ({ ...p, ...c }))} tipo="recibido"
                 conEmision={false} fechaVencimiento={chVenc} />
-              <p className="text-2xs md:text-[11px] text-kp-gray/70">Queda registrado como cheque en cartera en el módulo Cheques.</p>
+
+              {/* Reparto: el mismo cheque paga también a otros clientes */}
+              <div className="space-y-2 border-t border-kp-border pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-2xs md:text-[11px] text-kp-gray uppercase tracking-widest">¿Paga también a otros clientes?</p>
+                  <button type="button" onClick={agregarOtro}
+                    className="text-xs font-semibold text-green-400 hover:text-green-300">+ Agregar cliente</button>
+                </div>
+                {otros.map(o => (
+                  <div key={o.key} className="rounded-lg border border-kp-border bg-kp-surface2/60 p-2 space-y-2">
+                    {o.cliente ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-kp-white truncate">{o.cliente.razon_social}</p>
+                          {o.cliente.saldo_actual != null && (
+                            <p className="text-2xs md:text-[11px] text-kp-gray">Saldo: {ars.format(parseFloat(String(o.cliente.saldo_actual)) || 0)}</p>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => cambiarOtro(o.key, { cliente: null })}
+                          className="text-xs text-kp-gray hover:text-kp-white">Cambiar</button>
+                      </div>
+                    ) : (
+                      <BuscarCliente
+                        excluir={[clienteId, ...otros.map(x => x.cliente?.id).filter((x): x is string => !!x)]}
+                        onElegir={c => cambiarOtro(o.key, { cliente: c })} />
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kp-gray text-xs">$</span>
+                        <NumericInput value={o.monto} onChange={e => cambiarOtro(o.key, { monto: e.target.value })}
+                          placeholder="Monto para este cliente" className={`${inputCls} pl-6`} />
+                      </div>
+                      <button type="button" onClick={() => quitarOtro(o.key)} aria-label="Quitar cliente"
+                        className="px-2 py-2 text-kp-gray hover:text-kp-red text-sm">✕</button>
+                    </div>
+                  </div>
+                ))}
+                {repartido && (
+                  <div className="flex justify-between items-center rounded-lg bg-green-500/10 border border-green-700/40 px-3 py-2">
+                    <span className="text-xs text-kp-gray uppercase tracking-widest">Importe del cheque</span>
+                    <span className="font-bold tabular-nums text-green-300">{ars.format(totalCheque)}</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-2xs md:text-[11px] text-kp-gray/70">
+                {repartido
+                  ? 'Queda un solo cheque en cartera por el total; a cada cliente se le descuenta su parte de la cuenta corriente.'
+                  : 'Queda registrado como cheque en cartera en el módulo Cheques.'}
+              </p>
             </div>
           )}
 
