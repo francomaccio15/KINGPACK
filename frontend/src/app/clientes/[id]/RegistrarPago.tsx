@@ -32,6 +32,8 @@ interface CuentaBancaria { id: string; nombre: string; banco?: string | null }
 interface ClienteBusqueda { id: string; razon_social: string; cuit?: string | null; saldo_actual?: string | number }
 /** Otro cliente al que el mismo cheque le paga una parte. */
 interface OtroCliente { key: number; cliente: ClienteBusqueda | null; monto: string }
+/** Cheque que ya existía con el mismo banco + número (respuesta 409 del cobro). */
+interface ChequeExistente { id: string; importe: string; origen_nombre: string; estado: string; sumable: boolean }
 
 const inputCls = 'w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white placeholder:text-kp-gray focus:outline-none focus:border-green-500 transition-colors';
 
@@ -162,6 +164,7 @@ export default function RegistrarPago({
     setChBanco(''); setChNumero(''); setChEmision(''); setChVenc('');
     setChExtra(extraInicial());
     setOtros([]);
+    setChequeExistente(null);
   };
 
   const agregarOtro = () => setOtros(p => [...p, { key: ++otrosKey.current, cliente: null, monto: '' }]);
@@ -169,8 +172,13 @@ export default function RegistrarPago({
     setOtros(p => p.map(o => o.key === key ? { ...o, ...c } : o));
   const quitarOtro = (key: number) => setOtros(p => p.filter(o => o.key !== key));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Si el cheque ya estaba cargado (ej.: entero a otro cliente), el backend
+  // devuelve sus datos y, si sigue en cartera, se ofrece sumarle esta parte.
+  const [chequeExistente, setChequeExistente] = useState<ChequeExistente | null>(null);
+  useEffect(() => { setChequeExistente(null); }, [chBanco, chNumero, chExtra.librador_cuit, esCheque]);
+
+  const handleSubmit = async (e: React.FormEvent | null, sumar = false) => {
+    e?.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
     if (requiereCuenta && !cuentaId) { setError('Seleccioná la cuenta que recibe el pago'); return; }
     if (esCheque) {
@@ -204,10 +212,14 @@ export default function RegistrarPago({
           otros_clientes: esCheque && otros.length
             ? otros.map(o => ({ cliente_id: o.cliente!.id, monto: (parseFloat(o.monto) || 0).toFixed(2) }))
             : undefined,
+          sumar_a_cheque_existente: esCheque && sumar ? true : undefined,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Error al registrar pago');
+      if (!res.ok) {
+        if (data.cheque_existente) setChequeExistente(data.cheque_existente);
+        throw new Error(data.error ?? 'Error al registrar pago');
+      }
       cerrar();
       router.refresh();
     } catch (err: any) {
@@ -407,8 +419,35 @@ export default function RegistrarPago({
             </div>
           )}
 
-          {error && (
+          {error && !chequeExistente && (
             <p className="text-xs text-kp-red bg-kp-red/10 border border-kp-red/30 rounded-lg px-4 py-2">{error}</p>
+          )}
+
+          {/* El cheque ya estaba cargado: ofrecer sumarle la parte de este cobro */}
+          {chequeExistente && (
+            <div className={`rounded-lg border px-4 py-3 space-y-2 text-xs ${chequeExistente.sumable
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+              : 'border-kp-red/30 bg-kp-red/10 text-kp-red'}`}>
+              <p>
+                Este cheque ya está cargado por <b>{ars.format(parseFloat(chequeExistente.importe) || 0)}</b> a{' '}
+                <b>{chequeExistente.origen_nombre}</b> ({chequeExistente.estado.replace('_', ' ')}).
+              </p>
+              {chequeExistente.sumable ? (
+                <>
+                  <p>
+                    Si el mismo cheque también paga a este cliente, sumale esta parte: el cheque pasa a{' '}
+                    <b>{ars.format((parseFloat(chequeExistente.importe) || 0) + totalCheque)}</b> y a cada cliente se le
+                    descuenta lo suyo.
+                  </p>
+                  <button type="button" disabled={loading} onClick={() => handleSubmit(null, true)}
+                    className="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+                    {loading ? 'Guardando…' : `Sumar ${ars.format(totalCheque)} a este cheque`}
+                  </button>
+                </>
+              ) : (
+                <p>Ya no está en cartera (o entró por una venta), así que no se le puede sumar otra parte. Consultá con el administrador.</p>
+              )}
+            </div>
           )}
 
           <div className="flex gap-3 pt-1">

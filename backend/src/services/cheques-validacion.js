@@ -205,9 +205,30 @@ async function errorDuplicados(db, cheques) {
   return null;
 }
 
+// Igual que errorDuplicados pero para UN cheque y devolviendo la fila: el cobro
+// de clientes la usa para ofrecer sumar la parte de otro cliente a un cheque que
+// ya está cargado. Solo se puede sumar a un cheque recibido de carga manual /
+// cobro de CC (tabla cheques_manuales) que siga en cartera.
+async function buscarDuplicado(db, ch) {
+  const { rows } = await db.query(`
+    SELECT id, tipo, origen_tipo, origen_nombre, estado, importe FROM vw_cheques
+     WHERE LOWER(TRIM(banco)) = LOWER($1) AND TRIM(numero_cheque) = $2
+       AND ($3::text IS NULL OR librador_cuit IS NULL OR librador_cuit = $3)
+       AND estado <> 'anulado'
+     LIMIT 1`, [ch.banco, ch.numero_cheque, ch.librador_cuit]);
+  if (!rows.length) return null;
+  const d = rows[0];
+  return {
+    ...d,
+    mensaje: `Ya existe el cheque ${ch.banco} #${ch.numero_cheque} (${d.origen_nombre}, ${d.estado})`,
+    sumable: d.tipo === 'recibido' && d.origen_tipo === 'manual' && d.estado === 'en_cartera',
+  };
+}
+
 module.exports = {
   validarListaCheques,
   errorDuplicados,
+  buscarDuplicado,
   FORMAS,
   MODALIDADES,
   CAUSALES_RECHAZO,

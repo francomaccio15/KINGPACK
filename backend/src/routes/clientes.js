@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
-const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
+const { validarListaCheques, buscarDuplicado } = require('../services/cheques-validacion');
 const { registrarMovimientoBancario, revertirMovimientosBancarios } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
@@ -399,13 +399,30 @@ router.post('/:id/pagos', async (req, res, next) => {
     // El cheque de una cobranza es por el monto cobrado (la suma de todas las
     // partes si se reparte): mismas reglas que el alta en Cheques (librador,
     // CUIT, físico/ECHEQ, vigencia).
+    //
+    // Si el cheque ya está cargado (ej.: ayer se cargó entero a otro cliente y
+    // hoy aparece el resto del reparto), con `sumar_a_cheque_existente` la parte
+    // de este cobro se suma a ese mismo cheque en vez de crear uno nuevo. Solo se
+    // permite si sigue en cartera; si no, el 409 explica por qué.
     let chequeOk = null;
+    let chequeExistente = null;
     if (cheque) {
       const v = validarListaCheques([{ ...cheque, importe: totalCheque.toFixed(2) }], 'recibido');
       if (v.error) return res.status(400).json({ error: v.error });
-      const dup = await errorDuplicados(pool, v.cheques);
-      if (dup) return res.status(409).json({ error: dup });
       chequeOk = v.cheques[0];
+      const dup = await buscarDuplicado(pool, chequeOk);
+      if (dup) {
+        if (!req.body.sumar_a_cheque_existente || !dup.sumable) {
+          return res.status(409).json({
+            error: dup.mensaje,
+            cheque_existente: {
+              id: dup.id, importe: dup.importe, origen_nombre: dup.origen_nombre,
+              estado: dup.estado, sumable: dup.sumable,
+            },
+          });
+        }
+        chequeExistente = dup;
+      }
     }
 
     const dbClient = await pool.connect();
@@ -477,6 +494,13 @@ router.post('/:id/pagos', async (req, res, next) => {
         `, [imp.cliente_id,
             `Pagado con cheque ${chequeOk.banco} #${chequeOk.numero_cheque} junto a ${principal.razon_social}: ${fmtMoneda(imp.monto)}`]);
       }
+      if (chequeExistente) {
+        await dbClient.query(`
+          INSERT INTO correcciones_saldo_cliente (cliente_id, monto, motivo)
+          VALUES ($1, 0, $2)
+        `, [principal.cliente_id,
+            `Pagado con parte del cheque ${chequeOk.banco} #${chequeOk.numero_cheque} (cargado antes a ${chequeExistente.origen_nombre}): ${fmtMoneda(principal.monto)}`]);
+      }
 
       // Sucursal operativa del pago. El efectivo/cheque entra en la caja del
       // OPERADOR que recibe el pago, NO en la sucursal por defecto del cliente. Un
@@ -487,7 +511,23 @@ router.post('/:id/pagos', async (req, res, next) => {
         ? (req.usuario.sucursal_default_id || null)
         : (sucursal_id || req.usuario?.sucursal_default_id || null);
 
-      if (esCheque && chequeOk) {
+      if (esCheque && chequeExistente) {
+        // El cheque ya está en cartera: se agranda su importe con esta parte y
+        // queda anotado a quién se le imputó. No toca el banco (en cartera no
+        // impacta; lo hará al acreditarse por el total).
+        const agregado = `Sumado ${new Date().toLocaleDateString('es-AR')}: `
+          + imputaciones.map(x => `${x.razon_social} ${fmtMoneda(x.monto)}`).join(' · ');
+        const { rowCount } = await dbClient.query(`
+          UPDATE cheques_manuales
+             SET importe = importe + $1,
+                 observaciones = CONCAT_WS(' — ', NULLIF(observaciones, ''), $2::text)
+           WHERE id = $3 AND tipo = 'recibido' AND estado = 'en_cartera' AND deleted_at IS NULL
+        `, [totalCheque, agregado, chequeExistente.id]);
+        if (!rowCount) {
+          await dbClient.query('ROLLBACK');
+          return res.status(409).json({ error: 'El cheque ya no está en cartera: no se le puede sumar otra parte' });
+        }
+      } else if (esCheque && chequeOk) {
         if (!sucId) {
           await dbClient.query('ROLLBACK');
           return res.status(400).json({ error: 'No se pudo determinar la sucursal para registrar el cheque' });
