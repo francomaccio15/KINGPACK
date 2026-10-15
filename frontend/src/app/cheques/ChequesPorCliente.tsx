@@ -14,8 +14,9 @@ interface ChequeDetalle {
   importe: string;
   estado: string;
   fecha_estado: string | null;
-  venta_numero: number;
-  venta_id: string;
+  /** null cuando el cheque entró por un cobro de cuenta corriente, no por una venta. */
+  venta_numero: number | null;
+  venta_id: string | null;
   vencido: boolean;
 }
 
@@ -173,13 +174,17 @@ function FilaCliente({ c }: { c: ClienteCheques }) {
                       {ch.fecha_estado && <p className="text-kp-gray mt-0.5">{fmtFecha(ch.fecha_estado)}</p>}
                     </td>
                     <td className="px-3 py-2.5">
-                      <Link
-                        href={`/ventas/${ch.venta_id}`}
-                        className="text-kp-red hover:text-red-400 font-semibold"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        #{ch.venta_numero}
-                      </Link>
+                      {ch.venta_id ? (
+                        <Link
+                          href={`/ventas/${ch.venta_id}`}
+                          className="text-kp-red hover:text-red-400 font-semibold"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          #{ch.venta_numero}
+                        </Link>
+                      ) : (
+                        <span className="text-kp-gray">Cobro CC</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col items-stretch gap-1.5 [&>button]:w-full">

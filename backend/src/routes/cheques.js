@@ -772,18 +772,20 @@ router.post('/:tipo/:id/corregir-estado', requireRol('administrador'), async (re
 });
 
 // ─── GET /api/cheques/por-cliente ─────────────────────────────────────────────
-// Cheques recibidos agrupados por cliente con detalle
+// Cheques recibidos agrupados por cliente con detalle. Junta los cheques que
+// entraron en una venta y los de un cobro de cuenta corriente (cheques_manuales
+// con cliente, que es como los cargan los cajeros desde la ficha del cliente).
 router.get('/por-cliente', async (req, res, next) => {
   try {
     const { estado, banco } = req.query;
     const sucId = sucursalEfectiva(req);
 
-    const conditions = [`v.deleted_at IS NULL`];
+    const conditions = ['TRUE'];
     const params = [];
     let idx = 1;
 
     if (sucId) {
-      conditions.push(`v.sucursal_id = $${idx++}`);
+      conditions.push(`vc.sucursal_id = $${idx++}`);
       params.push(sucId);
     }
     if (estado) {
@@ -821,14 +823,26 @@ router.get('/por-cliente', async (req, res, next) => {
             'importe',           vc.importe,
             'estado',            vc.estado,
             'fecha_estado',      vc.fecha_estado,
-            'venta_numero',      v.numero,
-            'venta_id',          v.id,
+            'venta_numero',      vc.venta_numero,
+            'venta_id',          vc.venta_id,
             'vencido',           (vc.fecha_vencimiento < CURRENT_DATE AND vc.estado NOT IN ('acreditado','rechazado','anulado'))
           ) ORDER BY vc.fecha_vencimiento ASC
         ) AS cheques
-      FROM venta_cheques vc
-      JOIN ventas   v  ON v.id  = vc.venta_id
-      JOIN clientes cl ON cl.id = v.cliente_id
+      FROM (
+        SELECT c.id, c.banco, c.numero_cheque, c.fecha_emision, c.fecha_vencimiento,
+               c.importe, c.estado, c.fecha_estado,
+               v.cliente_id, v.sucursal_id, v.numero AS venta_numero, v.id AS venta_id
+          FROM venta_cheques c
+          JOIN ventas v ON v.id = c.venta_id
+         WHERE v.deleted_at IS NULL
+        UNION ALL
+        SELECT cm.id, cm.banco, cm.numero_cheque, cm.fecha_emision, cm.fecha_vencimiento,
+               cm.importe, cm.estado, cm.fecha_estado,
+               cm.cliente_id, cm.sucursal_id, NULL, NULL
+          FROM cheques_manuales cm
+         WHERE cm.tipo = 'recibido' AND cm.deleted_at IS NULL AND cm.cliente_id IS NOT NULL
+      ) vc
+      JOIN clientes cl ON cl.id = vc.cliente_id
       WHERE ${where}
       GROUP BY cl.id, cl.razon_social, cl.telefono
       ORDER BY SUM(vc.importe) FILTER (WHERE vc.estado IN ('en_cartera','depositado')) DESC NULLS LAST,
