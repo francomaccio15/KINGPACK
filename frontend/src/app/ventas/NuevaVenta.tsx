@@ -227,6 +227,18 @@ export default function NuevaVenta({
   // aplicado en el precio de lista (precio_efectivo), no se suma de nuevo.
   const descuentoBase    = descuentoCliente;
 
+  // Doble descuento: el cliente ya tiene su % propio y además se eligió a mano
+  // una lista con descuento que no es la suya. Se encadenan (20% lista + 10%
+  // cliente = 28%), así que se avisa y se pide confirmación antes de guardar.
+  const dobleDescuento = Number(descuentoCliente) > 0 && Number(descuentoLista) > 0
+    && listaId !== (selectedClient?.lista_precio_id ?? '');
+  const descuentoTotalPct = calcCombinedDiscount(Number(descuentoLista), Number(descuentoCliente));
+  const confirmarDobleDescuento = () => !dobleDescuento || window.confirm(
+    `Ojo: ${selectedClient?.razon_social ?? 'el cliente'} ya tiene ${Number(descuentoCliente)}% de descuento propio ` +
+    `y además elegiste la lista «${listas.find(l => l.id === listaId)?.nombre ?? ''}» (${Number(descuentoLista)}%). ` +
+    `El descuento total queda en ${descuentoTotalPct.toFixed(2).replace(/\.?0+$/, '')}%. ¿Continuar igual?`
+  );
+
   // ── Medios de pago
   const [mediosPago, setMediosPago]       = useState<MedioPago[]>([]);
   const [medioPagoId, setMedioPagoId]     = useState<string>('');
@@ -610,6 +622,7 @@ export default function NuevaVenta({
   // ─── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async (estado: 'preventa' | 'confirmada') => {
     if (cart.length === 0) return;
+    if (!confirmarDobleDescuento()) return;
     setSaveError('');
 
     // Cheques recibidos: mismas reglas que el módulo Cheques (librador, CUIT,
@@ -1320,6 +1333,13 @@ export default function NuevaVenta({
                             )}
                           </div>
                           <span className="text-xs text-kp-red font-semibold">−{descuentoCliente}%</span>
+                        </div>
+                      )}
+                      {dobleDescuento && (
+                        <div role="alert" className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-2 text-xs text-amber-300 leading-snug">
+                          <span className="font-bold">Doble descuento:</span> el cliente ya tiene {Number(descuentoCliente)}% propio
+                          y esta lista suma {Number(descuentoLista)}% más (total {descuentoTotalPct.toFixed(2).replace(/\.?0+$/, '')}%).
+                          Si no corresponde, dejá la lista en Precio Base.
                         </div>
                       )}
                       <div className="flex items-center justify-between pt-1 border-t border-kp-border">

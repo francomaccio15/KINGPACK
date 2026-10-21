@@ -149,6 +149,18 @@ export default function NuevoPresupuesto({
   const descuentoLista   = Number(listas.find(l => l.id === listaId)?.descuento_lista ?? 0);
   const descuentoCliente = Number(selectedClient?.descuento_adicional ?? 0);
 
+  // Doble descuento: el cliente ya tiene su % propio y además se eligió a mano
+  // una lista con descuento que no es la suya. Se encadenan (20% lista + 10%
+  // cliente = 28%), así que se avisa y se pide confirmación antes de guardar.
+  const dobleDescuento = descuentoCliente > 0 && descuentoLista > 0
+    && listaId !== (selectedClient?.lista_precio_id ?? '');
+  const descuentoTotalPct = calcCombinedDiscount(descuentoLista, descuentoCliente);
+  const confirmarDobleDescuento = () => !dobleDescuento || window.confirm(
+    `Ojo: ${selectedClient?.razon_social ?? 'el cliente'} ya tiene ${descuentoCliente}% de descuento propio ` +
+    `y además elegiste la lista «${listas.find(l => l.id === listaId)?.nombre ?? ''}» (${descuentoLista}%). ` +
+    `El descuento total queda en ${descuentoTotalPct.toFixed(2).replace(/\.?0+$/, '')}%. ¿Continuar igual?`
+  );
+
   // ── Descuento extra manual sobre el total (ad-hoc, NO ligado a lista ni cliente)
   const [descExtraModo, setDescExtraModo] = useState<'pct' | 'monto'>('pct');
   const [descExtraStr, setDescExtraStr]   = useState<string>('');
@@ -375,6 +387,7 @@ export default function NuevoPresupuesto({
       setSaveError('Para confirmar la venta en cuenta corriente elegí un cliente');
       return;
     }
+    if (!confirmarDobleDescuento()) return;
     if (confirmarCC && !window.confirm(
       `¿Confirmar la venta en la cuenta corriente de ${selectedClient!.razon_social}? ` +
       'Se descuenta el stock y se le avisa al cajero para que la despache.'
@@ -883,6 +896,13 @@ export default function NuevoPresupuesto({
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-kp-gray">Dto. adicional</span>
                       <span className="text-xs text-kp-red font-semibold">−{descuentoCliente}%</span>
+                    </div>
+                  )}
+                  {dobleDescuento && (
+                    <div role="alert" className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-2 text-xs text-amber-300 leading-snug">
+                      <span className="font-bold">Doble descuento:</span> el cliente ya tiene {descuentoCliente}% propio
+                      y esta lista suma {descuentoLista}% más (total {descuentoTotalPct.toFixed(2).replace(/\.?0+$/, '')}%).
+                      Si no corresponde, dejá la lista en Precio madre.
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-1 border-t border-kp-border">
