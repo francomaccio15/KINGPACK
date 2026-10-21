@@ -1575,6 +1575,101 @@ router.patch('/:id/observaciones', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── PATCH /api/ventas/:id/cliente — cambiar el cliente de una venta ───────────
+// Para cuando se cargó al cliente equivocado. Solo ventas no facturadas (la
+// factura ya salió a nombre del otro: eso se corrige con NC). Mueve los renglones
+// de cuenta corriente de la venta al cliente nuevo (como hace la edición: se
+// reasignan en vez de agregar contrapartidas, así una anulación posterior los
+// revierte bien) y recalcula los saldos de los dos. No toca caja, stock ni banco.
+router.patch('/:id/cliente', requireRol('administrador', 'supervisor'), async (req, res, next) => {
+  const { id } = req.params;
+  const { cliente_id: nuevoClienteId, motivo } = req.body;
+  if (!nuevoClienteId || typeof nuevoClienteId !== 'string') {
+    return res.status(400).json({ error: 'Elegí el cliente nuevo' });
+  }
+  if (!motivo?.trim()) {
+    return res.status(400).json({ error: 'El motivo es obligatorio' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [venta] } = await client.query(
+      `SELECT v.id, v.estado, v.cliente_id, c.razon_social AS cliente_nombre
+         FROM ventas v LEFT JOIN clientes c ON c.id = v.cliente_id
+        WHERE v.id = $1 AND v.deleted_at IS NULL FOR UPDATE OF v`,
+      [id]
+    );
+    if (!venta) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Venta no encontrada' });
+    }
+    if (!['preventa', 'confirmada'].includes(venta.estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: venta.estado === 'facturada'
+          ? 'La venta ya está facturada a nombre del cliente: hay que hacer nota de crédito'
+          : 'No se puede cambiar el cliente de una venta anulada',
+      });
+    }
+    if (venta.cliente_id === nuevoClienteId) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'La venta ya es de ese cliente' });
+    }
+
+    const { rows: [nuevo] } = await client.query(
+      `SELECT id, razon_social FROM clientes WHERE id = $1 AND deleted_at IS NULL`,
+      [nuevoClienteId]
+    );
+    if (!nuevo) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    // El saldo a favor que consumió la venta era del cliente anterior: no se
+    // puede pasar al nuevo sin rehacer el cobro.
+    const { rows: [sf] } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM cuentas_corrientes_cliente
+        WHERE origen_id = $1 AND origen_tipo = 'consumo_nc'`,
+      [id]
+    );
+    if (sf.n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'La venta usó saldo a favor del cliente anterior: editá el cobro antes de cambiar el cliente',
+      });
+    }
+
+    const { rowCount: movidos } = await client.query(
+      `UPDATE cuentas_corrientes_cliente SET cliente_id = $2
+        WHERE origen_id = $1 AND origen_tipo IN ('venta', 'edicion_venta')`,
+      [id, nuevo.id]
+    );
+    await client.query(`UPDATE ventas SET cliente_id = $2 WHERE id = $1`, [id, nuevo.id]);
+
+    if (movidos > 0) {
+      if (venta.cliente_id) await recomputarSaldosCliente(client, venta.cliente_id);
+      await recomputarSaldosCliente(client, nuevo.id);
+    }
+
+    await client.query(
+      `INSERT INTO venta_ediciones (venta_id, usuario_id, observacion)
+       VALUES ($1, $2, $3)`,
+      [id, req.usuario?.id ?? null,
+       `Cliente cambiado: ${venta.cliente_nombre ?? 'Público general'} → ${nuevo.razon_social}. Motivo: ${motivo.trim()}`]
+    );
+
+    await client.query('COMMIT');
+    res.json({ venta: { id, cliente_id: nuevo.id, cliente_nombre: nuevo.razon_social } });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PUT /api/ventas/:id/items — editar items y pagos de una venta existente ───
 // Cajero puede editar la venta completando los campos correspondientes (carrito/pagos).
 router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', 'cajero'), async (req, res, next) => {

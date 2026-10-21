@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import AccionesVenta from './AccionesVenta';
+import CambiarCliente from './CambiarCliente';
 
 import { serverFetch } from '@/lib/serverFetch';
 import type { AuthUser } from '@/lib/auth';
@@ -299,8 +300,14 @@ export default async function VentaDetalle({
             </div>
 
             <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
-              <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border">
+              <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border flex items-center justify-between gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cliente</h3>
+                {esAdmin && ['preventa', 'confirmada'].includes(venta.estado) && (
+                  <CambiarCliente
+                    ventaId={params.id} numero={venta.numero}
+                    clienteActualId={venta.cliente_id ?? null} clienteActualNombre={venta.cliente_nombre ?? null}
+                  />
+                )}
               </div>
               <div className="px-5 py-4 space-y-1.5">
                 {venta.cliente_nombre ? (
