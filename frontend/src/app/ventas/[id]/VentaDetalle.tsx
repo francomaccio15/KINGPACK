@@ -302,7 +302,7 @@ export default async function VentaDetalle({
             <div className="rounded-xl border border-kp-border bg-kp-surface overflow-hidden">
               <div className="bg-kp-surface2 px-4 md:px-5 py-3 border-b border-kp-border flex items-center justify-between gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cliente</h3>
-                {esAdmin && ['preventa', 'confirmada'].includes(venta.estado) && (
+                {(esAdmin || user.rol === 'cajero') && ['preventa', 'confirmada'].includes(venta.estado) && (
                   <CambiarCliente
                     ventaId={params.id} numero={venta.numero}
                     clienteActualId={venta.cliente_id ?? null} clienteActualNombre={venta.cliente_nombre ?? null}

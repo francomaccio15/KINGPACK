@@ -1581,7 +1581,8 @@ router.patch('/:id/observaciones', async (req, res, next) => {
 // de cuenta corriente de la venta al cliente nuevo (como hace la edición: se
 // reasignan en vez de agregar contrapartidas, así una anulación posterior los
 // revierte bien) y recalcula los saldos de los dos. No toca caja, stock ni banco.
-router.patch('/:id/cliente', requireRol('administrador', 'supervisor'), async (req, res, next) => {
+// Lo pueden usar admin, supervisor y cajero.
+router.patch('/:id/cliente', requireRol('administrador', 'supervisor', 'cajero'), async (req, res, next) => {
   const { id } = req.params;
   const { cliente_id: nuevoClienteId, motivo } = req.body;
   if (!nuevoClienteId || typeof nuevoClienteId !== 'string') {
