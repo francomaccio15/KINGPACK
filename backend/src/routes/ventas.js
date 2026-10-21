@@ -643,7 +643,7 @@ router.get('/:id', async (req, res, next) => {
         JOIN articulos a ON a.id = vi.articulo_id
         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
         WHERE vi.venta_id = $1
-        ORDER BY a.nombre, vi.unidad_venta
+        ORDER BY vi.orden
       `, [id]),
       pool.query(`
         SELECT
@@ -1271,7 +1271,7 @@ router.get('/:id/pdf', async (req, res, next) => {
         FROM venta_items vi
         JOIN articulos a ON a.id = vi.articulo_id
         LEFT JOIN alicuotas_iva ai ON ai.id = a.alicuota_iva_id
-        WHERE vi.venta_id = $1 ORDER BY a.nombre, vi.unidad_venta
+        WHERE vi.venta_id = $1 ORDER BY vi.orden
       `, [id]),
       pool.query(`
         SELECT f.cae, f.cae_vencimiento, f.numero AS factura_numero,

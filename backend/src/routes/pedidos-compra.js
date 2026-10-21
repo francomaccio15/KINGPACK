@@ -265,7 +265,7 @@ router.get('/:id', async (req, res, next) => {
         FROM pedido_items pi
         JOIN articulos a ON a.id = pi.articulo_id
         WHERE pi.pedido_id = $1
-        ORDER BY a.nombre
+        ORDER BY pi.orden
       `, [id]),
       // Historial de recepciones y correcciones (agrupado por evento/timestamp).
       // Se reconstruye desde ajustes_stock, que registra cada movimiento con el

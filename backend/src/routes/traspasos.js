@@ -240,7 +240,7 @@ router.get('/:id', async (req, res, next) => {
         JOIN articulos a ON a.id = ti.articulo_id
         JOIN traspasos t2 ON t2.id = ti.traspaso_id
         WHERE ti.traspaso_id = $1
-        ORDER BY a.nombre
+        ORDER BY ti.orden
       `, [id]),
     ]);
 
