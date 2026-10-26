@@ -330,6 +330,15 @@ export default function PagosProveedorClient() {
       return n;
     });
 
+  // En «Pago a cuenta» un cheque endosado va entero (no se puede endosar por
+  // menos): el monto a pagar sigue a lo que suman los medios al tildar cheques,
+  // así los centavos del cheque no traban el pago.
+  useEffect(() => {
+    if (modo !== 'cuenta' || chequeModo !== 'endoso' || endososSel.size === 0) return;
+    setMontoCuenta(totalMedios.toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endososSel]);
+
   const totalAplicado = useMemo(() =>
     Object.values(aplic).reduce((s, a) => s + (a.sel ? (parseFloat(a.monto) || 0) : 0), 0),
     [aplic]);
