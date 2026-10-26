@@ -425,6 +425,35 @@ export default function PagosProveedorClient() {
     const chequesNuevos = (hayCheque && chequeModo === 'nuevo')
       ? cheques.filter(c => c.banco || c.numero_cheque || c.importe)
       : [];
+    // Un cheque de cliente que ya está en cartera no se emite de nuevo: se
+    // endosa. Si los cargados a mano están todos en cartera, se pasan solos a
+    // «Endosar en cartera» para que el usuario revise y confirme.
+    if (chequesNuevos.length > 0) {
+      let cartera = chequesCartera;
+      if (cartera.length === 0) {
+        try {
+          const r = await apiFetch('/api/cheques?tipo=recibido&estado=en_cartera&limit=500');
+          cartera = (await r.json()).cheques ?? [];
+        } catch { cartera = []; }
+      }
+      const norm = (s: string | null) => (s ?? '').replace(/\D/g, '').replace(/^0+/, '');
+      const mismoBanco = (a: string | null, b: string) => {
+        const x = (a ?? '').trim().toLowerCase(), y = b.trim().toLowerCase();
+        return !x || !y || x.includes(y) || y.includes(x);
+      };
+      const enCartera = chequesNuevos.map(c => cartera.find(k =>
+        norm(c.numero_cheque) !== '' && norm(k.numero_cheque) === norm(c.numero_cheque) && mismoBanco(k.banco, c.banco)));
+      if (enCartera.some(Boolean)) {
+        if (enCartera.every(Boolean)) {
+          setChequesCartera(cartera);
+          setChequeModo('endoso');
+          setEndososSel(new Set(enCartera.map(k => k!.id)));
+          return setError('Esos cheques ya están en cartera (son de clientes): los pasé a «Endosar en cartera». Revisá el total y volvé a tocar «Registrar pago».');
+        }
+        const nums = chequesNuevos.filter((_, i) => enCartera[i]).map(c => `#${c.numero_cheque}`).join(', ');
+        return setError(`Los cheques ${nums} ya están en cartera: quitalos de acá y elegilos en «Endosar en cartera».`);
+      }
+    }
     for (const [i, c] of chequesNuevos.entries()) {
       const err = errorCheque(c, 'emitido');
       if (err) return setError(`Cheque ${i + 1}: ${err}`);

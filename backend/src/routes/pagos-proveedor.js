@@ -232,7 +232,14 @@ router.post('/', async (req, res, next) => {
     const vCheques = validarListaCheques(cheques || [], 'emitido');
     if (vCheques.error) return res.status(400).json({ error: vCheques.error });
     const dupPP = await errorDuplicados(pool, vCheques.cheques);
-    if (dupPP) return res.status(409).json({ error: dupPP });
+    if (dupPP) {
+      // Un cheque de cliente que ya está en cartera se paga endosándolo, no
+      // volviéndolo a cargar como emitido.
+      const msg = /en_cartera\)$/.test(dupPP)
+        ? `${dupPP}. Si es un cheque recibido de un cliente, elegilo en «Endosar en cartera».`
+        : dupPP;
+      return res.status(409).json({ error: msg });
+    }
 
     const primaryMedioId = mediosLista[0].medio_pago_id;
     const primaryCuenta  = mediosLista[0].cuenta_bancaria_id;
