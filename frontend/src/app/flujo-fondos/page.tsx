@@ -24,6 +24,10 @@ interface FlujoData {
   posicion: {
     disponibilidades: { tipo: string; nombre: string; monto: number }[];
     total_disponible: number; a_cobrar: number; deuda_proveedores: number; capital_trabajo: number;
+    proveedores: {
+      facturas_impagas: number; pagos_a_cuenta: number; a_pagar: number; a_favor: number;
+      detalle: { proveedor: string; impago: number; a_cuenta: number; neto: number }[];
+    };
   };
   proyeccion: {
     supuestos: { inflacion: number; crecimiento: number; base_meses: string[]; saldo_inicial: number };
@@ -113,7 +117,8 @@ function Contenido({ d }: { d: FlujoData }) {
         <Kpi label="Flujo neto" valor={millones(neto)} detalle={`Antes de retiros: ${millones(operativo)}`} tone={neto} />
         <Kpi label="Disponible hoy" valor={millones(d.posicion.total_disponible)} detalle="Bancos, cajas y cheques" />
         <Kpi label="A cobrar de clientes" valor={millones(d.posicion.a_cobrar)} detalle={`${pct(pctCC)} de las ventas va a CC`} />
-        <Kpi label="Deuda con proveedores" valor={millones(d.posicion.deuda_proveedores)} detalle="Facturas impagas o parciales" tone={-1} />
+        <Kpi label="Deuda neta con proveedores" valor={millones(d.posicion.deuda_proveedores)}
+          detalle={`Debés ${millones(d.posicion.proveedores.a_pagar)} · a favor ${millones(d.posicion.proveedores.a_favor)}`} tone={-1} />
         <Kpi label="Capital de trabajo" valor={millones(d.posicion.capital_trabajo)} detalle="Disponible + a cobrar − deuda" tone={d.posicion.capital_trabajo} />
         <Kpi label="Margen bruto estimado" valor={pct(d.productos.margen_pct)} detalle="Sobre venta neta (sin IVA)" />
       </div>
@@ -152,7 +157,8 @@ function Contenido({ d }: { d: FlujoData }) {
               ))}
               <FilaSimple label="Total disponible" valor={d.posicion.total_disponible} bold />
               <FilaSimple label="A cobrar de clientes" valor={d.posicion.a_cobrar} />
-              <FilaSimple label="Deuda con proveedores" valor={-d.posicion.deuda_proveedores} />
+              <FilaSimple label="Facturas de proveedores impagas" valor={-d.posicion.proveedores.facturas_impagas} />
+              <FilaSimple label="Pagos a cuenta sin imputar" valor={d.posicion.proveedores.pagos_a_cuenta} />
               <FilaSimple label="Capital de trabajo neto" valor={d.posicion.capital_trabajo} bold />
             </tbody>
           </table>
@@ -160,6 +166,36 @@ function Contenido({ d }: { d: FlujoData }) {
         </div>
 
       </div>
+
+      {/* Deuda por proveedor */}
+      <Tabla
+        titulo="Deuda con proveedores"
+        primera="Proveedor"
+        columnas={['Facturas impagas', 'Pagado a cuenta sin imputar', 'Neto']}
+        pie="Neto positivo = lo que se le debe; negativo = saldo a favor (se le pagó de más o por adelantado). Imputando los pagos a cuenta desde Pago a Proveedores, las facturas dejan de figurar impagas."
+      >
+        {d.posicion.proveedores.detalle.map((p) => (
+          <tr key={p.proveedor} className="border-t border-kp-border/50">
+            <td className={cn(tdCls, 'py-2 sticky left-0 bg-kp-surface')}>{p.proveedor}</td>
+            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(p.impago)}</td>
+            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap text-kp-gray')}>{money(p.a_cuenta)}</td>
+            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap font-semibold', p.neto > 0.5 ? 'text-rose-400' : p.neto < -0.5 ? 'text-green-400' : 'text-kp-gray')}>
+              {p.neto < -0.5 ? `a favor ${money(-p.neto)}` : money(p.neto)}
+            </td>
+          </tr>
+        ))}
+        <tr className="border-t-2 border-kp-border bg-kp-surface2 font-bold">
+          <td className={cn(tdCls, 'py-2 sticky left-0 bg-kp-surface2')}>Deuda neta</td>
+          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.facturas_impagas)}</td>
+          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.pagos_a_cuenta)}</td>
+          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap text-rose-400')}>{money(d.posicion.deuda_proveedores)}</td>
+        </tr>
+        <tr className="border-t border-kp-border/50">
+          <td colSpan={4} className={cn(tdCls, 'py-2', metaCls)}>
+            Se debe {money(d.posicion.proveedores.a_pagar)} y hay {money(d.posicion.proveedores.a_favor)} de saldo a favor con otros proveedores.
+          </td>
+        </tr>
+      </Tabla>
 
       {/* Flujo real */}
       <Tabla titulo="Flujo de fondos real" columnas={[...meses.map(etiqueta), 'Total']}>
@@ -256,7 +292,7 @@ function Kpi({ label, valor, detalle, tone }: { label: string; valor: string; de
   );
 }
 
-function Tabla({ titulo, columnas, children, pie }: { titulo: string; columnas: string[]; children: React.ReactNode; pie?: string }) {
+function Tabla({ titulo, columnas, children, pie, primera = 'Concepto' }: { titulo: string; columnas: string[]; children: React.ReactNode; pie?: string; primera?: string }) {
   return (
     <div className={cn(cardCls, 'overflow-hidden')}>
       <h3 className={cn(sectionTitleCls, 'px-4 pt-4 pb-2')}>{titulo}</h3>
@@ -264,7 +300,7 @@ function Tabla({ titulo, columnas, children, pie }: { titulo: string; columnas: 
         <table className={tableCls}>
           <thead>
             <tr className={theadRowCls}>
-              <th className={cn(thCls, 'sticky left-0 bg-kp-surface2 min-w-[220px]')}>Concepto</th>
+              <th className={cn(thCls, 'sticky left-0 bg-kp-surface2 min-w-[220px]')}>{primera}</th>
               {columnas.map((c) => <th key={c} className={cn(thNumCls, 'whitespace-nowrap')}>{c}</th>)}
             </tr>
           </thead>

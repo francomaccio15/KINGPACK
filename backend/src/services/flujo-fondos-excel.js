@@ -164,13 +164,44 @@ async function generarExcel(d) {
   const CCC = r;
   set(wp, r, 1, 'Saldo a cobrar de clientes (cuenta corriente)', { indent: 1 });
   set(wp, r++, 2, d.posicion.a_cobrar, { fmt: MON, color: 'FF0000FF' });
+  const pv = d.posicion.proveedores;
+  const IMP = r;
+  set(wp, r, 1, 'Facturas de proveedores impagas o pagadas en parte', { indent: 1 });
+  set(wp, r++, 2, -pv.facturas_impagas, { fmt: MON, color: 'FF0000FF' });
+  const ACU = r;
+  set(wp, r, 1, 'Pagos a cuenta a proveedores sin imputar a facturas', { indent: 1 });
+  set(wp, r++, 2, pv.pagos_a_cuenta, { fmt: MON, color: 'FF0000FF' });
   const DEU = r;
-  set(wp, r, 1, 'Deuda con proveedores (facturas impagas o pagadas en parte)', { indent: 1 });
-  set(wp, r++, 2, -d.posicion.deuda_proveedores, { fmt: MON, color: 'FF0000FF' });
+  set(wp, r, 1, 'Deuda neta con proveedores', { indent: 1, bold: true });
+  set(wp, r++, 2, f(`B${IMP}+B${ACU}`, -d.posicion.deuda_proveedores), { fmt: MON, bold: true });
   const WC = r;
-  set(wp, r, 1, 'Capital de trabajo neto (disponible + a cobrar − a pagar)', { bold: true });
+  set(wp, r, 1, 'Capital de trabajo neto (disponible + a cobrar − deuda neta)', { bold: true });
   set(wp, r, 2, f(`B${DISP}+B${CCC}+B${DEU}`, d.posicion.capital_trabajo), { fmt: MON, bold: true });
   pintarFila(wp, r++, 2, CELESTE, true);
+  r += 2;
+
+  // Desglose por proveedor
+  wp.getColumn(3).width = 22;
+  wp.getColumn(4).width = 20;
+  set(wp, r++, 1, 'DEUDA CON PROVEEDORES, POR PROVEEDOR', { bold: true });
+  encabezado(wp, r++, ['Proveedor', 'Facturas impagas', 'Pagado a cuenta sin imputar', 'Neto (+ debés / − a favor)']);
+  const pv0 = r;
+  for (const x of pv.detalle) {
+    set(wp, r, 1, x.proveedor);
+    set(wp, r, 2, x.impago, { fmt: MON, color: 'FF0000FF' });
+    set(wp, r, 3, x.a_cuenta, { fmt: MON, color: 'FF0000FF' });
+    set(wp, r, 4, f(`B${r}-C${r}`, x.neto), { fmt: MON });
+    r++;
+  }
+  set(wp, r, 1, 'Deuda neta', { bold: true });
+  [2, 3, 4].forEach((j) => set(wp, r, j, f(`SUM(${col(j)}${pv0}:${col(j)}${r - 1})`,
+    j === 2 ? pv.facturas_impagas : j === 3 ? pv.pagos_a_cuenta : d.posicion.deuda_proveedores), { fmt: MON, bold: true }));
+  pintarFila(wp, r++, 4, GRIS_TOT, true);
+  set(wp, r, 1, 'Se debe (proveedores con neto positivo)', { indent: 1 });
+  set(wp, r++, 4, f(`SUMIF(D${pv0}:D${r - 2},">0")`, pv.a_pagar), { fmt: MON });
+  set(wp, r, 1, 'Saldo a favor (proveedores con neto negativo)', { indent: 1 });
+  set(wp, r++, 4, f(`-SUMIF(D${pv0}:D${r - 3},"<0")`, pv.a_favor), { fmt: MON });
+  nota(wp, r++, 'Imputando los pagos a cuenta desde Pago a Proveedores, las facturas dejan de figurar impagas.');
 
   // ─── Proyección ────────────────────────────────────────────────────────────
   const pr = d.proyeccion;
@@ -312,7 +343,7 @@ async function generarExcel(d) {
     ['POSICIÓN HOY'],
     ['Disponibilidades (bancos, cajas fuertes, caja adm., cheques)', `'Posición actual'!B${DISP}`, d.posicion.total_disponible, MON],
     ['A cobrar de clientes', `'Posición actual'!B${CCC}`, d.posicion.a_cobrar, MON],
-    ['Deuda con proveedores', `'Posición actual'!B${DEU}`, -d.posicion.deuda_proveedores, MON],
+    ['Deuda neta con proveedores', `'Posición actual'!B${DEU}`, -d.posicion.deuda_proveedores, MON],
     ['Capital de trabajo neto', `'Posición actual'!B${WC}`, d.posicion.capital_trabajo, MON],
     [],
     [`PROYECCIÓN (${pr.meses[0].etiqueta} a ${pr.meses[nP - 1].etiqueta})`],
