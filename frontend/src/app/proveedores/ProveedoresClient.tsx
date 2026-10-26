@@ -5,6 +5,7 @@ import { getStoredUser } from '@/lib/auth';
 import Modal from '@/components/ui/Modal';
 import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 import { btnSecondary, cn } from '@/lib/ui';
+import DeudaDetalle from './DeudaDetalle';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Proveedor {
@@ -560,6 +561,8 @@ export default function ProveedoresClient() {
   const [togglingId,  setTogglingId]  = useState<string | null>(null);
 
   const esAdmin = getStoredUser()?.rol === 'administrador';
+  const veDeudaNeta = ['administrador', 'supervisor'].includes(getStoredUser()?.rol ?? '');
+  const [recargaDeuda, setRecargaDeuda] = useState(0);
 
   // Total adeudado de un proveedor = facturado + no facturado
   const totalProv = (p: Proveedor) =>
@@ -576,6 +579,7 @@ export default function ProveedoresClient() {
       const res  = await apiFetch(`/api/proveedores?${params}`);
       const data = await res.json();
       setProveedores(data.proveedores ?? []);
+      setRecargaDeuda((n) => n + 1);
     } finally {
       setLoading(false);
     }
@@ -641,6 +645,8 @@ export default function ProveedoresClient() {
           </div>
         );
       })()}
+
+      {veDeudaNeta && <DeudaDetalle recargar={recargaDeuda} />}
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3">

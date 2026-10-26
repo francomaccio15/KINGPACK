@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireRol } = require('../middleware/auth');
+const { deudaPorProveedor } = require('../services/flujo-fondos');
 
 const router = express.Router();
 
@@ -59,6 +60,14 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({ count: parseInt(countRows[0].count), proveedores: rows });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /api/proveedores/deuda-detalle ───────────────────────────────────────
+// Facturas impagas menos pagos a cuenta sin imputar, por proveedor.
+router.get('/deuda-detalle', requireRol('administrador', 'supervisor'), async (req, res, next) => {
+  try {
+    res.json(await deudaPorProveedor());
   } catch (err) { next(err); }
 });
 
