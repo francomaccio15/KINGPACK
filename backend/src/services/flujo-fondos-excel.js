@@ -166,11 +166,11 @@ async function generarExcel(d) {
   set(wp, r++, 2, d.posicion.a_cobrar, { fmt: MON, color: 'FF0000FF' });
   const pv = d.posicion.proveedores;
   const IMP = r;
-  set(wp, r, 1, 'Facturas de proveedores impagas o pagadas en parte', { indent: 1 });
-  set(wp, r++, 2, -pv.facturas_impagas, { fmt: MON, color: 'FF0000FF' });
+  set(wp, r, 1, 'Deuda con proveedores — facturado (cuenta corriente)', { indent: 1 });
+  set(wp, r++, 2, -pv.facturado, { fmt: MON, color: 'FF0000FF' });
   const ACU = r;
-  set(wp, r, 1, 'Pagos a cuenta a proveedores sin imputar a facturas', { indent: 1 });
-  set(wp, r++, 2, pv.pagos_a_cuenta, { fmt: MON, color: 'FF0000FF' });
+  set(wp, r, 1, 'Deuda con proveedores — no facturado (cuenta corriente)', { indent: 1 });
+  set(wp, r++, 2, -pv.no_facturado, { fmt: MON, color: 'FF0000FF' });
   const DEU = r;
   set(wp, r, 1, 'Deuda neta con proveedores', { indent: 1, bold: true });
   set(wp, r++, 2, f(`B${IMP}+B${ACU}`, -d.posicion.deuda_proveedores), { fmt: MON, bold: true });
@@ -184,24 +184,24 @@ async function generarExcel(d) {
   wp.getColumn(3).width = 22;
   wp.getColumn(4).width = 20;
   set(wp, r++, 1, 'DEUDA CON PROVEEDORES, POR PROVEEDOR', { bold: true });
-  encabezado(wp, r++, ['Proveedor', 'Facturas impagas', 'Pagado a cuenta sin imputar', 'Neto (+ debés / − a favor)']);
+  encabezado(wp, r++, ['Proveedor', 'Facturado', 'No facturado', 'Neto (+ debés / − a favor)']);
   const pv0 = r;
   for (const x of pv.detalle) {
     set(wp, r, 1, x.proveedor);
-    set(wp, r, 2, x.impago, { fmt: MON, color: 'FF0000FF' });
-    set(wp, r, 3, x.a_cuenta, { fmt: MON, color: 'FF0000FF' });
-    set(wp, r, 4, f(`B${r}-C${r}`, x.neto), { fmt: MON });
+    set(wp, r, 2, x.facturado, { fmt: MON, color: 'FF0000FF' });
+    set(wp, r, 3, x.no_facturado, { fmt: MON, color: 'FF0000FF' });
+    set(wp, r, 4, f(`B${r}+C${r}`, x.neto), { fmt: MON });
     r++;
   }
   set(wp, r, 1, 'Deuda neta', { bold: true });
   [2, 3, 4].forEach((j) => set(wp, r, j, f(`SUM(${col(j)}${pv0}:${col(j)}${r - 1})`,
-    j === 2 ? pv.facturas_impagas : j === 3 ? pv.pagos_a_cuenta : d.posicion.deuda_proveedores), { fmt: MON, bold: true }));
+    j === 2 ? pv.facturado : j === 3 ? pv.no_facturado : d.posicion.deuda_proveedores), { fmt: MON, bold: true }));
   pintarFila(wp, r++, 4, GRIS_TOT, true);
   set(wp, r, 1, 'Se debe (proveedores con neto positivo)', { indent: 1 });
   set(wp, r++, 4, f(`SUMIF(D${pv0}:D${r - 2},">0")`, pv.a_pagar), { fmt: MON });
   set(wp, r, 1, 'Saldo a favor (proveedores con neto negativo)', { indent: 1 });
   set(wp, r++, 4, f(`-SUMIF(D${pv0}:D${r - 3},"<0")`, pv.a_favor), { fmt: MON });
-  nota(wp, r++, 'Imputando los pagos a cuenta desde Pago a Proveedores, las facturas dejan de figurar impagas.');
+  nota(wp, r++, 'Saldo de la cuenta corriente de cada proveedor: el mismo que muestra la pestaña Proveedores.');
 
   // ─── Proyección ────────────────────────────────────────────────────────────
   const pr = d.proyeccion;

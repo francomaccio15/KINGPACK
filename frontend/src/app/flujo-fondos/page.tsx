@@ -25,8 +25,8 @@ interface FlujoData {
     disponibilidades: { tipo: string; nombre: string; monto: number }[];
     total_disponible: number; a_cobrar: number; deuda_proveedores: number; capital_trabajo: number;
     proveedores: {
-      facturas_impagas: number; pagos_a_cuenta: number; a_pagar: number; a_favor: number;
-      detalle: { proveedor: string; impago: number; a_cuenta: number; neto: number }[];
+      facturado: number; no_facturado: number; a_pagar: number; a_favor: number;
+      detalle: { proveedor: string; facturado: number; no_facturado: number; neto: number }[];
     };
   };
   proyeccion: {
@@ -157,8 +157,8 @@ function Contenido({ d }: { d: FlujoData }) {
               ))}
               <FilaSimple label="Total disponible" valor={d.posicion.total_disponible} bold />
               <FilaSimple label="A cobrar de clientes" valor={d.posicion.a_cobrar} />
-              <FilaSimple label="Facturas de proveedores impagas" valor={-d.posicion.proveedores.facturas_impagas} />
-              <FilaSimple label="Pagos a cuenta sin imputar" valor={d.posicion.proveedores.pagos_a_cuenta} />
+              <FilaSimple label="Deuda con proveedores (facturado)" valor={-d.posicion.proveedores.facturado} />
+              <FilaSimple label="Deuda con proveedores (no facturado)" valor={-d.posicion.proveedores.no_facturado} />
               <FilaSimple label="Capital de trabajo neto" valor={d.posicion.capital_trabajo} bold />
             </tbody>
           </table>
@@ -171,14 +171,14 @@ function Contenido({ d }: { d: FlujoData }) {
       <Tabla
         titulo="Deuda con proveedores"
         primera="Proveedor"
-        columnas={['Facturas impagas', 'Pagado a cuenta sin imputar', 'Neto']}
-        pie="Neto positivo = lo que se le debe; negativo = saldo a favor (se le pagó de más o por adelantado). Imputando los pagos a cuenta desde Pago a Proveedores, las facturas dejan de figurar impagas."
+        columnas={['Facturado', 'No facturado', 'Neto']}
+        pie="Saldo de la cuenta corriente de cada proveedor (el mismo que la pestaña Proveedores). Neto positivo = lo que se le debe; negativo = saldo a favor (se le pagó de más o por adelantado)."
       >
         {d.posicion.proveedores.detalle.map((p) => (
           <tr key={p.proveedor} className="border-t border-kp-border/50">
             <td className={cn(tdCls, 'py-2 sticky left-0 bg-kp-surface')}>{p.proveedor}</td>
-            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(p.impago)}</td>
-            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap text-kp-gray')}>{money(p.a_cuenta)}</td>
+            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(p.facturado)}</td>
+            <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(p.no_facturado)}</td>
             <td className={cn(tdNumCls, 'py-2 whitespace-nowrap font-semibold', p.neto > 0.5 ? 'text-rose-400' : p.neto < -0.5 ? 'text-green-400' : 'text-kp-gray')}>
               {p.neto < -0.5 ? `a favor ${money(-p.neto)}` : money(p.neto)}
             </td>
@@ -186,8 +186,8 @@ function Contenido({ d }: { d: FlujoData }) {
         ))}
         <tr className="border-t-2 border-kp-border bg-kp-surface2 font-bold">
           <td className={cn(tdCls, 'py-2 sticky left-0 bg-kp-surface2')}>Deuda neta</td>
-          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.facturas_impagas)}</td>
-          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.pagos_a_cuenta)}</td>
+          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.facturado)}</td>
+          <td className={cn(tdNumCls, 'py-2 whitespace-nowrap')}>{money(d.posicion.proveedores.no_facturado)}</td>
           <td className={cn(tdNumCls, 'py-2 whitespace-nowrap text-rose-400')}>{money(d.posicion.deuda_proveedores)}</td>
         </tr>
         <tr className="border-t border-kp-border/50">

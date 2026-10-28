@@ -86,39 +86,40 @@ async function normalizarParams(q) {
   return { desde, hasta, inflacion, crecimiento, hoy };
 }
 
-// Deuda por proveedor: facturas impagas menos los pagos a cuenta que todavía no
-// se imputaron a ninguna factura (sin restarlos, la deuda sale inflada).
+// Deuda por proveedor: el saldo de su cuenta corriente (saldo inicial + Σ debe −
+// Σ haber), por concepto facturado / no facturado. Es el mismo número que la
+// pestaña Proveedores, así que incluye saldos iniciales y ajustes manuales; los
+// pagos (también los pagos a cuenta y con cheque) ya están restados como haber.
 // neto > 0 = se le debe; neto < 0 = saldo a favor. La usa también /proveedores.
 async function deudaPorProveedor() {
   const { rows } = await pool.query(`
-      WITH impagas AS (
-        SELECT e.proveedor_id, SUM(e.total - COALESCE(pg.pagado, 0)) AS impago
-        FROM egresos e
-        LEFT JOIN (SELECT egreso_id, SUM(monto) AS pagado FROM egreso_pagos GROUP BY 1) pg ON pg.egreso_id = e.id
-        WHERE e.deleted_at IS NULL AND e.estado_pago IN ('pendiente', 'parcial')
-        GROUP BY 1
-      ), a_cuenta AS (
-        SELECT pp.proveedor_id, SUM(pp.monto - COALESCE(ap.aplicado, 0)) AS a_cuenta
-        FROM pagos_proveedor pp
-        LEFT JOIN (SELECT pago_proveedor_id, SUM(monto) AS aplicado FROM egreso_pagos
-                   WHERE pago_proveedor_id IS NOT NULL GROUP BY 1) ap ON ap.pago_proveedor_id = pp.id
-        WHERE NOT pp.anulado
-        GROUP BY 1
-        HAVING SUM(pp.monto - COALESCE(ap.aplicado, 0)) <> 0
-      )
-      SELECT COALESCE(i.proveedor_id, a.proveedor_id) AS proveedor_id,
-             COALESCE(p.razon_social, 'Gastos sin proveedor asignado') AS proveedor,
-             COALESCE(i.impago, 0) AS impago, COALESCE(a.a_cuenta, 0) AS a_cuenta
-      FROM impagas i
-      FULL JOIN a_cuenta a ON a.proveedor_id = i.proveedor_id
-      LEFT JOIN proveedores p ON p.id = COALESCE(i.proveedor_id, a.proveedor_id)`);
+      SELECT p.id AS proveedor_id, p.razon_social AS proveedor, p.activo,
+             p.saldo_inicial_facturado    + COALESCE(cc.mov_fact, 0)   AS facturado,
+             p.saldo_inicial_no_facturado + COALESCE(cc.mov_nofact, 0) AS no_facturado
+      FROM proveedores p
+      LEFT JOIN (
+        SELECT proveedor_id,
+          COALESCE(SUM(debe) FILTER (WHERE facturado), 0)
+            - COALESCE(SUM(haber) FILTER (WHERE facturado), 0)     AS mov_fact,
+          COALESCE(SUM(debe) FILTER (WHERE NOT facturado), 0)
+            - COALESCE(SUM(haber) FILTER (WHERE NOT facturado), 0) AS mov_nofact
+        FROM cuentas_corrientes_proveedor
+        GROUP BY proveedor_id
+      ) cc ON cc.proveedor_id = p.id
+      WHERE p.deleted_at IS NULL`);
   const detalle = rows
-    .map((r) => ({ proveedor_id: r.proveedor_id, proveedor: r.proveedor, impago: num(r.impago), a_cuenta: num(r.a_cuenta), neto: num(r.impago) - num(r.a_cuenta) }))
-    .filter((r) => Math.round(r.neto) !== 0 || Math.round(r.impago) !== 0)
+    .map((r) => ({
+      proveedor_id: r.proveedor_id,
+      proveedor: r.activo ? r.proveedor : `${r.proveedor} (inactivo)`,
+      facturado: num(r.facturado),
+      no_facturado: num(r.no_facturado),
+      neto: num(r.facturado) + num(r.no_facturado),
+    }))
+    .filter((r) => Math.round(r.neto) !== 0 || Math.round(r.facturado) !== 0)
     .sort((a, b) => b.neto - a.neto);
   return {
-    facturas_impagas: detalle.reduce((s, r) => s + r.impago, 0),
-    pagos_a_cuenta: detalle.reduce((s, r) => s + r.a_cuenta, 0),
+    facturado: detalle.reduce((s, r) => s + r.facturado, 0),
+    no_facturado: detalle.reduce((s, r) => s + r.no_facturado, 0),
     a_pagar: detalle.reduce((s, r) => s + Math.max(r.neto, 0), 0),
     a_favor: detalle.reduce((s, r) => s + Math.max(-r.neto, 0), 0),
     deuda_neta: detalle.reduce((s, r) => s + r.neto, 0),
@@ -273,7 +274,7 @@ async function calcularFlujo({ desde, hasta, inflacion, crecimiento, hoy }) {
   const aCobrar = pos.find((r) => r.tipo === 'cc_clientes')?.monto ?? 0;
   const proveedores = deudaProv;
   // Neta: lo que se debe menos lo que los proveedores nos deben (saldo a favor).
-  const deudaProveedores = proveedores.facturas_impagas - proveedores.pagos_a_cuenta;
+  const deudaProveedores = proveedores.deuda_neta;
 
   // ── Proyección ──
   // Base = promedio de los últimos 3 meses del período (o los que haya). Si el
