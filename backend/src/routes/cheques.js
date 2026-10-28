@@ -860,43 +860,57 @@ router.get('/emitidos-resumen', async (req, res, next) => {
     const { meses = 6 } = req.query;
     const sucId = sucursalEfectiva(req);
 
-    const conditions = [`ec.estado NOT IN ('anulado')`];
+    const conditions = [`v.tipo = 'emitido'`, `v.estado NOT IN ('anulado')`];
     const params = [];
     let idx = 1;
 
+    // Los pagos a proveedor pueden no tener sucursal (son a nivel empresa).
     if (sucId) {
-      conditions.push(`e.sucursal_id = $${idx++}`);
+      conditions.push(`(v.sucursal_id = $${idx++} OR v.sucursal_id IS NULL)`);
       params.push(sucId);
     }
 
     const where = conditions.join(' AND ');
 
-    // Cheques emitidos con info del proveedor y egreso
+    // Todos los cheques propios: los de pagar una factura desde Egresos, los de
+    // Pago a Proveedores y los de carga manual. Antes solo se leían los de
+    // Egresos y los de Pago a Proveedores no aparecían.
+    // egreso_id es la clave de agrupación (una fila por factura / pago / cheque
+    // manual); cheque_id lleva el origen porque los ids se repiten entre tablas.
     const { rows } = await pool.query(`
       SELECT
         COALESCE(pr.razon_social, 'Sin proveedor')  AS proveedor_nombre,
         pr.id                                        AS proveedor_id,
-        e.numero_comprobante                         AS nro_factura,
-        e.id                                         AS egreso_id,
-        ec.id                                        AS cheque_id,
-        ec.banco,
-        ec.numero_cheque,
-        ec.fecha_emision,
-        ec.fecha_vencimiento,
-        ec.importe,
-        ec.estado,
-        ec.fecha_estado,
-        DATE_TRUNC('month', ec.fecha_vencimiento)    AS mes_venc,
-        s.nombre                                     AS sucursal_nombre
-      FROM egreso_cheques ec
-      JOIN egreso_pagos   ep ON ep.id  = ec.egreso_pago_id
-      JOIN egresos        e  ON e.id   = ep.egreso_id
-      LEFT JOIN proveedores pr ON pr.id = e.proveedor_id
-      JOIN sucursales     s  ON s.id   = e.sucursal_id
+        CASE v.origen_tipo
+          WHEN 'egreso'         THEN e.numero_comprobante
+          WHEN 'pago_proveedor' THEN COALESCE(comp.comps, 'Pago a cuenta')
+        END                                          AS nro_factura,
+        v.origen_tipo || '-' || v.origen_id          AS egreso_id,
+        v.origen_tipo || '-' || v.id                 AS cheque_id,
+        v.banco,
+        v.numero_cheque,
+        v.fecha_emision,
+        v.fecha_vencimiento,
+        v.importe,
+        v.estado,
+        v.fecha_estado,
+        DATE_TRUNC('month', v.fecha_vencimiento)     AS mes_venc,
+        v.sucursal_nombre
+      FROM vw_cheques v
+      LEFT JOIN egresos          e  ON v.origen_tipo = 'egreso'         AND e.id  = v.origen_id
+      LEFT JOIN pagos_proveedor  pp ON v.origen_tipo = 'pago_proveedor' AND pp.id = v.origen_id
+      LEFT JOIN cheques_manuales cm ON v.origen_tipo = 'manual'         AND cm.id = v.id
+      LEFT JOIN proveedores pr ON pr.id = COALESCE(e.proveedor_id, pp.proveedor_id, cm.proveedor_id)
+      LEFT JOIN LATERAL (
+        SELECT string_agg(DISTINCT eg.numero_comprobante, ', ') AS comps
+        FROM pago_proveedor_aplicaciones a
+        JOIN egresos eg ON eg.id = a.egreso_id
+        WHERE a.pago_proveedor_id = pp.id
+      ) comp ON TRUE
       WHERE ${where}
-        AND ec.fecha_vencimiento >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
-        AND ec.fecha_vencimiento <  DATE_TRUNC('month', CURRENT_DATE) + (${parseInt(meses) || 6} || ' months')::INTERVAL
-      ORDER BY ec.fecha_vencimiento ASC, pr.razon_social
+        AND v.fecha_vencimiento >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+        AND v.fecha_vencimiento <  DATE_TRUNC('month', CURRENT_DATE) + (${parseInt(meses) || 6} || ' months')::INTERVAL
+      ORDER BY v.fecha_vencimiento ASC, pr.razon_social
     `, params);
 
     // Extraer meses únicos presentes
