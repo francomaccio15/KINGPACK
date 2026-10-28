@@ -687,38 +687,38 @@ export default function ProveedoresClient() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-kp-surface2 border-b border-kp-border">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Razón Social</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">CUIT</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Contacto</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Cond. Pago</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo facturado</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest whitespace-nowrap">Saldo no facturado</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-kp-white uppercase tracking-widest whitespace-nowrap">Total adeudado</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-kp-gray uppercase tracking-widest">Activo</th>
-                <th className="px-4 py-3" />
+                <th className="text-left px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide">Razón Social</th>
+                <th className="text-left px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide whitespace-nowrap">CUIT</th>
+                <th className="text-left px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide">Contacto</th>
+                <th className="text-left px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide">Cond. pago</th>
+                <th className="text-right px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide whitespace-nowrap">Facturado</th>
+                <th className="text-right px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide whitespace-nowrap">No facturado</th>
+                <th className="text-right px-2.5 py-2 text-xs font-semibold text-kp-white uppercase tracking-wide whitespace-nowrap">Total</th>
+                <th className="text-center px-2.5 py-2 text-xs font-semibold text-kp-gray uppercase tracking-wide">Activo</th>
+                <th className="px-2.5 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-kp-border">
               {proveedores.map(p => (
                 <tr key={p.id} className={`bg-kp-surface hover:bg-kp-surface2 transition-colors ${!p.activo ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-kp-white">{p.razon_social}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-kp-gray whitespace-nowrap">{p.cuit || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">
+                  <td className="px-2.5 py-2 text-xs font-medium text-kp-white min-w-[120px]">{p.razon_social}</td>
+                  <td className="px-2.5 py-2 font-mono text-xs text-kp-gray whitespace-nowrap">{p.cuit || '—'}</td>
+                  <td className="px-2.5 py-2 text-xs text-kp-gray-lt max-w-[170px] break-all">
                     {p.telefono || p.email
                       ? <>{p.telefono}{p.telefono && p.email ? ' · ' : ''}{p.email}</>
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 text-xs text-kp-gray-lt">{p.cond_pago || '—'}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-2.5 py-2 text-xs text-kp-gray-lt">{p.cond_pago || '—'}</td>
+                  <td className="px-2.5 py-2 text-right whitespace-nowrap">
                     <SaldoCell valor={p.saldo_facturado} onClick={() => setModalCC(p)} />
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-2.5 py-2 text-right whitespace-nowrap">
                     <SaldoCell valor={p.saldo_no_facturado} onClick={() => setModalCC(p)} />
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-2.5 py-2 text-right whitespace-nowrap">
                     <SaldoCell valor={String(totalProv(p))} onClick={() => setModalCC(p)} />
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-2.5 py-2 text-center">
                     <button
                       onClick={() => toggleActivo(p)}
                       disabled={togglingId === p.id}
@@ -728,7 +728,7 @@ export default function ProveedoresClient() {
                       <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${p.activo ? 'translate-x-4' : 'translate-x-1'}`} />
                     </button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2.5 py-2">
                     <div className="flex items-center justify-end gap-1">
                       {/* Historial de pedidos */}
                       <button onClick={() => setModalHist(p)} title="Historial de pedidos"
