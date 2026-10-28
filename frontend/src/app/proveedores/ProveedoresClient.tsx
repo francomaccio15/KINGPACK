@@ -599,6 +599,23 @@ export default function ProveedoresClient() {
     }
   };
 
+  // Baja lógica: el backend la rechaza si la cuenta corriente tiene saldo.
+  const eliminar = async (p: Proveedor) => {
+    if (!window.confirm(`¿Eliminar el proveedor "${p.razon_social}"?\n\nDeja de aparecer en el sistema; su historial de compras y pagos se conserva.`)) return;
+    setTogglingId(p.id);
+    try {
+      const res = await apiFetch(`/api/proveedores/${p.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error ?? 'No se pudo eliminar el proveedor.');
+        return;
+      }
+      await cargar();
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
     <section className="space-y-5">
 
@@ -752,6 +769,18 @@ export default function ProveedoresClient() {
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
                       </button>
+                      {/* Eliminar (solo admin) */}
+                      {esAdmin && (
+                        <button onClick={() => eliminar(p)} title="Eliminar" disabled={togglingId === p.id}
+                          className="p-1.5 rounded-lg text-kp-gray hover:text-kp-red hover:bg-kp-red/10 transition-colors disabled:opacity-50">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6" /><path d="M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -776,6 +805,10 @@ export default function ProveedoresClient() {
                     <button onClick={() => setModalCC(p)} className={cn(btnSecondary, 'flex-1')}>Cta. corriente</button>
                     <button onClick={() => setModalHist(p)} className={cn(btnSecondary, 'flex-1')}>Pedidos</button>
                     <button onClick={() => setModalEditar(p)} className={cn(btnSecondary, 'flex-1')}>Editar</button>
+                    {esAdmin && (
+                      <button onClick={() => eliminar(p)} disabled={togglingId === p.id}
+                        className={cn(btnSecondary, 'flex-1 text-kp-red')}>Eliminar</button>
+                    )}
                   </>
                 }
               />

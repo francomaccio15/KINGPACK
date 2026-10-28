@@ -298,4 +298,38 @@ router.get('/:id/anticipos', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── DELETE /api/proveedores/:id — solo admin (soft delete) ──────────────────
+// Se conserva el historial (compras, pagos, cta. cte.); solo se oculta. No se
+// permite si la cuenta corriente tiene saldo, para no esconder deuda.
+router.delete('/:id', requireRol('administrador'), async (req, res, next) => {
+  try {
+    const { rows: saldo } = await pool.query(`
+      SELECT
+        p.saldo_inicial_facturado + COALESCE(SUM(cc.debe) FILTER (WHERE cc.facturado), 0)
+          - COALESCE(SUM(cc.haber) FILTER (WHERE cc.facturado), 0)          AS fact,
+        p.saldo_inicial_no_facturado + COALESCE(SUM(cc.debe) FILTER (WHERE NOT cc.facturado), 0)
+          - COALESCE(SUM(cc.haber) FILTER (WHERE NOT cc.facturado), 0)      AS nofact
+      FROM proveedores p
+      LEFT JOIN cuentas_corrientes_proveedor cc ON cc.proveedor_id = p.id
+      WHERE p.id = $1 AND p.deleted_at IS NULL
+      GROUP BY p.id
+    `, [req.params.id]);
+    if (!saldo[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    const fact = parseFloat(saldo[0].fact) || 0;
+    const nofact = parseFloat(saldo[0].nofact) || 0;
+    if (Math.abs(fact) > 0.005 || Math.abs(nofact) > 0.005) {
+      return res.status(409).json({
+        error: 'No se puede eliminar: la cuenta corriente tiene saldo. Saldala primero o desactivá el proveedor.',
+      });
+    }
+
+    await pool.query(
+      `UPDATE proveedores SET deleted_at = NOW(), activo = false, updated_at = NOW() WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
