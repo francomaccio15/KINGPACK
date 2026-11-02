@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import CambiarEstado from './CambiarEstado';
-import CorregirEstado from './CorregirEstado';
-import { CAUSALES_RECHAZO } from '@/lib/cheques';
+import FichaCheque from './FichaCheque';
+import { ACCIONES, CAUSALES_RECHAZO, ESTADO_BADGE as BADGE, ESTADO_LABEL as LABEL_ESTADO } from '@/lib/cheques';
 import { EmptyState, MobileCards, RecordCard, TableWrap } from '@/components/ui/ResponsiveTable';
 
 interface Cheque {
@@ -27,23 +28,14 @@ interface Cheque {
   rechazo_causal?:   string | null;
 }
 
-const BADGE: Record<string, string> = {
-  en_cartera:  'bg-blue-900/50 text-blue-300 border-blue-700/50',
-  depositado:  'bg-purple-900/50 text-purple-300 border-purple-700/50',
-  acreditado:  'bg-emerald-900/50 text-emerald-300 border-emerald-700/50',
-  endosado:    'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
-  rechazado:   'bg-red-900/50 text-red-300 border-red-700/50',
-  anulado:     'bg-zinc-800 text-zinc-400 border-zinc-600',
-  emitido:     'bg-blue-900/50 text-blue-300 border-blue-700/50',
-  presentado:  'bg-purple-900/50 text-purple-300 border-purple-700/50',
-  debitado:    'bg-emerald-900/50 text-emerald-300 border-emerald-700/50',
-};
+// Acción habitual del cheque como botón directo; el resto, en la ficha.
+function AccionPrincipal({ c }: { c: Cheque }) {
+  const a = ACCIONES[c.tipo][c.estado]?.[0];
+  if (!a) return null;
+  return <CambiarEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} estadoFijo={a.estado} label={a.label} primario />;
+}
 
-const LABEL_ESTADO: Record<string, string> = {
-  en_cartera: 'En Cartera', depositado: 'Depositado', acreditado: 'Acreditado',
-  endosado: 'Endosado', rechazado: 'Rechazado', anulado: 'Anulado',
-  emitido: 'Emitido', presentado: 'Presentado', debitado: 'Debitado',
-};
+const btnVer = 'px-3 py-1.5 text-xs font-semibold rounded-md border border-kp-border text-kp-gray-lt hover:text-kp-white hover:border-kp-white transition-colors';
 
 function fmt(n: string | number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -65,6 +57,8 @@ interface Props {
 }
 
 export default function ChequesTabla({ cheques, tipoActivo }: Props) {
+  const [ficha, setFicha] = useState<Cheque | null>(null);
+
   if (cheques.length === 0) {
     return (
       <div className="rounded-xl border border-kp-border bg-kp-surface px-6 py-12 text-center text-kp-gray text-sm">
@@ -91,8 +85,9 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
           {cheques.map(c => (
             <tr
               key={`${c.tipo}-${c.id}`}
+              onClick={() => setFicha(c)}
               className={[
-                'hover:bg-kp-surface2 transition-colors',
+                'hover:bg-kp-surface2 transition-colors cursor-pointer',
                 c.vencido ? 'bg-red-950/20' : '',
               ].join(' ')}
             >
@@ -152,14 +147,12 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
                 <p className="text-kp-gray truncate" title={c.origen_nombre}>{c.origen_nombre}</p>
                 <p className="text-[11px] text-kp-gray/70">{c.sucursal_nombre}</p>
               </td>
-              <td className="px-3 py-3">
+              {/* stopPropagation: los modales de la acción son hijos de esta
+                  fila en React y sus clics abrirían también la ficha. */}
+              <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                 <div className="flex flex-col items-stretch gap-1.5 [&>button]:w-full">
-                  <CambiarEstado
-                    chequeId={c.id}
-                    tipo={c.tipo}
-                    estadoActual={c.estado}
-                  />
-                  <CorregirEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
+                  <AccionPrincipal c={c} />
+                  <button type="button" onClick={() => setFicha(c)} className={btnVer}>Ver</button>
                 </div>
               </td>
             </tr>
@@ -186,14 +179,16 @@ export default function ChequesTabla({ cheques, tipoActivo }: Props) {
             ]}
             actions={
               <div className="flex-1 flex gap-2 [&>button]:flex-1">
-                <CambiarEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
-                <CorregirEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} />
+                <AccionPrincipal c={c} />
+                <button type="button" onClick={() => setFicha(c)} className={btnVer}>Ver</button>
               </div>
             }
           />
         ))}
         {cheques.length === 0 && <EmptyState title="No hay cheques para mostrar." />}
       </MobileCards>
+
+      {ficha && <FichaCheque tipo={ficha.tipo} id={ficha.id} onClose={() => setFicha(null)} />}
     </div>
   );
 }

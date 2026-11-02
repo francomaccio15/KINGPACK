@@ -25,6 +25,7 @@ interface Props {
   chequeId: string;
   tipo: 'recibido' | 'emitido';
   estadoActual: string;
+  onDone?: () => void;
 }
 
 // Lo que va a pasar con la plata, dicho antes de confirmar. Mismo criterio que
@@ -43,7 +44,7 @@ function efectos(tipo: 'recibido' | 'emitido', actual: string, nuevo: string): s
   return e;
 }
 
-export default function CorregirEstado({ chequeId, tipo, estadoActual }: Props) {
+export default function CorregirEstado({ chequeId, tipo, estadoActual, onDone }: Props) {
   const router = useRouter();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -84,6 +85,7 @@ export default function CorregirEstado({ chequeId, tipo, estadoActual }: Props) 
         return;
       }
       cerrar();
+      onDone?.();
       router.refresh();
     } catch {
       setError('Error de conexión con el servidor');
@@ -102,7 +104,7 @@ export default function CorregirEstado({ chequeId, tipo, estadoActual }: Props) 
         title="Corregir un estado cargado por error"
         className="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-700/60 text-amber-400 hover:text-amber-300 hover:border-amber-500 transition-colors"
       >
-        Corregir
+        Corregir estado
       </button>
 
       <Modal

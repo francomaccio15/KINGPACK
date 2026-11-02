@@ -97,6 +97,59 @@ export const formatoFecha = (iso: string | null | undefined) => {
   return `${d}/${m}/${y}`;
 };
 
+// ─── Estados y acciones ──────────────────────────────────────────────────────
+
+export type TipoCheque = 'recibido' | 'emitido';
+
+export const ESTADO_LABEL: Record<string, string> = {
+  en_cartera: 'En Cartera', depositado: 'Depositado', acreditado: 'Acreditado',
+  endosado: 'Endosado', rechazado: 'Rechazado', anulado: 'Anulado',
+  emitido: 'Emitido', presentado: 'Presentado', debitado: 'Debitado',
+};
+
+export const ESTADO_BADGE: Record<string, string> = {
+  en_cartera:  'bg-blue-900/50 text-blue-300 border-blue-700/50',
+  depositado:  'bg-purple-900/50 text-purple-300 border-purple-700/50',
+  acreditado:  'bg-emerald-900/50 text-emerald-300 border-emerald-700/50',
+  endosado:    'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
+  rechazado:   'bg-red-900/50 text-red-300 border-red-700/50',
+  anulado:     'bg-zinc-800 text-zinc-400 border-zinc-600',
+  emitido:     'bg-blue-900/50 text-blue-300 border-blue-700/50',
+  presentado:  'bg-purple-900/50 text-purple-300 border-purple-700/50',
+  debitado:    'bg-emerald-900/50 text-emerald-300 border-emerald-700/50',
+};
+
+// Lo que se puede hacer con un cheque, dicho como acción. La primera es la
+// habitual (el botón destacado); el resto queda en la ficha. "Presentado" no se
+// ofrece: el débito lo marca el cron al vencer y era un paso de más.
+export const ACCIONES: Record<TipoCheque, Record<string, { estado: string; label: string }[]>> = {
+  recibido: {
+    en_cartera: [
+      { estado: 'depositado', label: 'Depositar' },
+      { estado: 'endosado',   label: 'Endosar' },
+      { estado: 'rechazado',  label: 'Rechazado' },
+      { estado: 'anulado',    label: 'Anular' },
+    ],
+    depositado: [
+      { estado: 'acreditado', label: 'Se acreditó' },
+      { estado: 'rechazado',  label: 'Rechazado' },
+    ],
+    rechazado: [{ estado: 'anulado', label: 'Anular' }],
+  },
+  emitido: {
+    emitido: [
+      { estado: 'debitado',  label: 'Se debitó' },
+      { estado: 'rechazado', label: 'Rechazado' },
+      { estado: 'anulado',   label: 'Anular' },
+    ],
+    presentado: [
+      { estado: 'debitado',  label: 'Se debitó' },
+      { estado: 'rechazado', label: 'Rechazado' },
+    ],
+    rechazado: [{ estado: 'anulado', label: 'Anular' }],
+  },
+};
+
 // ─── Campos de la mig 059 para formularios con cheques embebidos ────────────
 // (venta, egreso, pago a proveedor, movimiento de caja, cobranza). Cada form ya
 // maneja banco/número/vencimiento/importe; esto agrega lo demás.

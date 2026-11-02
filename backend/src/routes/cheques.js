@@ -109,6 +109,96 @@ router.get('/resumen', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── GET /api/cheques/calendario ──────────────────────────────────────────────
+// Qué plata entra y sale por cheques semana a semana, y cómo queda la cuenta de
+// cheques. Un cheque pendiente impacta el banco a los 2 días del vencimiento
+// (regla del cron acreditar-cheques-vencidos), así que se agrupa por esa fecha.
+// No se filtra por sucursal: la cuenta de cheques es una sola para la empresa y
+// proyectar su saldo con media cartera daría un número falso. El saldo solo lo
+// ve el administrador (igual que Flujo de Fondos).
+// ?semanas=  default 8, máximo 26
+const DIAS_IMPACTO = 2;
+router.get('/calendario', async (req, res, next) => {
+  try {
+    const semanas = Math.min(Math.max(parseInt(req.query.semanas) || 8, 1), 26);
+    const esAdmin = req.usuario?.rol === 'administrador';
+
+    const { rows: [cuenta] } = await pool.query(
+      `SELECT id, nombre, saldo::float AS saldo FROM cuentas_bancarias_empresa WHERE es_cuenta_cheques LIMIT 1`
+    );
+    const { rows: [fechas] } = await pool.query(
+      `SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS hoy,
+              to_char(date_trunc('week', CURRENT_DATE), 'YYYY-MM-DD') AS lunes`
+    );
+
+    // Pendientes = todavía no movieron el banco. Endosados quedan afuera: el
+    // papel ya se lo dimos a un proveedor y no pasa por nuestra cuenta.
+    const { rows } = await pool.query(`
+      SELECT v.tipo, v.id, v.banco, v.numero_cheque, v.importe::float AS importe, v.estado,
+             v.origen_nombre, v.librador_nombre, v.sucursal_nombre, v.forma,
+             to_char(v.fecha_vencimiento, 'YYYY-MM-DD') AS fecha_vencimiento,
+             to_char(v.fecha_vencimiento + $2::int, 'YYYY-MM-DD') AS fecha_impacto,
+             (v.tipo = 'emitido' OR v.deposito_cuenta_id IS NULL OR v.deposito_cuenta_id = $1) AS en_cuenta_cheques
+        FROM vw_cheques v
+       WHERE (v.tipo = 'recibido' AND v.estado IN ('en_cartera', 'depositado'))
+          OR (v.tipo = 'emitido'  AND v.estado IN ('emitido', 'presentado'))
+       ORDER BY v.fecha_vencimiento, v.importe DESC
+    `, [cuenta?.id ?? null, DIAS_IMPACTO]);
+
+    const sumarDias = (iso, n) => {
+      const d = new Date(`${iso}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const grupo = (extra = {}) => ({ ...extra, entran: 0, salen: 0, neto: 0, cheques: [] });
+    const sumar = (g, c) => {
+      g.cheques.push(c);
+      if (c.tipo === 'recibido') g.entran = +(g.entran + c.importe).toFixed(2);
+      else g.salen = +(g.salen + c.importe).toFixed(2);
+      g.neto = +(g.entran - g.salen).toFixed(2);
+    };
+
+    // Atrasados: vencidos que el banco todavía no reflejó (el cron los toma a
+    // la madrugada siguiente). Van primero porque impactan ya.
+    const atrasados = grupo();
+    const listaSemanas = Array.from({ length: semanas }, (_, i) => grupo({
+      desde: sumarDias(fechas.lunes, i * 7),
+      hasta: sumarDias(fechas.lunes, i * 7 + 6),
+    }));
+    const masAdelante = grupo();
+
+    for (const c of rows) {
+      if (c.fecha_impacto < fechas.hoy) { sumar(atrasados, c); continue; }
+      const s = listaSemanas.find(w => c.fecha_impacto >= w.desde && c.fecha_impacto <= w.hasta);
+      sumar(s ?? masAdelante, c);
+    }
+
+    // Saldo proyectado de la cuenta de cheques al cierre de cada semana. Solo
+    // cuentan los cheques que caen en esa cuenta (uno depositado en otra no).
+    const impactoCuenta = g => g.cheques
+      .filter(c => c.en_cuenta_cheques)
+      .reduce((s, c) => s + (c.tipo === 'recibido' ? c.importe : -c.importe), 0);
+    if (esAdmin && cuenta) {
+      let saldo = cuenta.saldo + impactoCuenta(atrasados);
+      atrasados.saldo_proyectado = +saldo.toFixed(2);
+      for (const w of listaSemanas) {
+        saldo += impactoCuenta(w);
+        w.saldo_proyectado = +saldo.toFixed(2);
+      }
+      masAdelante.saldo_proyectado = +(saldo + impactoCuenta(masAdelante)).toFixed(2);
+    }
+
+    res.json({
+      hoy: fechas.hoy,
+      dias_impacto: DIAS_IMPACTO,
+      cuenta: cuenta ? { nombre: cuenta.nombre, saldo: esAdmin ? cuenta.saldo : null } : null,
+      atrasados,
+      semanas: listaSemanas,
+      mas_adelante: masAdelante,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── GET /api/cheques ─────────────────────────────────────────────────────────
 // ?tipo=          recibido | emitido
 // ?estado=        en_cartera | depositado | …
@@ -339,7 +429,49 @@ router.get('/:tipo/:id', async (req, res, next) => {
     ]);
 
     if (chequeRows.length === 0) return res.status(404).json({ error: 'Cheque no encontrado' });
-    res.json({ cheque: chequeRows[0], historial: historialRows });
+    const cheque = chequeRows[0];
+
+    // Ficha completa: de dónde vino, a quién se endosó por Pago a Proveedores y
+    // qué movió en el banco. Un cheque vive en 5 tablas según su origen, así que
+    // sin esto la historia queda repartida y no se ve desde la pantalla.
+    const [{ rows: [origen] }, { rows: endosoPago }, { rows: movimientos }] = await Promise.all([
+      pool.query(
+        `SELECT v.id  AS venta_id,  v.numero AS venta_numero,
+                e.id  AS egreso_id, e.numero_comprobante AS egreso_comprobante,
+                pp.id AS pago_id,   to_char(pp.fecha, 'YYYY-MM-DD') AS pago_fecha
+           FROM (SELECT $1::text AS ot, $2::uuid AS oid) x
+           LEFT JOIN ventas          v  ON x.ot = 'venta'          AND v.id  = x.oid
+           LEFT JOIN egresos         e  ON x.ot = 'egreso'         AND e.id  = x.oid
+           LEFT JOIN pagos_proveedor pp ON x.ot = 'pago_proveedor' AND pp.id = x.oid`,
+        [cheque.origen_tipo, cheque.origen_id]
+      ),
+      pool.query(
+        `SELECT pp.id AS pago_id, to_char(pp.fecha, 'YYYY-MM-DD') AS fecha, pr.razon_social AS proveedor
+           FROM pago_proveedor_endosos pe
+           JOIN pagos_proveedor pp ON pp.id = pe.pago_proveedor_id AND NOT pp.anulado
+           LEFT JOIN proveedores pr ON pr.id = pp.proveedor_id
+          WHERE pe.cheque_id = $1
+          LIMIT 1`,
+        [id]
+      ),
+      pool.query(
+        `SELECT to_char(m.fecha, 'YYYY-MM-DD') AS fecha, m.tipo, m.monto::float AS monto,
+                m.concepto, cb.nombre AS cuenta_nombre
+           FROM movimientos_cuenta_bancaria m
+           JOIN cuentas_bancarias_empresa cb ON cb.id = m.cuenta_bancaria_id
+          WHERE m.origen_tipo = 'cheque' AND m.origen_id = $1
+          ORDER BY m.fecha, m.created_at`,
+        [id]
+      ),
+    ]);
+
+    res.json({
+      cheque,
+      historial: historialRows,
+      origen: origen ?? null,
+      endoso_pago: endosoPago[0] ?? null,
+      movimientos_banco: movimientos,
+    });
   } catch (err) { next(err); }
 });
 

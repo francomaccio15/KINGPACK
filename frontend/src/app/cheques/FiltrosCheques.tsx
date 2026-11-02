@@ -41,7 +41,7 @@ export default function FiltrosCheques({
 
   const aplicar = () => {
     const p = new URLSearchParams();
-    if (tipoActivo !== 'todos') p.set('tipo', tipoActivo);
+    p.set('tipo', tipoActivo); // sin tipo se abre el Calendario
     if (banco)      p.set('banco',            banco.trim());
     if (estado)     p.set('estado',           estado);
     if (fechaDesde) p.set('fecha_venc_desde', fechaDesde);
@@ -52,7 +52,7 @@ export default function FiltrosCheques({
   const limpiar = () => {
     setBanco(''); setEstado(''); setFechaDesde(''); setFechaHasta('');
     const p = new URLSearchParams();
-    if (tipoActivo !== 'todos') p.set('tipo', tipoActivo);
+    p.set('tipo', tipoActivo); // sin tipo se abre el Calendario
     router.push(`/cheques?${p}`);
   };
 

@@ -8,6 +8,7 @@ import ChequesPorCliente from './ChequesPorCliente';
 import ChequesEmitidosResumen from './ChequesEmitidosResumen';
 import AgregarCheque from './AgregarCheque';
 import CargaRapida from './CargaRapida';
+import ChequesCalendario, { type Calendario } from './ChequesCalendario';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +22,9 @@ interface PageProps {
   };
 }
 
-// Tabs disponibles
+// Tabs disponibles. Calendario es la de entrada: contesta "¿me alcanza?".
 const TABS = [
+  { value: 'calendario',  label: 'Calendario'    },
   { value: 'todos',       label: 'Todos'         },
   { value: 'recibido',    label: 'Recibidos'     },
   { value: 'por_cliente', label: 'Por Cliente'   },
@@ -34,7 +36,7 @@ export default async function ChequesPage({ searchParams }: PageProps) {
   requireAuth('/cheques');
 
   const { tipo, estado, banco, fecha_venc_desde, fecha_venc_hasta } = searchParams;
-  const tipoActivo = tipo || 'todos';
+  const tipoActivo = tipo || 'calendario';
 
   // ── Fetch según tab activa ─────────────────────────────────────────────────
   let cheques: any[]   = [];
@@ -43,12 +45,19 @@ export default async function ChequesPage({ searchParams }: PageProps) {
   let clientesCheques: any[] = [];
   let emitidosResumen: any[] = [];
   let meses: string[]  = [];
+  let calendario: Calendario | null = null;
 
-  // Resumen de cards siempre se carga
-  resumen = await serverFetch('/api/cheques/resumen', { cache: 'no-store' })
-    .then(r => r.json()).catch(() => ({}));
+  // Las tarjetas de resumen van en las listas; el calendario trae las suyas.
+  if (tipoActivo !== 'calendario') {
+    resumen = await serverFetch('/api/cheques/resumen', { cache: 'no-store' })
+      .then(r => r.json()).catch(() => ({}));
+  }
 
-  if (tipoActivo === 'por_cliente') {
+  if (tipoActivo === 'calendario') {
+    calendario = await serverFetch('/api/cheques/calendario?semanas=8', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null)).catch(() => null);
+
+  } else if (tipoActivo === 'por_cliente') {
     const qs = new URLSearchParams();
     if (estado) qs.set('estado', estado);
     if (banco)  qs.set('banco',  banco);
@@ -93,13 +102,13 @@ export default async function ChequesPage({ searchParams }: PageProps) {
       </div>
 
       {/* Tarjetas de resumen */}
-      <ChequesResumen resumen={resumen} />
+      {tipoActivo !== 'calendario' && <ChequesResumen resumen={resumen} />}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-kp-border overflow-x-auto">
         {TABS.map(tab => {
           const params = new URLSearchParams(searchParams as Record<string, string>);
-          if (tab.value === 'todos') params.delete('tipo');
+          if (tab.value === 'calendario') params.delete('tipo');
           else params.set('tipo', tab.value);
 
           const activo = tipoActivo === tab.value;
@@ -115,7 +124,7 @@ export default async function ChequesPage({ searchParams }: PageProps) {
               ].join(' ')}
             >
               {tab.label}
-              {tab.value === 'todos' && <span className="ml-1.5 text-xs opacity-60">({count})</span>}
+              {tab.value === 'todos' && tipoActivo === 'todos' && <span className="ml-1.5 text-xs opacity-60">({count})</span>}
               {tab.value === 'recibido' && tipoActivo === 'recibido' && <span className="ml-1.5 text-xs opacity-60">({cheques.length})</span>}
               {tab.value === 'emitido'  && tipoActivo === 'emitido'  && <span className="ml-1.5 text-xs opacity-60">({cheques.length})</span>}
               {tab.value === 'por_cliente' && tipoActivo === 'por_cliente' && clientesCheques.length > 0 && (
@@ -127,6 +136,14 @@ export default async function ChequesPage({ searchParams }: PageProps) {
       </div>
 
       {/* Contenido según tab */}
+      {tipoActivo === 'calendario' && (
+        calendario
+          ? <ChequesCalendario data={calendario} />
+          : <div className="rounded-xl border border-kp-border bg-kp-surface px-6 py-12 text-center text-kp-gray text-sm">
+              No se pudo cargar el calendario de cheques.
+            </div>
+      )}
+
       {(tipoActivo === 'todos' || tipoActivo === 'recibido' || tipoActivo === 'emitido') && (
         <>
           <FiltrosCheques

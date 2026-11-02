@@ -34,17 +34,23 @@ interface Props {
   chequeId:   string;
   tipo:       'recibido' | 'emitido';
   estadoActual: string;
+  // Botón de una acción concreta ("Depositar"): el estado ya viene elegido y
+  // no se muestra el desplegable.
+  estadoFijo?: string;
+  label?:      string;
+  primario?:   boolean;
+  onDone?:     () => void;
 }
 
 interface Opcion { id: string; nombre: string; esCheques?: boolean }
 
 const hoyISO = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
-export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
+export default function CambiarEstado({ chequeId, tipo, estadoActual, estadoFijo, label, primario, onDone }: Props) {
   const router = useRouter();
   const [open,        setOpen]        = useState(false);
   const [paso,        setPaso]        = useState<'form' | 'confirmar'>('form');
-  const [estadoNuevo, setEstadoNuevo] = useState('');
+  const [estadoNuevo, setEstadoNuevo] = useState(estadoFijo ?? '');
   const [observacion, setObservacion] = useState('');
   const [fechaEstado, setFechaEstado] = useState('');
   // Datos propios de cada transición
@@ -63,8 +69,10 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
   const esEndoso   = tipo === 'recibido' && estadoNuevo === 'endosado';
   const esRechazo  = estadoNuevo === 'rechazado';
 
-  // Catálogos solo cuando la transición los necesita.
+  // Catálogos solo cuando la transición los necesita (y con el modal abierto:
+  // con estadoFijo cada fila de la tabla montaría su propio pedido).
   useEffect(() => {
+    if (!open) return;
     if (esDeposito && cuentas.length === 0) {
       apiFetch('/api/cuentas-bancarias').then(r => r.json()).then(d => {
         const arr: Opcion[] = (d.cuentas ?? []).map((c: any) => ({ id: c.id, nombre: c.nombre, esCheques: c.es_cuenta_cheques }));
@@ -79,15 +87,16 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
       }).catch(() => {});
     }
     if (esEndoso && !endosoFecha) setEndosoFecha(hoyISO());
-  }, [esDeposito, esEndoso]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, esDeposito, esEndoso]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const siguientes = TRANSICIONES[tipo]?.[estadoActual] ?? [];
   if (siguientes.length === 0) return null;
+  if (estadoFijo && !siguientes.includes(estadoFijo)) return null;
 
   const cerrar = () => {
     setOpen(false);
     setPaso('form');
-    setEstadoNuevo(''); setObservacion(''); setFechaEstado('');
+    setEstadoNuevo(estadoFijo ?? ''); setObservacion(''); setFechaEstado('');
     setProveedorId(''); setEndosoFecha(''); setEndosoComprob(''); setCausal('');
     setError('');
   };
@@ -136,6 +145,7 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
         return;
       }
       cerrar();
+      onDone?.();
       router.refresh();
     } catch {
       setError('Error de conexión con el servidor');
@@ -171,16 +181,20 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
-        className="px-3 py-1.5 text-xs font-semibold rounded-md border border-kp-border text-kp-gray-lt hover:text-kp-white hover:border-kp-white transition-colors"
+        onClick={e => { e.stopPropagation(); setOpen(true); }}
+        className={primario
+          ? 'px-3 py-1.5 text-xs font-semibold rounded-md bg-kp-red text-white hover:bg-kp-red-dark transition-colors'
+          : 'px-3 py-1.5 text-xs font-semibold rounded-md border border-kp-border text-kp-gray-lt hover:text-kp-white hover:border-kp-white transition-colors'}
       >
-        Cambiar estado
+        {label ?? 'Cambiar estado'}
       </button>
 
       <Modal
           open={open}
           onClose={cerrar}
-          title={paso === 'form' ? 'Cambiar estado del cheque' : 'Confirmar cambio de estado'}
+          title={paso === 'form'
+            ? (estadoFijo ? `${label ?? LABEL_ESTADO[estadoFijo]} — cheque` : 'Cambiar estado del cheque')
+            : 'Confirmar cambio de estado'}
           size="md"
         >
 
@@ -224,15 +238,17 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual }: Props) {
           </p>
 
           <form onSubmit={revisar} className="space-y-3">
-            <div className="flex flex-col gap-1">
-              <label className={labelCls}>Nuevo estado *</label>
-              <select value={estadoNuevo} onChange={e => setEstadoNuevo(e.target.value)} className={inputCls}>
-                <option value="">Seleccionar…</option>
-                {siguientes.map(s => (
-                  <option key={s} value={s}>{LABEL_ESTADO[s] ?? s}</option>
-                ))}
-              </select>
-            </div>
+            {!estadoFijo && (
+              <div className="flex flex-col gap-1">
+                <label className={labelCls}>Nuevo estado *</label>
+                <select value={estadoNuevo} onChange={e => setEstadoNuevo(e.target.value)} className={inputCls}>
+                  <option value="">Seleccionar…</option>
+                  {siguientes.map(s => (
+                    <option key={s} value={s}>{LABEL_ESTADO[s] ?? s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {esDeposito && (
               <div className="flex flex-col gap-1">
