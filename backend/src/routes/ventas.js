@@ -964,6 +964,28 @@ router.patch('/:id/estado', requireRol('administrador', 'supervisor', 'vendedor'
     }
     const venta = ventaRows[0];
 
+    // Si ya tiene nota de crédito, la NC ya devolvió plata y stock: anular la
+    // venta encima los devolvía dos veces (egreso doble en caja, venta #3994).
+    // La NC por el total anula la venta sola; si es parcial, lo que falta se
+    // devuelve con otra NC.
+    if (estado === 'anulada' && venta.estado !== 'anulada') {
+      const { rows: ncs } = await client.query(
+        `SELECT nc.numero
+           FROM notas_credito nc
+           JOIN facturaciones f ON f.id = nc.factura_id
+          WHERE f.venta_id = $1 AND nc.estado <> 'anulada' AND nc.deleted_at IS NULL
+          ORDER BY nc.created_at`,
+        [id]
+      );
+      if (ncs.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: `La venta ya tiene la nota de crédito #${ncs.map(n => n.numero).join(', #')}, que devolvió ` +
+                 `la plata y la mercadería. Para devolver lo que falta, emití otra nota de crédito por la diferencia.`,
+        });
+      }
+    }
+
     // Al anular: devolver stock a la sucursal SOLO si la venta ya lo había descontado.
     // Las preventas nunca descuentan stock, así que anularlas no debe devolver nada.
     if (estado === 'anulada' && ['confirmada', 'facturada'].includes(venta.estado)) {

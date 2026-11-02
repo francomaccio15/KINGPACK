@@ -346,6 +346,12 @@ router.get('/estado-resultados', async (req, res, next) => {
     const sucVenta   = sucId ? 'AND v.sucursal_id   = $3' : '';
     const sucEgreso  = sucId ? 'AND e.sucursal_id   = $3' : '';
     const sucNC      = sucId ? 'AND nc.sucursal_id  = $3' : '';
+    // NC que restan: las vigentes cuya venta NO está anulada. Si la venta está
+    // anulada (por la propia NC o a mano) ya no suma en ventas ni en el COGS,
+    // así que restar también la NC la descontaría dos veces.
+    const ncVigente  = `AND nc.estado <> 'anulada'
+          AND NOT EXISTS (SELECT 1 FROM facturaciones fnc JOIN ventas vnc ON vnc.id = fnc.venta_id
+                           WHERE fnc.id = nc.factura_id AND vnc.estado = 'anulada')`;
     const baseParams = sucId ? [desde, hasta, sucId] : [desde, hasta];
 
     const [ventasRes, ncRes, egresosRes, cogsRes, cogsDevRes, acumRes] = await Promise.all([
@@ -369,6 +375,7 @@ router.get('/estado-resultados', async (req, res, next) => {
         FROM notas_credito nc
         WHERE nc.deleted_at IS NULL
           AND nc.fecha::date BETWEEN $1 AND $2
+          ${ncVigente}
           ${sucNC}
       `, baseParams).catch(() => ({ rows: [{ total_nc: 0 }] })),
 
@@ -433,6 +440,7 @@ router.get('/estado-resultados', async (req, res, next) => {
         WHERE nc.deleted_at IS NULL
           AND nc.fecha::date BETWEEN $1 AND $2
           AND (it->>'articulo_id') IS NOT NULL
+          ${ncVigente}
           ${sucNC}
       `, baseParams).catch(() => ({ rows: [{ cogs_dev: 0 }] })),
 

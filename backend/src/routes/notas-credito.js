@@ -173,9 +173,22 @@ router.post('/', async (req, res, next) => {
 
     await client.query('BEGIN');
 
+    // Venta de la factura de referencia. Si ya estaba anulada, su anulación ya
+    // devolvió la plata y el stock: la NC sale solo por lo fiscal (sin efectos),
+    // si no la caja/stock se moverían dos veces.
+    const { rows: [venta] } = await client.query(
+      `SELECT v.id, v.numero, v.estado, v.total, v.observaciones
+         FROM facturaciones f
+         JOIN ventas v ON v.id = f.venta_id AND v.deleted_at IS NULL
+        WHERE f.id = $1
+        FOR UPDATE OF v`,
+      [factura_id]
+    );
+    const sinEfectos = venta?.estado === 'anulada';
+
     // Para efectivo: descontar de la caja abierta de la sucursal (egreso).
     let cajaId = null;
-    if (formaDev === 'efectivo' && totalNum > 0) {
+    if (!sinEfectos && formaDev === 'efectivo' && totalNum > 0) {
       if (!sucursal_id) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Se requiere la sucursal para devolver en efectivo' });
@@ -299,8 +312,8 @@ router.post('/', async (req, res, next) => {
          (factura_id, cliente_id, sucursal_id, tipo_comprobante_id,
           numero, numero_referencia, motivo, items,
           subtotal, iva_pct, iva_monto, total, estado, emitida_por, fecha, forma_devolucion,
-          cae, respuesta_afip)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14,$15,$16,$17::jsonb)
+          cae, respuesta_afip, sin_efectos)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'emitida',$13,$14,$15,$16,$17::jsonb,$18)
        RETURNING id`,
       [
         factura_id || null,
@@ -320,13 +333,14 @@ router.post('/', async (req, res, next) => {
         formaDev,
         resultadoArca.CAE,
         JSON.stringify(resultadoArca),
+        sinEfectos,
       ]
     );
     const ncId = rows[0].id;
 
     // ── 1. Restaurar stock para ítems con articulo_id ─────────────────────────
     const itemsConArticulo = itemsU.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
-    if (itemsConArticulo.length > 0 && sucursal_id) {
+    if (!sinEfectos && itemsConArticulo.length > 0 && sucursal_id) {
       for (const item of itemsConArticulo) {
         await client.query(
           `INSERT INTO stock (articulo_id, sucursal_id, cantidad, ultima_actualizacion)
@@ -343,7 +357,7 @@ router.post('/', async (req, res, next) => {
     // ── 2. Acreditar cuenta corriente del cliente ─────────────────────────────
     // Solo si la devolución es por cuenta corriente. Efectivo/transferencia es
     // una devolución física y no debe mover el saldo del cliente.
-    if (cliente_id && totalNum > 0 && formaDev === 'cuenta_corriente') {
+    if (!sinEfectos && cliente_id && totalNum > 0 && formaDev === 'cuenta_corriente') {
       const saldoActual = await getSaldoActual(client, cliente_id);
       // haber = total NC → reduce deuda / genera saldo a favor (saldo negativo)
       const saldoDespues = parseFloat((saldoActual - totalNum).toFixed(2));
@@ -366,6 +380,34 @@ router.post('/', async (req, res, next) => {
          VALUES ($1, 'egreso', $2, $3, 'nota_credito', $4, $5)`,
         [cajaId, concepto, totalNum, ncId, req.usuario.id]
       );
+    }
+
+    // ── 4. Anular la venta si las NC ya cubren su total ───────────────────────
+    // La NC ya devolvió plata, stock y CC: acá solo se cambia el estado, sin los
+    // efectos de PATCH /ventas/:id/estado (repetirlos duplicaba el egreso de
+    // caja). Suma las NC anteriores de la misma factura (devolución en partes).
+    // Tolerancia de $1 por el redondeo del total de la venta.
+    if (venta && !sinEfectos) {
+      const { rows: [acum] } = await client.query(
+        `SELECT COALESCE(SUM(total), 0) AS total_nc
+           FROM notas_credito
+          WHERE factura_id = $1 AND estado <> 'anulada' AND deleted_at IS NULL`,
+        [factura_id]
+      );
+      if (parseFloat(acum.total_nc) >= parseFloat(venta.total) - 1) {
+        const obs = `[Anulada: Nota de crédito #${resultadoArca.nroComprobante}]` +
+          (venta.observaciones ? '\n' + venta.observaciones : '');
+        await client.query(
+          `UPDATE ventas
+              SET estado = 'anulada', observaciones = $2, despacho_pendiente = FALSE, updated_at = NOW()
+            WHERE id = $1`,
+          [venta.id, obs]
+        );
+        await client.query(
+          `UPDATE notas_credito SET anulo_venta_id = $2, venta_estado_previo = $3 WHERE id = $1`,
+          [ncId, venta.id, venta.estado]
+        );
+      }
     }
 
     await client.query('COMMIT');
@@ -399,7 +441,8 @@ router.patch('/:id/anular', requireRol('administrador', 'cajero'), async (req, r
       `UPDATE notas_credito
           SET estado = 'anulada', updated_at = NOW()
         WHERE id = $1 AND deleted_at IS NULL AND estado != 'anulada'
-        RETURNING id, numero, numero_referencia, cliente_id, sucursal_id, total, items, forma_devolucion`,
+        RETURNING id, numero, numero_referencia, cliente_id, sucursal_id, total, items, forma_devolucion,
+                  sin_efectos, anulo_venta_id, venta_estado_previo`,
       [req.params.id]
     );
     if (!rows[0]) {
@@ -407,8 +450,22 @@ router.patch('/:id/anular', requireRol('administrador', 'cajero'), async (req, r
       return res.status(404).json({ error: 'No encontrada o ya anulada' });
     }
     const nc = rows[0];
-    const totalNum = parseFloat(nc.total) || 0;
-    const items = await factoresGuardados(client, nc.items || []);
+    // Una NC sobre una venta ya anulada no movió nada: no hay qué revertir.
+    const totalNum = nc.sin_efectos ? 0 : (parseFloat(nc.total) || 0);
+    const items = nc.sin_efectos ? [] : await factoresGuardados(client, nc.items || []);
+
+    // Si esta NC había anulado la venta, la venta vuelve a su estado anterior
+    // (la plata y el stock vuelven con la reversión de abajo).
+    if (nc.anulo_venta_id) {
+      await client.query(
+        `UPDATE ventas
+            SET estado = $2,
+                observaciones = NULLIF(regexp_replace(COALESCE(observaciones, ''), $3, ''), ''),
+                updated_at = NOW()
+          WHERE id = $1 AND estado = 'anulada'`,
+        [nc.anulo_venta_id, nc.venta_estado_previo || 'facturada', `^\\[Anulada: Nota de crédito #${nc.numero}\\]\\n?`]
+      );
+    }
 
     // ── 1. Revertir stock (quitar lo que se había devuelto) ───────────────────
     const itemsConArticulo = items.filter(it => it.articulo_id && parseFloat(it.cantidad) > 0);
