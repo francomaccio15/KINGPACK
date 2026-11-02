@@ -11,7 +11,7 @@ const TRANSICIONES: Record<string, Record<string, string[]>> = {
     en_cartera: ['depositado', 'endosado', 'rechazado', 'anulado'],
     depositado:  ['acreditado', 'rechazado'],
     acreditado:  [],
-    endosado:    [],
+    endosado:    ['rechazado'],   // el proveedor lo devolvió
     rechazado:   ['anulado'],
     anulado:     [],
   },
@@ -174,6 +174,8 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual, estadoFijo
   const efecto =
     (tipo === 'recibido' && estadoNuevo === 'acreditado') ? 'Se acredita el importe en la cuenta de depósito.' :
     (tipo === 'emitido'  && estadoNuevo === 'debitado')   ? 'Se debita el importe de la cuenta de cheques.' :
+    (tipo === 'recibido' && esRechazo && estadoActual === 'endosado')
+      ? 'Si se endosó en un Pago a Proveedores, la deuda con ese proveedor vuelve a aparecer por el importe del cheque. El cheque queda rechazado para reclamarle a quien lo libró.' :
     (tipo === 'recibido' && esRechazo) ? 'Si el cheque vino de una venta, se registra un egreso compensatorio en la caja abierta.' :
     esEndoso ? 'El cheque sale de cartera. No mueve banco ni caja.' :
     null;
@@ -243,7 +245,8 @@ export default function CambiarEstado({ chequeId, tipo, estadoActual, estadoFijo
                 <label className={labelCls}>Nuevo estado *</label>
                 <select value={estadoNuevo} onChange={e => setEstadoNuevo(e.target.value)} className={inputCls}>
                   <option value="">Seleccionar…</option>
-                  {siguientes.map(s => (
+                  {/* Endosar va por Pago a Proveedores (baja la deuda); acá no. */}
+                  {siguientes.filter(s => s !== 'endosado').map(s => (
                     <option key={s} value={s}>{LABEL_ESTADO[s] ?? s}</option>
                   ))}
                 </select>

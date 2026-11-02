@@ -312,6 +312,24 @@ export default function PagosProveedorClient() {
     }
   }, [hayCheque, chequeModo]);
 
+  // ── Endoso que llega desde la ficha de un cheque (?endosar=<id>) ───────────
+  // Arranca con una línea Cheque en modo «Endosar en cartera» y ese cheque
+  // tildado. Tiene que ir DESPUÉS del efecto de arriba: cuando los medios se
+  // cargan (o recargan) ese efecto ve "sin cheque" y resetea el modo; si este
+  // corriera antes, el reset le ganaría.
+  const [endosarId, setEndosarId] = useState<string | null>(null);
+  useEffect(() => {
+    setEndosarId(new URLSearchParams(window.location.search).get('endosar'));
+  }, []);
+  useEffect(() => {
+    if (!endosarId || mediosPago.length === 0) return;
+    const medioCheque = mediosPago.find(m => /cheque/i.test(m.nombre));
+    if (!medioCheque) return;
+    setMedios([{ medio_pago_id: medioCheque.id, monto: '', cuenta_bancaria_id: '' }]);
+    setChequeModo('endoso');
+    setEndososSel(new Set([endosarId]));
+  }, [endosarId, mediosPago]);
+
   // Traer los cheques recibidos en cartera al entrar al modo endoso.
   useEffect(() => {
     if (!hayCheque || chequeModo !== 'endoso' || chequesCartera.length > 0) return;
@@ -494,7 +512,7 @@ export default function PagosProveedorClient() {
         : `Pago de ${ars.format(montoPagado)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
-      setChequeModo('nuevo'); setEndososSel(new Set()); setChequesCartera([]);
+      setChequeModo('nuevo'); setEndososSel(new Set()); setChequesCartera([]); setEndosarId(null);
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
       await recargarSaldos();
       await cargarProveedor(proveedorId);
@@ -644,6 +662,14 @@ export default function PagosProveedorClient() {
         <span className="w-1 h-5 md:h-6 bg-kp-red rounded-full block shrink-0" />
         <h2 className="text-lg md:text-2xl font-bold uppercase tracking-wide">Pago a Proveedores</h2>
       </div>
+
+      {endosarId && (
+        <div className="rounded-xl border border-sky-700/50 bg-sky-950/30 px-4 py-3 text-sm text-sky-200">
+          Estás endosando un cheque de cartera: ya está tildado en el medio <b>Cheque</b>.
+          Elegí el proveedor y qué comprobantes paga (o «Pago a cuenta»). Al registrar el pago,
+          el cheque pasa a endosado y baja la deuda con ese proveedor.
+        </div>
+      )}
 
       {/* ── Selección de proveedor ── */}
       <div className={cardCls}>

@@ -14,6 +14,7 @@ const {
   registrarEgresosCajaAdministrativaDeMedios,
   revertirMovimientosCajaAdministrativa,
 } = require('../services/movimientos-caja-administrativa');
+const { compensarRechazosDelPago } = require('../services/endosos');
 
 const router = express.Router();
 
@@ -714,6 +715,12 @@ router.post('/:id/anular', async (req, res, next) => {
         VALUES ($1, $2, $3, $4, 'correccion', $5, 'Anulación de pago a proveedor', $6)
       `, [pago.proveedor_id, debe, haber, +(saldoPrev + debe - haber).toFixed(2), id, facturado]);
     }
+
+    // 4) Si un cheque endosado de este pago ya había vuelto rechazado, su deuda
+    //    se repuso en ese momento; la reversión de arriba la repone otra vez.
+    //    Va al final: su asiento lleva origen_id = pago y no debe entrar en el
+    //    cálculo de reclasificaciones del paso 3.
+    await compensarRechazosDelPago(client, id, endososRows.map(e => e.cheque_id));
 
     await client.query('COMMIT');
     res.json({ ok: true });

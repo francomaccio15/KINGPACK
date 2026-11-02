@@ -122,11 +122,15 @@ export const ESTADO_BADGE: Record<string, string> = {
 // Lo que se puede hacer con un cheque, dicho como acción. La primera es la
 // habitual (el botón destacado); el resto queda en la ficha. "Presentado" no se
 // ofrece: el débito lo marca el cron al vencer y era un paso de más.
-export const ACCIONES: Record<TipoCheque, Record<string, { estado: string; label: string }[]>> = {
+//   pagoProveedor: se hace en Pago a Proveedores (endosar = pagar una deuda).
+//   soloFicha:     no se ofrece como botón destacado en la tabla.
+export interface AccionCheque { estado: string; label: string; pagoProveedor?: boolean; soloFicha?: boolean }
+
+export const ACCIONES: Record<TipoCheque, Record<string, AccionCheque[]>> = {
   recibido: {
     en_cartera: [
       { estado: 'depositado', label: 'Depositar' },
-      { estado: 'endosado',   label: 'Endosar' },
+      { estado: 'endosado',   label: 'Endosar a un proveedor', pagoProveedor: true },
       { estado: 'rechazado',  label: 'Rechazado' },
       { estado: 'anulado',    label: 'Anular' },
     ],
@@ -134,6 +138,7 @@ export const ACCIONES: Record<TipoCheque, Record<string, { estado: string; label
       { estado: 'acreditado', label: 'Se acreditó' },
       { estado: 'rechazado',  label: 'Rechazado' },
     ],
+    endosado: [{ estado: 'rechazado', label: 'Lo devolvió rechazado', soloFicha: true }],
     rechazado: [{ estado: 'anulado', label: 'Anular' }],
   },
   emitido: {

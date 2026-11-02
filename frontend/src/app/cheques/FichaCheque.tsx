@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/ui/Modal';
 import {
   ACCIONES, CAUSALES_RECHAZO, ESTADO_BADGE, ESTADO_LABEL, FORMA_LABEL, MODALIDAD_LABEL,
@@ -55,6 +56,8 @@ function Seccion({ titulo, children }: { titulo: string; children: React.ReactNo
 }
 
 export default function FichaCheque({ tipo, id, onClose }: Props) {
+  const { user } = useAuth();
+  const esAdmin = user?.rol === 'administrador';
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [error, setError] = useState('');
 
@@ -99,7 +102,19 @@ export default function FichaCheque({ tipo, id, onClose }: Props) {
           {/* Acciones disponibles ahora */}
           {acciones.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {acciones.map((a, i) => (
+              {acciones.map((a, i) => a.pagoProveedor ? (
+                // Endosar = pagarle a un proveedor: se hace en Pago a Proveedores
+                // para que además baje la deuda. Ese módulo es solo del admin.
+                esAdmin && (
+                  <Link
+                    key={a.estado}
+                    href={`/pagos-proveedor?endosar=${id}`}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-md border border-kp-border text-kp-gray-lt hover:text-kp-white hover:border-kp-white transition-colors"
+                  >
+                    {a.label}
+                  </Link>
+                )
+              ) : (
                 <CambiarEstado
                   key={a.estado}
                   chequeId={id}
@@ -107,7 +122,7 @@ export default function FichaCheque({ tipo, id, onClose }: Props) {
                   estadoActual={c.estado}
                   estadoFijo={a.estado}
                   label={a.label}
-                  primario={i === 0}
+                  primario={i === 0 && !a.soloFicha}
                   onDone={cargar}
                 />
               ))}
@@ -163,7 +178,13 @@ export default function FichaCheque({ tipo, id, onClose }: Props) {
                   <Fila label="Endosado a">{c.endoso_proveedor_nombre ?? ficha.endoso_pago?.proveedor ?? '—'}</Fila>
                   {c.endoso_fecha && <Fila label="Entregado el">{formatoFecha(c.endoso_fecha)}</Fila>}
                   {c.endoso_comprobante && <Fila label="Cancela">{c.endoso_comprobante}</Fila>}
-                  {ficha.endoso_pago && <Fila label="Pago a proveedor">{formatoFecha(ficha.endoso_pago.fecha)}</Fila>}
+                  {ficha.endoso_pago ? (
+                    <Fila label="Pago a proveedor">{formatoFecha(ficha.endoso_pago.fecha)}</Fila>
+                  ) : (
+                    <p className="py-2 text-xs text-amber-400">
+                      Endosado sin Pago a Proveedores: no bajó la deuda con el proveedor.
+                    </p>
+                  )}
                 </>
               )}
               {c.deposito_cuenta_nombre && <Fila label="Depositado en">{c.deposito_cuenta_nombre}</Fila>}
@@ -171,6 +192,12 @@ export default function FichaCheque({ tipo, id, onClose }: Props) {
                 <Fila label="Causal del rechazo">
                   <span className="text-red-400">{CAUSALES_RECHAZO[c.rechazo_causal] ?? c.rechazo_causal ?? '—'}</span>
                 </Fila>
+              )}
+              {c.estado === 'rechazado' && ficha.endoso_pago && (
+                <p className="py-2 text-xs text-amber-400">
+                  Estaba endosado a {ficha.endoso_pago.proveedor ?? 'un proveedor'} y lo devolvió:
+                  se le volvió a sumar a la deuda. Queda para reclamarle a quien lo libró.
+                </p>
               )}
             </Seccion>
           )}

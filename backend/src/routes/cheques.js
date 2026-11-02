@@ -8,6 +8,7 @@ const {
   cuentaDestinoCheque,
 } = require('../services/movimientos-bancarios');
 const { validarAltaCheque, CAUSALES_RECHAZO } = require('../services/cheques-validacion');
+const { reponerDeudaPorRechazo, rechazoRepusoDeuda } = require('../services/endosos');
 
 const router = express.Router();
 
@@ -29,7 +30,9 @@ const TRANSICIONES = {
     en_cartera: ['depositado', 'endosado', 'rechazado', 'anulado'],
     depositado:  ['acreditado', 'rechazado'],
     acreditado:  [],
-    endosado:    [],
+    // Un endosado puede volver rechazado: el proveedor lo devuelve y la deuda
+    // que había pagado vuelve a aparecer (ver efecto en el PATCH).
+    endosado:    ['rechazado'],
     rechazado:   ['anulado'],
     anulado:     [],
   },
@@ -491,6 +494,12 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
     } = req.body;
 
     // Lo que cada transición exige, ANTES de abrir la transacción.
+    // Endosar se hace desde Pago a Proveedores, que además baja la deuda. Este
+    // endoso "suelto" solo registra el papel (no toca la cuenta del proveedor):
+    // queda para que el administrador corrija cargas viejas.
+    if (estado_nuevo === 'endosado' && req.usuario?.rol !== 'administrador') {
+      return res.status(403).json({ error: 'Los cheques se endosan desde Pago a Proveedores' });
+    }
     if (estado_nuevo === 'endosado') {
       if (!endoso_proveedor_id)        return res.status(400).json({ error: 'Al endosar, indicá el proveedor que lo recibe' });
       if (!endoso_fecha)               return res.status(400).json({ error: 'Al endosar, indicá la fecha de entrega' });
@@ -714,6 +723,17 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
       }
     }
 
+    // ── Endosado que vuelve rechazado → la deuda con el proveedor reaparece ────
+    // El pago a proveedor que lo endosó había bajado la deuda por el importe del
+    // cheque; si el proveedor lo devuelve, ese importe se le vuelve a deber. Se
+    // asienta como 'correccion' con origen_id = cheque (así se encuentra para
+    // compensarlo si después se anula el pago). Se reparte entre facturado y no
+    // facturado en la misma proporción en que el pago bajó cada columna.
+    let deudaRepuesta = null;
+    if (tipo === 'recibido' && estadoActual === 'endosado' && estado_nuevo === 'rechazado') {
+      deudaRepuesta = await reponerDeudaPorRechazo(client, id);
+    }
+
     // Cheque RECIBIDO acreditado → NO se registra nada extra en caja: la venta ya
     // dejó su movimiento (`Venta #N`) al momento de la venta, y la acreditación se
     // refleja en el banco (bloque `impactaBanco` de arriba). Volver a insertarlo acá
@@ -722,7 +742,7 @@ router.patch('/:tipo/:id/estado', async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    res.json({ ok: true, estado_anterior: estadoActual, estado_nuevo });
+    res.json({ ok: true, estado_anterior: estadoActual, estado_nuevo, deuda_repuesta: deudaRepuesta });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -806,6 +826,15 @@ router.post('/:tipo/:id/corregir-estado', requireRol('administrador'), async (re
         `UPDATE ${tabla} SET endoso_proveedor_id = NULL, endoso_fecha = NULL, endoso_comprobante = NULL WHERE id = $1`, [id]
       );
       efectos.push('se deshizo el endoso');
+    }
+
+    if (estadoActual === 'rechazado' && await rechazoRepusoDeuda(client, id)) {
+      // Era un endosado que volvió: el rechazo le repuso la deuda al proveedor y
+      // el cheque sigue atado a ese pago. Deshacerlo acá dejaría la deuda doble.
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Este cheque volvió rechazado de un endoso y ya se repuso la deuda con el proveedor. Para deshacerlo, anulá el Pago a Proveedores que lo endosó.',
+      });
     }
 
     if (estadoActual === 'rechazado') {

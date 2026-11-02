@@ -31,7 +31,7 @@ interface Cheque {
 // Acción habitual del cheque como botón directo; el resto, en la ficha.
 function AccionPrincipal({ c }: { c: Cheque }) {
   const a = ACCIONES[c.tipo][c.estado]?.[0];
-  if (!a) return null;
+  if (!a || a.soloFicha || a.pagoProveedor) return null;
   return <CambiarEstado chequeId={c.id} tipo={c.tipo} estadoActual={c.estado} estadoFijo={a.estado} label={a.label} primario />;
 }
 
