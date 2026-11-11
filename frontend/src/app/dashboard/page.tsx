@@ -7,7 +7,7 @@ import type { DashboardData } from './DashboardView';
 export const revalidate = 0;
 
 export default async function DashboardPage() {
-  const user = requireAuth();
+  const user = await requireAuth();
   if (user.rol === 'cajero') redirect('/ventas');
   const res  = await serverFetch('/api/dashboard');
   const data: DashboardData | null = res.ok ? await res.json() : null;

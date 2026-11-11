@@ -15,8 +15,9 @@ const fmt = (v: string | number | null) => {
 
 export const dynamic = 'force-dynamic';
 
-export default async function DetalleCajaPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/caja');
+export default async function DetalleCajaPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/caja');
   const esAdmin = user.rol === 'administrador';
   const esCajero = user.rol === 'cajero';
   const cajeroSucursalId = user.sucursal_default_id ?? null;

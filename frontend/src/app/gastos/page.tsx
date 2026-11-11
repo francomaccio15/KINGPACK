@@ -112,12 +112,13 @@ async function fetchData(params: Record<string, string | undefined>) {
 
 export const dynamic = 'force-dynamic';
 
-export default async function GastosPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; tipo_operacion?: string; proveedor_id?: string; rubro_id?: string; subrubro_gasto_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string };
-}) {
-  requireAuth('/gastos');
+export default async function GastosPage(
+  props: {
+    searchParams: Promise<{ q?: string; tipo_operacion?: string; proveedor_id?: string; rubro_id?: string; subrubro_gasto_id?: string; estado_pago?: string; fecha_desde?: string; fecha_hasta?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/gastos');
   const { egresos, count, proveedores, rubros, alertas } = await fetchData(searchParams);
   const hayFiltros = !!(searchParams.q || searchParams.tipo_operacion || searchParams.proveedor_id || searchParams.rubro_id || searchParams.subrubro_gasto_id || searchParams.estado_pago || searchParams.fecha_desde || searchParams.fecha_hasta);
 

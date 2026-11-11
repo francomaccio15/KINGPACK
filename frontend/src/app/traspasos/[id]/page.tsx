@@ -30,8 +30,9 @@ const ESTADO_LABEL_PRINT: Record<string, string> = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function DetalleTraspasoPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/traspasos');
+export default async function DetalleTraspasoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/traspasos');
   const esAdmin      = user.rol === 'administrador';
   const esSupervisor = user.rol === 'supervisor';
   const esCajero     = user.rol === 'cajero';

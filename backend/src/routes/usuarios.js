@@ -4,7 +4,8 @@
 const express  = require('express');
 const bcrypt   = require('bcryptjs');
 const { pool } = require('../config/db');
-const { requireRol } = require('../middleware/auth');
+const { requireRol, invalidarUsuario } = require('../middleware/auth');
+const { registrarEvento } = require('../services/seguridad');
 
 const router   = express.Router();
 const soloAdmin = requireRol('administrador');
@@ -52,14 +53,14 @@ router.post('/', soloAdmin, async (req, res, next) => {
 
     if (!email?.trim())    return res.status(400).json({ error: 'Email requerido' });
     if (!password?.trim()) return res.status(400).json({ error: 'Contraseña requerida' });
-    if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    if (typeof password !== 'string' || password.length < 8 || password.length > 200) return res.status(400).json({ error: 'La contraseña debe tener entre 8 y 200 caracteres' });
     if (!nombre?.trim())   return res.status(400).json({ error: 'Nombre requerido' });
 
     const roles = ['administrador', 'supervisor', 'cajero', 'vendedor', 'comercial'];
     if (!roles.includes(rol)) return res.status(400).json({ error: 'Rol inválido' });
 
     const emailNorm = email.toLowerCase().trim();
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
 
     const { rows } = await pool.query(`
       INSERT INTO usuarios (email, password_hash, nombre, telefono, rol, sucursal_default_id, activo)
@@ -111,6 +112,7 @@ router.patch('/:id', soloAdmin, async (req, res, next) => {
     `, params);
 
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+    invalidarUsuario(id);
     res.json({ usuario: rows[0] });
   } catch (err) { next(err); }
 });
@@ -122,15 +124,18 @@ router.patch('/:id/password', soloAdmin, async (req, res, next) => {
     const { password } = req.body;
 
     if (!password?.trim()) return res.status(400).json({ error: 'Contraseña requerida' });
-    if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    if (typeof password !== 'string' || password.length < 8 || password.length > 200) return res.status(400).json({ error: 'La contraseña debe tener entre 8 y 200 caracteres' });
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     const { rowCount } = await pool.query(
-      `UPDATE usuarios SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL`,
+      // tokens_validos_desde: cierra las sesiones abiertas con la contraseña vieja.
+      `UPDATE usuarios SET password_hash = $1, tokens_validos_desde = NOW() WHERE id = $2 AND deleted_at IS NULL`,
       [hash, id]
     );
 
     if (rowCount === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    invalidarUsuario(id);
+    registrarEvento('password_cambiada', { req, usuario_id: id, por: req.usuario.email });
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -150,6 +155,7 @@ router.delete('/:id', soloAdmin, async (req, res, next) => {
     );
 
     if (rowCount === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    invalidarUsuario(id);
     res.json({ ok: true });
   } catch (err) { next(err); }
 });

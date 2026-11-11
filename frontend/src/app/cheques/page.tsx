@@ -13,13 +13,13 @@ import ChequesCalendario, { type Calendario } from './ChequesCalendario';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     tipo?: string;
     estado?: string;
     banco?: string;
     fecha_venc_desde?: string;
     fecha_venc_hasta?: string;
-  };
+  }>;
 }
 
 // Tabs disponibles. Calendario es la de entrada: contesta "¿me alcanza?".
@@ -32,8 +32,9 @@ const TABS = [
   { value: 'a_pagar',     label: 'A Pagar'       },
 ];
 
-export default async function ChequesPage({ searchParams }: PageProps) {
-  requireAuth('/cheques');
+export default async function ChequesPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/cheques');
 
   const { tipo, estado, banco, fecha_venc_desde, fecha_venc_hasta } = searchParams;
   const tipoActivo = tipo || 'calendario';

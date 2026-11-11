@@ -52,8 +52,9 @@ async function fetchSucursales() {
   }
 }
 
-export default async function LicitacionDetallePage({ params }: { params: { id: string } }) {
-  requireAuth('/licitaciones');
+export default async function LicitacionDetallePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAuth('/licitaciones');
   const [data, sucursales] = await Promise.all([fetchLicitacion(params.id), fetchSucursales()]);
 
   if (!data) {

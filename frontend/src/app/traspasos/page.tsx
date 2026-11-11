@@ -62,7 +62,7 @@ async function fetchData(sucursalId: string | null) {
 export const dynamic = 'force-dynamic';
 
 export default async function TraspasosPage() {
-  const user = requireAuth('/traspasos');
+  const user = await requireAuth('/traspasos');
   const esCajero = user.rol === 'cajero';
   const sucursalId = esCajero ? (user.sucursal_default_id ?? null) : null;
 

@@ -26,8 +26,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function NotaCreditoPage({ params }: { params: { id: string } }) {
-  requireAuth('/notas-credito');
+export default async function NotaCreditoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAuth('/notas-credito');
   const nota = await fetchNota(params.id);
 
   if (!nota) {

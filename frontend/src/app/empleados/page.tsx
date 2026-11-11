@@ -44,12 +44,13 @@ async function fetchData(q?: string, activo?: string, sucursal_id?: string) {
   return { empleados, sucursales };
 }
 
-export default async function EmpleadosPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; activo?: string; sucursal_id?: string };
-}) {
-  const user    = requireAuth('/empleados');
+export default async function EmpleadosPage(
+  props: {
+    searchParams: Promise<{ q?: string; activo?: string; sucursal_id?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user    = await requireAuth('/empleados');
   const esAdmin = user.rol === 'administrador';
 
   const { empleados, sucursales } = await fetchData(

@@ -3,7 +3,7 @@ import TransporteClient from './TransporteClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function TransportePage() {
-  requireAuth('/transporte');
+export default async function TransportePage() {
+  await requireAuth('/transporte');
   return <TransporteClient />;
 }

@@ -23,7 +23,7 @@ async function fetchCategorias(): Promise<Categoria[]> {
 }
 
 export default async function CategoriasPage() {
-  requireAuth('/categorias');
+  await requireAuth('/categorias');
   const categorias = await fetchCategorias();
   return <CategoriasView categoriasIniciales={categorias} />;
 }

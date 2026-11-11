@@ -18,6 +18,9 @@ const apiFetch = (p: string, o: RequestInit = {}) => {
   });
 };
 
+// Escapa texto antes de meterlo en el HTML de la ventana de impresión.
+const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
 const ars = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 function Spinner() {
@@ -132,7 +135,7 @@ export default function CerrarCaja({
       </tr>`;
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <title>Cierre de Caja — ${sucursalNombre ?? ''}</title>
+      <title>Cierre de Caja — ${esc(sucursalNombre ?? '')}</title>
       <style>body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111}
         @media print{@page{margin:12mm}body{padding:0}}</style>
     </head><body>
@@ -142,7 +145,7 @@ export default function CerrarCaja({
           <p style="font-size:11px;color:#6b7280;margin:4px 0 0">CIERRE DE CAJA</p>
         </div>
         <div style="text-align:right;font-size:12px;line-height:1.7">
-          <p style="margin:0"><strong>Sucursal:</strong> ${sucursalNombre ?? '—'}</p>
+          <p style="margin:0"><strong>Sucursal:</strong> ${esc(sucursalNombre ?? '—')}</p>
           <p style="margin:0"><strong>Apertura:</strong> ${aperturaStr}</p>
           <p style="margin:0"><strong>Cierre:</strong> ${cierreStr}</p>
         </div>

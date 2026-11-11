@@ -31,7 +31,7 @@ export default function CambiarCliente({
   const [motivo, setMotivo]       = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError]         = useState('');
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     clearTimeout(debounce.current);

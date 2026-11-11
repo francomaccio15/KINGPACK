@@ -3,7 +3,7 @@ import CajaAdministrativaClient from './CajaAdministrativaClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function CajaAdministrativaPage() {
-  requireAuth('/caja-administrativa');
+export default async function CajaAdministrativaPage() {
+  await requireAuth('/caja-administrativa');
   return <CajaAdministrativaClient />;
 }

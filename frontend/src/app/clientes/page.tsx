@@ -32,12 +32,13 @@ async function fetchAll(q?: string, activo?: string) {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ClientesPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; activo?: string; tab?: string };
-}) {
-  const user = requireAuth('/clientes');
+export default async function ClientesPage(
+  props: {
+    searchParams: Promise<{ q?: string; activo?: string; tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user = await requireAuth('/clientes');
   const esAdmin = user.rol === 'administrador';
   // El comercial carga clientes pero no maneja cuentas corrientes.
   const sinCC = user.rol === 'comercial';

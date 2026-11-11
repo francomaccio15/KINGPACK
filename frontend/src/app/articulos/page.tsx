@@ -154,12 +154,13 @@ export const dynamic = 'force-dynamic';
 const PAGE_SIZE = 10;
 
 // ─── Página ──────────────────────────────────────────────────────────────────
-export default async function ArticulosPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string>;
-}) {
-  const user = requireAuth('/articulos');
+export default async function ArticulosPage(
+  props: {
+    searchParams: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user = await requireAuth('/articulos');
   // Cajero, repartidor (vendedor) y comercial ven artículos en modo solo-lectura:
   // sin alta, sin columna de precio base, sin acciones de edición.
   const esCajero = user.rol === 'cajero' || user.rol === 'vendedor' || user.rol === 'comercial';
@@ -167,7 +168,7 @@ export default async function ArticulosPage({
   // El cajero está fijado a su sucursal por cookie, pero en artículos debe ver
   // el stock de AMBAS sucursales (vista "Todas"): ignoramos su sucursal activa
   // para las consultas de stock de esta página.
-  const sucursalActivaId = esCajero ? '' : getSucursalActivaId();
+  const sucursalActivaId = esCajero ? '' : await getSucursalActivaId();
 
   const currentPage = Math.max(1, parseInt(searchParams.page || '1') || 1);
 

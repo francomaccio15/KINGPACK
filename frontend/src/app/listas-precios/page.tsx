@@ -23,7 +23,7 @@ async function fetchListas(): Promise<Lista[] | { error: string }> {
 export const dynamic = 'force-dynamic';
 
 export default async function ListasPreciosPage() {
-  requireAuth('/listas-precios');
+  await requireAuth('/listas-precios');
   const listas = await fetchListas();
 
   if (!Array.isArray(listas)) {

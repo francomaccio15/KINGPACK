@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { puedeAcceder } from './permissions';
@@ -32,7 +32,9 @@ function verifyToken(token: string): VerifyResult {
       .update(`${header}.${payload}`)
       .digest('base64url');
 
-    if (expectedSig !== signature) {
+    const a = Buffer.from(expectedSig);
+    const b = Buffer.from(signature);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       return { user: null, reason: 'FIRMA_INVALIDA', info: { usuario: decoded?.email ?? null } };
     }
 
@@ -64,8 +66,8 @@ function verifyToken(token: string): VerifyResult {
  * Redirige a /login si no hay sesión o el token es inválido/expirado.
  * Redirige a /forbidden si el rol no tiene permiso al módulo.
  */
-export function requireAuth(modulo?: string): AuthUser {
-  const token = cookies().get('kp_token')?.value;
+export async function requireAuth(modulo?: string): Promise<AuthUser> {
+  const token = (await cookies()).get('kp_token')?.value;
   // Sin cookie: visitante anónimo (o cookie ya limpiada). No se loguea para no
   // ensuciar con tráfico de bots / primeras cargas.
   if (!token) redirect('/login');

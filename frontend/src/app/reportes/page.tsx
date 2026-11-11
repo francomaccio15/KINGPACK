@@ -144,12 +144,13 @@ function BarChart({ data }: { data: DiaDato[] }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default async function ReportesPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
-  requireAuth('/reportes');
+export default async function ReportesPage(
+  props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/reportes');
 
   const tab        = (searchParams.tab as string) || 'ventas';
   const fechaDesde = (searchParams.fecha_desde as string) || defaultDesde();
@@ -280,7 +281,7 @@ export default async function ReportesPage({
               <p className="text-kp-gray text-sm">No se pudo cargar el estado de resultados.</p>
             </div>
           : erData.cierre_pendiente
-            ? <CierreMensual anio={erData.anio} mes={erData.mes} sucursalId={getSucursalActivaId()} />
+            ? <CierreMensual anio={erData.anio} mes={erData.mes} sucursalId={await getSucursalActivaId()} />
             : <EstadoResultados data={erData} fechaDesde={erData.periodo.desde} fechaHasta={erData.periodo.hasta} />
       )}
 

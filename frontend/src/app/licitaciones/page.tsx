@@ -36,7 +36,7 @@ const ESTADO_LABEL: Record<string, string> = {
 export const dynamic = 'force-dynamic';
 
 export default async function LicitacionesPage() {
-  requireAuth('/licitaciones');
+  await requireAuth('/licitaciones');
 
   const data = await serverFetch('/api/licitaciones?limit=200', { cache: 'no-store' })
     .then(r => r.json())

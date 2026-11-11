@@ -205,7 +205,7 @@ export default function EditarVentaForm({
   const [query, setQuery]           = useState('');
   const [resultados, setResultados] = useState<ArticuloResult[]>([]);
   const [buscando, setBuscando]     = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const buscar = useCallback((q: string) => {
     clearTimeout(debounceRef.current);

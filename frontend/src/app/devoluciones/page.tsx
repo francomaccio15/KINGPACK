@@ -74,12 +74,13 @@ async function fetchSucursales(): Promise<Sucursal[]> {
   } catch { return []; }
 }
 
-export default async function DevolucionesPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string>;
-}) {
-  requireAuth('/devoluciones');
+export default async function DevolucionesPage(
+  props: {
+    searchParams: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/devoluciones');
 
   const [{ devoluciones, count }, clientes, sucursales] = await Promise.all([
     fetchDevoluciones(searchParams),

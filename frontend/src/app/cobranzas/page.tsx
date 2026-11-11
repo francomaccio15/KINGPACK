@@ -12,10 +12,10 @@ export const dynamic = 'force-dynamic';
  * el acceso: buscador sobre todos los clientes y cobro en un click.
  */
 export default async function CobranzasPage() {
-  requireAuth('/cobranzas');
+  await requireAuth('/cobranzas');
 
   // Sucursal operativa (selector global); el backend igual usa la del JWT del cajero.
-  const sucursalId = cookies().get('kp_sucursal_id')?.value;
+  const sucursalId = (await cookies()).get('kp_sucursal_id')?.value;
 
   const [clientes, cajaAbierta] = await Promise.all([
     serverFetch('/api/clientes?limit=5000&activo=true', { cache: 'no-store' })

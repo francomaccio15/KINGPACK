@@ -11,6 +11,10 @@ const arca   = require('../services/arca');
 const fs     = require('fs');
 const path   = require('path');
 const { pool } = require('../config/db');
+const { requireRol } = require('../middleware/auth');
+
+// Diagnóstico de ARCA: solo administradores.
+const soloAdmin = requireRol('administrador');
 
 // GET /api/arca/tipos-comprobante
 router.get('/tipos-comprobante', async (req, res, next) => {
@@ -24,12 +28,15 @@ router.get('/tipos-comprobante', async (req, res, next) => {
 
 // GET /api/arca/status
 router.get('/status', (req, res) => {
+  // Cualquier rol logueado lo consulta (pantalla de venta); los detalles
+  // internos (ruta del certificado) solo los ve el administrador.
+  const esAdmin = req.usuario?.rol === 'administrador';
   const certPath = arca.certPath;
   res.json({
     modo:           arca.modoActivo,
     esDemo:         arca.esDemo,
     cuitConfigurado: arca.esDemo ? '20409378472 (demo)' : String(arca.cuit),
-    certPath,
+    certPath:       esAdmin ? certPath : undefined,
     certificado:    fs.existsSync(certPath) ? 'presente' : 'pendiente — ver docs/ARCA_CERTIFICADO.md',
     mensaje: arca.esDemo
       ? 'Módulo en modo DEMO. Los CAE son reales del servidor de homologación de ARCA.'
@@ -39,7 +46,7 @@ router.get('/status', (req, res) => {
 
 // GET /api/arca/test-auth — diagnóstico: prueba solo el login WSAA (firma CMS).
 // No emite comprobantes. Sirve para validar el certificado contra AFIP.
-router.get('/test-auth', async (req, res) => {
+router.get('/test-auth', soloAdmin, async (req, res) => {
   try {
     const r = await arca.probarAuth();
     res.json(r);
@@ -52,8 +59,13 @@ router.get('/test-auth', async (req, res) => {
 // Body (opcional): { total, cliente_razon_social, cond_iva_afip, cuit }
 //   cond_iva_afip + cuit permiten probar Factura A (RI/Monotributo con CUIT).
 //   Sin esos datos → Factura B a Consumidor Final.
-router.post('/test-factura', async (req, res, next) => {
+router.post('/test-factura', soloAdmin, async (req, res, next) => {
   try {
+    // En producción una "factura de prueba" sería un comprobante fiscal REAL
+    // con CAE: se bloquea. Solo se permite en demo/homologación.
+    if (!(arca.esDemo || arca.modoActivo === 'homo')) {
+      return res.status(403).json({ error: 'La factura de prueba está deshabilitada en producción' });
+    }
     const total  = parseFloat(req.body?.total) || 1210;
     const nombre = req.body?.cliente_razon_social || 'Consumidor Final (Test)';
     const condIvaAfip = req.body?.cond_iva_afip != null ? parseInt(req.body.cond_iva_afip, 10) : 5;

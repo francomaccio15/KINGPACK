@@ -57,7 +57,7 @@ async function fetchSucursales() {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [sucursales, sucursalActivaId] = await Promise.all([
     fetchSucursales(),
-    Promise.resolve(getSucursalActivaId()),
+    getSucursalActivaId(),
   ]);
 
   return (

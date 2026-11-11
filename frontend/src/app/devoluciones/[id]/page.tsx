@@ -33,8 +33,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function DevolucionPage({ params }: { params: { id: string } }) {
-  requireAuth('/devoluciones');
+export default async function DevolucionPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  await requireAuth('/devoluciones');
   const dev = await fetchDevolucion(params.id);
 
   if (!dev) {

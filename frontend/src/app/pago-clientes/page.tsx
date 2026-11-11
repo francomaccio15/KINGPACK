@@ -91,12 +91,13 @@ async function fetchData(fecha: string): Promise<Data> {
 
 export const dynamic = 'force-dynamic';
 
-export default async function PagoClientesPage({
-  searchParams,
-}: {
-  searchParams: { fecha?: string };
-}) {
-  requireAuth('/pago-clientes');
+export default async function PagoClientesPage(
+  props: {
+    searchParams: Promise<{ fecha?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/pago-clientes');
   const fecha = searchParams.fecha && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.fecha)
     ? searchParams.fecha
     : hoyAR();

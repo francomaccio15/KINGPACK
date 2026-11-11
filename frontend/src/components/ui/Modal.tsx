@@ -45,7 +45,7 @@ export interface ModalProps {
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
   /** Elemento a enfocar al abrir. En mobile evitar inputs: abren el teclado. */
-  initialFocusRef?: React.RefObject<HTMLElement>;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
   hideCloseButton?: boolean;
   /**
    * `false` quita el padding y el scroll del cuerpo, para modales que manejan

@@ -16,7 +16,9 @@ export function saveSession(token: string, usuario: AuthUser): void {
   // Cookie para que los Server Components puedan leer el token.
   // max-age = 24h, igual que la expiración del JWT (JWT_EXPIRES_IN en el backend);
   // deben coincidir para que la cookie no muera antes ni después que el token.
-  document.cookie = `kp_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict`;
+  // Secure en HTTPS: la cookie nunca viaja por HTTP plano.
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `kp_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict${secure}`;
 }
 
 export function clearSession(): void {

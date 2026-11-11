@@ -76,8 +76,9 @@ export const dynamic = 'force-dynamic';
 
 const TIPOS_EDITABLES = ['compra_mercaderia', 'compra_gasto'];
 
-export default async function DetalleEgresoPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/gastos');
+export default async function DetalleEgresoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/gastos');
   let egreso: any = null;
   let items: any[]  = [];
   let pagos: any[]  = [];

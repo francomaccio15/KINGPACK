@@ -3,7 +3,7 @@ import UsuariosClient from './UsuariosClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function UsuariosPage() {
-  requireAuth('/usuarios');
+export default async function UsuariosPage() {
+  await requireAuth('/usuarios');
   return <UsuariosClient />;
 }

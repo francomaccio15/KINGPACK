@@ -3,8 +3,8 @@ import Trazabilidad from './Trazabilidad';
 
 export const dynamic = 'force-dynamic';
 
-export default function TrazabilidadPage() {
-  requireAuth('/trazabilidad');
+export default async function TrazabilidadPage() {
+  await requireAuth('/trazabilidad');
 
   return (
     <section className="space-y-5">

@@ -69,12 +69,13 @@ async function fetchData(params: Record<string, string | undefined>, sucursalFil
 
 export const dynamic = 'force-dynamic';
 
-export default async function PedidosProveedoresPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string };
-}) {
-  const user = requireAuth('/pedidos-proveedores');
+export default async function PedidosProveedoresPage(
+  props: {
+    searchParams: Promise<{ q?: string; estado?: string; proveedor_id?: string; fecha_desde?: string; fecha_hasta?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user = await requireAuth('/pedidos-proveedores');
   const esCajero = user.rol === 'cajero';
   const esAdmin = user.rol === 'administrador';
   const sucursalFilter = esCajero ? (user.sucursal_default_id ?? null) : null;

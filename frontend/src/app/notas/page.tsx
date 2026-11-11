@@ -6,7 +6,7 @@ import type { Nota } from './NotasView';
 export const dynamic = 'force-dynamic';
 
 export default async function NotasPage() {
-  const user = requireAuth('/notas');
+  const user = await requireAuth('/notas');
 
   let notas: Nota[] = [];
   try {

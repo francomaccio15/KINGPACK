@@ -237,6 +237,34 @@ router.get('/', async (req, res, next) => {
           label: `Cargar lo acreditado en banco de ${lbl} y comparar con ARCA`,
         });
       }
+
+      // ── Seguridad: actividad sospechosa de las últimas 24 h ──
+      // Logins fallidos repetidos, cuentas bloqueadas, tokens fabricados,
+      // accesos denegados y pedidos desde otros sitios (services/seguridad.js).
+      try {
+        const { rows: seg } = await pool.query(`
+          SELECT COUNT(*) FILTER (WHERE tipo IN ('login_bloqueo_cuenta','login_cuenta_bloqueada','login_limite_ip'))::int AS bloqueos,
+                 COUNT(*) FILTER (WHERE tipo IN ('token_invalido','origen_rechazado','acceso_denegado'))::int        AS sospechosos,
+                 COUNT(*) FILTER (WHERE tipo = 'login_fallido')::int                                                AS fallidos
+            FROM eventos_seguridad
+           WHERE created_at > NOW() - INTERVAL '24 hours'
+        `);
+        const { bloqueos, sospechosos, fallidos } = seg[0];
+        if (bloqueos > 0 || sospechosos > 0 || fallidos >= 10) {
+          const partes = [];
+          if (bloqueos)    partes.push(`${bloqueos} bloqueo${bloqueos !== 1 ? 's' : ''} por intentos de login`);
+          if (fallidos)    partes.push(`${fallidos} login${fallidos !== 1 ? 's' : ''} fallido${fallidos !== 1 ? 's' : ''}`);
+          if (sospechosos) partes.push(`${sospechosos} acceso${sospechosos !== 1 ? 's' : ''} sospechoso${sospechosos !== 1 ? 's' : ''}`);
+          alertas.push({
+            tipo: 'seguridad',
+            nivel: bloqueos > 0 || sospechosos > 0 ? 'error' : 'warning',
+            href: '/usuarios',
+            label: `Seguridad (24 h): ${partes.join(', ')}`,
+          });
+        }
+      } catch (e) {
+        console.error('[security] no se pudo leer eventos_seguridad:', e.message);
+      }
     }
 
     res.json({

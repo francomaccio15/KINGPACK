@@ -13,7 +13,9 @@ router.get('/', async (req, res) => {
       ts: new Date().toISOString(),
     });
   } catch (err) {
-    res.status(503).json({ status: 'degraded', db: 'down', error: err.message });
+    // El detalle va al log, no a la respuesta pública (puede revelar host/usuario de la base).
+    console.error('[health] DB caída:', err.message);
+    res.status(503).json({ status: 'degraded', db: 'down' });
   }
 });
 

@@ -63,12 +63,13 @@ async function fetchData(params: Record<string, string | undefined>, soloMias: b
 
 export const dynamic = 'force-dynamic';
 
-export default async function PresupuestosPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; fecha_desde?: string; fecha_hasta?: string; vista?: string };
-}) {
-  const user = requireAuth('/presupuestos');
+export default async function PresupuestosPage(
+  props: {
+    searchParams: Promise<{ q?: string; fecha_desde?: string; fecha_hasta?: string; vista?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user = await requireAuth('/presupuestos');
   const esRepartidor = user.rol === 'vendedor' || user.rol === 'comercial';
 
   const vistas: { id: Vista; label: string }[] = esRepartidor

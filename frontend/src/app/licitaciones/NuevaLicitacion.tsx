@@ -47,8 +47,8 @@ export default function NuevaLicitacion() {
   const [artSugs, setArtSugs]         = useState<Articulo[]>([]);
   const [items, setItems]             = useState<Item[]>([]);
 
-  const clienteTimer = useRef<ReturnType<typeof setTimeout>>();
-  const artTimer     = useRef<ReturnType<typeof setTimeout>>();
+  const clienteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const artTimer     = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Búsqueda de clientes ─────────────────────────────────────────────────
   useEffect(() => {

@@ -1,6 +1,7 @@
 /**
  * Crea el usuario administrador para Distribuidora King Pack.
- * Ejecutar una sola vez: node db/seeds/seed-distribuidora-admin.js
+ * Ejecutar una sola vez: ADMIN_PASSWORD='...' node db/seeds/seed-distribuidora-admin.js
+ * La contraseña se pasa por variable de entorno: nunca va en el código.
  */
 
 const path = require('path');
@@ -10,12 +11,16 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../../src/config/db');
 
 async function run() {
-  const email = 'Distribuidorakingpack@gmail.com';
-  const password = 'Francesco17m';
+  const email = 'distribuidorakingpack@gmail.com';
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password || password.length < 12) {
+    console.error('Definí ADMIN_PASSWORD (mínimo 12 caracteres).');
+    process.exit(1);
+  }
   const nombre = 'Distribuidora King Pack';
   const rol = 'administrador';
 
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await bcrypt.hash(password, 12);
 
   const { rowCount } = await pool.query(
     `INSERT INTO usuarios (email, password_hash, nombre, rol, activo)

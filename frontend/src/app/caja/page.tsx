@@ -51,7 +51,7 @@ async function fetchData() {
 export const dynamic = 'force-dynamic';
 
 export default async function CajaPage() {
-  const user = requireAuth('/caja');
+  const user = await requireAuth('/caja');
   const { sucursales: allSucursales, historial: allHistorial } = await fetchData();
 
   const esCajero = user.rol === 'cajero';

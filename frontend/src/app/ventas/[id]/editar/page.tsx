@@ -5,8 +5,9 @@ import EditarVentaForm from './EditarVentaForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EditarVentaPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/ventas');
+export default async function EditarVentaPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/ventas');
 
   const res = await serverFetch(`/api/ventas/${params.id}`, { cache: 'no-store' });
   if (!res.ok) {

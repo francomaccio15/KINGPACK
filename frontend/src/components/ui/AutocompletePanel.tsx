@@ -27,7 +27,7 @@ import { cn } from '@/lib/ui';
 
 export interface AutocompletePanelProps {
   /** Input (o su contenedor) al que se ancla el panel. */
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
@@ -35,7 +35,7 @@ export interface AutocompletePanelProps {
   maxHeightVh?: number;
   className?: string;
   /** Elementos que no deben disparar el cierre al hacer click (ej. un boton). */
-  ignoreRef?: React.RefObject<HTMLElement>;
+  ignoreRef?: React.RefObject<HTMLElement | null>;
 }
 
 interface Pos { top: number; left: number; width: number; maxHeight: number; }

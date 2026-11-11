@@ -17,17 +17,18 @@ const TABS = [
 ];
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     tab?: string;
     desde?: string;
     hasta?: string;
     sucursal_id?: string;
     anio?: string;
-  };
+  }>;
 }
 
-export default async function ImpuestosPage({ searchParams }: PageProps) {
-  requireAuth('/impuestos');
+export default async function ImpuestosPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/impuestos');
 
   const tab       = searchParams.tab       || 'posicion';
   const anio      = searchParams.anio      || String(new Date().getFullYear());

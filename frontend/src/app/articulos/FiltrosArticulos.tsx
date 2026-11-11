@@ -15,7 +15,7 @@ export default function FiltrosArticulos({
   const router   = useRouter();
   const pathname = usePathname();
   const params   = useSearchParams();
-  const timer    = useRef<ReturnType<typeof setTimeout>>();
+  const timer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [q, setQ] = useState(params.get('q') || '');
 

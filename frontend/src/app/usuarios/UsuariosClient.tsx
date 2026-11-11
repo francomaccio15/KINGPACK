@@ -90,7 +90,7 @@ function FormUsuario({
     if (!nombre.trim()) return setError('El nombre es requerido');
     if (!esEdicion && !email.trim()) return setError('El email es requerido');
     if (!esEdicion && !password.trim()) return setError('La contraseña es requerida');
-    if (!esEdicion && password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres');
+    if (!esEdicion && password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres');
 
     setSaving(true);
     try {
@@ -140,7 +140,7 @@ function FormUsuario({
         <div>
           <label className={labelCls}>Contraseña *</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Mínimo 6 caracteres" className={inputCls} />
+            placeholder="Mínimo 8 caracteres" className={inputCls} />
         </div>
       )}
 
@@ -202,7 +202,7 @@ function ModalPassword({ usuario, onGuardar, onCerrar }: { usuario: Usuario; onG
   const handleSubmit = async () => {
     setError(null);
     if (!password.trim()) return setError('Ingresá la nueva contraseña');
-    if (password.length < 6) return setError('Mínimo 6 caracteres');
+    if (password.length < 8) return setError('Mínimo 8 caracteres');
     if (password !== password2) return setError('Las contraseñas no coinciden');
 
     setSaving(true);
@@ -227,7 +227,7 @@ function ModalPassword({ usuario, onGuardar, onCerrar }: { usuario: Usuario; onG
       <div>
         <label className={labelCls}>Nueva contraseña *</label>
         <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-          placeholder="Mínimo 6 caracteres" className={inputCls} autoFocus />
+          placeholder="Mínimo 8 caracteres" className={inputCls} autoFocus />
       </div>
       <div>
         <label className={labelCls}>Repetir contraseña *</label>

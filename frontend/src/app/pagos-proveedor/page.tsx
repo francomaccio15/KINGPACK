@@ -3,7 +3,7 @@ import PagosProveedorClient from './PagosProveedorClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function PagosProveedorPage() {
-  requireAuth('/pagos-proveedor');
+export default async function PagosProveedorPage() {
+  await requireAuth('/pagos-proveedor');
   return <PagosProveedorClient />;
 }

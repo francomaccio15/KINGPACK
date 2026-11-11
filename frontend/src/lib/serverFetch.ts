@@ -9,7 +9,7 @@ const API = process.env.API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || '
  * la inyecta como ?sucursal_id= en la URL para que el backend filtre correctamente.
  */
 export async function serverFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const jar      = cookies();
+  const jar      = await cookies();
   const token    = jar.get('kp_token')?.value;
   const sucursal = jar.get('kp_sucursal_id')?.value; // '' = Todas, UUID = una sucursal
 

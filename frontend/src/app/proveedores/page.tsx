@@ -3,7 +3,7 @@ import ProveedoresClient from './ProveedoresClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function ProveedoresPage() {
-  requireAuth('/proveedores');
+export default async function ProveedoresPage() {
+  await requireAuth('/proveedores');
   return <ProveedoresClient />;
 }

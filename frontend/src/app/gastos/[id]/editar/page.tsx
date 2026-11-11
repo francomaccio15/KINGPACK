@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 // Solo Compra de Mercadería y Gasto Varios son editables desde este formulario.
 const TIPOS_EDITABLES = ['compra_mercaderia', 'compra_gasto'];
 
-export default async function EditarEgresoPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/gastos');
+export default async function EditarEgresoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/gastos');
 
   if (user.rol !== 'administrador') {
     return (

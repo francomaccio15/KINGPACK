@@ -9,12 +9,13 @@ const ars = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 3,
 });
 
-export default async function EmpleadoDetallePage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const user    = requireAuth('/empleados');
+export default async function EmpleadoDetallePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  const user    = await requireAuth('/empleados');
   const esAdmin = user.rol === 'administrador';
 
   const [empRes, sucRes] = await Promise.all([

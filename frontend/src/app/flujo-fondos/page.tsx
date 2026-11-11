@@ -49,10 +49,11 @@ function mesActualAR() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).slice(0, 7);
 }
 
-interface PageProps { searchParams: { desde?: string; hasta?: string; inflacion?: string; crecimiento?: string } }
+interface PageProps { searchParams: Promise<{ desde?: string; hasta?: string; inflacion?: string; crecimiento?: string }> }
 
-export default async function FlujoFondosPage({ searchParams }: PageProps) {
-  requireAuth('/flujo-fondos');
+export default async function FlujoFondosPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/flujo-fondos');
 
   const qs = new URLSearchParams();
   for (const k of ['desde', 'hasta', 'inflacion', 'crecimiento'] as const) {

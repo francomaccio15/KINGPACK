@@ -17,8 +17,9 @@ const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-AR', { day: '
 
 export const dynamic = 'force-dynamic';
 
-export default async function ClienteDetallePage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/clientes');
+export default async function ClienteDetallePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/clientes');
   const puedeEditarPago = user.rol === 'cajero' || user.rol === 'administrador';
   // El comercial ve y edita los datos del cliente, pero no su cuenta corriente
   // (saldo, movimientos, pagos) ni sus ventas.
@@ -53,7 +54,7 @@ export default async function ClienteDetallePage({ params }: { params: { id: str
 
   // Sucursal donde entra el pago = la sucursal operativa (selector global), no la
   // del cliente. Para cajeros el backend usa su propia sucursal del JWT igual.
-  const sucursalOperativa = cookies().get('kp_sucursal_id')?.value || cliente.sucursal_default_id;
+  const sucursalOperativa = (await cookies()).get('kp_sucursal_id')?.value || cliente.sucursal_default_id;
 
   const saldoActual  = parseFloat(cliente.saldo_actual  || '0');
   const limiteCredito = parseFloat(cliente.limite_credito || '0');

@@ -30,8 +30,9 @@ const ESTADO_LABEL: Record<string, string> = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function DetallePedidoPage({ params }: { params: { id: string } }) {
-  const user = requireAuth('/pedidos-proveedores');
+export default async function DetallePedidoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const user = await requireAuth('/pedidos-proveedores');
   const esCajero = user.rol === 'cajero';
   const esAdmin = user.rol === 'administrador';
   let pedido: any = null;

@@ -115,12 +115,13 @@ async function fetchTiposComprobante(): Promise<TipoComprobante[]> {
   } catch { return []; }
 }
 
-export default async function NotasCreditoPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string>;
-}) {
-  requireAuth('/notas-credito');
+export default async function NotasCreditoPage(
+  props: {
+    searchParams: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  await requireAuth('/notas-credito');
 
   const [{ notas, count }, clientes, sucursales] = await Promise.all([
     fetchNotas(searchParams),

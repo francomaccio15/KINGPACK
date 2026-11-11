@@ -64,12 +64,13 @@ function hoyISO(): string {
   }).format(new Date());
 }
 
-export default async function VentasPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string };
-}) {
-  const user = requireAuth('/ventas');
+export default async function VentasPage(
+  props: {
+    searchParams: Promise<{ q?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const user = await requireAuth('/ventas');
 
   // Filtros explícitos que el usuario haya seteado
   const hayFiltros = !!(searchParams.q || searchParams.estado || searchParams.fecha_desde || searchParams.fecha_hasta);
