@@ -1009,14 +1009,15 @@ export default function PagosProveedorClient() {
                 ) : (
                   <>
                     <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">
-                      Cheques en cartera ({endososSel.size} elegido{endososSel.size === 1 ? '' : 's'})
+                      Cheques en cartera — {chequesCartera.length} disponible{chequesCartera.length === 1 ? '' : 's'}
+                      {' '}({endososSel.size} elegido{endososSel.size === 1 ? '' : 's'})
                     </p>
                     {loadingCartera ? (
                       <p className="text-xs text-kp-gray">Cargando cheques…</p>
                     ) : chequesCartera.length === 0 ? (
                       <p className="text-xs text-kp-gray">No hay cheques recibidos en cartera para endosar.</p>
                     ) : (
-                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                      <div className="space-y-1">
                         {chequesCartera.map(c => {
                           const sel = endososSel.has(c.id);
                           return (
