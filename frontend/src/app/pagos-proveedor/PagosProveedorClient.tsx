@@ -704,13 +704,13 @@ export default function PagosProveedorClient() {
         {/* Pagos ya cobrados por el proveedor que nunca se imputaron a un comprobante:
             mientras siguen sin imputar, esas facturas figuran impagas y alertan por
             vencimiento aunque el dinero ya haya salido. */}
-        {/* Sin comprobantes pendientes no hay nada que imputar: ese dinero es saldo a
-            favor (anticipo) y se imputa cuando entre la próxima factura. Se informa
-            sin alerta ni botones. */}
-        {proveedor && sinImputarProv > 0.01 && !loadingPend && pendientes.length === 0 && (
+        {/* Sin comprobantes pendientes no hay nada que imputar. Si el saldo sigue
+            siendo deuda, esos pagos a cuenta ya están cancelando el saldo inicial y
+            no hay nada que avisar; solo si quedamos a favor se informa, sin botones. */}
+        {proveedor && sinImputarProv > 0.01 && !loadingPend && pendientes.length === 0 && saldoProv < -0.005 && (
           <p className="text-xs text-kp-gray">
-            Hay <span className="font-semibold text-kp-gray-lt">{fmt(sinImputarProv)}</span> pagados a cuenta (saldo a favor).
-            Se podrán imputar cuando se cargue una factura de este proveedor.
+            Tenemos <span className="font-semibold text-green-400">{fmt(-saldoProv)}</span> a favor con este proveedor.
+            Se podrán imputar cuando se cargue una factura suya.
           </p>
         )}
         {proveedor && sinImputarProv > 0.01 && pendientes.length > 0 && (
