@@ -37,7 +37,12 @@ const chequeVacio = (): Cheque => ({ ...chequeExtraVacio(), banco: '', numero_ch
 interface ChequeCartera {
   id: string; origen_tipo: string; banco: string | null; numero_cheque: string | null;
   importe: string; fecha_vencimiento: string | null; origen_nombre: string | null;
+  estado?: string;
 }
+const ESTADO_CHEQUE_LABEL: Record<string, string> = {
+  en_cartera: 'En cartera', depositado: 'Depositado', acreditado: 'Acreditado',
+  endosado: 'Endosado', rechazado: 'Rechazado', anulado: 'Anulado',
+};
 interface MedioLinea { medio_pago_id: string; monto: string; cuenta_bancaria_id: string }
 interface PagoHist {
   id: string;
@@ -169,6 +174,9 @@ export default function PagosProveedorClient() {
   // Cheque como pago: emitir uno nuevo ('nuevo') o endosar uno en cartera ('endoso').
   const [chequeModo, setChequeModo]       = useState<'nuevo' | 'endoso'>('nuevo');
   const [chequesCartera, setChequesCartera] = useState<ChequeCartera[]>([]);
+  // Todos los cheques recibidos (cualquier estado), solo para mostrarlos en la
+  // lista de endoso; los que no están en cartera se ven pero no se pueden tildar.
+  const [chequesRecibidos, setChequesRecibidos] = useState<ChequeCartera[]>([]);
   const [endososSel, setEndososSel]       = useState<Set<string>>(new Set());
   const [loadingCartera, setLoadingCartera] = useState(false);
 
@@ -330,16 +338,33 @@ export default function PagosProveedorClient() {
     setEndososSel(new Set([endosarId]));
   }, [endosarId, mediosPago]);
 
-  // Traer los cheques recibidos en cartera al entrar al modo endoso.
+  // Traer todos los cheques recibidos al entrar al modo endoso. Solo los que
+  // están en cartera son endosables; el resto se lista con su estado.
   useEffect(() => {
-    if (!hayCheque || chequeModo !== 'endoso' || chequesCartera.length > 0) return;
+    if (!hayCheque || chequeModo !== 'endoso' || chequesRecibidos.length > 0) return;
     setLoadingCartera(true);
-    apiFetch('/api/cheques?tipo=recibido&estado=en_cartera&limit=500')
+    apiFetch('/api/cheques?tipo=recibido&limit=500')
       .then(r => r.json())
-      .then(d => setChequesCartera(d.cheques ?? []))
-      .catch(() => setChequesCartera([]))
+      .then(d => {
+        const todos: ChequeCartera[] = d.cheques ?? [];
+        setChequesRecibidos(todos);
+        setChequesCartera(todos.filter(c => c.estado === 'en_cartera'));
+      })
+      .catch(() => { setChequesRecibidos([]); setChequesCartera([]); })
       .finally(() => setLoadingCartera(false));
-  }, [hayCheque, chequeModo, chequesCartera.length]);
+  }, [hayCheque, chequeModo, chequesRecibidos.length]);
+
+  // Lista a mostrar: primero los endosables (vencimiento más próximo arriba),
+  // después el resto (más recientes arriba).
+  const listaEndoso = useMemo(() => {
+    const base = chequesRecibidos.length > 0 ? chequesRecibidos : chequesCartera;
+    const venc = (c: ChequeCartera) => c.fecha_vencimiento ?? '';
+    const cart = base.filter(c => (c.estado ?? 'en_cartera') === 'en_cartera')
+      .sort((a, b) => venc(a).localeCompare(venc(b)));
+    const otros = base.filter(c => (c.estado ?? 'en_cartera') !== 'en_cartera')
+      .sort((a, b) => venc(b).localeCompare(venc(a)));
+    return [...cart, ...otros];
+  }, [chequesRecibidos, chequesCartera]);
 
   const toggleEndoso = (id: string) =>
     setEndososSel(prev => {
@@ -512,7 +537,7 @@ export default function PagosProveedorClient() {
         : `Pago de ${ars.format(montoPagado)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
-      setChequeModo('nuevo'); setEndososSel(new Set()); setChequesCartera([]); setEndosarId(null);
+      setChequeModo('nuevo'); setEndososSel(new Set()); setChequesCartera([]); setChequesRecibidos([]); setEndosarId(null);
       setMedios(mediosPago.length > 0 ? [{ medio_pago_id: mediosPago[0].id, monto: '', cuenta_bancaria_id: '' }] : []);
       await recargarSaldos();
       await cargarProveedor(proveedorId);
@@ -1009,21 +1034,28 @@ export default function PagosProveedorClient() {
                 ) : (
                   <>
                     <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">
-                      Cheques en cartera — {chequesCartera.length} disponible{chequesCartera.length === 1 ? '' : 's'}
-                      {' '}({endososSel.size} elegido{endososSel.size === 1 ? '' : 's'})
+                      Cheques recibidos — {listaEndoso.length} cargado{listaEndoso.length === 1 ? '' : 's'},
+                      {' '}{chequesCartera.length} en cartera ({endososSel.size} elegido{endososSel.size === 1 ? '' : 's'})
                     </p>
                     {loadingCartera ? (
                       <p className="text-xs text-kp-gray">Cargando cheques…</p>
-                    ) : chequesCartera.length === 0 ? (
-                      <p className="text-xs text-kp-gray">No hay cheques recibidos en cartera para endosar.</p>
+                    ) : listaEndoso.length === 0 ? (
+                      <p className="text-xs text-kp-gray">No hay cheques recibidos cargados.</p>
                     ) : (
-                      <div className="space-y-1">
-                        {chequesCartera.map(c => {
-                          const sel = endososSel.has(c.id);
+                      <div className="space-y-1 max-h-[28rem] overflow-y-auto pr-1">
+                        {chequesCartera.length === 0 && (
+                          <p className="text-xs text-kp-gray pb-1">Ningún cheque está en cartera: no hay nada para endosar ahora.</p>
+                        )}
+                        {listaEndoso.map(c => {
+                          const endosable = (c.estado ?? 'en_cartera') === 'en_cartera';
+                          const sel = endosable && endososSel.has(c.id);
                           return (
-                            <button key={c.id} type="button" onClick={() => toggleEndoso(c.id)}
+                            <button key={c.id} type="button" disabled={!endosable}
+                              onClick={() => endosable && toggleEndoso(c.id)}
+                              title={endosable ? undefined : 'Solo se pueden endosar cheques en cartera'}
                               className={`w-full flex items-center gap-3 text-left rounded-lg border px-3 py-2 transition-colors ${
-                                sel ? 'border-kp-red bg-kp-red/10' : 'border-kp-border bg-kp-surface2/40 hover:border-kp-gray'}`}>
+                                !endosable ? 'border-kp-border/60 bg-transparent opacity-50 cursor-not-allowed'
+                                : sel ? 'border-kp-red bg-kp-red/10' : 'border-kp-border bg-kp-surface2/40 hover:border-kp-gray'}`}>
                               <span className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center text-2xs md:text-[10px] ${
                                 sel ? 'bg-kp-red border-kp-red text-white' : 'border-kp-gray text-transparent'}`}>✓</span>
                               <span className="flex-1 min-w-0">
@@ -1031,7 +1063,13 @@ export default function PagosProveedorClient() {
                                   {(c.banco || 's/banco')} #{c.numero_cheque || 's/nº'}
                                   {c.origen_nombre ? ` · ${c.origen_nombre}` : ''}
                                 </span>
-                                <span className="block text-2xs md:text-[10px] text-kp-gray">Vence {fmtVenc(c.fecha_vencimiento)}</span>
+                                <span className="block text-2xs md:text-[10px] text-kp-gray">
+                                  Vence {fmtVenc(c.fecha_vencimiento)}
+                                  {' · '}
+                                  <span className={endosable ? 'text-green-400' : ''}>
+                                    {ESTADO_CHEQUE_LABEL[c.estado ?? 'en_cartera'] ?? c.estado}
+                                  </span>
+                                </span>
                               </span>
                               <span className="shrink-0 text-sm font-semibold tabular-nums text-kp-white">{fmt(parseFloat(c.importe) || 0)}</span>
                             </button>
