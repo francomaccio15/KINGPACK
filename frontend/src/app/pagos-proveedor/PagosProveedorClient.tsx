@@ -704,11 +704,20 @@ export default function PagosProveedorClient() {
         {/* Pagos ya cobrados por el proveedor que nunca se imputaron a un comprobante:
             mientras siguen sin imputar, esas facturas figuran impagas y alertan por
             vencimiento aunque el dinero ya haya salido. */}
-        {proveedor && sinImputarProv > 0.01 && (
+        {/* Sin comprobantes pendientes no hay nada que imputar: ese dinero es saldo a
+            favor (anticipo) y se imputa cuando entre la próxima factura. Se informa
+            sin alerta ni botones. */}
+        {proveedor && sinImputarProv > 0.01 && !loadingPend && pendientes.length === 0 && (
+          <p className="text-xs text-kp-gray">
+            Hay <span className="font-semibold text-kp-gray-lt">{fmt(sinImputarProv)}</span> pagados a cuenta (saldo a favor).
+            Se podrán imputar cuando se cargue una factura de este proveedor.
+          </p>
+        )}
+        {proveedor && sinImputarProv > 0.01 && pendientes.length > 0 && (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 space-y-2">
             <p className="text-sm text-amber-300">
               <span className="font-bold">{fmt(sinImputarProv)}</span> ya pagados a este proveedor sin imputar a ningún comprobante.
-              {pendientes.length > 0 && ' Mientras no se imputen, sus facturas siguen figurando impagas y alertan por vencimiento.'}
+              {' Mientras no se imputen, sus facturas siguen figurando impagas y alertan por vencimiento.'}
             </p>
             {pagosSinImputar.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -1092,7 +1101,7 @@ export default function PagosProveedorClient() {
                         </td>
                         <td className="px-4 py-2 text-right tabular-nums font-semibold text-kp-white">{fmt(h.monto)}</td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">
-                          {!h.anulado && parseFloat(h.sin_imputar ?? '0') > 0.01 && (
+                          {!h.anulado && pendientes.length > 0 && parseFloat(h.sin_imputar ?? '0') > 0.01 && (
                             <button onClick={() => abrirImputar(h)}
                               className="text-xs text-amber-400 hover:text-amber-300 px-2 py-1 mr-1 rounded border border-amber-500/40 hover:bg-amber-500/10 transition-colors">
                               Imputar {fmt(h.sin_imputar!)}
