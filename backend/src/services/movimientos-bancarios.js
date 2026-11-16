@@ -143,7 +143,51 @@ async function cuentaDestinoCheque(client, chequeId) {
   return rows[0]?.deposito_cuenta_id ?? cuentaChequesId(client);
 }
 
+// Cuenta fija para los cobros por QR de una sucursal (mig 070, `recibe_qr`).
+// Si la sucursal tiene una, el QR va SIEMPRE ahí, elija lo que elija la
+// pantalla. Sin cuenta marcada → null y se respeta lo que vino.
+async function cuentaQRSucursal(client, sucursal_id) {
+  if (!sucursal_id) return null;
+  const { rows } = await client.query(
+    `SELECT id, nombre FROM cuentas_bancarias_empresa
+      WHERE recibe_qr AND activo AND sucursal_id = $1 LIMIT 1`,
+    [sucursal_id]
+  );
+  return rows[0] ?? null;
+}
+
+async function esMedioQR(client, medio_pago_id) {
+  if (!medio_pago_id) return false;
+  const { rows } = await client.query(
+    `SELECT 1 FROM medios_pago WHERE id = $1 AND nombre ~* '\\mqr\\M'`, [medio_pago_id]
+  );
+  return rows.length > 0;
+}
+
+// Devuelve la cuenta que corresponde a un cobro: la fija de QR de la sucursal
+// si el medio es QR, o la pedida. `{ id, nombre }` (nombre null si no cambió).
+async function resolverCuentaCobro(client, { medio_pago_id, sucursal_id, cuenta_bancaria_id }) {
+  if (await esMedioQR(client, medio_pago_id)) {
+    const fija = await cuentaQRSucursal(client, sucursal_id);
+    if (fija) return { id: fija.id, nombre: fija.nombre };
+  }
+  return { id: cuenta_bancaria_id || null, nombre: null };
+}
+
+// Aplica la cuenta fija de QR a una lista de pagos de venta (in place).
+async function forzarCuentaQR(client, pagos, sucursal_id) {
+  if (!Array.isArray(pagos) || !pagos.length) return pagos;
+  for (const p of pagos) {
+    const r = await resolverCuentaCobro(client, { ...p, sucursal_id });
+    if (r.nombre) { p.cuenta_bancaria_id = r.id; p.cuenta_destino = r.nombre; }
+  }
+  return pagos;
+}
+
 module.exports = {
+  cuentaQRSucursal,
+  resolverCuentaCobro,
+  forzarCuentaQR,
   registrarMovimientoBancario,
   cuentaDestinoCheque,
   registrarMovimientosDeMedios,

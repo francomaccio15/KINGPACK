@@ -6,6 +6,7 @@ const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 const {
   registrarMovimientoBancario,
   revertirMovimientosBancarios,
+  forzarCuentaQR,
 } = require('../services/movimientos-bancarios');
 const {
   normalizarUnidad, puedeVenderPorUnidad, factorDe, cantidadStock, formatoStock, unidadesPorBulto,
@@ -501,6 +502,9 @@ router.post('/', async (req, res, next) => {
         );
       }
 
+      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070).
+      await forzarCuentaQR(client, pagos, sucursal_id);
+
       for (const [iPago, pago] of pagos.entries()) {
         await client.query(`
           INSERT INTO venta_pagos (venta_id, medio_pago_id, monto, cuenta_destino, cuenta_bancaria_id)
@@ -836,6 +840,8 @@ router.patch('/:id/confirmar-preventa', async (req, res, next) => {
           [cliente_id, totalSF, saldoDespues, id]
         );
       }
+
+      await forzarCuentaQR(client, pagos, sucursal_id);
 
       for (const pago of pagos) {
         await client.query(
@@ -1867,6 +1873,19 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     // Sin esto, al bajar el total por un descuento la cuenta corriente y la caja
     // quedaban con el importe viejo (sin descuento) y desincronizados del total.
     let pagosEfectivos = Array.isArray(pagos) && pagos.length > 0 ? pagos : null;
+    // Pagos reenviados a mano: el QR va a la cuenta fija de la sucursal. Los
+    // reescalados de abajo conservan la cuenta donde cayeron originalmente.
+    // Un QR que ya estaba en la venta con su cuenta se respeta (histórico: los
+    // de Huaico anteriores a la mig 070 quedan donde cayeron).
+    if (pagosEfectivos) {
+      const { rows: previos } = await client.query(
+        `SELECT medio_pago_id, cuenta_bancaria_id FROM venta_pagos WHERE venta_id = $1`, [id]
+      );
+      const yaEstaban = new Set(previos.map(p => `${p.medio_pago_id}|${p.cuenta_bancaria_id}`));
+      await forzarCuentaQR(client,
+        pagosEfectivos.filter(p => !yaEstaban.has(`${p.medio_pago_id}|${p.cuenta_bancaria_id || null}`)),
+        sucursal_id);
+    }
     if (!pagosEfectivos) {
       const { rows: pagosPrevios } = await client.query(
         `SELECT medio_pago_id, monto::float AS monto, cuenta_destino, cuenta_bancaria_id

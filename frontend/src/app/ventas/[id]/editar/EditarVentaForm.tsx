@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { type UnidadVenta, formatoStock, unidadesPorBulto, vendePorUnidad } from '@/lib/unidades';
+import { cuentaQRFija } from '@/lib/mediosPago';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const apiFetch = (p: string, o: RequestInit = {}) => {
@@ -56,7 +57,7 @@ interface CartItem {
 }
 
 interface MedioPago { id: string; nombre: string; }
-interface CuentaBancaria { id: string; nombre: string; banco: string | null; titular: string | null; alias: string | null; cbu: string | null; sucursal_id: string | null; }
+interface CuentaBancaria { id: string; nombre: string; banco: string | null; titular: string | null; alias: string | null; cbu: string | null; sucursal_id: string | null; recibe_qr?: boolean | null; }
 interface PagoItem { medio_pago_id: string; monto: string; cuenta_bancaria_id: string; }
 
 // Un medio es "bancario" (necesita elegir cuenta destino) si es transferencia, MP o QR.
@@ -187,7 +188,9 @@ export default function EditarVentaForm({
       // si deja de ser bancario, limpiar la cuenta.
       if (field === 'medio_pago_id') {
         const nombre = mediosPago.find(m => m.id === val)?.nombre;
-        next.cuenta_bancaria_id = esMedioBancario(nombre)
+        // QR en una sucursal con cuenta fija (Huaico → MERCADO PAGO): va ahí.
+        const fija = cuentaQRFija(cuentasBancarias, nombre, sucursalId);
+        next.cuenta_bancaria_id = fija ? fija.id : esMedioBancario(nombre)
           ? (p.cuenta_bancaria_id || cuentasBancarias[0]?.id || '')
           : '';
       }

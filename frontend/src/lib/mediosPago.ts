@@ -19,3 +19,21 @@ export function medioEfectivo<T extends MedioPagoBase>(medios: T[]): T | undefin
   return medios.find(m => m.nombre.trim().toLowerCase() === 'efectivo')
       ?? medios.find(m => m.nombre.toLowerCase().includes('efectivo'));
 }
+
+/**
+ * Cuenta fija de QR de una sucursal (mig 070, `recibe_qr`): en Huaico el QR
+ * cobra siempre en MERCADO PAGO. Si la hay, la pantalla la muestra fija en vez
+ * del selector; el backend la fuerza igual aunque llegue otra.
+ */
+export interface CuentaConQR { id: string; nombre: string; recibe_qr?: boolean | null; sucursal_id?: string | null }
+
+export function esMedioQR(nombre?: string | null): boolean {
+  return !!nombre && /\bqr\b/i.test(nombre);
+}
+
+export function cuentaQRFija<T extends CuentaConQR>(
+  cuentas: T[], medioNombre?: string | null, sucursalId?: string | null,
+): T | null {
+  if (!sucursalId || !esMedioQR(medioNombre)) return null;
+  return cuentas.find(c => c.recibe_qr && c.sucursal_id === sucursalId) ?? null;
+}

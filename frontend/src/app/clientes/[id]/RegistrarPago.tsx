@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
-import { filtrarMediosPorRol } from '@/lib/mediosPago';
+import { filtrarMediosPorRol, cuentaQRFija } from '@/lib/mediosPago';
 import Modal from '@/components/ui/Modal';
 import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
 import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
@@ -28,7 +28,7 @@ const MEDIOS_OCULTOS_PAGO = ['efectivo caja fuerte', 'mercado pago', 'tarjeta de
 const MEDIOS_REQUIEREN_CUENTA = ['qr', 'tarjeta de débito', 'tarjeta de debito'];
 
 interface MedioPago { id: string; nombre: string; requiere_cuenta?: boolean }
-interface CuentaBancaria { id: string; nombre: string; banco?: string | null }
+interface CuentaBancaria { id: string; nombre: string; banco?: string | null; sucursal_id?: string | null; recibe_qr?: boolean | null }
 interface ClienteBusqueda { id: string; razon_social: string; cuit?: string | null; saldo_actual?: string | number }
 /** Otro cliente al que el mismo cheque le paga una parte. */
 interface OtroCliente { key: number; cliente: ClienteBusqueda | null; monto: string }
@@ -128,6 +128,12 @@ export default function RegistrarPago({
     MEDIOS_REQUIEREN_CUENTA.includes(medioElegido.nombre.trim().toLowerCase())
   );
 
+  // QR con cuenta fija (Huaico → MERCADO PAGO). La sucursal es la misma que usa
+  // el backend para la caja: la del cajero, o la elegida para los demás roles.
+  const sucursalCobro = user?.rol === 'cajero' ? (user?.sucursal_default_id ?? null) : (sucursalId || user?.sucursal_default_id || null);
+  const qrFija = cuentaQRFija(cuentas, medioElegido?.nombre, sucursalCobro);
+  const cuentaEf = qrFija?.id ?? cuentaId;
+
   useEffect(() => {
     if (!open) return;
     apiFetch('/api/ventas/medios-pago')
@@ -180,7 +186,7 @@ export default function RegistrarPago({
   const handleSubmit = async (e: React.FormEvent | null, sumar = false) => {
     e?.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un método de pago'); return; }
-    if (requiereCuenta && !cuentaId) { setError('Seleccioná la cuenta que recibe el pago'); return; }
+    if (requiereCuenta && !cuentaEf) { setError('Seleccioná la cuenta que recibe el pago'); return; }
     if (esCheque) {
       const err = errorCheque({
         ...chExtra, fecha_emision: chEmision,
@@ -202,7 +208,7 @@ export default function RegistrarPago({
           concepto,
           medio_pago_id: medioPagoId,
           sucursal_id: sucursalId,
-          cuenta_bancaria_id: cuentaId || null,
+          cuenta_bancaria_id: cuentaEf || null,
           cheque: esCheque
             ? {
                 banco: chBanco.trim(), numero_cheque: chNumero.trim(), fecha_vencimiento: chVenc,
@@ -306,10 +312,10 @@ export default function RegistrarPago({
           {requiereCuenta && (
             <div>
               <label className="block text-xs text-kp-gray uppercase tracking-widest mb-1">Cuenta que recibe *</label>
-              <select value={cuentaId} onChange={e => setCuentaId(e.target.value)}
-                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors">
-                <option value="">Seleccioná la cuenta</option>
-                {cuentas.map(c => (
+              <select value={cuentaEf} onChange={e => setCuentaId(e.target.value)} disabled={!!qrFija}
+                className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 transition-colors disabled:opacity-80">
+                {!qrFija && <option value="">Seleccioná la cuenta</option>}
+                {(qrFija ? [qrFija] : cuentas).map(c => (
                   <option key={c.id} value={c.id}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''}</option>
                 ))}
               </select>

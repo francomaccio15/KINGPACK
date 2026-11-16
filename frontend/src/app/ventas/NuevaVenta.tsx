@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import { useAuth } from '@/contexts/AuthContext';
-import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
+import { filtrarMediosPorRol, medioEfectivo, cuentaQRFija } from '@/lib/mediosPago';
 import { sucursalPorDefecto, useSucursalActiva } from '@/lib/sucursalActivaCliente';
 import Modal from '@/components/ui/Modal';
 import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
@@ -58,6 +58,8 @@ interface CuentaBancaria {
   titular: string | null;
   alias: string | null;
   cbu: string | null;
+  sucursal_id?: string | null;
+  recibe_qr?: boolean | null;
 }
 
 type Cheque = ChequeExtra & {
@@ -273,6 +275,11 @@ export default function NuevaVenta({
     ? ['transferencia', 'mercado pago', 'qr'].some(k => selectedMedio2.nombre.toLowerCase().includes(k))
     : false;
   const esEfectivo = selectedMedio?.nombre.toLowerCase().includes('efectivo') ?? false;
+  // QR con cuenta fija de la sucursal (Huaico → MERCADO PAGO): no se elige.
+  const qrFija1 = cuentaQRFija(cuentasBancarias, selectedMedio?.nombre, sucursalId);
+  const qrFija2 = cuentaQRFija(cuentasBancarias, selectedMedio2?.nombre, sucursalId);
+  const cuentaEf1 = qrFija1?.id ?? cuentaDestinoId;
+  const cuentaEf2 = qrFija2?.id ?? cuentaDestinoId2;
 
   // ── Efectivo: importe recibido y vuelto
   const [montoRecibido, setMontoRecibido] = useState<string>('');
@@ -665,8 +672,8 @@ export default function NuevaVenta({
         pagos.push({
           medio_pago_id: medioPagoId,
           monto: monto1Num,
-          cuenta_destino: esTransferencia ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null) : null,
-          cuenta_bancaria_id: esTransferencia ? (cuentaDestinoId || null) : null,
+          cuenta_destino: esTransferencia ? (cuentasBancarias.find(c => c.id === cuentaEf1)?.nombre ?? null) : null,
+          cuenta_bancaria_id: esTransferencia ? (cuentaEf1 || null) : null,
           cheques: esCheque ? chequesValidos : undefined,
         });
       }
@@ -674,8 +681,8 @@ export default function NuevaVenta({
         pagos.push({
           medio_pago_id: medioPagoId2,
           monto: monto2Num,
-          cuenta_destino: esTransferencia2 ? (cuentasBancarias.find(c => c.id === cuentaDestinoId2)?.nombre ?? null) : null,
-          cuenta_bancaria_id: esTransferencia2 ? (cuentaDestinoId2 || null) : null,
+          cuenta_destino: esTransferencia2 ? (cuentasBancarias.find(c => c.id === cuentaEf2)?.nombre ?? null) : null,
+          cuenta_bancaria_id: esTransferencia2 ? (cuentaEf2 || null) : null,
           cheques: esCheque2 && !esCheque ? chequesValidos : undefined,
         });
       }
@@ -684,9 +691,9 @@ export default function NuevaVenta({
         medio_pago_id:  medioPagoId,
         monto:          saldoRestante,
         cuenta_destino: esTransferencia
-          ? (cuentasBancarias.find(c => c.id === cuentaDestinoId)?.nombre ?? null)
+          ? (cuentasBancarias.find(c => c.id === cuentaEf1)?.nombre ?? null)
           : null,
-        cuenta_bancaria_id: esTransferencia ? (cuentaDestinoId || null) : null,
+        cuenta_bancaria_id: esTransferencia ? (cuentaEf1 || null) : null,
         cheques: esCheque ? cheques.filter(chequeCargado).map(chequePayload) : undefined,
       });
     }
@@ -1549,12 +1556,13 @@ export default function NuevaVenta({
                       ) : (
                       <>
                       <select
-                        value={cuentaDestinoId}
+                        value={cuentaEf1}
                         onChange={e => setCuentaDestinoId(e.target.value)}
+                        disabled={!!qrFija1}
                         className="w-full bg-kp-surface border border-kp-red/60 rounded-lg px-3 py-2 text-sm text-kp-white
-                          focus:outline-none focus:border-kp-red transition-colors"
+                          focus:outline-none focus:border-kp-red transition-colors disabled:opacity-80"
                       >
-                        {cuentasBancarias.map(c => (
+                        {(qrFija1 ? [qrFija1] : cuentasBancarias).map(c => (
                           <option key={c.id} value={c.id}>
                             {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
                           </option>
@@ -1562,7 +1570,7 @@ export default function NuevaVenta({
                       </select>
                       {/* Info de la cuenta seleccionada */}
                       {(() => {
-                        const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId);
+                        const cc = cuentasBancarias.find(c => c.id === cuentaEf1);
                         return cc ? (
                           <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}
@@ -1584,19 +1592,20 @@ export default function NuevaVenta({
                         Cuenta destino (Medio 2)
                       </p>
                       <select
-                        value={cuentaDestinoId2}
+                        value={cuentaEf2}
                         onChange={e => setCuentaDestinoId2(e.target.value)}
+                        disabled={!!qrFija2}
                         className="w-full bg-kp-surface border border-kp-red/60 rounded-lg px-3 py-2 text-sm text-kp-white
-                          focus:outline-none focus:border-kp-red transition-colors"
+                          focus:outline-none focus:border-kp-red transition-colors disabled:opacity-80"
                       >
-                        {cuentasBancarias.map(c => (
+                        {(qrFija2 ? [qrFija2] : cuentasBancarias).map(c => (
                           <option key={c.id} value={c.id}>
                             {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
                           </option>
                         ))}
                       </select>
                       {(() => {
-                        const cc = cuentasBancarias.find(c => c.id === cuentaDestinoId2);
+                        const cc = cuentasBancarias.find(c => c.id === cuentaEf2);
                         return cc ? (
                           <div className="mt-1.5 px-3 py-2 bg-kp-surface2 rounded-lg border border-kp-border text-2xs md:text-[11px] text-kp-gray space-y-0.5">
                             {cc.titular && <p><span className="text-kp-gray-lt font-medium">Titular:</span> {cc.titular}</p>}

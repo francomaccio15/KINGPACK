@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { filtrarMediosPorRol, medioEfectivo } from '@/lib/mediosPago';
+import { filtrarMediosPorRol, medioEfectivo, cuentaQRFija } from '@/lib/mediosPago';
 import Modal from '@/components/ui/Modal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -22,7 +22,7 @@ type Facturacion = {
 } | null;
 
 interface MedioPago { id: string; nombre: string; }
-interface CuentaBancaria { id: string; nombre: string; banco: string | null; alias: string | null; }
+interface CuentaBancaria { id: string; nombre: string; banco: string | null; alias: string | null; sucursal_id?: string | null; recibe_qr?: boolean | null; }
 interface PagoConfirm { medio_pago_id: string; monto: string; cuenta_destino_id: string; }
 
 const esMedioTransferencia = (nombre?: string) =>
@@ -30,8 +30,10 @@ const esMedioTransferencia = (nombre?: string) =>
 
 export default function AccionesVenta({
   ventaId, numero, estado, total, facturacion, observaciones,
-  soloPreventista = false, clienteNombre = null,
+  soloPreventista = false, clienteNombre = null, sucursalId = null,
 }: {
+  /** Sucursal de la venta: decide la cuenta fija del QR (Huaico → MERCADO PAGO). */
+  sucursalId?: string | null;
   ventaId: string;
   numero?: number;
   /** Preventista: solo PDF, imprimir y confirmar su presupuesto en Cta. Cte. */
@@ -108,7 +110,10 @@ export default function AccionesVenta({
     try {
       const res = await apiFetch(`/api/ventas/${ventaId}/confirmar-preventa`, {
         method: 'PATCH',
-        body: JSON.stringify({ pagos: pagos.map(p => ({
+        body: JSON.stringify({ pagos: pagos.map(p => {
+          const fija = cuentaQRFija(cuentasBancarias, mediosPago.find(m => m.id === p.medio_pago_id)?.nombre, sucursalId);
+          if (fija) p = { ...p, cuenta_destino_id: fija.id };
+          return {
           medio_pago_id: p.medio_pago_id,
           monto: parseFloat(p.monto),
           cuenta_destino: esMedioTransferencia(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre)
@@ -118,7 +123,7 @@ export default function AccionesVenta({
           cuenta_bancaria_id: esMedioTransferencia(mediosPago.find(m => m.id === p.medio_pago_id)?.nombre)
             ? (p.cuenta_destino_id || null)
             : null,
-        })) }),
+        }; }) }),
       });
       const data = await res.json();
       if (!res.ok) { setConfirmarError(data.error ?? 'Error al confirmar'); return; }
@@ -608,7 +613,9 @@ export default function AccionesVenta({
               {pagos.map((pago, idx) => {
                 const medio = mediosPago.find(mp => mp.id === pago.medio_pago_id);
                 const esTransferencia = esMedioTransferencia(medio?.nombre);
-                const cuentaSel = cuentasBancarias.find(c => c.id === pago.cuenta_destino_id);
+                const qrFija = cuentaQRFija(cuentasBancarias, medio?.nombre, sucursalId);
+                const cuentaElegida = qrFija?.id ?? pago.cuenta_destino_id;
+                const cuentaSel = cuentasBancarias.find(c => c.id === cuentaElegida);
                 return (
                 <div key={idx} className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -642,12 +649,13 @@ export default function AccionesVenta({
                   {esTransferencia && cuentasBancarias.length > 0 && (
                     <div className="pl-1">
                       <select
-                        value={pago.cuenta_destino_id}
+                        value={cuentaElegida}
                         onChange={e => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, cuenta_destino_id: e.target.value } : p))}
-                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500"
+                        disabled={!!qrFija}
+                        className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 min-h-touch md:min-h-touch-sm text-base md:text-sm text-kp-white focus:outline-none focus:border-green-500 disabled:opacity-80"
                       >
-                        <option value="">Seleccioná cuenta de destino…</option>
-                        {cuentasBancarias.map(c => (
+                        {!qrFija && <option value="">Seleccioná cuenta de destino…</option>}
+                        {(qrFija ? [qrFija] : cuentasBancarias).map(c => (
                           <option key={c.id} value={c.id}>
                             {c.nombre}{c.alias ? ` · ${c.alias}` : ''}
                           </option>

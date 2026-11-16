@@ -2,7 +2,7 @@ const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva } = require('../middleware/auth');
 const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
-const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
+const { registrarMovimientoBancario, forzarCuentaQR } = require('../services/movimientos-bancarios');
 const { registrarMovimientoCajaAdministrativa } = require('../services/movimientos-caja-administrativa');
 
 const router = express.Router();
@@ -282,6 +282,9 @@ router.post('/:id/movimiento', async (req, res, next) => {
     // Insertar un movimiento_caja por cada medio de pago
     let primerMovimiento = null;
     let movimientoChequId = null;
+
+    // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070).
+    await forzarCuentaQR(client, mediosArr, cajaRows[0].sucursal_id);
 
     for (const m of mediosArr) {
       const montoMedio = parseFloat(m.monto) || 0;

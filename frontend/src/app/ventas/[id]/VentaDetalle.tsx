@@ -169,6 +169,7 @@ export default async function VentaDetalle({
             ventaId={params.id} numero={venta.numero} estado={venta.estado} total={venta.total}
             facturacion={facturacion} observaciones={venta.observaciones ?? null}
             soloPreventista={esPreventista} clienteNombre={venta.cliente_nombre ?? null}
+            sucursalId={(venta as any).sucursal_id ?? null}
           />
         </div>
 

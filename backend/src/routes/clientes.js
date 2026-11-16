@@ -2,7 +2,7 @@ const express = require('express');
 const { pool } = require('../config/db');
 const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 const { validarListaCheques, buscarDuplicado } = require('../services/cheques-validacion');
-const { registrarMovimientoBancario, revertirMovimientosBancarios } = require('../services/movimientos-bancarios');
+const { registrarMovimientoBancario, revertirMovimientosBancarios, resolverCuentaCobro } = require('../services/movimientos-bancarios');
 
 const router = express.Router();
 
@@ -371,7 +371,7 @@ router.get('/:id/compras-mensuales', async (req, res, next) => {
 // cliente se le asienta su haber (y su ingreso de caja) por su parte.
 router.post('/:id/pagos', async (req, res, next) => {
   try {
-    const { monto, concepto, medio_pago_id, sucursal_id, cheque, cuenta_bancaria_id } = req.body;
+    const { monto, concepto, medio_pago_id, sucursal_id, cheque, cuenta_bancaria_id: cuentaPedidaId } = req.body;
     if (!monto || parseFloat(monto) <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
@@ -428,6 +428,15 @@ router.post('/:id/pagos', async (req, res, next) => {
     const dbClient = await pool.connect();
     try {
       await dbClient.query('BEGIN');
+
+      // Cuenta que recibe el cobro: un QR de una sucursal con cuenta fija va ahí
+      // siempre (Huaico → Mercado Pago, mig 070). Misma sucursal que la caja.
+      const sucursalCobro = req.usuario?.rol === 'cajero'
+        ? (req.usuario.sucursal_default_id || null)
+        : (sucursal_id || req.usuario?.sucursal_default_id || null);
+      const { id: cuenta_bancaria_id } = await resolverCuentaCobro(dbClient, {
+        medio_pago_id, sucursal_id: sucursalCobro, cuenta_bancaria_id: cuentaPedidaId,
+      });
 
       // ¿El medio de pago es cheque? En ese caso registramos el cheque recibido en
       // el módulo de cheques (en cartera) para poder seguir su vencimiento/estado.
@@ -663,7 +672,7 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
 
     // ¿Piden cambiar el medio (o la cuenta destino)?
     const medioNuevoId  = medio_pago_id || null;
-    const cuentaNuevaId = cuenta_bancaria_id || null;
+    let cuentaNuevaId = cuenta_bancaria_id || null;
     const cambiaMedio   = medioNuevoId && medioNuevoId !== (mov.medio_pago_id || null);
     const cambiaCuenta  = medioNuevoId && medioNuevoId === (mov.medio_pago_id || null)
                           && cuentaNuevaId !== (mov.cuenta_bancaria_id || null);
@@ -736,6 +745,21 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
       if (esChequeViejo || esChequeNuevo) {
         await dbClient.query('ROLLBACK');
         return res.status(400).json({ error: 'Los cobros con cheque se corrigen desde el módulo Cheques o por el administrador.' });
+      }
+
+      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070): la
+      // sucursal es la de la caja del cobro o, si no tiene, la del operador.
+      {
+        let sucQR = req.usuario?.sucursal_default_id || null;
+        if (cajaMov?.caja_id) {
+          const { rows: [cj] } = await dbClient.query(
+            `SELECT sucursal_id FROM cajas WHERE id = $1`, [cajaMov.caja_id]
+          );
+          sucQR = cj?.sucursal_id ?? sucQR;
+        }
+        ({ id: cuentaNuevaId } = await resolverCuentaCobro(dbClient, {
+          medio_pago_id: medioNuevoId, sucursal_id: sucQR, cuenta_bancaria_id: cuentaNuevaId,
+        }));
       }
 
       // El medio nuevo bancario (Transferencia por su flag; QR / Débito por nombre)
