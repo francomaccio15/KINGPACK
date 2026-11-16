@@ -1,4 +1,4 @@
--- KINGPACK — Migración 070: cuenta fija para los cobros por QR de cada sucursal
+-- KINGPACK — Migración 071: cuenta fija para los cobros por QR de cada sucursal
 --
 -- En Huaico el QR cobra en la cuenta de Mercado Pago. La cuenta se marca con
 -- `recibe_qr` + su `sucursal_id` y el backend fuerza ahí todo cobro con medio

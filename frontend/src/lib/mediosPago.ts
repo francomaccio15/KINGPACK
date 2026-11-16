@@ -21,7 +21,7 @@ export function medioEfectivo<T extends MedioPagoBase>(medios: T[]): T | undefin
 }
 
 /**
- * Cuenta fija de QR de una sucursal (mig 070, `recibe_qr`): en Huaico el QR
+ * Cuenta fija de QR de una sucursal (mig 071, `recibe_qr`): en Huaico el QR
  * cobra siempre en MERCADO PAGO. Si la hay, la pantalla la muestra fija en vez
  * del selector; el backend la fuerza igual aunque llegue otra.
  */

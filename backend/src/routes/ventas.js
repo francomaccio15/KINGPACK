@@ -502,7 +502,7 @@ router.post('/', async (req, res, next) => {
         );
       }
 
-      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070).
+      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 071).
       await forzarCuentaQR(client, pagos, sucursal_id);
 
       for (const [iPago, pago] of pagos.entries()) {
@@ -1876,7 +1876,7 @@ router.put('/:id/items', requireRol('administrador', 'supervisor', 'vendedor', '
     // Pagos reenviados a mano: el QR va a la cuenta fija de la sucursal. Los
     // reescalados de abajo conservan la cuenta donde cayeron originalmente.
     // Un QR que ya estaba en la venta con su cuenta se respeta (histórico: los
-    // de Huaico anteriores a la mig 070 quedan donde cayeron).
+    // de Huaico anteriores a la mig 071 quedan donde cayeron).
     if (pagosEfectivos) {
       const { rows: previos } = await client.query(
         `SELECT medio_pago_id, cuenta_bancaria_id FROM venta_pagos WHERE venta_id = $1`, [id]

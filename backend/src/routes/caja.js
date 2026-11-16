@@ -283,7 +283,7 @@ router.post('/:id/movimiento', async (req, res, next) => {
     let primerMovimiento = null;
     let movimientoChequId = null;
 
-    // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070).
+    // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 071).
     await forzarCuentaQR(client, mediosArr, cajaRows[0].sucursal_id);
 
     for (const m of mediosArr) {

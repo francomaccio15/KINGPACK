@@ -143,7 +143,7 @@ async function cuentaDestinoCheque(client, chequeId) {
   return rows[0]?.deposito_cuenta_id ?? cuentaChequesId(client);
 }
 
-// Cuenta fija para los cobros por QR de una sucursal (mig 070, `recibe_qr`).
+// Cuenta fija para los cobros por QR de una sucursal (mig 071, `recibe_qr`).
 // Si la sucursal tiene una, el QR va SIEMPRE ahí, elija lo que elija la
 // pantalla. Sin cuenta marcada → null y se respeta lo que vino.
 async function cuentaQRSucursal(client, sucursal_id) {

@@ -430,7 +430,7 @@ router.post('/:id/pagos', async (req, res, next) => {
       await dbClient.query('BEGIN');
 
       // Cuenta que recibe el cobro: un QR de una sucursal con cuenta fija va ahí
-      // siempre (Huaico → Mercado Pago, mig 070). Misma sucursal que la caja.
+      // siempre (Huaico → Mercado Pago, mig 071). Misma sucursal que la caja.
       const sucursalCobro = req.usuario?.rol === 'cajero'
         ? (req.usuario.sucursal_default_id || null)
         : (sucursal_id || req.usuario?.sucursal_default_id || null);
@@ -747,7 +747,7 @@ router.put('/:id/pagos/:movId', requireRol('cajero', 'administrador'), async (re
         return res.status(400).json({ error: 'Los cobros con cheque se corrigen desde el módulo Cheques o por el administrador.' });
       }
 
-      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 070): la
+      // QR de una sucursal con cuenta fija (Huaico → Mercado Pago, mig 071): la
       // sucursal es la de la caja del cobro o, si no tiene, la del operador.
       {
         let sucQR = req.usuario?.sucursal_default_id || null;
