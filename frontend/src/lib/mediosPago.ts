@@ -28,7 +28,8 @@ export function medioEfectivo<T extends MedioPagoBase>(medios: T[]): T | undefin
 export interface CuentaConQR { id: string; nombre: string; recibe_qr?: boolean | null; sucursal_id?: string | null }
 
 export function esMedioQR(nombre?: string | null): boolean {
-  return !!nombre && /\bqr\b/i.test(nombre);
+  // QR y el medio «Mercado Pago» van a la misma cuenta fija de la sucursal.
+  return !!nombre && (/\bqr\b/i.test(nombre) || nombre.trim().toLowerCase() === 'mercado pago');
 }
 
 export function cuentaQRFija<T extends CuentaConQR>(

@@ -159,7 +159,10 @@ async function cuentaQRSucursal(client, sucursal_id) {
 async function esMedioQR(client, medio_pago_id) {
   if (!medio_pago_id) return false;
   const { rows } = await client.query(
-    `SELECT 1 FROM medios_pago WHERE id = $1 AND nombre ~* '\\mqr\\M'`, [medio_pago_id]
+    // QR y el medio «Mercado Pago» van a la misma cuenta fija de la sucursal.
+    `SELECT 1 FROM medios_pago
+      WHERE id = $1 AND (nombre ~* '\\mqr\\M' OR lower(trim(nombre)) = 'mercado pago')`,
+    [medio_pago_id]
   );
   return rows.length > 0;
 }
