@@ -165,6 +165,14 @@ export default function NuevoPresupuesto({
   const [descExtraModo, setDescExtraModo] = useState<'pct' | 'monto'>('pct');
   const [descExtraStr, setDescExtraStr]   = useState<string>('');
 
+  // ── Descuento a todos los artículos: pisa el % de cada renglón (que por
+  // defecto es el del cliente). Vacío = vuelve al descuento del cliente.
+  const [descTodosStr, setDescTodosStr] = useState<string>('');
+  const descTodosNum = parseFloat(descTodosStr.replace(',', '.'));
+  const descItem = descTodosStr.trim() === '' || isNaN(descTodosNum)
+    ? descuentoCliente
+    : Math.min(100, Math.max(0, descTodosNum));
+
   // Save state
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -185,6 +193,7 @@ export default function NuevoPresupuesto({
     setSucursalId(initialSucursal);
     setDescExtraStr('');
     setDescExtraModo('pct');
+    setDescTodosStr('');
   }, [initialSucursal]);
 
   const cerrar = useCallback(() => {
@@ -287,9 +296,18 @@ export default function NuevoPresupuesto({
 
   // ─── Recalculate cart when lista or client discount changes ─────────────────
   useEffect(() => {
-    setCart(prev => prev.map(item => recalcItem(item, descuentoLista, descuentoCliente)));
+    setCart(prev => prev.map(item => recalcItem(item, descuentoLista, descItem)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listaId, selectedClient?.id]);
+
+  // ─── Descuento a todos: aplicar el % nuevo a cada renglón ───────────────────
+  useEffect(() => {
+    setCart(prev => prev.map(item => ({
+      ...item,
+      descuento_pct: descItem,
+      precio_unitario_final: calcFinalPrice(item.precio_lista, descItem),
+    })));
+  }, [descItem]);
 
   // ─── Cart ops ───────────────────────────────────────────────────────────────
   const addToCart = useCallback((art: ArticuloResult, unidad: UnidadVenta = 'bulto') => {
@@ -309,7 +327,7 @@ export default function NuevoPresupuesto({
       const precioEfectivo = suelta
         ? Number(art.precio_lista_unidad ?? art.precio_unidad) || 0
         : art.precio_lista ?? art.precio_madre;
-      const descuento      = descuentoCliente;
+      const descuento      = descItem;
       const finalPrice     = calcFinalPrice(precioEfectivo, descuento);
       return [
         ...prev,
@@ -330,7 +348,7 @@ export default function NuevoPresupuesto({
         },
       ];
     });
-  }, [descuentoLista, descuentoCliente]);
+  }, [descuentoLista, descItem]);
 
   const updateQty = useCallback((articuloId: string, delta: number) => {
     setCart(prev => prev.map(item =>
@@ -913,6 +931,39 @@ export default function NuevoPresupuesto({
                   </div>
                 </section>
               )}
+
+              {/* ── Descuento a todos los artículos ──────────────────────── */}
+              <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest">
+                    Descuento a todos los artículos
+                  </span>
+                  {descTodosStr.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setDescTodosStr('')}
+                      className="text-2xs md:text-[11px] text-kp-gray hover:text-kp-red transition-colors"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <NumericInput
+                    decimals={2}
+                    value={descTodosStr}
+                    onChange={e => setDescTodosStr(e.target.value)}
+                    placeholder={String(descuentoCliente)}
+                    className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 pr-8 text-sm
+                      text-kp-white tabular-nums placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
+                    aria-label="Descuento para todos los artículos"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-kp-gray">%</span>
+                </div>
+                <p className="text-2xs md:text-[11px] text-kp-gray leading-snug">
+                  Cambia el % de cada artículo de una vez{descuentoCliente > 0 ? ` (reemplaza el ${descuentoCliente}% del cliente)` : ''}.
+                </p>
+              </section>
 
               {/* ── Totals ─────────────────────────────────────────────── */}
               <section className="rounded-xl bg-kp-surface border border-kp-border overflow-hidden">
