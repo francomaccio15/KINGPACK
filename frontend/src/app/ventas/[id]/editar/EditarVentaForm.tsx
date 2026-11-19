@@ -112,12 +112,29 @@ export default function EditarVentaForm({
     })
   );
 
-  // Descuento por defecto para artículos nuevos = primer ítem con descuento > 0
-  const descuentoVenta = itemsIniciales.find(
-    i => parseFloat(String(i.descuento_pct)) > 0
-  )?.descuento_pct
-    ? parseFloat(String(itemsIniciales.find(i => parseFloat(String(i.descuento_pct)) > 0)!.descuento_pct))
-    : 0;
+  // Descuento por defecto para artículos nuevos = primer ítem con descuento > 0.
+  // Es estado porque "Aplicar a todos" lo cambia: los que se agreguen después
+  // entran con el nuevo %.
+  const [descuentoVenta, setDescuentoVenta] = useState<number>(() => {
+    const conDto = itemsIniciales.find(i => parseFloat(String(i.descuento_pct)) > 0);
+    return conDto ? parseFloat(String(conDto.descuento_pct)) : 0;
+  });
+
+  // Descuento a todos los artículos de una (pisa el % de cada renglón).
+  const [descTodosStr, setDescTodosStr] = useState<string>('');
+  const aplicarDescuentoATodos = () => {
+    const v = parseFloat(descTodosStr.replace(',', '.'));
+    if (isNaN(v)) return;
+    const pct = Math.min(100, Math.max(0, v));
+    setDescuentoVenta(pct);
+    setCart(prev => prev.map(i => ({
+      ...i,
+      descuento_manual: pct,
+      descuento_pct: pct,
+      precio_unitario_final: +(i.precio_lista * (1 - pct / 100)).toFixed(4),
+    })));
+    setDescTodosStr('');
+  };
 
   const [observacion, setObservacion] = useState('');
   const [saving, setSaving]           = useState(false);
@@ -429,6 +446,38 @@ export default function EditarVentaForm({
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Mismo descuento para todos los artículos ── */}
+      <div className="rounded-xl border border-kp-border bg-kp-surface p-5">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Descuento a todos los artículos</h3>
+            <p className="text-xs text-kp-gray mt-1">Cambia el % de descuento de cada artículo de una sola vez (y el de los que agregues después).</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center">
+              <NumericInput
+                decimals={2}
+                placeholder={String(descuentoVenta)}
+                value={descTodosStr}
+                onChange={e => setDescTodosStr(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); aplicarDescuentoATodos(); } }}
+                className="w-20 text-center bg-kp-surface2 border border-kp-border rounded-l px-2 py-1.5 text-sm tabular-nums text-kp-white focus:outline-none focus:border-kp-red transition-colors"
+                aria-label="Descuento para todos los artículos"
+              />
+              <span className="px-2 py-1.5 text-xs text-kp-gray bg-kp-surface2 border border-l-0 border-kp-border rounded-r leading-none">%</span>
+            </div>
+            <button
+              type="button"
+              onClick={aplicarDescuentoATodos}
+              disabled={descTodosStr.trim() === '' || cart.length === 0}
+              className="px-3 py-1.5 rounded-lg bg-kp-red hover:bg-kp-red-dark text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Aplicar a todos
+            </button>
+          </div>
         </div>
       </div>
 
