@@ -167,11 +167,20 @@ export default function NuevoPresupuesto({
 
   // ── Descuento a todos los artículos: pisa el % de cada renglón (que por
   // defecto es el del cliente). Vacío = vuelve al descuento del cliente.
+  // REEMPLAZA el descuento de la lista y el del cliente: la línea parte del
+  // precio madre y se le aplica solo este %.
   const [descTodosStr, setDescTodosStr] = useState<string>('');
   const descTodosNum = parseFloat(descTodosStr.replace(',', '.'));
-  const descItem = descTodosStr.trim() === '' || isNaN(descTodosNum)
-    ? descuentoCliente
+  const descOverride: number | null = descTodosStr.trim() === '' || isNaN(descTodosNum)
+    ? null
     : Math.min(100, Math.max(0, descTodosNum));
+
+  const conOverride = (item: CartItem, pct: number): CartItem => ({
+    ...item,
+    precio_lista:          item.precio_madre,
+    descuento_pct:         pct,
+    precio_unitario_final: calcFinalPrice(item.precio_madre, pct),
+  });
 
   // Save state
   const [saving, setSaving]       = useState(false);
@@ -295,19 +304,13 @@ export default function NuevoPresupuesto({
   }, [selectedClient?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Recalculate cart when lista or client discount changes ─────────────────
+  // (y cuando se pone o se quita el «Descuento a todos»)
   useEffect(() => {
-    setCart(prev => prev.map(item => recalcItem(item, descuentoLista, descItem)));
+    setCart(prev => prev.map(item => descOverride != null
+      ? conOverride(item, descOverride)
+      : recalcItem(item, descuentoLista, descuentoCliente)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listaId, selectedClient?.id]);
-
-  // ─── Descuento a todos: aplicar el % nuevo a cada renglón ───────────────────
-  useEffect(() => {
-    setCart(prev => prev.map(item => ({
-      ...item,
-      descuento_pct: descItem,
-      precio_unitario_final: calcFinalPrice(item.precio_lista, descItem),
-    })));
-  }, [descItem]);
+  }, [listaId, selectedClient?.id, descOverride]);
 
   // ─── Cart ops ───────────────────────────────────────────────────────────────
   const addToCart = useCallback((art: ArticuloResult, unidad: UnidadVenta = 'bulto') => {
@@ -327,11 +330,9 @@ export default function NuevoPresupuesto({
       const precioEfectivo = suelta
         ? Number(art.precio_lista_unidad ?? art.precio_unidad) || 0
         : art.precio_lista ?? art.precio_madre;
-      const descuento      = descItem;
+      const descuento      = descuentoCliente;
       const finalPrice     = calcFinalPrice(precioEfectivo, descuento);
-      return [
-        ...prev,
-        {
+      const nuevo: CartItem = {
           key,
           unidad_venta:          unidad,
           factor:                factorLinea(art, unidad),
@@ -345,10 +346,11 @@ export default function NuevoPresupuesto({
           descuento_pct:         descuento,
           precio_unitario_final: finalPrice,
           stock_disponible:      art.stock_total ?? 0,
-        },
-      ];
+      };
+      return [...prev, descOverride != null ? conOverride(nuevo, descOverride) : nuevo];
     });
-  }, [descuentoLista, descItem]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descuentoLista, descuentoCliente, descOverride]);
 
   const updateQty = useCallback((articuloId: string, delta: number) => {
     setCart(prev => prev.map(item =>
@@ -405,7 +407,7 @@ export default function NuevoPresupuesto({
       setSaveError('Para confirmar la venta en cuenta corriente elegí un cliente');
       return;
     }
-    if (!confirmarDobleDescuento()) return;
+    if (descOverride == null && !confirmarDobleDescuento()) return;
     if (confirmarCC && !window.confirm(
       `¿Confirmar la venta en la cuenta corriente de ${selectedClient!.razon_social}? ` +
       'Se descuenta el stock y se le avisa al cajero para que la despache.'
@@ -443,6 +445,7 @@ export default function NuevoPresupuesto({
           descuento_pct:         descPctConExtra,
           precio_unitario_final: finalConExtra,
           iva_monto:             0,
+          sin_descuento_lista:   descOverride != null,
         };
       }),
       pagos: [],
@@ -899,7 +902,7 @@ export default function NuevoPresupuesto({
               </section>
 
               {/* ── Discount breakdown ──────────────────────────────── */}
-              {(descuentoLista > 0 || descuentoCliente > 0) && (
+              {descOverride == null && (descuentoLista > 0 || descuentoCliente > 0) && (
                 <section className="rounded-lg bg-kp-surface border border-kp-border px-3 py-2.5 space-y-1.5">
                   <p className="text-2xs md:text-[10px] text-kp-gray uppercase tracking-widest mb-1">
                     Descuentos aplicados
@@ -953,7 +956,7 @@ export default function NuevoPresupuesto({
                     decimals={2}
                     value={descTodosStr}
                     onChange={e => setDescTodosStr(e.target.value)}
-                    placeholder={String(descuentoCliente)}
+                    placeholder="—"
                     className="w-full bg-kp-surface2 border border-kp-border rounded-lg px-3 py-2 pr-8 text-sm
                       text-kp-white tabular-nums placeholder:text-kp-gray focus:outline-none focus:border-kp-red transition-colors"
                     aria-label="Descuento para todos los artículos"
@@ -961,7 +964,8 @@ export default function NuevoPresupuesto({
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-kp-gray">%</span>
                 </div>
                 <p className="text-2xs md:text-[11px] text-kp-gray leading-snug">
-                  Cambia el % de cada artículo de una vez{descuentoCliente > 0 ? ` (reemplaza el ${descuentoCliente}% del cliente)` : ''}.
+                  Pone este % a todos los artículos, en lugar del descuento de la lista y del cliente (no se suman).
+                  Vacío = vuelven los descuentos de la lista y del cliente.
                 </p>
               </section>
 

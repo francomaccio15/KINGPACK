@@ -336,7 +336,11 @@ router.post('/', async (req, res, next) => {
     let subtotal_bruto = 0; // Σ precio madre · cant — base del descuento extra en %
     const itemsCalculados = items.map(item => {
       const art        = artMap[item.articulo_id];
-      const { precio_lista, precio_madre } = preciosDeLinea(art, item.unidad_venta);
+      const precios       = preciosDeLinea(art, item.unidad_venta);
+      const precio_madre  = precios.precio_madre;
+      // «Descuento a todos» del presupuesto: el % REEMPLAZA al de la lista, así
+      // que la línea parte del precio madre en vez del precio de lista.
+      const precio_lista  = item.sin_descuento_lista ? precio_madre : precios.precio_lista;
       const factor        = factorDe(art, item.unidad_venta);
       const descuento_pct = Math.max(0, Math.min(100, parseFloat(item.descuento_pct) || 0));
       const precio_final  = parseFloat((precio_lista * (1 - descuento_pct / 100)).toFixed(3));

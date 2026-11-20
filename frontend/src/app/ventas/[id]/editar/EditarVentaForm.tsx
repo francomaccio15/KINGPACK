@@ -120,18 +120,23 @@ export default function EditarVentaForm({
     return conDto ? parseFloat(String(conDto.descuento_pct)) : 0;
   });
 
-  // Descuento a todos los artículos de una (pisa el % de cada renglón).
+  // Descuento a todos los artículos de una. REEMPLAZA el descuento de la lista
+  // (no se suma): cada renglón parte del precio madre y lleva solo este %.
   const [descTodosStr, setDescTodosStr] = useState<string>('');
+  // Tras «Aplicar a todos», los artículos que se agreguen también parten del madre.
+  const [reemplazaLista, setReemplazaLista] = useState(false);
   const aplicarDescuentoATodos = () => {
     const v = parseFloat(descTodosStr.replace(',', '.'));
     if (isNaN(v)) return;
     const pct = Math.min(100, Math.max(0, v));
     setDescuentoVenta(pct);
+    setReemplazaLista(true);
     setCart(prev => prev.map(i => ({
       ...i,
+      precio_lista: i.precio_madre,
       descuento_manual: pct,
       descuento_pct: pct,
-      precio_unitario_final: +(i.precio_lista * (1 - pct / 100)).toFixed(4),
+      precio_unitario_final: +(i.precio_madre * (1 - pct / 100)).toFixed(4),
     })));
     setDescTodosStr('');
   };
@@ -259,9 +264,10 @@ export default function EditarVentaForm({
       // Suelta: precio por unidad propio, con el mismo descuento de la lista.
       const suelta = unidad === 'unidad';
       const madre = suelta ? Number(art.precio_unidad) || 0 : art.precio_madre;
-      const precioLista = suelta
+      const precioListaArt = suelta
         ? Number(art.precio_lista_unidad ?? art.precio_unidad) || 0
         : art.precio_lista || art.precio_madre;
+      const precioLista = reemplazaLista ? (madre || precioListaArt) : precioListaArt;
       const eff = descuentoVenta;
       const precioFinal = +(precioLista * (1 - eff / 100)).toFixed(4);
       return [...prev, {
@@ -454,7 +460,7 @@ export default function EditarVentaForm({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <h3 className="text-xs font-bold uppercase tracking-widest text-kp-gray">Descuento a todos los artículos</h3>
-            <p className="text-xs text-kp-gray mt-1">Cambia el % de descuento de cada artículo de una sola vez (y el de los que agregues después).</p>
+            <p className="text-xs text-kp-gray mt-1">Pone este % a todos los artículos sobre el precio madre, en lugar del descuento de la lista (no se suman). También a los que agregues después.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center">
