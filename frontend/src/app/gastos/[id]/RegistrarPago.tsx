@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import NumericInput from '@/components/NumericInput';
 import Modal from '@/components/ui/Modal';
 import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import EndosoCartera, { type ChequeCartera, endososPayload, totalEndosos } from '@/components/cheques/EndosoCartera';
 import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 
 type MedioPago = { id: string; nombre: string };
@@ -40,9 +41,13 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
   const [cuentaBancariaId, setCuentaBancariaId] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [cheques, setCheques] = useState<Cheque[]>([emptyCheque()]);
+  // Cheque propio nuevo o cheques de clientes en cartera que se endosan.
+  const [chequeModo, setChequeModo] = useState<'nuevo' | 'endoso'>('nuevo');
+  const [endosos, setEndosos] = useState<ChequeCartera[]>([]);
 
   const selectedMedio = mediosPago.find(m => m.id === medioPagoId);
   const esCheque = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
+  const esEndoso = esCheque && chequeModo === 'endoso';
 
   const handleOpen = () => {
     setMonto(pendiente.toFixed(2));
@@ -50,6 +55,8 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
     setCuentaBancariaId('');
     setObservaciones('');
     setCheques([emptyCheque()]);
+    setChequeModo('nuevo');
+    setEndosos([]);
     setError('');
     setOpen(true);
   };
@@ -66,7 +73,9 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medioPagoId) { setError('Seleccioná un medio de pago'); return; }
-    const montoNum = parseFloat(monto);
+    if (esEndoso && endosos.length === 0) { setError('Elegí los cheques en cartera a endosar'); return; }
+    // Endosando, el pago es lo que suman los cheques elegidos.
+    const montoNum = esEndoso ? +totalEndosos(endosos).toFixed(2) : parseFloat(monto);
     if (!montoNum || montoNum <= 0) { setError('El monto debe ser mayor a 0'); return; }
     // El backend rechaza el pago si supera el saldo: avisamos antes de mandarlo.
     if (montoNum - pendiente > 0.01) {
@@ -81,7 +90,9 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
       observaciones: observaciones.trim() || null,
     };
 
-    if (esCheque) {
+    if (esEndoso) {
+      body.endosos = endososPayload(endosos);
+    } else if (esCheque) {
       // Una fila con algún dato cargado cuenta como cheque y tiene que estar completa.
       const chequesValidos = cheques.filter(c => c.banco || c.numero_cheque || c.importe);
       if (chequesValidos.length === 0) { setError('Completá al menos un cheque'); return; }
@@ -173,10 +184,17 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
 
             <div>
               <label className={labelCls}>Monto *</label>
-              <NumericInput
-                value={monto} onChange={e => setMonto(e.target.value)}
-                className={inputCls} required
-              />
+              {esEndoso ? (
+                <p className={inputCls + ' tabular-nums'}>
+                  {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalEndosos(endosos))}
+                  <span className="text-xs text-kp-gray"> · suma de los cheques elegidos</span>
+                </p>
+              ) : (
+                <NumericInput
+                  value={monto} onChange={e => setMonto(e.target.value)}
+                  className={inputCls} required
+                />
+              )}
             </div>
 
             {cuentasBancarias.length > 0 && (
@@ -201,6 +219,24 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
             </div>
 
             {esCheque && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {(['nuevo', 'endoso'] as const).map(m => (
+                  <button key={m} type="button" onClick={() => setChequeModo(m)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                      chequeModo === m
+                        ? 'border-kp-red bg-kp-red/10 text-kp-white'
+                        : 'border-kp-border text-kp-gray hover:text-kp-white'}`}>
+                    {m === 'nuevo' ? 'Emitir cheque propio' : 'Endosar cheques de cartera'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {esEndoso && (
+              <EndosoCartera value={endosos} onChange={setEndosos} objetivo={pendiente} />
+            )}
+
+            {esCheque && !esEndoso && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className={labelCls + ' mb-0'}>Cheques</p>

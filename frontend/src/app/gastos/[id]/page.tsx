@@ -503,6 +503,22 @@ export default async function DetalleEgresoPage(props: { params: Promise<{ id: s
                     ))}
                   </div>
                 )}
+
+                {/* Cheques de clientes endosados en este pago */}
+                {Array.isArray(pago.endosos) && pago.endosos.length > 0 && (
+                  <div className="ml-4 space-y-1">
+                    {pago.endosos.map((ch: any) => (
+                      <div key={ch.id} className="flex flex-wrap gap-3 text-xs text-kp-gray bg-kp-surface2 rounded-lg px-3 py-1.5">
+                        <span className="text-kp-white">Endosado</span>
+                        <span>Cheque {ch.banco || 's/banco'}</span>
+                        <span>Nro: {ch.numero_cheque || 's/nº'}</span>
+                        {ch.origen_nombre && <span>De: {ch.origen_nombre}</span>}
+                        <span>Vence: {fmtDate(ch.fecha_vencimiento)}</span>
+                        <span className="ml-auto tabular-nums text-kp-white font-semibold">{fmt(ch.importe)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

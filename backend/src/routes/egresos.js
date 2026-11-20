@@ -20,6 +20,9 @@ const {
 const { registrarMovimientoBancario } = require('../services/movimientos-bancarios');
 const { requireRol } = require('../middleware/auth');
 const { validarListaCheques, errorDuplicados } = require('../services/cheques-validacion');
+const {
+  validarEndosos, endosarChequesEnEgreso, devolverEndososDePagoEgreso,
+} = require('../services/endosos-egreso');
 
 const router = express.Router();
 
@@ -350,6 +353,9 @@ router.post('/', async (req, res, next) => {
     if (vCheques.error) return res.status(400).json({ error: vCheques.error });
     const dupEgreso = await errorDuplicados(pool, vCheques.cheques);
     if (dupEgreso) return res.status(409).json({ error: dupEgreso });
+    // Cheques de clientes en cartera que se endosan para pagar (sueldos, retiros…).
+    const vEndosos = validarEndosos(pago?.endosos);
+    if (vEndosos.error) return res.status(400).json({ error: vEndosos.error });
 
     await client.query('BEGIN');
 
@@ -552,6 +558,29 @@ router.post('/', async (req, res, next) => {
           }
         }
 
+        // Endosos: hace falta una línea con medio Cheque y el detalle (emitidos +
+        // endosados) tiene que dar lo abonado en cheque, como en Pago a Proveedores.
+        if (vEndosos.endosos.length > 0) {
+          const sumaChequeMedios = mediosReales
+            .filter(m => /cheque/i.test(nombreOf[m.medio_pago_id] || ''))
+            .reduce((s, m) => s + m.monto, 0);
+          if (!chequePagoId || sumaChequeMedios <= 0) {
+            throw Object.assign(new Error('Para endosar cheques elegí el medio de pago Cheque'), { status: 400 });
+          }
+          const sumaDetalle = vCheques.cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0)
+            + vEndosos.endosos.reduce((s, e) => s + e.importe, 0);
+          if (Math.abs(sumaDetalle - sumaChequeMedios) > 0.01) {
+            throw Object.assign(new Error(
+              `El detalle de cheques (${sumaDetalle.toFixed(2)}) no coincide con el importe abonado en cheque (${sumaChequeMedios.toFixed(2)})`
+            ), { status: 400 });
+          }
+          await endosarChequesEnEgreso(client, {
+            egresoId: egreso.id, egresoPagoId: chequePagoId, endosos: vEndosos.endosos,
+            proveedorId: proveedor_id || null, destino: descripcion.trim(),
+            usuarioId: req.usuario?.id ?? null,
+          });
+        }
+
         // Cheques → atados a la línea de pago con medio cheque
         if (chequePagoId) {
           for (const ch of vCheques.cheques) {
@@ -677,7 +706,14 @@ router.get('/:id', async (req, res, next) => {
               'fecha_vencimiento', ec.fecha_vencimiento,
               'importe', ec.importe
             )
-          ) FILTER (WHERE ec.id IS NOT NULL) AS cheques
+          ) FILTER (WHERE ec.id IS NOT NULL) AS cheques,
+          (SELECT json_agg(json_build_object(
+                    'id', vw.id, 'banco', vw.banco, 'numero_cheque', vw.numero_cheque,
+                    'fecha_vencimiento', vw.fecha_vencimiento, 'importe', ee.importe,
+                    'estado', vw.estado, 'origen_nombre', vw.origen_nombre))
+             FROM egreso_endosos ee
+             LEFT JOIN vw_cheques vw ON vw.tipo = 'recibido' AND vw.id = ee.cheque_id
+            WHERE ee.egreso_pago_id = ep.id) AS endosos
         FROM egreso_pagos ep
         LEFT JOIN medios_pago mp             ON mp.id = ep.medio_pago_id
         LEFT JOIN cuentas_bancarias_empresa cb ON cb.id = ep.cuenta_bancaria_id
@@ -712,7 +748,7 @@ router.post('/:id/pago', async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { medio_pago_id, monto, cuenta_bancaria_id, observaciones, cheques: chequesBody = [] } = req.body;
+    const { medio_pago_id, monto, cuenta_bancaria_id, observaciones, cheques: chequesBody = [], endosos: endososBody } = req.body;
 
     if (!medio_pago_id) return res.status(400).json({ error: 'medio_pago_id es requerido' });
     const vCheques = validarListaCheques(chequesBody, 'emitido');
@@ -722,9 +758,26 @@ router.post('/:id/pago', async (req, res, next) => {
     if (dupPago) return res.status(409).json({ error: dupPago });
     const montoPago = parseFloat(monto);
     if (!montoPago || montoPago <= 0) return res.status(400).json({ error: 'monto debe ser mayor a 0' });
+    // Cheques de clientes en cartera que se endosan para pagar este egreso.
+    const vEndosos = validarEndosos(endososBody);
+    if (vEndosos.error) return res.status(400).json({ error: vEndosos.error });
+    const endosos = vEndosos.endosos;
+    if (endosos.length > 0) {
+      const { rows: mpChq } = await pool.query(`SELECT nombre FROM medios_pago WHERE id = $1`, [medio_pago_id]);
+      if (!/cheque/i.test(mpChq[0]?.nombre || '')) {
+        return res.status(400).json({ error: 'Para endosar cheques elegí el medio de pago Cheque' });
+      }
+      const sumaDetalle = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0)
+        + endosos.reduce((s, e) => s + e.importe, 0);
+      if (Math.abs(sumaDetalle - montoPago) > 0.01) {
+        return res.status(400).json({
+          error: `Los cheques suman ${sumaDetalle.toFixed(2)} y el pago es de ${montoPago.toFixed(2)}`,
+        });
+      }
+    }
 
     const { rows: egresoRows } = await pool.query(
-      `SELECT id, total, proveedor_id, estado_pago, tipo_comprobante, sucursal_id FROM egresos WHERE id = $1`, [id]
+      `SELECT id, total, proveedor_id, estado_pago, tipo_comprobante, sucursal_id, descripcion FROM egresos WHERE id = $1`, [id]
     );
     if (!egresoRows[0]) return res.status(404).json({ error: 'Egreso no encontrado' });
     if (egresoRows[0].estado_pago === 'pagado') {
@@ -814,6 +867,15 @@ router.post('/:id/pago', async (req, res, next) => {
           ch.forma, ch.modalidad, ch.librador_cuit, ch.librador_nombre, ch.banco_sucursal, ch.banco_cbu]);
     }
 
+    if (endosos.length > 0) {
+      await endosarChequesEnEgreso(client, {
+        egresoId: id, egresoPagoId: pagoId, endosos,
+        proveedorId: egresoRows[0].proveedor_id || null,
+        destino: egresoRows[0].descripcion || 'Egreso',
+        usuarioId: req.usuario?.id ?? null,
+      });
+    }
+
     // Calcular total pagado para determinar nuevo estado
     const { rows: totalPagadoRows } = await client.query(
       `SELECT COALESCE(SUM(monto), 0) AS total_pagado FROM egreso_pagos WHERE egreso_id = $1`, [id]
@@ -844,6 +906,7 @@ router.post('/:id/pago', async (req, res, next) => {
     res.json({ ok: true, estado_pago: nuevoEstado, pago_id: pagoId });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   } finally {
     client.release();
@@ -956,6 +1019,9 @@ router.post('/:id/pagos/:pagoId/anular', async (req, res, next) => {
       `, [egreso.proveedor_id, montoPago, +(saldo + montoPago).toFixed(2), id,
           `Anulación de pago — ${motivo.trim()}`.substring(0, 200), esFacturado]);
     }
+
+    // 3b) Los cheques de clientes endosados en este pago vuelven a cartera.
+    await devolverEndososDePagoEgreso(client, pagoId, usuarioId);
 
     // 4) Borrar el pago (arrastra sus cheques emitidos por CASCADE) y recalcular
     //    el estado con la fórmula de siempre.

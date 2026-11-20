@@ -437,7 +437,7 @@ router.get('/:tipo/:id', async (req, res, next) => {
     // Ficha completa: de dónde vino, a quién se endosó por Pago a Proveedores y
     // qué movió en el banco. Un cheque vive en 5 tablas según su origen, así que
     // sin esto la historia queda repartida y no se ve desde la pantalla.
-    const [{ rows: [origen] }, { rows: endosoPago }, { rows: movimientos }] = await Promise.all([
+    const [{ rows: [origen] }, { rows: endosoPago }, { rows: movimientos }, { rows: endosoEgreso }] = await Promise.all([
       pool.query(
         `SELECT v.id  AS venta_id,  v.numero AS venta_numero,
                 e.id  AS egreso_id, e.numero_comprobante AS egreso_comprobante,
@@ -466,6 +466,18 @@ router.get('/:tipo/:id', async (req, res, next) => {
           ORDER BY m.fecha, m.created_at`,
         [id]
       ),
+      // Endosado para pagar un egreso (sueldos, retiros, gastos — mig 072).
+      pool.query(
+        `SELECT e.id AS egreso_id, e.descripcion, to_char(ep.fecha_pago, 'YYYY-MM-DD') AS fecha,
+                pr.razon_social AS proveedor
+           FROM egreso_endosos ee
+           JOIN egreso_pagos ep ON ep.id = ee.egreso_pago_id
+           JOIN egresos e       ON e.id  = ee.egreso_id
+           LEFT JOIN proveedores pr ON pr.id = e.proveedor_id
+          WHERE ee.cheque_id = $1
+          LIMIT 1`,
+        [id]
+      ),
     ]);
 
     res.json({
@@ -473,6 +485,7 @@ router.get('/:tipo/:id', async (req, res, next) => {
       historial: historialRows,
       origen: origen ?? null,
       endoso_pago: endosoPago[0] ?? null,
+      endoso_egreso: endosoEgreso[0] ?? null,
       movimientos_banco: movimientos,
     });
   } catch (err) { next(err); }
@@ -820,6 +833,16 @@ router.post('/:tipo/:id/corregir-estado', requireRol('administrador'), async (re
         await client.query('ROLLBACK');
         return res.status(409).json({
           error: 'Este cheque se endosó en un Pago a Proveedores: anulá ese pago y el cheque vuelve solo a cartera',
+        });
+      }
+      // Lo mismo si se endosó para pagar un egreso (sueldos, retiros…).
+      const { rows: ee } = await client.query(
+        `SELECT 1 FROM egreso_endosos WHERE cheque_id = $1 LIMIT 1`, [id]
+      );
+      if (ee.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Este cheque se endosó para pagar un egreso: anulá ese pago desde el egreso y el cheque vuelve solo a cartera',
         });
       }
       await client.query(

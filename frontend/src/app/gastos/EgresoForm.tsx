@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NumericInput from '@/components/NumericInput';
 import ChequeDatosExtra from '@/components/cheques/ChequeDatosExtra';
+import EndosoCartera, { type ChequeCartera, endososPayload, totalEndosos } from '@/components/cheques/EndosoCartera';
 import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } from '@/lib/cheques';
 
 type ChequeLinea = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
@@ -221,6 +222,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   );
   const [pagoMedios, setPagoMedios] = useState<{ medio_pago_id: string; monto: string; cuenta_bancaria_id: string }[]>([]);
   const [cheques, setCheques] = useState<ChequeLinea[]>([]);
+  // Cheque propio nuevo o cheques de clientes en cartera que se endosan.
+  const [chequeModo, setChequeModo] = useState<'nuevo' | 'endoso'>('nuevo');
+  const [endosos, setEndosos] = useState<ChequeCartera[]>([]);
 
   // Anticipo a vincular
   const [anticipoId, setAnticipoId] = useState('');
@@ -307,6 +311,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       setCheques(prev => prev.length === 0 ? [chequeVacio()] : prev);
     } else {
       setCheques([]);
+      setEndosos([]);
+      setChequeModo('nuevo');
     }
   }, [pagoMedios, mediosPago]);
 
@@ -456,7 +462,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
   const requiereCuenta = (id: string) => !!mediosPago.find(m => m.id === id)?.requiere_cuenta;
   const hayCheque      = pagoMedios.some(m => esChequeId(m.medio_pago_id));
 
-  const totalCheques   = cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
+  const totalCheques   = chequeModo === 'endoso'
+    ? totalEndosos(endosos)
+    : cheques.reduce((s, c) => s + (parseFloat(c.importe) || 0), 0);
   const montoLinea     = (m: { medio_pago_id: string; monto: string }) =>
     esChequeId(m.medio_pago_id) ? totalCheques : (parseFloat(m.monto) || 0);
   const totalPagoMedios = pagoMedios.reduce((s, m) => s + montoLinea(m), 0);
@@ -498,8 +506,9 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
       if (pagoMedios.length === 0 || pagoMedios.some(m => !m.medio_pago_id)) return setSaveError('Seleccioná el medio de pago');
       if (pagoMedios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setSaveError('Ingresá el monto de cada medio de pago');
       if (pagoMedios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setSaveError('Seleccioná la cuenta bancaria del medio correspondiente');
-      if (hayCheque && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) return setSaveError('Cargá el detalle de los cheques');
-      if (hayCheque) {
+      if (hayCheque && chequeModo === 'endoso' && endosos.length === 0) return setSaveError('Elegí los cheques en cartera a endosar');
+      if (hayCheque && chequeModo === 'nuevo' && cheques.filter(c => c.fecha_vencimiento && c.importe).length === 0) return setSaveError('Cargá el detalle de los cheques');
+      if (hayCheque && chequeModo === 'nuevo') {
         for (const [i, c] of cheques.filter(c => c.banco || c.numero_cheque || c.importe).entries()) {
           const err = errorCheque(c, 'emitido');
           if (err) return setSaveError(`Cheque ${i + 1}: ${err}`);
@@ -572,7 +581,8 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
           monto: montoLinea(m),
           cuenta_bancaria_id: m.cuenta_bancaria_id || null,
         })),
-        cheques: hayCheque
+        endosos: hayCheque && chequeModo === 'endoso' ? endososPayload(endosos) : [],
+        cheques: hayCheque && chequeModo === 'nuevo'
           ? cheques.filter(c => c.banco || c.numero_cheque || c.importe).map(c => ({
               banco: c.banco.trim(), numero_cheque: c.numero_cheque.trim(),
               fecha_vencimiento: c.fecha_vencimiento, importe: c.importe,
@@ -1374,6 +1384,25 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
         {/* Cheques */}
         {estadoPago === 'pagado' && esCheque && (
           <div className="space-y-3 pt-2 border-t border-kp-border">
+            {/* Emitir un cheque propio o endosar cheques de clientes en cartera */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(['nuevo', 'endoso'] as const).map(m => (
+                <button key={m} type="button" onClick={() => setChequeModo(m)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                    chequeModo === m
+                      ? 'border-kp-red bg-kp-red/10 text-kp-white'
+                      : 'border-kp-border text-kp-gray hover:text-kp-white'}`}>
+                  {m === 'nuevo' ? 'Emitir cheque propio' : 'Endosar cheques de cartera'}
+                </button>
+              ))}
+            </div>
+            {chequeModo === 'endoso' ? (
+              <EndosoCartera value={endosos} onChange={setEndosos}
+                objetivo={(() => {
+                  const i = pagoMedios.findIndex(m => esChequeId(m.medio_pago_id));
+                  return i >= 0 ? restoMedioPago(i) : undefined;
+                })()} />
+            ) : (<>
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-widest text-kp-gray">Cheques</p>
               <button type="button" onClick={addCheque}
@@ -1426,6 +1455,7 @@ export default function EgresoForm({ edicion }: { edicion?: EgresoEdicion | null
                 <span className="tabular-nums font-bold text-kp-white">{ars.format(totalCheques)}</span>
               </div>
             )}
+            </>)}
           </div>
         )}
       </div>

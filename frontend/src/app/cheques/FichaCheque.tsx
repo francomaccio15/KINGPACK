@@ -22,6 +22,8 @@ interface Ficha {
   historial: { estado_anterior: string | null; estado_nuevo: string; observacion: string | null; usuario_nombre: string | null; created_at: string }[];
   origen: { venta_id: string | null; venta_numero: number | null; egreso_id: string | null; egreso_comprobante: string | null; pago_id: string | null; pago_fecha: string | null } | null;
   endoso_pago: { pago_id: string; fecha: string; proveedor: string | null } | null;
+  /** Endosado para pagar un egreso (sueldos, retiros, gastos). */
+  endoso_egreso?: { egreso_id: string; descripcion: string | null; fecha: string; proveedor: string | null } | null;
   movimientos_banco: { fecha: string; tipo: 'ingreso' | 'egreso'; monto: number; concepto: string; cuenta_nombre: string }[];
 }
 
@@ -175,11 +177,18 @@ export default function FichaCheque({ tipo, id, onClose }: Props) {
             <Seccion titulo="A dónde fue">
               {c.estado === 'endosado' && (
                 <>
-                  <Fila label="Endosado a">{c.endoso_proveedor_nombre ?? ficha.endoso_pago?.proveedor ?? '—'}</Fila>
+                  <Fila label="Endosado a">{c.endoso_proveedor_nombre ?? ficha.endoso_pago?.proveedor ?? ficha.endoso_egreso?.descripcion ?? '—'}</Fila>
                   {c.endoso_fecha && <Fila label="Entregado el">{formatoFecha(c.endoso_fecha)}</Fila>}
                   {c.endoso_comprobante && <Fila label="Cancela">{c.endoso_comprobante}</Fila>}
                   {ficha.endoso_pago ? (
                     <Fila label="Pago a proveedor">{formatoFecha(ficha.endoso_pago.fecha)}</Fila>
+                  ) : ficha.endoso_egreso ? (
+                    <Fila label="Pagó el egreso">
+                      <a href={`/gastos/${ficha.endoso_egreso.egreso_id}`} className="text-kp-red hover:underline">
+                        {ficha.endoso_egreso.descripcion || 'Ver egreso'}
+                      </a>
+                      {ficha.endoso_egreso.fecha ? ` · ${formatoFecha(ficha.endoso_egreso.fecha)}` : ''}
+                    </Fila>
                   ) : (
                     <p className="py-2 text-xs text-amber-400">
                       Endosado sin Pago a Proveedores: no bajó la deuda con el proveedor.
