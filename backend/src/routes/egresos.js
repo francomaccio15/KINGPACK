@@ -744,6 +744,40 @@ router.get('/:id', async (req, res, next) => {
 // ─── POST /api/egresos/:id/pago ───────────────────────────────────────────────
 // Registra un pago parcial o total para un egreso pendiente
 // Body: { medio_pago_id, monto, cuenta_bancaria_id?, observaciones?, cheques?: [...] }
+// Pagos a proveedor (Pago a Proveedores) con plata todavía SIN imputar a
+// comprobantes: saldo a favor del proveedor que debería usarse antes de pagar
+// el comprobante de nuevo. Sin esto se pagó dos veces la factura 063 de Norte
+// Polietileno (echeqs «a cuenta» + Caja Administrativa).
+const MINIMO_SALDO_A_FAVOR = 100;
+async function pagosACuentaSinImputar(db, proveedorId) {
+  if (!proveedorId) return [];
+  const { rows } = await db.query(`
+    SELECT pp.id, pp.fecha, pp.monto, pp.observaciones, pp.facturado,
+           mp.nombre AS medio_pago_nombre,
+           pp.monto - COALESCE((SELECT SUM(a.monto_aplicado) FROM pago_proveedor_aplicaciones a
+                                 WHERE a.pago_proveedor_id = pp.id), 0) AS sin_imputar
+      FROM pagos_proveedor pp
+      JOIN medios_pago mp ON mp.id = pp.medio_pago_id
+     WHERE pp.proveedor_id = $1 AND pp.anulado = FALSE
+       -- Remanentes de redondeo (ej.: los $1,52 de más de unos echeqs) no
+       -- cuentan: solo frenan los saldos a favor que pueden pagar algo.
+       AND pp.monto - COALESCE((SELECT SUM(a.monto_aplicado) FROM pago_proveedor_aplicaciones a
+                                 WHERE a.pago_proveedor_id = pp.id), 0) >= $2
+     ORDER BY pp.fecha, pp.created_at`, [proveedorId, MINIMO_SALDO_A_FAVOR]);
+  return rows;
+}
+
+// ─── GET /api/egresos/:id/pagos-a-cuenta ──────────────────────────────────────
+router.get('/:id/pagos-a-cuenta', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT proveedor_id FROM egresos WHERE id = $1 AND deleted_at IS NULL`, [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Egreso no encontrado' });
+    res.json({ pagos: await pagosACuentaSinImputar(pool, rows[0].proveedor_id) });
+  } catch (err) { next(err); }
+});
+
 router.post('/:id/pago', async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -796,6 +830,21 @@ router.post('/:id/pago', async (req, res, next) => {
       return res.status(400).json({
         error: `El pago (${montoPago.toFixed(2)}) supera el saldo pendiente del comprobante (${pendiente.toFixed(2)})`,
       });
+    }
+
+    // Si el proveedor tiene pagos a cuenta sin imputar, lo más probable es que
+    // este comprobante ya esté pagado con esa plata: se frena hasta que el
+    // usuario confirme explícitamente que es un pago nuevo.
+    if (req.body.confirmar_saldo_a_favor !== true) {
+      const aCuenta = await pagosACuentaSinImputar(pool, egresoRows[0].proveedor_id);
+      if (aCuenta.length > 0) {
+        const total = aCuenta.reduce((s, p) => s + parseFloat(p.sin_imputar), 0);
+        return res.status(409).json({
+          error: `El proveedor tiene ${total.toFixed(2)} en pagos a cuenta sin imputar. Imputalos a este comprobante o confirmá que es un pago nuevo.`,
+          codigo: 'saldo_a_favor',
+          pagos_a_cuenta: aCuenta,
+        });
+      }
     }
 
     await client.query('BEGIN');

@@ -394,6 +394,10 @@ export default function PagosProveedorClient() {
   // deuda (el backend deja cada egreso en 'parcial' y sigue listándose acá).
   const esParcial   = modo === 'aplicar' && totalMedios > 0 && totalMedios < totalPago - 0.01;
   const restoDeuda  = esParcial ? +(totalPago - totalMedios).toFixed(2) : 0;
+  // Pago de más: se imputa lo tildado y el sobrante queda como pago a cuenta
+  // (saldo a favor) del mismo pago, en vez de rebotar todo a «Pago a cuenta».
+  const excedente   = modo === 'aplicar' && totalPago > 0 && totalMedios - totalPago > 0.01
+    ? +(totalMedios - totalPago).toFixed(2) : 0;
   const seleccionados = useMemo(() =>
     Object.entries(aplic)
       .filter(([, a]) => a.sel && parseFloat(a.monto) > 0)
@@ -431,16 +435,13 @@ export default function PagosProveedorClient() {
     if (totalPago <= 0) return setError('El monto a pagar debe ser mayor a 0');
     if (medios.some(m => !esChequeId(m.medio_pago_id) && montoLinea(m) <= 0)) return setError('Ingresá el monto de cada medio de pago');
     if (medios.some(m => requiereCuenta(m.medio_pago_id) && !m.cuenta_bancaria_id)) return setError('Seleccioná la cuenta bancaria del medio correspondiente');
-    // En «aplicar» se admite pagar de MENOS (queda parcial y se prorratea).
-    // Pagar de más no: excedería el saldo de los comprobantes tildados.
+    // En «aplicar» se admite pagar de MENOS (queda parcial y se prorratea) y de
+    // MÁS (se imputa lo tildado y el sobrante queda como saldo a favor).
     if (modo === 'cuenta' && Math.abs(totalMedios - totalPago) > 0.01) {
       return setError(`Los medios de pago (${ars.format(totalMedios)}) deben sumar el total a pagar (${ars.format(totalPago)})`);
     }
     if (modo === 'aplicar') {
       if (totalMedios <= 0) return setError('Ingresá el monto de los medios de pago');
-      if (totalMedios - totalPago > 0.01) {
-        return setError(`Los medios (${ars.format(totalMedios)}) superan el saldo de los comprobantes tildados (${ars.format(totalPago)}). Usá «Pago a cuenta» para el excedente.`);
-      }
       if (seleccionados.some(s => s.monto - s.pend > 0.01)) {
         return setError('Hay un comprobante con un monto mayor a su saldo pendiente');
       }
@@ -534,6 +535,8 @@ export default function PagosProveedorClient() {
       if (!res.ok) { setError(data.error ?? 'Error al registrar el pago'); return; }
       setOkMsg(esParcial
         ? `Pago parcial de ${ars.format(montoPagado)} registrado. Quedan ${ars.format(restoDeuda)} como deuda con el proveedor.`
+        : excedente > 0
+        ? `Pago de ${ars.format(montoPagado)} registrado. Se imputaron ${ars.format(montoPagado - excedente)} a los comprobantes y ${ars.format(excedente)} quedan a favor (pago a cuenta).`
         : `Pago de ${ars.format(montoPagado)} registrado correctamente.`);
       // Reset del formulario y recarga del proveedor (saldos actualizados)
       setMontoCuenta(''); setObs(''); setCheques([]);
@@ -946,7 +949,7 @@ export default function PagosProveedorClient() {
                 <div className="text-right">
                   <span className={`text-sm font-bold tabular-nums ${
                     totalPago <= 0                            ? 'text-kp-red'
-                    : esParcial                               ? 'text-amber-400'
+                    : esParcial || excedente > 0              ? 'text-amber-400'
                     : Math.abs(totalMedios - totalPago) <= 0.01 ? 'text-green-400'
                     : 'text-kp-red'}`}>
                     {fmt(totalMedios)}
@@ -954,6 +957,10 @@ export default function PagosProveedorClient() {
                   {esParcial ? (
                     <span className="block text-2xs md:text-[11px] text-amber-400">
                       Pago parcial — quedan {fmt(restoDeuda)} como deuda, prorrateados entre {seleccionados.length} comprobante{seleccionados.length === 1 ? '' : 's'}
+                    </span>
+                  ) : excedente > 0 ? (
+                    <span className="block text-2xs md:text-[11px] text-amber-400">
+                      Se pasan {fmt(excedente)}: se imputa lo tildado y el sobrante queda a favor (pago a cuenta)
                     </span>
                   ) : totalPago > 0 && Math.abs(totalMedios - totalPago) > 0.01 && (
                     <span className="block text-2xs md:text-[11px] text-kp-red">

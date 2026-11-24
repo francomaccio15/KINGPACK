@@ -203,14 +203,22 @@ router.post('/', async (req, res, next) => {
 
     const aplicar = Array.isArray(aplicaciones) && aplicaciones.length > 0;
 
-    // En modo "aplicado", la suma imputada debe igualar el monto del pago.
+    // En modo "aplicado", la suma imputada no puede superar el monto del pago.
+    // Si el pago es MAYOR que lo imputado (ej.: cheques que suman unos pesos más
+    // que la factura), se imputa lo que cubre cada comprobante y el excedente
+    // queda como pago a cuenta del mismo pago. Antes se rechazaba y el usuario
+    // terminaba cargando todo «a cuenta», sin vincular a la factura, que seguía
+    // figurando impaga (así se pagó dos veces la factura 063 de Norte Polietileno).
+    let excedente = 0;
     if (aplicar) {
       const sumaAplic = aplicaciones.reduce((s, a) => s + (parseFloat(a.monto) || 0), 0);
-      if (Math.abs(sumaAplic - montoTotal) > 0.01) {
+      if (sumaAplic - montoTotal > 0.01) {
         return res.status(400).json({
-          error: `La suma imputada (${sumaAplic.toFixed(2)}) no coincide con el monto del pago (${montoTotal.toFixed(2)})`,
+          error: `La suma imputada (${sumaAplic.toFixed(2)}) supera el monto del pago (${montoTotal.toFixed(2)})`,
         });
       }
+      excedente = +(montoTotal - sumaAplic).toFixed(2);
+      if (excedente <= 0.01) excedente = 0;
     }
 
     // El importe abonado en cheque puede cubrirse emitiendo cheques nuevos
@@ -302,6 +310,7 @@ router.post('/', async (req, res, next) => {
 
     if (aplicar) {
       // 2a) Imputación a cada egreso pendiente
+      let todasFacturadas = true;
       for (const ap of aplicaciones) {
         const montoAp = parseFloat(ap.monto);
         if (!montoAp || montoAp <= 0) throw Object.assign(new Error('monto de imputación inválido'), { status: 400 });
@@ -360,6 +369,26 @@ router.post('/', async (req, res, next) => {
           INSERT INTO pago_proveedor_aplicaciones (pago_proveedor_id, egreso_id, monto_aplicado)
           VALUES ($1, $2, $3)
         `, [pago.id, ap.egreso_id, montoAp]);
+
+        if (!esFacturado) todasFacturadas = false;
+      }
+
+      // 2a') Excedente sobre lo imputado: queda como saldo a favor (pago a
+      //      cuenta) a nombre del pago, en la columna de los comprobantes que
+      //      saldó. Se puede imputar después desde «Imputar» como cualquier pago
+      //      a cuenta, y la anulación lo revierte (asiento con origen_id = pago).
+      if (excedente > 0) {
+        // `facturado` del body solo aplica si vino explícito (el destructuring
+        // le pone false por defecto); si no, sigue a los comprobantes saldados.
+        const colExcedente = req.body.facturado === undefined || req.body.facturado === null
+          ? todasFacturadas : !!req.body.facturado;
+        const saldoPrev = await saldoMovimientos(client, proveedor_id);
+        await client.query(`
+          INSERT INTO cuentas_corrientes_proveedor
+            (proveedor_id, debe, haber, saldo, origen_tipo, origen_id, descripcion, facturado)
+          VALUES ($1, 0, $2, $3, 'pago', $4, $5, $6)
+        `, [proveedor_id, excedente, +(saldoPrev - excedente).toFixed(2), pago.id,
+            'Pago a cuenta — excedente del pago', colExcedente]);
       }
     } else {
       // 2b) Pago a cuenta: un único haber global

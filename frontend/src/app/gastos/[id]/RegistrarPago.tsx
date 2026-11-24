@@ -11,6 +11,11 @@ import { type ChequeExtra, chequeExtraVacio, errorCheque, chequeExtraPayload } f
 type MedioPago = { id: string; nombre: string };
 type CuentaBancaria = { id: string; nombre: string; banco: string | null };
 type Cheque = ChequeExtra & { banco: string; numero_cheque: string; fecha_vencimiento: string; importe: string };
+type PagoACuenta = { id: string; fecha: string; monto: string; sin_imputar: string; medio_pago_nombre: string; observaciones: string | null };
+
+const ars = (n: number | string) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(parseFloat(String(n)) || 0);
+const fechaAR = (f: string) => { const [y, m, d] = String(f).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
 
 type Props = {
   egresoId: string;
@@ -49,7 +54,49 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
   const esCheque = selectedMedio?.nombre.toLowerCase().includes('cheque') ?? false;
   const esEndoso = esCheque && chequeModo === 'endoso';
 
+  // Pagos a cuenta del proveedor todavía sin imputar: si hay, casi seguro que
+  // este comprobante ya está pagado con esa plata. Se ofrece imputarlo y, para
+  // pagar igual, hay que confirmarlo (el backend también lo exige).
+  const [aCuenta, setACuenta] = useState<PagoACuenta[]>([]);
+  const [confirmarNuevo, setConfirmarNuevo] = useState(false);
+  const [imputandoId, setImputandoId] = useState<string | null>(null);
+  const esAdmin = (() => {
+    try { return JSON.parse(localStorage.getItem('kp_user') || '{}')?.rol === 'administrador'; } catch { return false; }
+  })();
+
+  const cargarACuenta = async () => {
+    try {
+      const r = await apiFetch(`/api/egresos/${egresoId}/pagos-a-cuenta`);
+      const d = r.ok ? await r.json() : { pagos: [] };
+      setACuenta(d.pagos ?? []);
+    } catch { setACuenta([]); }
+  };
+
+  const imputar = async (p: PagoACuenta) => {
+    const monto = +Math.min(parseFloat(p.sin_imputar), pendiente).toFixed(2);
+    if (monto <= 0) return;
+    setImputandoId(p.id);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/pagos-proveedor/${p.id}/imputar`, {
+        method: 'POST',
+        body: JSON.stringify({ aplicaciones: [{ egreso_id: egresoId, monto }], reclasificar: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'No se pudo imputar el pago a cuenta'); return; }
+      setOpen(false);
+      router.refresh();
+    } catch {
+      setError('Error de conexión con el servidor');
+    } finally {
+      setImputandoId(null);
+    }
+  };
+
   const handleOpen = () => {
+    setACuenta([]);
+    setConfirmarNuevo(false);
+    cargarACuenta();
     setMonto(pendiente.toFixed(2));
     setMedioPagoId(mediosPago[0]?.id ?? '');
     setCuentaBancariaId('');
@@ -72,6 +119,10 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (aCuenta.length > 0 && !confirmarNuevo) {
+      setError('El proveedor tiene pagos a cuenta sin imputar: imputá uno a este comprobante o tildá que es un pago nuevo.');
+      return;
+    }
     if (!medioPagoId) { setError('Seleccioná un medio de pago'); return; }
     if (esEndoso && endosos.length === 0) { setError('Elegí los cheques en cartera a endosar'); return; }
     // Endosando, el pago es lo que suman los cheques elegidos.
@@ -88,6 +139,7 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
       monto: montoNum,
       cuenta_bancaria_id: cuentaBancariaId || null,
       observaciones: observaciones.trim() || null,
+      ...(confirmarNuevo ? { confirmar_saldo_a_favor: true } : {}),
     };
 
     if (esEndoso) {
@@ -124,7 +176,12 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Error al registrar el pago'); return; }
+      if (!res.ok) {
+        // Pago a cuenta cargado mientras el modal estaba abierto: mostrarlo.
+        if (data.codigo === 'saldo_a_favor') setACuenta(data.pagos_a_cuenta ?? []);
+        setError(data.error || 'Error al registrar el pago');
+        return;
+      }
       setOpen(false);
       router.refresh();
     } catch {
@@ -173,6 +230,39 @@ export default function RegistrarPago({ egresoId, totalEgreso, totalPagado, medi
                 </span>
               </div>
             </div>
+
+            {aCuenta.length > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2 text-sm">
+                <p className="font-semibold text-amber-400">
+                  ⚠ Este proveedor tiene pagos a cuenta sin imputar
+                </p>
+                <p className="text-xs text-kp-gray">
+                  Probablemente este comprobante ya está pagado con esa plata. Imputalo en vez de pagarlo de nuevo.
+                </p>
+                <ul className="space-y-1.5">
+                  {aCuenta.map(p => (
+                    <li key={p.id} className="flex items-center gap-2 flex-wrap">
+                      <span className="tabular-nums">{fechaAR(p.fecha)}</span>
+                      <span className="text-kp-gray">· {p.medio_pago_nombre}</span>
+                      <span className="font-semibold tabular-nums">{ars(p.sin_imputar)}</span>
+                      <span className="text-kp-gray text-xs">sin imputar</span>
+                      {esAdmin ? (
+                        <button type="button" onClick={() => imputar(p)} disabled={!!imputandoId}
+                          className="ml-auto px-3 py-1 text-xs font-semibold rounded-lg bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-50">
+                          {imputandoId === p.id ? 'Imputando…' : `Imputar ${ars(Math.min(parseFloat(p.sin_imputar), pendiente))}`}
+                        </button>
+                      ) : (
+                        <span className="ml-auto text-xs text-kp-gray">Pedile al administrador que lo impute</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <label className="flex items-center gap-2 text-xs text-kp-gray pt-1 cursor-pointer">
+                  <input type="checkbox" checked={confirmarNuevo} onChange={e => setConfirmarNuevo(e.target.checked)} />
+                  Es un pago nuevo, distinto de esos pagos a cuenta: registrarlo igual
+                </label>
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>Medio de Pago *</label>
