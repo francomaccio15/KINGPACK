@@ -4,6 +4,32 @@ const { sucursalEfectiva, requireRol } = require('../middleware/auth');
 
 const router = express.Router();
 
+// "Mes anterior" para comparar = los MISMOS días del mes anterior (del 1 al día
+// de hoy). Comparar el mes en curso a medias contra el mes anterior completo
+// mostraba caídas que no existían (ej.: −16 % en ventas cuando venían +24 %).
+const MES_ANT_DESDE = `date_trunc('month', CURRENT_DATE - INTERVAL '1 month')::date`;
+const MES_ANT_HASTA = `(CURRENT_DATE - INTERVAL '1 month')::date`;
+
+// Ventas sin IVA y costo de lo vendido de un período. El costo se estima con el
+// costo ACTUAL de cada artículo (costo_base + % flete, sin IVA), igual que el
+// Flujo de Fondos: el sistema no guarda el costo histórico de cada venta.
+// Las ventas en unidades sueltas se pasan a bultos con unidades_por_bulto.
+async function margenPeriodo(condFecha, sucId) {
+  const { rows } = await pool.query(`
+    SELECT COALESCE(SUM(vi.cantidad * vi.precio_unitario_final) - SUM(vi.iva_monto), 0)::float AS neto,
+           COALESCE(SUM(
+             CASE WHEN vi.unidad_venta = 'unidad'
+                  THEN vi.cantidad / GREATEST(a.unidades_por_bulto, 1)
+                  ELSE vi.cantidad END
+             * a.costo_base * (1 + COALESCE(a.costo_flete, 0) / 100)), 0)::float AS costo
+      FROM venta_items vi
+      JOIN ventas v    ON v.id = vi.venta_id
+      JOIN articulos a ON a.id = vi.articulo_id
+     WHERE v.deleted_at IS NULL AND v.estado NOT IN ('anulada', 'preventa')
+       AND ${condFecha} ${sucId ? 'AND v.sucursal_id = $1' : ''}`, sucId ? [sucId] : []);
+  return { neto: rows[0].neto, costo: rows[0].costo };
+}
+
 router.use(requireRol('administrador', 'supervisor'));
 
 router.get('/', async (req, res, next) => {
@@ -46,7 +72,7 @@ router.get('/', async (req, res, next) => {
 
       pool.query(`SELECT COUNT(*) AS cantidad, COALESCE(SUM(total),0) AS monto
         FROM ventas WHERE deleted_at IS NULL AND estado NOT IN ('anulada','preventa')
-        AND date_trunc('month', fecha) = date_trunc('month', CURRENT_DATE - INTERVAL '1 month') ${sf}`, p),
+        AND fecha::date BETWEEN ${MES_ANT_DESDE} AND ${MES_ANT_HASTA} ${sf}`, p),
 
       pool.query(`SELECT
           COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
@@ -68,7 +94,7 @@ router.get('/', async (req, res, next) => {
           COALESCE(SUM(total) FILTER (WHERE tipo_operacion = 'compra_mercaderia'),0)  AS mercaderia,
           COALESCE(SUM(total) FILTER (WHERE tipo_operacion <> 'compra_mercaderia'),0) AS gastos
         FROM egresos WHERE deleted_at IS NULL
-        AND date_trunc('month', fecha_emision) = date_trunc('month', CURRENT_DATE - INTERVAL '1 month') ${sf}`, p),
+        AND fecha_emision BETWEEN ${MES_ANT_DESDE} AND ${MES_ANT_HASTA} ${sf}`, p),
 
       pool.query(`SELECT COUNT(*) AS cantidad
         FROM stock s JOIN articulos a ON a.id = s.articulo_id
@@ -256,18 +282,30 @@ router.get('/', async (req, res, next) => {
     const vm  = parseFloat(ventasMes.rows[0].monto);
     const vma = parseFloat(ventasMesAnt.rows[0].monto);
 
-    // Egresos divididos: costo de mercadería vs gastos operativos (no mercadería)
-    const ch  = parseFloat(egresosHoy.rows[0].mercaderia);
-    const ca  = parseFloat(egresosAyer.rows[0].mercaderia);
-    const cm  = parseFloat(egresosMes.rows[0].mercaderia);
-    const cma = parseFloat(egresosMesAnt.rows[0].mercaderia);
+    // Compras de mercadería: es stock que entra, NO el costo de lo vendido.
+    // Antes se restaban como costo y un mes de reposición fuerte daba una
+    // "pérdida" que no existía. Se informan aparte.
+    const compH  = parseFloat(egresosHoy.rows[0].mercaderia);
+    const compA  = parseFloat(egresosAyer.rows[0].mercaderia);
+    const compM  = parseFloat(egresosMes.rows[0].mercaderia);
+    const compMa = parseFloat(egresosMesAnt.rows[0].mercaderia);
+
+    // Costo de lo vendido y ventas sin IVA por período.
+    const [mH, mA, mM, mMa] = await Promise.all([
+      margenPeriodo(`v.fecha::date = CURRENT_DATE`, sucId),
+      margenPeriodo(`v.fecha::date = CURRENT_DATE - 1`, sucId),
+      margenPeriodo(`date_trunc('month', v.fecha) = date_trunc('month', CURRENT_DATE)`, sucId),
+      margenPeriodo(`v.fecha::date BETWEEN ${MES_ANT_DESDE} AND ${MES_ANT_HASTA}`, sucId),
+    ]);
+    const ch = mH.costo, ca = mA.costo, cm = mM.costo, cma = mMa.costo;
     const gh  = parseFloat(egresosHoy.rows[0].gastos);
     const ga  = parseFloat(egresosAyer.rows[0].gastos);
     const gm  = parseFloat(egresosMes.rows[0].gastos);
     const gma = parseFloat(egresosMesAnt.rows[0].gastos);
 
-    // Egreso total (costo + gastos) usado para el resultado
-    const eh = ch + gh, ea = ca + ga, em = cm + gm, ema = cma + gma;
+    // Resultado = ventas sin IVA − costo de lo vendido − gastos operativos.
+    const resultado = (m, g) => parseFloat((m.neto - m.costo - g).toFixed(2));
+    const pct = (m) => m.neto > 0 ? parseFloat(((m.neto - m.costo) / m.neto * 100).toFixed(1)) : null;
 
     res.json({
       ventas_hoy:      { cantidad: parseInt(ventasHoy.rows[0].cantidad),  monto: vh },
@@ -282,10 +320,19 @@ router.get('/', async (req, res, next) => {
       gastos_operativos_ayer:    { monto: ga },
       gastos_operativos_mes:     { monto: gm },
       gastos_operativos_mes_ant: { monto: gma },
-      resultado_hoy:   parseFloat((vh - eh).toFixed(2)),
-      resultado_ayer:  parseFloat((va - ea).toFixed(2)),
-      resultado_mes:   parseFloat((vm - em).toFixed(2)),
-      resultado_mes_ant: parseFloat((vma - ema).toFixed(2)),
+      compras_mercaderia_hoy:     { monto: compH },
+      compras_mercaderia_ayer:    { monto: compA },
+      compras_mercaderia_mes:     { monto: compM },
+      compras_mercaderia_mes_ant: { monto: compMa },
+      ventas_netas_mes:     mM.neto,
+      ventas_netas_mes_ant: mMa.neto,
+      margen_bruto_pct_hoy: pct(mH),
+      margen_bruto_pct_mes: pct(mM),
+      margen_bruto_pct_mes_ant: pct(mMa),
+      resultado_hoy:     resultado(mH, gh),
+      resultado_ayer:    resultado(mA, ga),
+      resultado_mes:     resultado(mM, gm),
+      resultado_mes_ant: resultado(mMa, gma),
       stock_bajo:          parseInt(stockBajo.rows[0].cantidad),
       pedidos_pendientes:  parseInt(pedidosPendientes.rows[0].cantidad),
       ventas_mes_diario:   ventasMesDiario.rows,

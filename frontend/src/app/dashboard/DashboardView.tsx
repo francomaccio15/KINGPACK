@@ -81,6 +81,13 @@ export type DashboardData = {
   gastos_operativos_ayer:    { monto: number };
   gastos_operativos_mes:     { monto: number };
   gastos_operativos_mes_ant: { monto: number };
+  // Compras de stock (no son costo: el costo es el de lo vendido, arriba).
+  compras_mercaderia_hoy?:     { monto: number };
+  compras_mercaderia_mes?:     { monto: number };
+  ventas_netas_mes?:           number;
+  margen_bruto_pct_hoy?:       number | null;
+  margen_bruto_pct_mes?:       number | null;
+  margen_bruto_pct_mes_ant?:   number | null;
   resultado_hoy:     number;
   resultado_ayer:    number;
   resultado_mes:     number;
@@ -113,6 +120,18 @@ const fmtCompact = (n: number) => {
   if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}k`;
   return fmt(n);
 };
+
+// El mes en curso se compara contra los mismos días del mes anterior.
+const TREND_MES = 'vs mismos días mes ant.';
+
+// Bajada de la tarjeta de costo: margen bruto y, aparte, cuánto stock se compró
+// (las compras ya no se restan como costo).
+function subCosto(margenPct?: number | null, compras?: number) {
+  const partes: string[] = [];
+  if (margenPct !== null && margenPct !== undefined) partes.push(`Margen bruto ${margenPct.toLocaleString('es-AR')}%`);
+  if (compras !== undefined) partes.push(`Compras de stock ${fmt(compras)}`);
+  return partes.join(' · ') || undefined;
+}
 
 function calcTrend(ahora: number, antes: number) {
   if (antes === 0) return null;
@@ -862,7 +881,8 @@ export default function DashboardView({
             trendAhora={d.ventas_hoy.monto} trendAntes={d.ventas_ayer.monto} trendLabel="vs ayer"
           />
           <KpiCard
-            label="Costo de mercadería" value={fmt(d.costo_mercaderia_hoy.monto)}
+            label="Costo de lo vendido" value={fmt(d.costo_mercaderia_hoy.monto)}
+            sub={subCosto(d.margen_bruto_pct_hoy, d.compras_mercaderia_hoy?.monto)}
             iconBg="bg-orange-500/10" iconColor="text-orange-400" icon={<IcoBox />}
             trendAhora={d.costo_mercaderia_hoy.monto} trendAntes={d.costo_mercaderia_ayer.monto} trendLabel="vs ayer"
           />
@@ -873,6 +893,7 @@ export default function DashboardView({
           />
           <KpiCard
             label="Resultado" value={fmt(d.resultado_hoy)}
+            sub="ventas sin IVA − costo − gastos"
             iconBg={d.resultado_hoy >= 0 ? 'bg-sky-500/10' : 'bg-rose-500/10'}
             iconColor={d.resultado_hoy >= 0 ? 'text-sky-400' : 'text-rose-400'} icon={<IcoTrend />}
             trendAhora={d.resultado_hoy} trendAntes={d.resultado_ayer} trendLabel="vs ayer"
@@ -918,23 +939,25 @@ export default function DashboardView({
             label="Ventas" value={fmt(d.ventas_mes.monto)}
             sub={`${d.ventas_mes.cantidad} op.`}
             iconBg="bg-emerald-500/10" iconColor="text-emerald-400" icon={<IcoCart />}
-            trendAhora={d.ventas_mes.monto} trendAntes={d.ventas_mes_ant.monto} trendLabel="vs mes ant."
+            trendAhora={d.ventas_mes.monto} trendAntes={d.ventas_mes_ant.monto} trendLabel={TREND_MES}
           />
           <KpiCard
-            label="Costo de mercadería" value={fmt(d.costo_mercaderia_mes.monto)}
+            label="Costo de lo vendido" value={fmt(d.costo_mercaderia_mes.monto)}
+            sub={subCosto(d.margen_bruto_pct_mes, d.compras_mercaderia_mes?.monto)}
             iconBg="bg-orange-500/10" iconColor="text-orange-400" icon={<IcoBox />}
-            trendAhora={d.costo_mercaderia_mes.monto} trendAntes={d.costo_mercaderia_mes_ant.monto} trendLabel="vs mes ant."
+            trendAhora={d.costo_mercaderia_mes.monto} trendAntes={d.costo_mercaderia_mes_ant.monto} trendLabel={TREND_MES}
           />
           <KpiCard
             label="Gastos operativos" value={fmt(d.gastos_operativos_mes.monto)}
             iconBg="bg-amber-500/10" iconColor="text-amber-400" icon={<IcoReceipt />}
-            trendAhora={d.gastos_operativos_mes.monto} trendAntes={d.gastos_operativos_mes_ant.monto} trendLabel="vs mes ant."
+            trendAhora={d.gastos_operativos_mes.monto} trendAntes={d.gastos_operativos_mes_ant.monto} trendLabel={TREND_MES}
           />
           <KpiCard
             label="Resultado" value={fmt(d.resultado_mes)}
+            sub="ventas sin IVA − costo − gastos"
             iconBg={d.resultado_mes >= 0 ? 'bg-sky-500/10' : 'bg-rose-500/10'}
             iconColor={d.resultado_mes >= 0 ? 'text-sky-400' : 'text-rose-400'} icon={<IcoTrend />}
-            trendAhora={d.resultado_mes} trendAntes={d.resultado_mes_ant} trendLabel="vs mes ant."
+            trendAhora={d.resultado_mes} trendAntes={d.resultado_mes_ant} trendLabel={TREND_MES}
             negative={d.resultado_mes < 0}
           />
         </div>
