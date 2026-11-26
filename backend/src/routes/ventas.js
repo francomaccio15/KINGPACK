@@ -1220,6 +1220,17 @@ router.post('/:id/facturar', async (req, res, next) => {
       // quedó sin facturar ni si hay que auditar un comprobante huérfano.
       console.error(`[ventas] fallo al facturar venta #${v.numero} (${id}): ` +
         `PV ${puntoVenta} Factura ${comp.letra} $${total} — ${arcaErr.message}`);
+      // Caída/corte de ARCA (ej. 26/11/2026: servicios1.afip.gov.ar reseteaba todo
+      // handshake TLS). Sin esto el cajero veía "Internal Server Error" y no sabía
+      // que el problema era de ARCA y no del sistema.
+      const RED = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'EHOSTUNREACH'];
+      const msg = String(arcaErr.message || '');
+      if (RED.includes(arcaErr.code) || /^ARCA no disponible|^WSFE timeout/.test(msg)) {
+        return res.status(503).json({
+          error: 'ARCA (AFIP) no está respondiendo en este momento. La venta NO se facturó: ' +
+                 'reintentá en unos minutos. Si sigue fallando, avisá a administración.',
+        });
+      }
       throw arcaErr;
     }
 
